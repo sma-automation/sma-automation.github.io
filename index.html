@@ -1,369 +1,313 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMA – Social Media Automation</title>
-  <meta name="description" content="SMA verbindet Social-Media-Konten und zentrale Content-Workflows in einer übersichtlichen Plattform.">
-
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Inter, Arial, sans-serif;
-      background: #f4f6f8;
-      color: #17191c;
-    }
-
-    header {
-      background: #ffffff;
-      border-bottom: 1px solid #e3e6ea;
-      padding: 18px 6%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .logo {
-      display: flex;
-      align-items: center;
-    }
-
-    .hex {
-      width: 46px;
-      height: 40px;
-      display: grid;
-      place-items: center;
-      background: #123879;
-      color: white;
-      font-size: 19px;
-      font-weight: 900;
-      clip-path: polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);
-    }
-
-    .link {
-      width: 14px;
-      height: 2px;
-      background: #123879;
-    }
-
-    nav a {
-      color: #46505d;
-      text-decoration: none;
-      margin-left: 24px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .language button {
-      border: 0;
-      background: transparent;
-      cursor: pointer;
-      font-weight: 700;
-      color: #667085;
-    }
-
-    .language button.active {
-      color: #1769e0;
-    }
-
-    main {
-      max-width: 1180px;
-      margin: auto;
-      padding: 75px 6%;
-    }
-
-    .hero {
-      background: #ffffff;
-      border: 1px solid #e3e6ea;
-      border-radius: 24px;
-      padding: 68px 7%;
-      box-shadow: 0 18px 50px rgba(17,19,23,.07);
-    }
-
-    .eyebrow {
-      color: #1769e0;
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-
-    h1 {
-      max-width: 760px;
-      font-size: clamp(38px, 6vw, 68px);
-      line-height: 1.03;
-      margin: 18px 0 24px;
-      letter-spacing: -.04em;
-    }
-
-    .hero p {
-      max-width: 720px;
-      color: #69717d;
-      font-size: 18px;
-      line-height: 1.7;
-    }
-
-    .features {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px;
-      margin-top: 28px;
-    }
-
-    .feature {
-      background: #ffffff;
-      border: 1px solid #e3e6ea;
-      border-radius: 18px;
-      padding: 26px;
-    }
-
-    .feature-number {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: #eef4ff;
-      color: #1769e0;
-      display: grid;
-      place-items: center;
-      font-weight: 900;
-      margin-bottom: 18px;
-    }
-
-    .feature h2 {
-      margin: 0 0 10px;
-      font-size: 19px;
-    }
-
-    .feature p {
-      color: #69717d;
-      font-size: 14px;
-      line-height: 1.6;
-      margin: 0;
-    }
-
-    footer {
-      max-width: 1180px;
-      margin: auto;
-      padding: 20px 6% 45px;
-      color: #747b86;
-      font-size: 13px;
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      flex-wrap: wrap;
-    }
-
-    footer a {
-      color: #1769e0;
-      text-decoration: none;
-      margin-left: 18px;
-    }
-
-    [data-lang] { display: none; }
-
-    html[data-language="de"] [data-lang="de"],
-    html[data-language="en"] [data-lang="en"] {
-      display: block;
-    }
-
-    @media (max-width: 760px) {
-      header {
-        align-items: flex-start;
-        gap: 18px;
-      }
-
-      nav { display: none; }
-
-      main {
-        padding: 35px 16px;
-      }
-
-      .hero {
-        padding: 40px 24px;
-      }
-
-      .features {
-        grid-template-columns: 1fr;
-      }
-
-      footer {
-        padding: 15px 20px 35px;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMA – Social Media Automation</title>
+<style>
+:root{
+  --bg:#05070b;
+  --bg2:#0b1020;
+  --surface:#101726;
+  --surface2:#151f33;
+  --line:#253452;
+  --text:#f5f7fb;
+  --muted:#9aa8bf;
+  --blue:#4f7cff;
+  --blue2:#7ea1ff;
+  --white:#ffffff;
+  --success:#39c278;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 80% 0%, rgba(79,124,255,.22), transparent 30%),
+    linear-gradient(180deg,var(--bg),#08101d 52%,#05070b);
+}
+a{color:inherit;text-decoration:none}
+.container{width:min(1160px,calc(100% - 32px));margin:auto}
+header{
+  position:sticky;top:0;z-index:50;
+  background:rgba(5,7,11,.82);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.nav{
+  min-height:74px;display:flex;align-items:center;justify-content:space-between;gap:24px
+}
+.logo{display:flex;align-items:center;gap:8px;font-weight:900;letter-spacing:.4px}
+.hex{
+  width:34px;height:30px;background:#fff;color:#3768ed;display:grid;place-items:center;font-size:14px;font-weight:900;
+  clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)
+}
+.logoeq{opacity:.65}
+nav{display:flex;gap:24px;align-items:center;color:#c9d2e3;font-size:14px}
+nav a:hover{color:#fff}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;padding:0 18px;border-radius:10px;
+  background:var(--blue);color:#fff;font-weight:800;border:1px solid transparent;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn.secondary{background:transparent;border-color:#314364;color:#dfe7f7}
+.hero{
+  padding:92px 0 72px;
+  display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:7px 10px;border-radius:999px;
+  background:rgba(79,124,255,.12);border:1px solid rgba(126,161,255,.24);
+  color:#b8c9ff;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.9px
+}
+h1{font-size:clamp(42px,6vw,72px);line-height:1.02;margin:22px 0 18px;letter-spacing:-2.4px}
+.hero p{font-size:19px;line-height:1.7;color:#b2bdd0;max-width:720px;margin:0}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}
+.hero-card{
+  border:1px solid #23324d;border-radius:22px;padding:22px;
+  background:linear-gradient(180deg,rgba(20,31,52,.95),rgba(11,17,29,.95));
+  box-shadow:0 26px 80px rgba(0,0,0,.32)
+}
+.window{
+  border:1px solid #293a5a;border-radius:16px;overflow:hidden;background:#0a1020
+}
+.windowbar{display:flex;gap:6px;padding:12px 14px;border-bottom:1px solid #23314a}
+.dot{width:8px;height:8px;border-radius:50%;background:#53617a}
+.dashboard{display:grid;grid-template-columns:100px 1fr;min-height:340px}
+.side{background:#05070b;padding:18px 12px}
+.side .mini{height:9px;border-radius:6px;background:#1b2437;margin:10px 0}
+.side .mini.active{background:#315ed0}
+.mainmock{padding:18px}
+.mainmock h3{margin:0 0 14px;font-size:17px}
+.statgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:#111a2b;border:1px solid #253653;border-radius:12px;padding:14px}
+.stat strong{display:block;font-size:22px;margin-top:5px;color:#fff}
+.mockrow{height:54px;background:#0e1726;border:1px solid #21314d;border-radius:10px;margin-top:10px}
+.section{padding:84px 0}
+.section-head{max-width:760px;margin-bottom:34px}
+.kicker{color:#8eacff;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1px}
+h2{font-size:clamp(32px,4vw,50px);line-height:1.08;margin:10px 0 14px;letter-spacing:-1.5px}
+.section-head p,.muted{color:var(--muted);line-height:1.7}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{
+  background:linear-gradient(180deg,#101827,#0c1320);
+  border:1px solid #22314c;border-radius:18px;padding:24px
+}
+.card h3{margin:10px 0 8px;font-size:20px}
+.icon{
+  width:42px;height:42px;border-radius:12px;background:#162447;border:1px solid #29437e;
+  display:grid;place-items:center;color:#9eb7ff;font-weight:900
+}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.step{padding:20px;border-top:2px solid #365fd3;background:rgba(255,255,255,.025);border-radius:0 0 14px 14px}
+.stepnum{font-size:12px;color:#85a4ff;font-weight:900;margin-bottom:8px}
+.pricing{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.pricecard{position:relative}
+.pricecard.featured{border-color:#547ffc;box-shadow:0 16px 60px rgba(79,124,255,.16)}
+.badge{position:absolute;right:18px;top:18px;font-size:11px;background:#234fc2;color:white;padding:6px 9px;border-radius:999px;font-weight:800}
+.price{font-size:40px;font-weight:900;margin:18px 0 4px}
+.small{font-size:13px;color:var(--muted)}
+.features{display:grid;gap:10px;margin-top:20px;color:#d5ddec;font-size:14px}
+.features div::before{content:"✓";color:var(--success);font-weight:900;margin-right:8px}
+.tutorials{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.video{
+  aspect-ratio:16/10;border-radius:14px;background:
+  linear-gradient(135deg,rgba(79,124,255,.26),rgba(11,18,32,.9));
+  display:grid;place-items:center;border:1px solid #2a3c5d
+}
+.play{width:48px;height:48px;border-radius:50%;background:#fff;color:#254ed0;display:grid;place-items:center;font-weight:900}
+.faq{display:grid;gap:12px}
+.faq details{border:1px solid #22324e;background:#0d1524;border-radius:14px;padding:18px 20px}
+.faq summary{cursor:pointer;font-weight:800}
+.faq p{color:var(--muted);line-height:1.65}
+.cta{
+  border:1px solid #3858a0;border-radius:24px;padding:38px;
+  background:linear-gradient(135deg,rgba(47,88,202,.38),rgba(13,20,34,.92));
+  display:flex;justify-content:space-between;align-items:center;gap:24px
+}
+footer{padding:38px 0 46px;border-top:1px solid #17243a;color:#8795ac;font-size:13px}
+.footerrow{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+@media(max-width:900px){
+  nav{display:none}
+  .hero{grid-template-columns:1fr;padding-top:62px}
+  .grid3,.pricing{grid-template-columns:1fr}
+  .steps{grid-template-columns:repeat(2,1fr)}
+  .tutorials{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:560px){
+  .container{width:min(100% - 22px,1160px)}
+  .hero{padding-top:42px}
+  .steps,.tutorials{grid-template-columns:1fr}
+  .cta{display:block}
+  .cta .actions{margin-top:20px}
+}
+</style>
 </head>
-
 <body>
 
 <header>
-  <div class="logo">
-    <div class="hex">S</div>
-    <div class="link"></div>
-    <div class="hex">M</div>
-    <div class="link"></div>
-    <div class="hex">A</div>
-  </div>
-
-  <nav>
-    <a href="/">SMA</a>
-    <a href="/datenschutz/">Datenschutz</a>
-    <a href="/nutzungsbedingungen/">Nutzungsbedingungen</a>
-  </nav>
-
-  <div class="language">
-    <button id="deButton" onclick="setLanguage('de')">DE</button>
-    <span> / </span>
-    <button id="enButton" onclick="setLanguage('en')">EN</button>
+  <div class="container nav">
+    <a href="#start" class="logo" aria-label="SMA Startseite">
+      <span class="hex">S</span><span class="logoeq">=</span>
+      <span class="hex">M</span><span class="logoeq">=</span>
+      <span class="hex">A</span>
+    </a>
+    <nav>
+      <a href="#leistungen">Leistungen</a>
+      <a href="#ablauf">So funktioniert SMA</a>
+      <a href="#pakete">Pakete</a>
+      <a href="#tutorials">Tutorials</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn secondary" href="#login">Login</a>
   </div>
 </header>
 
 <main>
-
-  <section class="hero">
-
-    <div data-lang="de">
-      <div class="eyebrow">SMA · Social Media Automation</div>
-
-      <h1>
-        Social Media einfacher verbinden und zentral verwalten.
-      </h1>
-
-      <p>
-        SMA ist eine digitale Plattform für die zentrale Verbindung unterstützter
-        Social-Media-Konten und automatisierter Content-Workflows.
-        Kunden können ihre eigenen Konten sicher über die jeweiligen Plattformanbieter
-        verbinden und ihre digitalen Abläufe zentral verwalten.
-      </p>
+  <section class="container hero" id="start">
+    <div>
+      <span class="eyebrow">SMA · Social Media Automation</span>
+      <h1>Ein System.<br>Mehr Reichweite.<br>Mehr Verkauf.</h1>
+      <p>SMA verbindet Content, Social Media, Produkte, Shop und automatisierte Verkaufsprozesse in einer zentralen Oberfläche. Der Kunde arbeitet in SMA – die Technik läuft im Hintergrund.</p>
+      <div class="actions">
+        <a class="btn" href="#pakete">Pakete ansehen</a>
+        <a class="btn secondary" href="#ablauf">So funktioniert SMA</a>
+      </div>
     </div>
 
-    <div data-lang="en">
-      <div class="eyebrow">SMA · Social Media Automation</div>
-
-      <h1>
-        Connect social media more easily and manage it centrally.
-      </h1>
-
-      <p>
-        SMA is a digital platform for connecting supported social-media accounts
-        and managing automated content workflows centrally.
-        Customers connect their own accounts securely through the respective
-        platform providers.
-      </p>
+    <div class="hero-card">
+      <div class="window">
+        <div class="windowbar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <div class="dashboard">
+          <div class="side">
+            <div class="mini active"></div><div class="mini"></div><div class="mini"></div><div class="mini"></div><div class="mini"></div>
+          </div>
+          <div class="mainmock">
+            <h3>SMA Dashboard</h3>
+            <div class="statgrid">
+              <div class="stat"><span class="small">Social Media</span><strong>4</strong></div>
+              <div class="stat"><span class="small">Produkte</span><strong>2</strong></div>
+            </div>
+            <div class="mockrow"></div>
+            <div class="mockrow"></div>
+            <div class="mockrow"></div>
+          </div>
+        </div>
+      </div>
     </div>
-
   </section>
 
-  <section class="features">
-
-    <div class="feature">
-      <div class="feature-number">1</div>
-
-      <div data-lang="de">
-        <h2>Konten verbinden</h2>
-        <p>
-          Unterstützte Social-Media-Konten werden über die offiziellen
-          Anmelde- und Berechtigungsverfahren der jeweiligen Anbieter verbunden.
-        </p>
+  <section class="section" id="leistungen">
+    <div class="container">
+      <div class="section-head">
+        <div class="kicker">Leistungen</div>
+        <h2>Die wichtigsten Arbeitsbereiche an einem Ort</h2>
+        <p>Keine unnötigen Wechsel zwischen Plattformen. SMA bleibt die zentrale Oberfläche für den Kunden.</p>
       </div>
-
-      <div data-lang="en">
-        <h2>Connect accounts</h2>
-        <p>
-          Supported social-media accounts are connected through the official
-          login and authorization processes of each provider.
-        </p>
+      <div class="grid3">
+        <article class="card"><div class="icon">↗</div><h3>Social Media</h3><p class="muted">Content vorbereiten, freigeben und automatisiert auf verbundenen Plattformen veröffentlichen.</p></article>
+        <article class="card"><div class="icon">▦</div><h3>Shop & Produkte</h3><p class="muted">Produkte zentral in SMA verwalten und mit verbundenen Verkaufskanälen synchronisieren.</p></article>
+        <article class="card"><div class="icon">⚡</div><h3>24/7 Verkäufer</h3><p class="muted">Produktinformationen nutzen, Kundenfragen beantworten und passende Angebote unterstützen.</p></article>
+        <article class="card"><div class="icon">◇</div><h3>Kundenassistent</h3><p class="muted">Geführte Bedienung mit möglichst wenig technischem Aufwand für den Kunden.</p></article>
+        <article class="card"><div class="icon">⌘</div><h3>Website & Domain</h3><p class="muted">Eigene Webpräsenz mit Domain, Produktdarstellung und Anbindung an SMA.</p></article>
+        <article class="card"><div class="icon">✨</div><h3>Magic Effect</h3><p class="muted">Content für die spätere Veröffentlichung optimieren und wirkungsvoller aufbereiten.</p></article>
       </div>
     </div>
-
-    <div class="feature">
-      <div class="feature-number">2</div>
-
-      <div data-lang="de">
-        <h2>Zentral verwalten</h2>
-        <p>
-          Verbindungsstatus, Content und zukünftige Veröffentlichungsabläufe
-          können an einem zentralen Ort verwaltet werden.
-        </p>
-      </div>
-
-      <div data-lang="en">
-        <h2>Manage centrally</h2>
-        <p>
-          Connection status, content and future publishing workflows can be
-          managed from one central location.
-        </p>
-      </div>
-    </div>
-
-    <div class="feature">
-      <div class="feature-number">3</div>
-
-      <div data-lang="de">
-        <h2>Sicherer Zugriff</h2>
-        <p>
-          Passwörter für Social-Media-Dienste werden direkt beim jeweiligen
-          Anbieter eingegeben und nicht von SMA abgefragt.
-        </p>
-      </div>
-
-      <div data-lang="en">
-        <h2>Secure access</h2>
-        <p>
-          Social-media passwords are entered directly with the respective
-          provider and are not requested by SMA.
-        </p>
-      </div>
-    </div>
-
   </section>
 
+  <section class="section" id="ablauf">
+    <div class="container">
+      <div class="section-head">
+        <div class="kicker">So funktioniert SMA</div>
+        <h2>Vom Einstieg bis zur laufenden Automation</h2>
+      </div>
+      <div class="steps">
+        <div class="step"><div class="stepnum">01</div><strong>Registrieren</strong><p class="muted">Konto erstellen und SMA-Paket wählen.</p></div>
+        <div class="step"><div class="stepnum">02</div><strong>Verbinden</strong><p class="muted">Social Media und Verkaufskanäle anbinden.</p></div>
+        <div class="step"><div class="stepnum">03</div><strong>Inhalte & Produkte</strong><p class="muted">Content und Produktdaten zentral in SMA verwalten.</p></div>
+        <div class="step"><div class="stepnum">04</div><strong>Automatisieren</strong><p class="muted">Publishing, Verkauf und Workflows im Hintergrund ausführen.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pakete">
+    <div class="container">
+      <div class="section-head">
+        <div class="kicker">Pakete</div>
+        <h2>Ein klarer Einstieg für jede Ausbaustufe</h2>
+      </div>
+      <div class="pricing">
+        <article class="card pricecard">
+          <h3>Alpha</h3>
+          <div class="price">100 €</div><div class="small">pro Monat</div>
+          <div class="features">
+            <div>Automatisches Publishing</div><div>Social-Media-Anbindung</div><div>Shopify / Digistore24</div><div>Grundlegende Datenpflege</div>
+          </div>
+        </article>
+        <article class="card pricecard featured">
+          <span class="badge">Erweitert</span><h3>Beta</h3>
+          <div class="price">300 €</div><div class="small">pro Monat</div>
+          <div class="features">
+            <div>Alle Alpha-Funktionen</div><div>SMA 24/7 Verkäufer</div><div>Eigener Shopbereich</div><div>Produkt- und Bestellverwaltung</div>
+          </div>
+        </article>
+        <article class="card pricecard">
+          <h3>Delta</h3>
+          <div class="price">500 €</div><div class="small">pro Monat</div>
+          <div class="features">
+            <div>Alle Beta-Funktionen</div><div>Kundenassistent</div><div>Eigene Website & Domain</div><div>Magic Effect inklusive</div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tutorials">
+    <div class="container">
+      <div class="section-head">
+        <div class="kicker">SMA Academy</div>
+        <h2>Tutorials direkt dort, wo der Kunde sie braucht</h2>
+        <p>Öffentlich zeigen wir die wichtigsten Grundlagen. Die ausführliche Videobibliothek kommt in den geschützten Kundenbereich.</p>
+      </div>
+      <div class="tutorials">
+        <article class="card"><div class="video"><div class="play">▶</div></div><h3>Erste Schritte</h3><p class="muted">Dashboard, Navigation und Grundeinrichtung.</p></article>
+        <article class="card"><div class="video"><div class="play">▶</div></div><h3>Social Media verbinden</h3><p class="muted">Plattformen Schritt für Schritt anbinden.</p></article>
+        <article class="card"><div class="video"><div class="play">▶</div></div><h3>Produkte & Shop</h3><p class="muted">Produkte verwalten und Bestellungen verstehen.</p></article>
+        <article class="card"><div class="video"><div class="play">▶</div></div><h3>Website & Domain</h3><p class="muted">Eigene Webpräsenz mit SMA einrichten.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="faq">
+    <div class="container">
+      <div class="section-head"><div class="kicker">FAQ</div><h2>Häufige Fragen</h2></div>
+      <div class="faq">
+        <details><summary>Muss ich Shopify oder Digistore24 selbst bedienen?</summary><p>Das Ziel von SMA ist, möglichst viele Aufgaben zentral in SMA zu erledigen. Externe Systeme laufen so weit wie möglich im Hintergrund.</p></details>
+        <details><summary>Kann ich meine eigene Domain verwenden?</summary><p>Im Delta-Paket ist eine eigene Website mit Domain als Bestandteil des Angebots vorgesehen.</p></details>
+        <details><summary>Wo finde ich Hilfe?</summary><p>Im Kundenbereich entsteht die SMA Academy mit kurzen Erklärungsvideos und Schritt-für-Schritt-Anleitungen.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="login">
+    <div class="container">
+      <div class="cta">
+        <div><div class="kicker">SMA Kundenbereich</div><h2 style="margin-bottom:8px">Bereit für den nächsten Schritt?</h2><div class="muted">Registrierung und Login werden hier mit dem bestehenden SMA-Kundenzugang verbunden.</div></div>
+        <div class="actions"><a class="btn" href="#">Registrieren</a><a class="btn secondary" href="#">Login</a></div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer>
-
-  <div>
-    © 2026 SMA – Social Media Automation
-    · Kontakt: sma.automation.office@gmail.com
+  <div class="container footerrow">
+    <div>© 2026 SMA · Social Media Automation</div>
+    <div>Impressum · Datenschutz · AGB · Support</div>
   </div>
-
-  <div>
-    <a href="/datenschutz/">Datenschutz / Privacy</a>
-    <a href="/nutzungsbedingungen/">Nutzungsbedingungen / Terms</a>
-  </div>
-
 </footer>
-
-<script>
-  function setLanguage(language) {
-    document.documentElement.setAttribute('data-language', language);
-    document.documentElement.lang = language;
-
-    localStorage.setItem('sma_language', language);
-
-    document.getElementById('deButton').classList.toggle('active', language === 'de');
-    document.getElementById('enButton').classList.toggle('active', language === 'en');
-  }
-
-  let language = 'de';
-
-  try {
-    const saved = localStorage.getItem('sma_language');
-
-    if (saved === 'de' || saved === 'en') {
-      language = saved;
-    } else if (
-      String(navigator.language || '')
-        .toLowerCase()
-        .startsWith('en')
-    ) {
-      language = 'en';
-    }
-  } catch (e) {}
-
-  setLanguage(language);
-</script>
-
 </body>
 </html>
