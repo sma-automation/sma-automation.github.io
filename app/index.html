@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMA Kundenbereich</title>
-
 <style>
 :root {
   --bg: #05070b;
@@ -13,12 +12,11 @@
   --text: #f5f7fb;
   --muted: #9aa8bf;
   --blue: #4f7cff;
+  --blue-dark: #315fd1;
+  --green: #39c278;
+  --red: #ef6b73;
 }
-
-* {
-  box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
   margin: 0;
   min-height: 100vh;
@@ -28,14 +26,12 @@ body {
     var(--bg);
   color: var(--text);
 }
-
 header {
   height: 72px;
   border-bottom: 1px solid #1c2940;
   display: flex;
   align-items: center;
 }
-
 .header-inner {
   width: min(1100px, calc(100% - 32px));
   margin: auto;
@@ -43,50 +39,25 @@ header {
   justify-content: space-between;
   align-items: center;
 }
-
-.logo {
-  font-size: 22px;
-  font-weight: 900;
-}
-
-.back {
-  color: #9eb7ff;
-  text-decoration: none;
-}
-
+.logo { font-size: 22px; font-weight: 900; letter-spacing: .4px; }
+.back { color: #9eb7ff; text-decoration: none; }
 main {
   min-height: calc(100vh - 72px);
   display: grid;
   place-items: center;
   padding: 30px 16px;
 }
-
 .login-card {
-  width: min(440px, 100%);
+  width: min(460px, 100%);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 32px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.28);
 }
-
-h1 {
-  margin: 0 0 10px;
-  font-size: 34px;
-}
-
-.intro {
-  color: var(--muted);
-  line-height: 1.6;
-  margin-bottom: 28px;
-}
-
-label {
-  display: block;
-  margin: 16px 0 7px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
+h1 { margin: 0 0 10px; font-size: 34px; }
+.intro { color: var(--muted); line-height: 1.6; margin-bottom: 26px; }
+label { display: block; margin: 16px 0 7px; font-size: 13px; font-weight: 700; }
 input {
   width: 100%;
   height: 46px;
@@ -96,12 +67,13 @@ input {
   color: white;
   padding: 0 13px;
   font-size: 15px;
+  outline: none;
 }
-
+input:focus { border-color: var(--blue); }
+.actions { display: grid; gap: 10px; margin-top: 22px; }
 button {
   width: 100%;
-  height: 46px;
-  margin-top: 22px;
+  min-height: 46px;
   border: 0;
   border-radius: 10px;
   background: var(--blue);
@@ -110,68 +82,132 @@ button {
   font-weight: 800;
   cursor: pointer;
 }
-
-.register {
-  text-align: center;
-  margin-top: 20px;
+button:hover { background: var(--blue-dark); }
+button.secondary { background: transparent; border: 1px solid #31415f; color: #dbe5ff; }
+button:disabled { opacity: .65; cursor: default; }
+.status {
+  min-height: 22px;
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--muted);
-  font-size: 14px;
 }
-
-.register a {
-  color: #9eb7ff;
-}
+.status.success { color: var(--green); }
+.status.error { color: var(--red); }
+.password-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 7px; }
 </style>
 </head>
-
 <body>
-
 <header>
   <div class="header-inner">
     <div class="logo">SMA</div>
     <a class="back" href="../index.html">Zur Startseite</a>
   </div>
 </header>
-
 <main>
-
   <div class="login-card">
-
     <h1>Kundenbereich</h1>
+    <div class="intro">Melde dich an oder registriere dein SMA-Konto.</div>
 
-    <div class="intro">
-      Melde dich an, um dein SMA Dashboard zu öffnen.
-    </div>
-
-    <form>
-
+    <form id="authForm">
       <label for="email">E-Mail-Adresse</label>
-      <input
-        id="email"
-        type="email"
-        placeholder="name@beispiel.at"
-      >
+      <input id="email" type="email" autocomplete="email" placeholder="name@beispiel.at" required>
 
       <label for="password">Passwort</label>
-      <input
-        id="password"
-        type="password"
-        placeholder="••••••••"
-      >
+      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••••" required>
+      <div class="password-note">Mindestens 10 Zeichen mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen.</div>
 
-<button type="button" onclick="window.location.href='dashboard.html'">        Anmelden
-      </button>
+      <div class="actions">
+        <button id="loginButton" type="submit">Anmelden</button>
+        <button id="registerButton" class="secondary" type="button">Registrieren</button>
+      </div>
 
+      <div id="status" class="status" aria-live="polite"></div>
     </form>
-
-    <div class="register">
-      Noch kein SMA-Konto?
-      <a href="#">Registrieren</a>
-    </div>
-
   </div>
-
 </main>
 
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const SUPABASE_URL = 'https://bnvnmdxosbnuzedokqgh.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+  const form = document.getElementById('authForm');
+  const emailInput = document.getElementById('email');
+  const passwordInput = document.getElementById('password');
+  const loginButton = document.getElementById('loginButton');
+  const registerButton = document.getElementById('registerButton');
+  const status = document.getElementById('status');
+
+  const setStatus = (message, type = '') => {
+    status.textContent = message || '';
+    status.className = 'status' + (type ? ' ' + type : '');
+  };
+
+  const setBusy = (busy) => {
+    loginButton.disabled = busy;
+    registerButton.disabled = busy;
+  };
+
+  const credentials = () => ({
+    email: emailInput.value.trim(),
+    password: passwordInput.value
+  });
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData?.session) {
+    window.location.replace('dashboard.html');
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setStatus('Anmeldung wird geprüft ...');
+
+    const { email, password } = credentials();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setStatus(error.message, 'error');
+      setBusy(false);
+      return;
+    }
+
+    setStatus('Anmeldung erfolgreich.', 'success');
+    window.location.replace('dashboard.html');
+  });
+
+  registerButton.addEventListener('click', async () => {
+    setBusy(true);
+    setStatus('Registrierung wird erstellt ...');
+
+    const { email, password } = credentials();
+    const emailRedirectTo = new URL('./', window.location.href).href;
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo }
+    });
+
+    if (error) {
+      setStatus(error.message, 'error');
+      setBusy(false);
+      return;
+    }
+
+    if (data?.session) {
+      setStatus('Registrierung erfolgreich.', 'success');
+      window.location.replace('dashboard.html');
+      return;
+    }
+
+    setStatus('Registrierung erfolgreich. Bitte bestätige jetzt die E-Mail-Adresse.', 'success');
+    setBusy(false);
+  });
+</script>
 </body>
 </html>
