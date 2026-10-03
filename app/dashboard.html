@@ -15,6 +15,7 @@
   --text:#17191c;
   --muted:#727984;
   --green:#238b45;
+  --red:#b94a48;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -39,9 +40,12 @@ h1{margin:0 0 6px;font-size:32px}
 .card-title{font-size:13px;color:var(--muted);font-weight:700}
 .big{font-size:30px;font-weight:900;margin-top:8px}
 .status{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef8f1;color:var(--green);font-size:11px;font-weight:800}
+.status.off{background:#fff0f0;color:var(--red)}
 .section{margin-top:22px}
 .placeholder{min-height:170px;display:grid;place-items:center;text-align:center;color:var(--muted);border:1px dashed #ccd2db;border-radius:14px;background:#fafbfc}
 .hidden{display:none!important}
+.blocked{max-width:620px;margin:70px auto;background:#fff;border:1px solid var(--border);border-radius:18px;padding:28px;text-align:center}
+.blocked h2{margin-top:0}
 @media(max-width:900px){.sidebar{width:210px}.grid{grid-template-columns:1fr}}
 @media(max-width:650px){.app{display:block}.sidebar{width:100%;min-height:auto}.main{width:100%}}
 </style>
@@ -49,6 +53,12 @@ h1{margin:0 0 6px;font-size:32px}
 <body>
 <div id="loading" style="min-height:100vh;display:grid;place-items:center;font-family:Arial,sans-serif">
   Anmeldung wird geprüft …
+</div>
+
+<div id="blocked" class="blocked hidden">
+  <h2>Zugang derzeit nicht freigeschaltet</h2>
+  <p id="blockedText">Dein SMA-Konto ist noch nicht freigeschaltet.</p>
+  <button id="blockedLogout" class="logout" type="button">Abmelden</button>
 </div>
 
 <div id="app" class="app hidden">
@@ -82,24 +92,26 @@ h1{margin:0 0 6px;font-size:32px}
     </header>
 
     <div class="content">
-      <h1>Willkommen bei SMA</h1>
+      <h1 id="welcomeTitle">Willkommen bei SMA</h1>
       <p class="lead">Dein zentraler Kundenbereich.</p>
 
       <div class="grid">
         <div class="card">
           <div class="card-title">Konto</div>
-          <div class="big">Aktiv</div>
-          <div class="status">Angemeldet</div>
+          <div class="big" id="kontoStatus">–</div>
+          <div id="kontoBadge" class="status">–</div>
         </div>
+
         <div class="card">
-          <div class="card-title">Produkte</div>
-          <div class="big">–</div>
-          <div class="lead" style="margin:6px 0 0">wird aus Supabase geladen</div>
+          <div class="card-title">Paket</div>
+          <div class="big" id="paketValue">–</div>
+          <div class="lead" style="margin:6px 0 0" id="kundeIdValue">–</div>
         </div>
+
         <div class="card">
-          <div class="card-title">Bestellungen</div>
-          <div class="big">–</div>
-          <div class="lead" style="margin:6px 0 0">wird aus Supabase geladen</div>
+          <div class="card-title">Zahlungsstatus</div>
+          <div class="big" id="zahlungValue">–</div>
+          <div class="lead" style="margin:6px 0 0" id="demoValue">–</div>
         </div>
       </div>
 
@@ -107,8 +119,8 @@ h1{margin:0 0 6px;font-size:32px}
         <div class="card-title">SMA Daten</div>
         <div class="placeholder">
           <div>
-            <strong>Dashboard-Grundlage steht.</strong><br><br>
-            Als Nächstes verbinden wir Kundendaten, Produkte und Bestellungen sicher über Supabase.
+            <strong>Supabase-Verbindung aktiv.</strong><br><br>
+            Als Nächstes binden wir Produkte und Bestellungen an dieses Kundenkonto.
           </div>
         </div>
       </div>
@@ -124,21 +136,77 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-const { data, error } = await supabase.auth.getSession();
-const session = data?.session;
+const goLogin = () => window.location.replace('index.html');
 
-if (error || !session) {
-  window.location.replace('index.html');
-} else {
-  document.getElementById('userEmail').textContent = session.user?.email || '';
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('app').classList.remove('hidden');
-}
-
-document.getElementById('logoutButton').addEventListener('click', async () => {
+const signOut = async () => {
   await supabase.auth.signOut();
-  window.location.replace('index.html');
-});
+  goLogin();
+};
+
+document.getElementById('logoutButton').addEventListener('click', signOut);
+document.getElementById('blockedLogout').addEventListener('click', signOut);
+
+const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+const session = sessionData?.session;
+
+if (sessionError || !session) {
+  goLogin();
+} else {
+  const { data: kunde, error: kundeError } = await supabase
+    .from('sma_kunden')
+    .select('kunde_id,kunde_name,kunde_email,paket,aktiv,zahlung_bestaetigt,demo_delta_aktiv')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (kundeError || !kunde) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('blockedText').textContent =
+      'Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.';
+    document.getElementById('blocked').classList.remove('hidden');
+  } else {
+    const freigeschaltet =
+      kunde.aktiv === true &&
+      (kunde.zahlung_bestaetigt === true || kunde.demo_delta_aktiv === true);
+
+    if (!freigeschaltet) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('blockedText').textContent =
+        'Dein SMA-Konto ist noch nicht aktiv oder die Freischaltung wurde noch nicht bestätigt.';
+      document.getElementById('blocked').classList.remove('hidden');
+    } else {
+      document.getElementById('userEmail').textContent =
+        kunde.kunde_email || session.user.email || '';
+
+      document.getElementById('welcomeTitle').textContent =
+        'Willkommen, ' + (kunde.kunde_name || 'SMA Kunde');
+
+      document.getElementById('kontoStatus').textContent =
+        kunde.aktiv ? 'Aktiv' : 'Inaktiv';
+
+      document.getElementById('kontoBadge').textContent =
+        kunde.aktiv ? 'Freigeschaltet' : 'Gesperrt';
+
+      if (!kunde.aktiv) {
+        document.getElementById('kontoBadge').classList.add('off');
+      }
+
+      document.getElementById('paketValue').textContent =
+        (kunde.paket || '–').toUpperCase();
+
+      document.getElementById('kundeIdValue').textContent =
+        kunde.kunde_id || '–';
+
+      document.getElementById('zahlungValue').textContent =
+        kunde.zahlung_bestaetigt ? 'Bestätigt' : 'Offen';
+
+      document.getElementById('demoValue').textContent =
+        kunde.demo_delta_aktiv ? 'Demo-Override aktiv' : 'Kein Demo-Override';
+
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+    }
+  }
+}
 </script>
 </body>
 </html>
