@@ -7,18 +7,18 @@
 <style>
 :root{
   --blue:#2f67d8;
-  --blue-dark:#2454b6;
   --sidebar:#050505;
   --bg:#f5f6f8;
-  --surface:#fff;
+  --surface:#ffffff;
   --border:#e4e7ec;
   --text:#17191c;
   --muted:#727984;
   --green:#238b45;
+  --orange:#a86512;
   --red:#b94a48;
 }
 *{box-sizing:border-box}
-body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
 .app{min-height:100vh;display:flex}
 .sidebar{width:270px;background:var(--sidebar);color:#fff;padding:24px 18px;display:flex;flex-direction:column}
 .logo{font-weight:900;font-size:22px;margin-bottom:28px}
@@ -34,26 +34,32 @@ body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(
 .logout{border:1px solid var(--border);background:#fff;border-radius:9px;padding:9px 13px;font-weight:700;cursor:pointer}
 .content{padding:28px}
 h1{margin:0 0 6px;font-size:32px}
+h2{margin:0 0 14px;font-size:22px}
 .lead{color:var(--muted);margin:0 0 26px}
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
 .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px}
 .card-title{font-size:13px;color:var(--muted);font-weight:700}
 .big{font-size:30px;font-weight:900;margin-top:8px}
 .status{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef8f1;color:var(--green);font-size:11px;font-weight:800}
-.status.off{background:#fff0f0;color:var(--red)}
 .section{margin-top:22px}
-.placeholder{min-height:170px;display:grid;place-items:center;text-align:center;color:var(--muted);border:1px dashed #ccd2db;border-radius:14px;background:#fafbfc}
+.list{display:grid;gap:12px}
+.item{border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;justify-content:space-between;gap:18px;background:#fff}
+.item-title{font-weight:900;font-size:18px;margin-bottom:5px}
+.item-meta{color:var(--muted);font-size:13px;line-height:1.55}
+.amount{font-size:20px;font-weight:900;color:var(--blue);white-space:nowrap}
+.badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#eef2f7;color:#445}
+.badge.green{background:#eef8f1;color:var(--green)}
+.badge.orange{background:#fff6e9;color:var(--orange)}
+.empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed #ccd2db;border-radius:14px;background:#fafbfc}
 .hidden{display:none!important}
 .blocked{max-width:620px;margin:70px auto;background:#fff;border:1px solid var(--border);border-radius:18px;padding:28px;text-align:center}
-.blocked h2{margin-top:0}
 @media(max-width:900px){.sidebar{width:210px}.grid{grid-template-columns:1fr}}
-@media(max-width:650px){.app{display:block}.sidebar{width:100%;min-height:auto}.main{width:100%}}
+@media(max-width:650px){.app{display:block}.sidebar{width:100%;min-height:auto}.item{display:block}.amount{margin-top:12px}}
 </style>
 </head>
 <body>
-<div id="loading" style="min-height:100vh;display:grid;place-items:center;font-family:Arial,sans-serif">
-  Anmeldung wird geprüft …
-</div>
+<div id="loading" style="min-height:100vh;display:grid;place-items:center">Anmeldung wird geprüft …</div>
 
 <div id="blocked" class="blocked hidden">
   <h2>Zugang derzeit nicht freigeschaltet</h2>
@@ -64,22 +70,18 @@ h1{margin:0 0 6px;font-size:32px}
 <div id="app" class="app hidden">
   <aside class="sidebar">
     <div class="logo">SMA</div>
-
-    <a class="nav-button active" href="#">▦ Übersicht</a>
-    <a class="nav-button" href="#">♫ Musikbibliothek</a>
-    <a class="nav-button" href="#">↺ History</a>
+    <a class="nav-button active" href="#uebersicht">▦ Übersicht</a>
+    <a class="nav-button" href="#bestellungen">↺ History</a>
     <a class="nav-button" href="#">⚙ Einstellungen</a>
     <a class="nav-button" href="../academy/index.html">? Tutorials</a>
 
     <div class="nav-section">Paket-Module</div>
     <a class="nav-button" href="#">⚡ 24/7 Verkäufer</a>
-    <a class="nav-button" href="#">▦ Shop</a>
+    <a class="nav-button" href="#shop">▦ Shop</a>
     <a class="nav-button" href="#">◇ Kundenassistent</a>
     <a class="nav-button" href="#">⌘ Website & Domain</a>
 
-    <div class="sidebar-footer">
-      SMA<br>Social Media Automation
-    </div>
+    <div class="sidebar-footer">SMA<br>Social Media Automation</div>
   </aside>
 
   <main class="main">
@@ -92,38 +94,38 @@ h1{margin:0 0 6px;font-size:32px}
     </header>
 
     <div class="content">
-      <h1 id="welcomeTitle">Willkommen bei SMA</h1>
-      <p class="lead">Dein zentraler Kundenbereich.</p>
+      <section id="uebersicht">
+        <h1 id="welcomeTitle">Willkommen bei SMA</h1>
+        <p class="lead">Dein zentraler Kundenbereich.</p>
 
-      <div class="grid">
-        <div class="card">
-          <div class="card-title">Konto</div>
-          <div class="big" id="kontoStatus">–</div>
-          <div id="kontoBadge" class="status">–</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Paket</div>
-          <div class="big" id="paketValue">–</div>
-          <div class="lead" style="margin:6px 0 0" id="kundeIdValue">–</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Zahlungsstatus</div>
-          <div class="big" id="zahlungValue">–</div>
-          <div class="lead" style="margin:6px 0 0" id="demoValue">–</div>
-        </div>
-      </div>
-
-      <div class="section card">
-        <div class="card-title">SMA Daten</div>
-        <div class="placeholder">
-          <div>
-            <strong>Supabase-Verbindung aktiv.</strong><br><br>
-            Als Nächstes binden wir Produkte und Bestellungen an dieses Kundenkonto.
+        <div class="grid">
+          <div class="card">
+            <div class="card-title">Konto</div>
+            <div class="big" id="kontoStatus">–</div>
+            <div id="kontoBadge" class="status">–</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Paket</div>
+            <div class="big" id="paketValue">–</div>
+            <div class="lead" style="margin:6px 0 0" id="kundeIdValue">–</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Shop</div>
+            <div class="big"><span id="produktCount">0</span> / <span id="bestellCount">0</span></div>
+            <div class="lead" style="margin:6px 0 0">Produkte / Bestellungen</div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section id="shop" class="section card">
+        <h2>Shop & Produkte</h2>
+        <div id="produktListe" class="list"></div>
+      </section>
+
+      <section id="bestellungen" class="section card">
+        <h2>Bestellungen</h2>
+        <div id="bestellListe" class="list"></div>
+      </section>
     </div>
   </main>
 </div>
@@ -133,15 +135,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://bnvnmdxosbnuzedokqgh.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+const euro = new Intl.NumberFormat('de-DE', { style:'currency', currency:'EUR' });
+const esc = (v='') => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const goLogin = () => window.location.replace('index.html');
-
-const signOut = async () => {
-  await supabase.auth.signOut();
-  goLogin();
-};
+const signOut = async () => { await supabase.auth.signOut(); goLogin(); };
 
 document.getElementById('logoutButton').addEventListener('click', signOut);
 document.getElementById('blockedLogout').addEventListener('click', signOut);
@@ -160,47 +159,73 @@ if (sessionError || !session) {
 
   if (kundeError || !kunde) {
     document.getElementById('loading').classList.add('hidden');
-    document.getElementById('blockedText').textContent =
-      'Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.';
+    document.getElementById('blockedText').textContent = 'Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.';
     document.getElementById('blocked').classList.remove('hidden');
   } else {
-    const freigeschaltet =
-      kunde.aktiv === true &&
-      (kunde.zahlung_bestaetigt === true || kunde.demo_delta_aktiv === true);
+    const freigeschaltet = kunde.aktiv === true && (kunde.zahlung_bestaetigt === true || kunde.demo_delta_aktiv === true);
 
     if (!freigeschaltet) {
       document.getElementById('loading').classList.add('hidden');
-      document.getElementById('blockedText').textContent =
-        'Dein SMA-Konto ist noch nicht aktiv oder die Freischaltung wurde noch nicht bestätigt.';
+      document.getElementById('blockedText').textContent = 'Dein SMA-Konto ist noch nicht aktiv oder die Freischaltung wurde noch nicht bestätigt.';
       document.getElementById('blocked').classList.remove('hidden');
     } else {
-      document.getElementById('userEmail').textContent =
-        kunde.kunde_email || session.user.email || '';
+      document.getElementById('userEmail').textContent = kunde.kunde_email || session.user.email || '';
+      document.getElementById('welcomeTitle').textContent = 'Willkommen, ' + (kunde.kunde_name || 'SMA Kunde');
+      document.getElementById('kontoStatus').textContent = kunde.aktiv ? 'Aktiv' : 'Inaktiv';
+      document.getElementById('kontoBadge').textContent = kunde.aktiv ? 'Freigeschaltet' : 'Gesperrt';
+      document.getElementById('paketValue').textContent = (kunde.paket || '–').toUpperCase();
+      document.getElementById('kundeIdValue').textContent = kunde.kunde_id || '–';
 
-      document.getElementById('welcomeTitle').textContent =
-        'Willkommen, ' + (kunde.kunde_name || 'SMA Kunde');
+      const [prodRes, orderRes] = await Promise.all([
+        supabase.from('sma_produkte')
+          .select('produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,created_at')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending:false }),
+        supabase.from('sma_bestellungen')
+          .select('markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung')
+          .eq('user_id', session.user.id)
+          .order('erstellt_am', { ascending:false })
+      ]);
 
-      document.getElementById('kontoStatus').textContent =
-        kunde.aktiv ? 'Aktiv' : 'Inaktiv';
+      const produkte = prodRes.data || [];
+      const bestellungen = orderRes.data || [];
 
-      document.getElementById('kontoBadge').textContent =
-        kunde.aktiv ? 'Freigeschaltet' : 'Gesperrt';
+      document.getElementById('produktCount').textContent = produkte.length;
+      document.getElementById('bestellCount').textContent = bestellungen.length;
 
-      if (!kunde.aktiv) {
-        document.getElementById('kontoBadge').classList.add('off');
-      }
+      document.getElementById('produktListe').innerHTML = produkte.length ? produkte.map(p => `
+        <div class="item">
+          <div>
+            <div class="item-title">${esc(p.produkt_name || 'Produkt')}</div>
+            <div class="item-meta">
+              ${esc(p.produkt_typ || '')}${p.sku ? ' · SKU ' + esc(p.sku) : ''}<br>
+              Bestand: ${esc(p.bestand ?? 0)}${p.beschreibung ? '<br>' + esc(p.beschreibung) : ''}
+            </div>
+            <div class="badges">
+              <span class="badge ${p.aktiv ? 'green' : ''}">${p.aktiv ? 'Aktiv' : 'Inaktiv'}</span>
+              ${p.shopify_aktiv ? '<span class="badge green">Shopify aktiv</span>' : ''}
+              ${p.digistore24_aktiv ? '<span class="badge green">Digistore24 aktiv</span>' : ''}
+            </div>
+          </div>
+          <div class="amount">${euro.format(Number(p.preis || 0))}</div>
+        </div>
+      `).join('') : '<div class="empty">Noch keine Produkte vorhanden.</div>';
 
-      document.getElementById('paketValue').textContent =
-        (kunde.paket || '–').toUpperCase();
-
-      document.getElementById('kundeIdValue').textContent =
-        kunde.kunde_id || '–';
-
-      document.getElementById('zahlungValue').textContent =
-        kunde.zahlung_bestaetigt ? 'Bestätigt' : 'Offen';
-
-      document.getElementById('demoValue').textContent =
-        kunde.demo_delta_aktiv ? 'Demo-Override aktiv' : 'Kein Demo-Override';
+      document.getElementById('bestellListe').innerHTML = bestellungen.length ? bestellungen.map(b => `
+        <div class="item">
+          <div>
+            <div class="item-title">${esc(b.bestellnummer || 'Bestellung')}</div>
+            <div class="item-meta">
+              ${esc(b.markt || '')}${b.erstellt_am ? ' · ' + new Date(b.erstellt_am).toLocaleString('de-DE') : ''}
+            </div>
+            <div class="badges">
+              <span class="badge green">${esc(b.zahlungsstatus || '–')}</span>
+              <span class="badge orange">${esc(b.lieferstatus || '–')}</span>
+            </div>
+          </div>
+          <div class="amount">${euro.format(Number(b.gesamtbetrag || 0))}</div>
+        </div>
+      `).join('') : '<div class="empty">Noch keine Bestellungen vorhanden.</div>';
 
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
