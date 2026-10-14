@@ -1,9 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMA Kundenbereich</title>
+
 <style>
 :root {
   --bg: #05070b;
@@ -16,22 +18,31 @@
   --green: #39c278;
   --red: #ef6b73;
 }
+
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   min-height: 100vh;
   font-family: Arial, sans-serif;
   background:
-    radial-gradient(circle at top right, rgba(79,124,255,.22), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(79,124,255,.22),
+      transparent 30%
+    ),
     var(--bg);
   color: var(--text);
 }
+
 header {
   height: 72px;
   border-bottom: 1px solid #1c2940;
   display: flex;
   align-items: center;
 }
+
 .header-inner {
   width: min(1100px, calc(100% - 32px));
   margin: auto;
@@ -39,14 +50,25 @@ header {
   justify-content: space-between;
   align-items: center;
 }
-.logo { font-size: 22px; font-weight: 900; letter-spacing: .4px; }
-.back { color: #9eb7ff; text-decoration: none; }
+
+.logo {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: .4px;
+}
+
+.back {
+  color: #9eb7ff;
+  text-decoration: none;
+}
+
 main {
   min-height: calc(100vh - 72px);
   display: grid;
   place-items: center;
   padding: 30px 16px;
 }
+
 .login-card {
   width: min(460px, 100%);
   background: var(--surface);
@@ -55,9 +77,25 @@ main {
   padding: 32px;
   box-shadow: 0 24px 70px rgba(0,0,0,.28);
 }
-h1 { margin: 0 0 10px; font-size: 34px; }
-.intro { color: var(--muted); line-height: 1.6; margin-bottom: 26px; }
-label { display: block; margin: 16px 0 7px; font-size: 13px; font-weight: 700; }
+
+h1 {
+  margin: 0 0 10px;
+  font-size: 34px;
+}
+
+.intro {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 26px;
+}
+
+label {
+  display: block;
+  margin: 16px 0 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 input {
   width: 100%;
   height: 46px;
@@ -69,8 +107,67 @@ input {
   font-size: 15px;
   outline: none;
 }
-input:focus { border-color: var(--blue); }
-.actions { display: grid; gap: 10px; margin-top: 22px; }
+
+input:focus {
+  border-color: var(--blue);
+}
+
+/* Passwortfeld mit Augensymbol */
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 52px;
+}
+
+.eye-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 42px;
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.eye-toggle:hover,
+.eye-toggle:focus-visible {
+  background: #1d2a41;
+  color: white;
+}
+
+.eye-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.eye-toggle .slash {
+  display: none;
+}
+
+.eye-toggle.is-visible .slash {
+  display: block;
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
 button {
   width: 100%;
   min-height: 46px;
@@ -82,9 +179,46 @@ button {
   font-weight: 800;
   cursor: pointer;
 }
-button:hover { background: var(--blue-dark); }
-button.secondary { background: transparent; border: 1px solid #31415f; color: #dbe5ff; }
-button:disabled { opacity: .65; cursor: default; }
+
+button:hover {
+  background: var(--blue-dark);
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid #31415f;
+  color: #dbe5ff;
+}
+
+button.secondary:hover {
+  background: #1d2a41;
+}
+
+button:disabled {
+  opacity: .65;
+  cursor: default;
+}
+
+button.link-button {
+  width: auto;
+  min-height: 34px;
+  padding: 2px 0;
+  background: transparent;
+  color: #9eb7ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+button.link-button:hover {
+  color: white;
+  text-decoration: underline;
+}
+
+.link-row {
+  text-align: right;
+  margin-top: 8px;
+}
+
 .status {
   min-height: 22px;
   margin-top: 16px;
@@ -92,122 +226,736 @@ button:disabled { opacity: .65; cursor: default; }
   line-height: 1.5;
   color: var(--muted);
 }
-.status.success { color: var(--green); }
-.status.error { color: var(--red); }
-.password-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 7px; }
+
+.status.success {
+  color: var(--green);
+}
+
+.status.error {
+  color: var(--red);
+}
+
+.password-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 7px;
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 29px;
+  }
+}
 </style>
 </head>
+
 <body>
+
 <header>
   <div class="header-inner">
     <div class="logo">SMA</div>
-    <a class="back" href="../index.html">Zur Startseite</a>
+    <a class="back" href="../index.html">
+      Zur Startseite
+    </a>
   </div>
 </header>
+
 <main>
   <div class="login-card">
-    <h1>Kundenbereich</h1>
-    <div class="intro">Melde dich an oder registriere dein SMA-Konto.</div>
 
-    <form id="authForm">
-      <label for="email">E-Mail-Adresse</label>
-      <input id="email" type="email" autocomplete="email" placeholder="name@beispiel.at" required>
+    <h1 id="viewTitle">Kundenbereich</h1>
 
-      <label for="password">Passwort</label>
-      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••••" required>
-      <div class="password-note">Mindestens 10 Zeichen mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen.</div>
+    <div id="viewIntro" class="intro">
+      Melde dich an oder registriere dein SMA-Konto.
+    </div>
 
-      <div class="actions">
-        <button id="loginButton" type="submit">Anmelden</button>
-        <button id="registerButton" class="secondary" type="button">Registrieren</button>
-      </div>
+    <!-- LOGIN UND REGISTRIERUNG -->
 
-      <div id="status" class="status" aria-live="polite"></div>
-    </form>
+    <section id="loginView">
+
+      <form id="authForm">
+
+        <label for="email">E-Mail-Adresse</label>
+
+        <input
+          id="email"
+          type="email"
+          autocomplete="email"
+          placeholder="name@beispiel.at"
+          required
+        >
+
+        <label for="password">Passwort</label>
+
+        <div class="password-field">
+
+          <input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="••••••••••"
+            required
+          >
+
+          <button
+            type="button"
+            class="eye-toggle"
+            data-target="password"
+            aria-label="Passwort anzeigen"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path class="slash" d="M3 3l18 18"></path>
+            </svg>
+          </button>
+
+        </div>
+
+        <div class="password-note">
+          Für neue Passwörter: mindestens 10 Zeichen
+          mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen.
+        </div>
+
+        <div class="link-row">
+          <button
+            id="forgotButton"
+            class="link-button"
+            type="button"
+          >
+            Passwort vergessen?
+          </button>
+        </div>
+
+        <div class="actions">
+
+          <button id="loginButton" type="submit">
+            Anmelden
+          </button>
+
+          <button
+            id="registerButton"
+            class="secondary"
+            type="button"
+          >
+            Registrieren
+          </button>
+
+        </div>
+
+      </form>
+
+    </section>
+
+    <!-- PASSWORT VERGESSEN -->
+
+    <section id="forgotView" hidden>
+
+      <form id="forgotForm">
+
+        <label for="forgotEmail">
+          E-Mail-Adresse deines SMA-Kontos
+        </label>
+
+        <input
+          id="forgotEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="name@beispiel.at"
+          required
+        >
+
+        <div class="actions">
+
+          <button
+            id="sendResetButton"
+            type="submit"
+          >
+            Wiederherstellungslink senden
+          </button>
+
+          <button
+            id="backToLoginButton"
+            class="secondary"
+            type="button"
+          >
+            Zur Anmeldung
+          </button>
+
+        </div>
+
+      </form>
+
+    </section>
+
+    <!-- NEUES PASSWORT FESTLEGEN -->
+
+    <section id="resetView" hidden>
+
+      <form id="resetForm">
+
+        <label for="newPassword">
+          Neues Passwort
+        </label>
+
+        <div class="password-field">
+
+          <input
+            id="newPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="10"
+            required
+          >
+
+          <button
+            type="button"
+            class="eye-toggle"
+            data-target="newPassword"
+            aria-label="Neues Passwort anzeigen"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path class="slash" d="M3 3l18 18"></path>
+            </svg>
+          </button>
+
+        </div>
+
+        <div class="password-note">
+          Mindestens 10 Zeichen mit Groß- und
+          Kleinbuchstaben, Zahl und Sonderzeichen.
+        </div>
+
+        <label for="confirmPassword">
+          Neues Passwort wiederholen
+        </label>
+
+        <div class="password-field">
+
+          <input
+            id="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="10"
+            required
+          >
+
+          <button
+            type="button"
+            class="eye-toggle"
+            data-target="confirmPassword"
+            aria-label="Passwortbestätigung anzeigen"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path class="slash" d="M3 3l18 18"></path>
+            </svg>
+          </button>
+
+        </div>
+
+        <div class="actions">
+
+          <button
+            id="savePasswordButton"
+            type="submit"
+          >
+            Neues Passwort speichern
+          </button>
+
+        </div>
+
+      </form>
+
+    </section>
+
+    <div
+      id="status"
+      class="status"
+      aria-live="polite"
+    ></div>
+
   </div>
 </main>
 
 <script type="module">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-  const SUPABASE_URL = 'https://bnvnmdxosbnuzedokqgh.supabase.co';
-  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
+import {
+  createClient
+} from 'https://esm.sh/@supabase/supabase-js@2';
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const SUPABASE_URL =
+  'https://bnvnmdxosbnuzedokqgh.supabase.co';
 
-  const form = document.getElementById('authForm');
-  const emailInput = document.getElementById('email');
-  const passwordInput = document.getElementById('password');
-  const loginButton = document.getElementById('loginButton');
-  const registerButton = document.getElementById('registerButton');
-  const status = document.getElementById('status');
+const SUPABASE_PUBLISHABLE_KEY =
+  'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
 
-  const setStatus = (message, type = '') => {
-    status.textContent = message || '';
-    status.className = 'status' + (type ? ' ' + type : '');
+const APP_URL =
+  'https://sma-automation.com/app/';
+
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+const form = document.getElementById('authForm');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const forgotEmail = document.getElementById('forgotEmail');
+
+const loginButton = document.getElementById('loginButton');
+const registerButton = document.getElementById('registerButton');
+const sendResetButton = document.getElementById('sendResetButton');
+const savePasswordButton = document.getElementById('savePasswordButton');
+
+const status = document.getElementById('status');
+
+const urlHash = new URLSearchParams(
+  window.location.hash.slice(1)
+);
+
+const urlQuery = new URLSearchParams(
+  window.location.search
+);
+
+let recoveryMode =
+  urlHash.get('type') === 'recovery' ||
+  urlQuery.get('type') === 'recovery';
+
+// STATUSANZEIGE
+
+function setStatus(message, type = '') {
+  status.textContent = message || '';
+  status.className = 'status' + (type ? ' ' + type : '');
+}
+
+// BUTTONS SPERREN
+
+function setBusy(busy) {
+  loginButton.disabled = busy;
+  registerButton.disabled = busy;
+  sendResetButton.disabled = busy;
+  savePasswordButton.disabled = busy;
+}
+
+// ANSICHT WECHSELN
+
+function showView(view) {
+
+  document.getElementById('loginView').hidden =
+    view !== 'login';
+
+  document.getElementById('forgotView').hidden =
+    view !== 'forgot';
+
+  document.getElementById('resetView').hidden =
+    view !== 'reset';
+
+  const titles = {
+    login: [
+      'Kundenbereich',
+      'Melde dich an oder registriere dein SMA-Konto.'
+    ],
+    forgot: [
+      'Passwort vergessen?',
+      'Wir senden dir einen Link zum Festlegen eines neuen Passworts.'
+    ],
+    reset: [
+      'Neues Passwort',
+      'Lege jetzt dein neues Passwort für dein SMA-Konto fest.'
+    ]
   };
 
-  const setBusy = (busy) => {
-    loginButton.disabled = busy;
-    registerButton.disabled = busy;
-  };
+  document.getElementById('viewTitle').textContent =
+    titles[view][0];
 
-  const credentials = () => ({
-    email: emailInput.value.trim(),
-    password: passwordInput.value
-  });
+  document.getElementById('viewIntro').textContent =
+    titles[view][1];
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData?.session) {
-    window.location.replace('dashboard.html');
-  }
+  setStatus('');
+}
 
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    setBusy(true);
-    setStatus('Anmeldung wird geprüft ...');
+// PASSWORTSICHERHEIT
 
-    const { email, password } = credentials();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+function strongPassword(value) {
 
-    if (error) {
-      setStatus(error.message, 'error');
-      setBusy(false);
-      return;
-    }
+  return (
+    value.length >= 10 &&
+    /[a-z]/.test(value) &&
+    /[A-Z]/.test(value) &&
+    /[0-9]/.test(value) &&
+    /[^a-zA-Z0-9]/.test(value)
+  );
 
-    setStatus('Anmeldung erfolgreich.', 'success');
-    window.location.replace('dashboard.html');
-  });
+}
 
-  registerButton.addEventListener('click', async () => {
-    setBusy(true);
-    setStatus('Registrierung wird erstellt ...');
+// AUGENSYMBOL
 
-    const { email, password } = credentials();
-    const emailRedirectTo = new URL('./', window.location.href).href;
+document.querySelectorAll('.eye-toggle').forEach(
+  (button) => {
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo }
+    button.addEventListener('click', () => {
+
+      const input = document.getElementById(
+        button.dataset.target
+      );
+
+      const isVisible =
+        input.type === 'password';
+
+      input.type =
+        isVisible ? 'text' : 'password';
+
+      button.classList.toggle(
+        'is-visible',
+        isVisible
+      );
+
+      button.setAttribute(
+        'aria-pressed',
+        String(isVisible)
+      );
+
+      button.setAttribute(
+        'aria-label',
+        isVisible
+          ? 'Passwort verbergen'
+          : 'Passwort anzeigen'
+      );
+
     });
 
+  }
+);
+
+// SUPABASE PASSWORT-WIEDERHERSTELLUNG
+
+supabase.auth.onAuthStateChange((event) => {
+
+  if (event === 'PASSWORD_RECOVERY') {
+
+    recoveryMode = true;
+
+    showView('reset');
+
+    setStatus(
+      'Wiederherstellungslink bestätigt. Bitte neues Passwort eingeben.'
+    );
+
+  }
+
+});
+
+if (recoveryMode) {
+
+  showView('reset');
+
+  setStatus('Bitte gib dein neues Passwort ein.');
+
+}
+
+// BESTEHENDE SESSION PRÜFEN
+
+const {
+  data: sessionData,
+  error: sessionError
+} = await supabase.auth.getSession();
+
+if (sessionError && recoveryMode) {
+
+  setStatus(
+    'Der Wiederherstellungslink konnte nicht geprüft werden. Bitte fordere einen neuen Link an.',
+    'error'
+  );
+
+}
+
+if (sessionData?.session && !recoveryMode) {
+
+  window.location.replace('dashboard.html');
+
+}
+
+// ANMELDUNG
+
+form.addEventListener('submit', async (event) => {
+
+  event.preventDefault();
+
+  setBusy(true);
+  setStatus('Anmeldung wird geprüft ...');
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+
+  const { error } =
+    await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+  if (error) {
+
+    setStatus(error.message, 'error');
+    setBusy(false);
+    return;
+
+  }
+
+  setStatus(
+    'Anmeldung erfolgreich.',
+    'success'
+  );
+
+  window.location.replace('dashboard.html');
+
+});
+
+// REGISTRIERUNG
+
+registerButton.addEventListener('click', async () => {
+
+  if (!emailInput.reportValidity()) return;
+  if (!passwordInput.reportValidity()) return;
+
+  if (!strongPassword(passwordInput.value)) {
+
+    setStatus(
+      'Bitte verwende mindestens 10 Zeichen, Groß- und Kleinbuchstaben, eine Zahl und ein Sonderzeichen.',
+      'error'
+    );
+
+    return;
+
+  }
+
+  setBusy(true);
+  setStatus('Registrierung wird erstellt ...');
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+
+  const { data, error } =
+    await supabase.auth.signUp({
+
+      email,
+      password,
+
+      options: {
+        emailRedirectTo: APP_URL
+      }
+
+    });
+
+  if (error) {
+
+    setStatus(error.message, 'error');
+    setBusy(false);
+    return;
+
+  }
+
+  if (data?.session) {
+
+    setStatus(
+      'Registrierung erfolgreich.',
+      'success'
+    );
+
+    window.location.replace('dashboard.html');
+
+    return;
+
+  }
+
+  setStatus(
+    'Registrierung erfolgreich. Bitte bestätige jetzt die E-Mail-Adresse.',
+    'success'
+  );
+
+  setBusy(false);
+
+});
+
+// PASSWORT VERGESSEN ANZEIGEN
+
+document.getElementById('forgotButton')
+  .addEventListener('click', () => {
+
+    showView('forgot');
+
+    forgotEmail.value =
+      emailInput.value.trim();
+
+  });
+
+// ZURÜCK ZUM LOGIN
+
+document.getElementById('backToLoginButton')
+  .addEventListener('click', () => {
+
+    showView('login');
+
+  });
+
+// WIEDERHERSTELLUNGSLINK SENDEN
+
+document.getElementById('forgotForm')
+  .addEventListener('submit', async (event) => {
+
+    event.preventDefault();
+
+    setBusy(true);
+
+    setStatus(
+      'Wiederherstellungslink wird angefordert ...'
+    );
+
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(
+        forgotEmail.value.trim(),
+        {
+          redirectTo: APP_URL
+        }
+      );
+
     if (error) {
-      setStatus(error.message, 'error');
+
+      setStatus(
+        'Link konnte nicht angefordert werden: ' +
+        error.message,
+        'error'
+      );
+
+    } else {
+
+      setStatus(
+        'Falls für diese E-Mail-Adresse ein SMA-Konto existiert, erhältst du einen Link zum Zurücksetzen des Passworts. Bitte prüfe auch den Spam-Ordner.',
+        'success'
+      );
+
+    }
+
+    setBusy(false);
+
+  });
+
+// NEUES PASSWORT SPEICHERN
+
+document.getElementById('resetForm')
+  .addEventListener('submit', async (event) => {
+
+    event.preventDefault();
+
+    const newPassword =
+      document.getElementById('newPassword').value;
+
+    const confirmPassword =
+      document.getElementById('confirmPassword').value;
+
+    if (!strongPassword(newPassword)) {
+
+      setStatus(
+        'Bitte verwende mindestens 10 Zeichen, Groß- und Kleinbuchstaben, eine Zahl und ein Sonderzeichen.',
+        'error'
+      );
+
+      return;
+
+    }
+
+    if (newPassword !== confirmPassword) {
+
+      setStatus(
+        'Die beiden Passwörter stimmen nicht überein.',
+        'error'
+      );
+
+      return;
+
+    }
+
+    setBusy(true);
+
+    setStatus(
+      'Neues Passwort wird gespeichert ...'
+    );
+
+    const {
+      data: currentSession,
+      error: sessionCheckError
+    } = await supabase.auth.getSession();
+
+    if (
+      sessionCheckError ||
+      !currentSession?.session
+    ) {
+
+      setStatus(
+        'Der Wiederherstellungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen an.',
+        'error'
+      );
+
       setBusy(false);
       return;
+
     }
 
-    if (data?.session) {
-      setStatus('Registrierung erfolgreich.', 'success');
-      window.location.replace('dashboard.html');
+    const { error } =
+      await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+    if (error) {
+
+      setStatus(
+        'Passwort konnte nicht geändert werden: ' +
+        error.message,
+        'error'
+      );
+
+      setBusy(false);
       return;
+
     }
 
-    setStatus('Registrierung erfolgreich. Bitte bestätige jetzt die E-Mail-Adresse.', 'success');
+    await supabase.auth.signOut();
+
+    recoveryMode = false;
+
+    window.history.replaceState(
+      null,
+      '',
+      new URL('./', window.location.href).pathname
+    );
+
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    passwordInput.value = '';
+
+    showView('login');
+
+    setStatus(
+      'Dein Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.',
+      'success'
+    );
+
     setBusy(false);
+
   });
+
 </script>
+
 </body>
 </html>
