@@ -52,12 +52,12 @@ h2{margin:0 0 14px;font-size:22px}
 /* Produktliste: ein Produkt pro Zeile, Bild links, Text in der Mitte, Preis rechts. */
 .product-item{display:grid;grid-template-columns:144px minmax(0,1fr) auto;align-items:start;gap:20px}
 .product-photo{width:144px;height:144px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#f4f6fa;display:grid;place-items:center}
-.product-photo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.product-photo img{width:100%;height:100%;object-fit:contain;object-position:center;background:#fff;padding:8px}
 .product-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;color:#8e98aa;font-size:12px;padding:12px}
 .product-placeholder-icon{font-size:36px;line-height:1}
 .product-details{min-width:0}
-.product-description{margin-top:8px;white-space:pre-line}
-.product-actions{display:flex;flex-direction:column;align-items:flex-end;gap:12px;min-width:142px}
+.product-description{margin-top:8px;white-space:pre-line}.product-description.fallback{font-style:italic}
+.product-actions{display:flex;flex-direction:column;align-items:flex-end;gap:12px;min-width:110px}
 .btn{border:1px solid var(--border);border-radius:9px;background:white;color:var(--text);padding:9px 11px;font-weight:700;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--blue);color:var(--blue)}
 .btn:disabled{opacity:.55;cursor:wait}
@@ -86,8 +86,8 @@ h2{margin:0 0 14px;font-size:22px}
 .gallery-head h2{margin-bottom:6px;font-size:21px}
 .gallery-muted{font-size:13px;color:var(--muted)}
 .gallery-close{width:36px;height:36px;border:1px solid var(--border);border-radius:9px;background:white;font-size:23px;cursor:pointer}
-.gallery-main{background:#f4f6fa;border:1px solid var(--border);border-radius:12px;min-height:255px;height:min(45vh,360px);display:grid;place-items:center;overflow:hidden}
-.gallery-main img{width:100%;height:100%;object-fit:contain;background:white}
+.gallery-main{background:#f4f6fa;border:1px solid var(--border);border-radius:12px;min-height:280px;height:min(52vh,500px);display:flex;align-items:center;justify-content:center;overflow:hidden;padding:12px}
+.gallery-main img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;object-position:center;background:white}
 .gallery-empty{text-align:center;color:var(--muted);font-size:14px;padding:20px}
 .gallery-thumbs{display:flex;gap:9px;overflow:auto;padding:11px 1px 3px;min-height:86px;align-items:center}
 .gallery-thumb{position:relative;flex:0 0 73px;height:73px;border:2px solid var(--border);border-radius:10px;background:white;display:grid;place-items:center;cursor:pointer;padding:3px;overflow:hidden}
@@ -104,6 +104,22 @@ h2{margin:0 0 14px;font-size:22px}
 .gallery-status{min-height:20px;font-size:13px;line-height:1.5;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}
 .gallery-status.error{color:var(--red)}
 .gallery-status.ok{color:var(--green)}
+/* Produktbeschreibung in der Galerie */
+.gallery-info{margin-top:13px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#fafbfc}
+.gallery-info-title{font-size:13px;font-weight:800;margin-bottom:6px}
+.gallery-info-text{font-size:14px;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
+.gallery-info-text.fallback{font-style:italic;color:var(--muted)}
+.gallery-info-meta{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.5}
+/* Unabhängige Seitennavigation: höchstens zehn Datensätze je Liste und Seite */
+.pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px}
+.pagination-summary{color:var(--muted);font-size:13px}
+.pagination-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pagination-button{border:1px solid var(--border);background:white;border-radius:9px;padding:7px 11px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;min-width:36px}
+.pagination-button:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+.pagination-button[aria-current="page"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.pagination-button:disabled{opacity:.45;cursor:not-allowed}
+.pagination-ellipsis{color:var(--muted);padding:0 3px}
+@media(max-width:650px){.pagination{align-items:flex-start;flex-direction:column}.pagination-controls{gap:4px}.pagination-button{padding:7px 9px}}
 body.gallery-open{overflow:hidden}
 @media(max-width:1000px){.product-media{width:116px}}
 @media(max-width:650px){.product-media{width:104px}.gallery-modal{padding:15px}.gallery-main{min-height:200px;height:35vh}}
@@ -168,11 +184,13 @@ body.gallery-open{overflow:hidden}
       <section id="shop" class="section card">
         <h2>Shop &amp; Produkte</h2>
         <div id="produktListe" class="list"></div>
+        <nav id="produktPagination" class="pagination" aria-label="Produktseiten"></nav>
       </section>
 
       <section id="bestellungen" class="section card">
         <h2>Bestellungen</h2>
         <div id="bestellListe" class="list"></div>
+        <nav id="bestellPagination" class="pagination" aria-label="Bestellseiten"></nav>
       </section>
     </div>
   </main>
@@ -189,6 +207,11 @@ body.gallery-open{overflow:hidden}
       <button type="button" id="galleryClose" class="gallery-close" aria-label="Galerie schließen">×</button>
     </div>
     <div id="galleryMain" class="gallery-main" aria-live="polite"></div>
+    <div class="gallery-info">
+      <div class="gallery-info-title">Produktbeschreibung</div>
+      <div id="galleryDescription" class="gallery-info-text"></div>
+      <div id="galleryMeta" class="gallery-info-meta"></div>
+    </div>
     <div id="galleryThumbnails" class="gallery-thumbs" aria-label="Produktbilder auswählen"></div>
     <div class="gallery-actions">
       <button type="button" id="galleryAdd" class="btn primary">+ Bilder hinzufügen</button>
@@ -210,6 +233,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW
 const BUCKET = 'sma-produktbilder';
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
+const PAGE_SIZE = 10;
 const IMAGE_TYPES = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const euro = new Intl.NumberFormat('de-DE', {style:'currency',currency:'EUR'});
@@ -240,6 +264,10 @@ function makePlaceholder(container){
 const signedCache = new Map();
 let productsState=[];
 let currentUserId='';
+const paginationState={
+  products:{page:1,total:0,request:0},
+  orders:{page:1,total:0,request:0}
+};
 const gallery={product:null,index:0,busy:false,version:0,opener:null};
 const galleryBackdrop=document.getElementById('galleryBackdrop');
 const galleryDialog=document.getElementById('galleryDialog');
@@ -256,6 +284,17 @@ function imagePaths(product){
   const list=Array.isArray(product.bild_pfade)?product.bild_pfade.filter(path=>typeof path==='string'&&path.length>0):[];
   if(list.length) return [...new Set(list)];
   return product.bild_pfad?[product.bild_pfad]:[];
+}
+// Vorhandene Beschreibung vollständig verwenden; falls leer, nur belegte Produktdaten zusammenfassen.
+function productDescription(product){
+  const given=String(product?.beschreibung||'').trim();
+  if(given)return {text:given,generated:false};
+  const name=String(product?.produkt_name||'Produkt').trim();
+  const fragments=[name];
+  if(product?.produkt_typ)fragments.push('Produkttyp: '+product.produkt_typ);
+  if(product?.sku)fragments.push('SKU: '+product.sku);
+  fragments.push('Bestand: '+String(product?.bestand??0));
+  return {text:fragments.join(' · ')+'.',generated:true};
 }
 async function imageUrl(path){
   if(!path) return null;
@@ -344,7 +383,9 @@ function makeProductCard(product,userId){
   meta.textContent=(product.produkt_typ||'')+(product.sku?' · SKU '+product.sku:'')+'\nBestand: '+(product.bestand??0);
   meta.style.whiteSpace='pre-line';
   const description=document.createElement('div');description.className='item-meta product-description';
-  description.textContent=product.beschreibung||'';
+  const desc=productDescription(product);
+  description.textContent=desc.text;
+  if(desc.generated)description.classList.add('fallback');
   const badges=document.createElement('div');badges.className='badges';
   badges.append(makeBadge(product.aktiv?'Aktiv':'Inaktiv',!!product.aktiv));
   if(product.shopify_aktiv)badges.append(makeBadge('Shopify aktiv',true));
@@ -354,11 +395,8 @@ function makeProductCard(product,userId){
   const actions=document.createElement('div');actions.className='product-actions';
   const amount=document.createElement('div');amount.className='amount';
   amount.textContent=euro.format(Number(product.preis||0));
-  const editImages=document.createElement('button');editImages.type='button';editImages.className='btn';
-  editImages.textContent=paths.length?'Galerie bearbeiten':'Bilder hinzufügen';
-  editImages.disabled=!product.sma_produkt_id;
-  editImages.addEventListener('click',()=>openGallery(product,editImages,0));
-  actions.append(amount,editImages);
+  // Bilder lassen sich direkt durch Klick auf das Produktfoto verwalten.
+  actions.append(amount);
   row.append(media,details,actions);
   return row;
 }
@@ -412,10 +450,19 @@ async function renderGallery(){
   const myVersion=++gallery.version;
   document.getElementById('galleryTitle').textContent=product.produkt_name||'Produktbilder';
   galleryCounter.textContent=paths.length+' / '+MAX_IMAGES+' Bilder';
+  const desc=productDescription(product);
+  const descriptionNode=document.getElementById('galleryDescription');
+  descriptionNode.textContent=desc.text;
+  descriptionNode.classList.toggle('fallback',desc.generated);
+  document.getElementById('galleryMeta').textContent=[
+    product.produkt_typ||'',product.sku?'SKU '+product.sku:'',
+    'Bestand: '+String(product.bestand??0),
+    euro.format(Number(product.preis||0))
+  ].filter(Boolean).join(' · ');
   galleryMain.replaceChildren();galleryThumbs.replaceChildren();
   if(!paths.length){
     const empty=document.createElement('div');empty.className='gallery-empty';
-    empty.textContent='Noch kein Bild vorhanden. Klicke auf „Bilder hinzufügen“.';
+    empty.textContent='Noch kein Bild vorhanden. Füge unten Bilder hinzu.';
     galleryMain.append(empty);
   }else{
     const selectedPath=paths[gallery.index];
@@ -544,6 +591,91 @@ function renderOrders(orders){
   }
 }
 
+// Daten werden seitenweise aus Supabase geladen, damit auch große Shops vollständig erreichbar bleiben.
+const PRODUKT_FELDER='sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at';
+const BESTELL_FELDER='markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung';
+
+function showLoading(elementId,message){
+  const element=document.getElementById(elementId);
+  element.replaceChildren();
+  const notice=document.createElement('div');notice.className='empty';notice.textContent=message;
+  element.append(notice);
+}
+function renderPagination(elementId,state,word,loadPage){
+  const nav=document.getElementById(elementId);nav.replaceChildren();
+  const totalPages=Math.max(1,Math.ceil(state.total/PAGE_SIZE));
+  if(state.total===0)return;
+  const start=(state.page-1)*PAGE_SIZE+1;
+  const end=Math.min(state.page*PAGE_SIZE,state.total);
+  const summary=document.createElement('div');summary.className='pagination-summary';
+  summary.textContent=start+'–'+end+' von '+state.total+' '+word;
+  nav.append(summary);
+  if(totalPages===1)return;
+  const controls=document.createElement('div');controls.className='pagination-controls';
+  function button(label,page,disabled=false,current=false){
+    const el=document.createElement('button');el.type='button';el.className='pagination-button';
+    el.textContent=label;el.disabled=disabled;
+    if(current)el.setAttribute('aria-current','page');
+    el.addEventListener('click',()=>{if(!el.disabled)loadPage(page);});
+    controls.append(el);
+  }
+  button('‹ Zurück',state.page-1,state.page===1);
+  const indices=new Set([1,totalPages]);
+  for(let n=Math.max(1,state.page-2);n<=Math.min(totalPages,state.page+2);n++)indices.add(n);
+  let prev=0;
+  for(const n of [...indices].sort((a,b)=>a-b)){
+    if(n-prev>1){const dots=document.createElement('span');dots.className='pagination-ellipsis';dots.textContent='…';controls.append(dots);}
+    button(String(n),n,n===state.page,n===state.page);
+    prev=n;
+  }
+  button('Weiter ›',state.page+1,state.page===totalPages);
+  nav.append(controls);
+}
+async function loadProductsPage(requestedPage=1){
+  const state=paginationState.products;
+  const request=++state.request;
+  const page=Math.max(1,Math.floor(requestedPage));
+  const from=(page-1)*PAGE_SIZE;
+  showLoading('produktListe','Produkte werden geladen …');
+  const {data,error,count}=await supabase.from('sma_produkte')
+    .select(PRODUKT_FELDER,{count:'exact'})
+    .eq('user_id',currentUserId)
+    .order('created_at',{ascending:false})
+    .order('sma_produkt_id',{ascending:true})
+    .range(from,from+PAGE_SIZE-1);
+  if(request!==state.request)return;
+  if(error){showLoading('produktListe','Produkte konnten nicht geladen werden: '+error.message);return;}
+  const total=count??0;
+  const maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(page>maxPage){await loadProductsPage(maxPage);return;}
+  state.total=total;state.page=page;
+  productsState=data||[];
+  document.getElementById('produktCount').textContent=total;
+  renderProductList();
+  renderPagination('produktPagination',state,'Produkten',loadProductsPage);
+}
+async function loadOrdersPage(requestedPage=1){
+  const state=paginationState.orders;
+  const request=++state.request;
+  const page=Math.max(1,Math.floor(requestedPage));
+  const from=(page-1)*PAGE_SIZE;
+  showLoading('bestellListe','Bestellungen werden geladen …');
+  const {data,error,count}=await supabase.from('sma_bestellungen')
+    .select(BESTELL_FELDER,{count:'exact'})
+    .eq('user_id',currentUserId)
+    .order('erstellt_am',{ascending:false})
+    .range(from,from+PAGE_SIZE-1);
+  if(request!==state.request)return;
+  if(error){showLoading('bestellListe','Bestellungen konnten nicht geladen werden: '+error.message);return;}
+  const total=count??0;
+  const maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(page>maxPage){await loadOrdersPage(maxPage);return;}
+  state.total=total;state.page=page;
+  document.getElementById('bestellCount').textContent=total;
+  renderOrders(data||[]);
+  renderPagination('bestellPagination',state,'Bestellungen',loadOrdersPage);
+}
+
 const {data:sessionData,error:sessionError}=await supabase.auth.getSession();
 const session=sessionData?.session;
 if(sessionError||!session){
@@ -565,32 +697,9 @@ if(sessionError||!session){
       document.getElementById('kontoBadge').textContent=kunde.aktiv?'Freigeschaltet':'Gesperrt';
       document.getElementById('paketValue').textContent=(kunde.paket||'–').toUpperCase();
       document.getElementById('kundeIdValue').textContent=kunde.kunde_id||'–';
-      const [prodRes,orderRes]=await Promise.all([
-        supabase.from('sma_produkte')
-          .select('sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at')
-          .eq('user_id',session.user.id).order('created_at',{ascending:false}),
-        supabase.from('sma_bestellungen')
-          .select('markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung')
-          .eq('user_id',session.user.id).order('erstellt_am',{ascending:false})
-      ]);
-      const productList=document.getElementById('produktListe');
-      productList.replaceChildren();
-      const products=prodRes.data||[];
-      const orders=orderRes.data||[];
-      document.getElementById('produktCount').textContent=products.length;
-      document.getElementById('bestellCount').textContent=orders.length;
       currentUserId=session.user.id;
-      productsState=products;
-      if(prodRes.error){
-        const msg=document.createElement('div');msg.className='empty';
-        msg.textContent='Produkte konnten nicht geladen werden: '+prodRes.error.message;
-        productList.append(msg);
-      }else renderProductList();
-      if(orderRes.error){
-        const msg=document.createElement('div');msg.className='empty';
-        msg.textContent='Bestellungen konnten nicht geladen werden: '+orderRes.error.message;
-        document.getElementById('bestellListe').replaceChildren(msg);
-      }else renderOrders(orders);
+      // Produkte und Bestellungen unabhängig und serverseitig mit je zehn Einträgen laden.
+      await Promise.all([loadProductsPage(1),loadOrdersPage(1)]);
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
     }
