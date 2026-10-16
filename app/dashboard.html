@@ -68,6 +68,45 @@ h2{margin:0 0 14px;font-size:22px}
 @media(max-width:1000px){.product-item{grid-template-columns:116px minmax(0,1fr)}.product-photo{width:116px;height:116px}.product-actions{grid-column:2;align-items:flex-start;min-width:0}}
 @media(max-width:900px){.sidebar{width:210px}.grid{grid-template-columns:1fr}}
 @media(max-width:650px){.app{display:block}.sidebar{width:100%;min-height:auto}.topbar{padding:15px}.content{padding:15px}.item{display:block}.amount{margin-top:12px}.product-item{display:grid;grid-template-columns:104px minmax(0,1fr);gap:12px}.product-photo{width:104px;height:104px}.product-actions{grid-column:1 / -1;align-items:flex-start;flex-direction:row;flex-wrap:wrap}.product-actions .amount{margin-top:0}}
+
+/* Produktgalerie: Vorschaubilder und Klick auf das Produktbild. */
+.product-media{width:144px;min-width:0}
+.product-photo{position:relative;display:grid;place-items:center;padding:0;cursor:pointer}
+.product-photo:hover,.product-photo:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.product-photo .photo-action{position:absolute;bottom:0;left:0;right:0;padding:5px 3px;background:rgba(0,0,0,.67);color:white;text-align:center;font-weight:700;font-size:11px}
+.product-mini-list{display:flex;gap:5px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.product-mini{width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:white;display:grid;place-items:center;overflow:hidden;padding:0;cursor:pointer;color:var(--blue);font-weight:900}
+.product-mini img{width:100%;height:100%;object-fit:contain}
+.product-mini:hover{border-color:var(--blue)}
+.product-mini.more{font-size:10px;color:var(--muted)}
+.product-media-note{margin-top:5px;color:var(--muted);font-size:11px}
+.gallery-backdrop{position:fixed;inset:0;background:rgba(12,19,32,.68);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px}
+.gallery-modal{width:min(760px,100%);max-height:min(94vh,880px);overflow:auto;background:white;border-radius:16px;padding:22px;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+.gallery-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.gallery-head h2{margin-bottom:6px;font-size:21px}
+.gallery-muted{font-size:13px;color:var(--muted)}
+.gallery-close{width:36px;height:36px;border:1px solid var(--border);border-radius:9px;background:white;font-size:23px;cursor:pointer}
+.gallery-main{background:#f4f6fa;border:1px solid var(--border);border-radius:12px;min-height:255px;height:min(45vh,360px);display:grid;place-items:center;overflow:hidden}
+.gallery-main img{width:100%;height:100%;object-fit:contain;background:white}
+.gallery-empty{text-align:center;color:var(--muted);font-size:14px;padding:20px}
+.gallery-thumbs{display:flex;gap:9px;overflow:auto;padding:11px 1px 3px;min-height:86px;align-items:center}
+.gallery-thumb{position:relative;flex:0 0 73px;height:73px;border:2px solid var(--border);border-radius:10px;background:white;display:grid;place-items:center;cursor:pointer;padding:3px;overflow:hidden}
+.gallery-thumb.active{border-color:var(--blue)}
+.gallery-thumb img{width:100%;height:100%;object-fit:contain}
+.gallery-thumb .cover-tag{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.72);color:white;font-size:9px;text-align:center;padding:2px}
+.gallery-add-tile{font-size:13px;font-weight:700;color:var(--blue);background:#f4f8ff}
+.gallery-add-tile:disabled{opacity:.45;cursor:not-allowed}
+.gallery-actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.gallery-actions .primary{background:var(--blue);border-color:var(--blue);color:white}
+.gallery-actions .primary:hover{background:#2156c0;color:white}
+.gallery-actions .danger{color:var(--red);border-color:#edcaca}
+.gallery-actions .danger:hover{background:#fff2f2}
+.gallery-status{min-height:20px;font-size:13px;line-height:1.5;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}
+.gallery-status.error{color:var(--red)}
+.gallery-status.ok{color:var(--green)}
+body.gallery-open{overflow:hidden}
+@media(max-width:1000px){.product-media{width:116px}}
+@media(max-width:650px){.product-media{width:104px}.gallery-modal{padding:15px}.gallery-main{min-height:200px;height:35vh}}
 </style>
 </head>
 <body>
@@ -139,6 +178,29 @@ h2{margin:0 0 14px;font-size:22px}
   </main>
 </div>
 
+<!-- Kundengalerie: private Bilder je Produkt, kein Zugriff auf fremde Kunden. -->
+<div id="galleryBackdrop" class="gallery-backdrop hidden" aria-hidden="true">
+  <section id="galleryDialog" class="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="galleryTitle" tabindex="-1">
+    <div class="gallery-head">
+      <div>
+        <h2 id="galleryTitle">Produktbilder</h2>
+        <div id="galleryCounter" class="gallery-muted">0 / 8 Bilder</div>
+      </div>
+      <button type="button" id="galleryClose" class="gallery-close" aria-label="Galerie schließen">×</button>
+    </div>
+    <div id="galleryMain" class="gallery-main" aria-live="polite"></div>
+    <div id="galleryThumbnails" class="gallery-thumbs" aria-label="Produktbilder auswählen"></div>
+    <div class="gallery-actions">
+      <button type="button" id="galleryAdd" class="btn primary">+ Bilder hinzufügen</button>
+      <button type="button" id="galleryCover" class="btn">Als Hauptbild</button>
+      <button type="button" id="galleryDelete" class="btn danger">Bild löschen</button>
+      <input id="galleryInput" class="file-input" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="Produktbilder hinzufügen">
+    </div>
+    <div id="galleryStatus" class="gallery-status" role="status" aria-live="polite"></div>
+    <p class="gallery-muted">Bis zu 8 Bilder je Produkt · JPG, PNG, WebP · maximal 5 MB je Bild. Das erste Bild ist das Hauptbild.</p>
+  </section>
+</div>
+
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -147,6 +209,7 @@ const SUPABASE_URL = 'https://bnvnmdxosbnuzedokqgh.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
 const BUCKET = 'sma-produktbilder';
 const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGES = 8;
 const IMAGE_TYPES = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const euro = new Intl.NumberFormat('de-DE', {style:'currency',currency:'EUR'});
@@ -174,116 +237,293 @@ function makePlaceholder(container){
   element.append(ico,caption);
   container.append(element);
 }
-async function displayPrivateImage(product, container){
-  if (!product.bild_pfad) return;
-  const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(product.bild_pfad, 3600);
-  if (error || !data?.signedUrl) return;
-  const img=document.createElement('img');
-  img.alt='Produktbild: '+(product.produkt_name||'Produkt');
-  img.loading='lazy';
-  img.onerror=()=>makePlaceholder(container);
-  img.src=data.signedUrl;
-  container.replaceChildren(img);
+const signedCache = new Map();
+let productsState=[];
+let currentUserId='';
+const gallery={product:null,index:0,busy:false,version:0,opener:null};
+const galleryBackdrop=document.getElementById('galleryBackdrop');
+const galleryDialog=document.getElementById('galleryDialog');
+const galleryMain=document.getElementById('galleryMain');
+const galleryThumbs=document.getElementById('galleryThumbnails');
+const galleryCounter=document.getElementById('galleryCounter');
+const galleryStatus=document.getElementById('galleryStatus');
+const galleryAdd=document.getElementById('galleryAdd');
+const galleryCover=document.getElementById('galleryCover');
+const galleryDelete=document.getElementById('galleryDelete');
+const galleryInput=document.getElementById('galleryInput');
+
+function imagePaths(product){
+  const list=Array.isArray(product.bild_pfade)?product.bild_pfade.filter(path=>typeof path==='string'&&path.length>0):[];
+  if(list.length) return [...new Set(list)];
+  return product.bild_pfad?[product.bild_pfad]:[];
 }
-function makeBadge(label, isGreen=false, isOrange=false){
+async function imageUrl(path){
+  if(!path) return null;
+  const cached=signedCache.get(path);
+  if(cached&&cached.expiry>Date.now()) return cached.url;
+  const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(path,600);
+  if(error||!data?.signedUrl) return null;
+  signedCache.set(path,{url:data.signedUrl,expiry:Date.now()+8*60*1000});
+  return data.signedUrl;
+}
+function loadImage(target,path,label){
+  if(!path) return;
+  imageUrl(path).then(url=>{
+    if(!url||!target.isConnected||target.dataset.imagePath!==path) return;
+    const img=document.createElement('img');
+    img.alt=label;
+    img.loading='lazy';
+    const overlay=target.querySelector('.photo-action');
+    img.onerror=()=>{
+      if(target.dataset.imagePath===path){
+        makePlaceholder(target);
+        if(overlay)target.append(overlay);
+      }
+    };
+    img.src=url;
+    target.replaceChildren(img);
+    if(overlay)target.append(overlay);
+  }).catch(()=>{});
+}
+function makeBadge(label,isGreen=false,isOrange=false){
   const badge=document.createElement('span');
   badge.className='badge'+(isGreen?' green':isOrange?' orange':'');
   badge.textContent=label;
   return badge;
 }
+function renderProductList(){
+  const productList=document.getElementById('produktListe');
+  productList.replaceChildren();
+  if(!productsState.length){
+    const empty=document.createElement('div');empty.className='empty';
+    empty.textContent='Noch keine Produkte vorhanden.';productList.append(empty);return;
+  }
+  for(const product of productsState) productList.append(makeProductCard(product,currentUserId));
+}
 function makeProductCard(product,userId){
   const row=document.createElement('article');
   row.className='item product-item';
-  const photo=document.createElement('div');
-  photo.className='product-photo';
+  const paths=imagePaths(product);
+  const media=document.createElement('div');media.className='product-media';
+  const photo=document.createElement('button');
+  photo.type='button';photo.className='product-photo';
+  photo.title='Produktgalerie öffnen';
+  photo.setAttribute('aria-label','Bilder von '+(product.produkt_name||'Produkt')+' verwalten');
+  photo.disabled=!product.sma_produkt_id;
+  photo.dataset.imagePath=paths[0]||'';
   makePlaceholder(photo);
-  displayPrivateImage(product,photo);
-  const details=document.createElement('div');
-  details.className='product-details';
-  const name=document.createElement('div');
-  name.className='item-title';
+  if(paths[0])loadImage(photo,paths[0],'Hauptbild: '+(product.produkt_name||'Produkt'));
+  const hint=document.createElement('span');hint.className='photo-action';hint.textContent='Bilder verwalten';
+  photo.append(hint);
+  photo.addEventListener('click',()=>openGallery(product,photo,0));
+  media.append(photo);
+  if(paths.length){
+    const miniList=document.createElement('div');miniList.className='product-mini-list';
+    for(let i=0;i<Math.min(paths.length,3);i++){
+      const thumb=document.createElement('button');thumb.type='button';thumb.className='product-mini';
+      thumb.title='Bild '+(i+1)+' in Galerie öffnen';thumb.setAttribute('aria-label','Bild '+(i+1)+' öffnen');
+      thumb.dataset.imagePath=paths[i];thumb.textContent='▧';
+      loadImage(thumb,paths[i],'Vorschaubild '+(i+1));
+      thumb.addEventListener('click',()=>openGallery(product,thumb,i));
+      miniList.append(thumb);
+    }
+    if(paths.length>3){
+      const more=document.createElement('button');more.type='button';more.className='product-mini more';
+      more.textContent='+'+(paths.length-3);more.title='Alle Bilder anzeigen';
+      more.addEventListener('click',()=>openGallery(product,more,3));miniList.append(more);
+    }
+    media.append(miniList);
+  }
+  const mediaNote=document.createElement('div');mediaNote.className='product-media-note';
+  mediaNote.textContent=paths.length+' / '+MAX_IMAGES+' Bilder';media.append(mediaNote);
+
+  const details=document.createElement('div');details.className='product-details';
+  const name=document.createElement('div');name.className='item-title';
   name.textContent=product.produkt_name||'Produkt';
-  const meta=document.createElement('div');
-  meta.className='item-meta';
+  const meta=document.createElement('div');meta.className='item-meta';
   meta.textContent=(product.produkt_typ||'')+(product.sku?' · SKU '+product.sku:'')+'\nBestand: '+(product.bestand??0);
   meta.style.whiteSpace='pre-line';
-  const description=document.createElement('div');
-  description.className='item-meta product-description';
+  const description=document.createElement('div');description.className='item-meta product-description';
   description.textContent=product.beschreibung||'';
-  const badges=document.createElement('div');
-  badges.className='badges';
+  const badges=document.createElement('div');badges.className='badges';
   badges.append(makeBadge(product.aktiv?'Aktiv':'Inaktiv',!!product.aktiv));
-  if(product.shopify_aktiv) badges.append(makeBadge('Shopify aktiv',true));
-  if(product.digistore24_aktiv) badges.append(makeBadge('Digistore24 aktiv',true));
+  if(product.shopify_aktiv)badges.append(makeBadge('Shopify aktiv',true));
+  if(product.digistore24_aktiv)badges.append(makeBadge('Digistore24 aktiv',true));
   details.append(name,meta,description,badges);
 
-  const actions=document.createElement('div');
-  actions.className='product-actions';
-  const amount=document.createElement('div');
-  amount.className='amount';
+  const actions=document.createElement('div');actions.className='product-actions';
+  const amount=document.createElement('div');amount.className='amount';
   amount.textContent=euro.format(Number(product.preis||0));
-  const choose=document.createElement('button');
-  choose.type='button';
-  choose.className='btn';
-  choose.textContent=product.bild_pfad?'Bild austauschen':'Bild hinzufügen';
-  choose.disabled=!product.sma_produkt_id;
-  choose.title='Eigenes Bild (JPG, PNG oder WebP, maximal 5 MB)';
-  const fileInput=document.createElement('input');
-  fileInput.type='file';
-  fileInput.className='file-input';
-  fileInput.accept='image/jpeg,image/png,image/webp';
-  fileInput.setAttribute('aria-label','Bilddatei für '+(product.produkt_name||'Produkt'));
-  const status=document.createElement('span');
-  status.className='upload-note';
-  status.setAttribute('role','status');
-  status.setAttribute('aria-live','polite');
-  choose.addEventListener('click',()=>fileInput.click());
-  fileInput.addEventListener('change',async()=>{
-    const file=fileInput.files?.[0];
-    fileInput.value='';
-    if(!file) return;
-    status.className='upload-note';
-    if(!IMAGE_TYPES[file.type]){
-      status.textContent='Nur JPG, PNG oder WebP erlaubt.';
-      status.classList.add('error');return;
-    }
-    if(file.size>MAX_BYTES){
-      status.textContent='Bild darf maximal 5 MB groß sein.';
-      status.classList.add('error');return;
-    }
-    if(!product.sma_produkt_id){
-      status.textContent='Produkt-ID fehlt. Kein Upload möglich.';
-      status.classList.add('error');return;
-    }
-    choose.disabled=true;
-    status.textContent='Bild wird hochgeladen …';
-    const path=userId+'/'+product.sma_produkt_id+'/'+crypto.randomUUID()+'.'+IMAGE_TYPES[file.type];
-    try{
-      const upload=await supabase.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:false});
-      if(upload.error) throw upload.error;
-      // Die SECURITY-DEFINER-RPC prüft auth.uid(), Produktbesitz und Bildpfad.
-      const result=await supabase.rpc('sma_produktbild_setzen_v1',{
-        p_produkt_id:String(product.sma_produkt_id),
-        p_bild_pfad:path
-      });
-      if(result.error || result.data!==true){
-        await supabase.storage.from(BUCKET).remove([path]);
-        throw result.error||new Error('Bild konnte dem Produkt nicht zugeordnet werden.');
-      }
-      product.bild_pfad=path;
-      await displayPrivateImage(product,photo);
-      choose.textContent='Bild austauschen';
-      status.textContent='Produktbild gespeichert.';
-      status.classList.add('ok');
-    }catch(error){
-      status.textContent='Upload fehlgeschlagen: '+(error?.message||'Unbekannter Fehler');
-      status.classList.add('error');
-    }finally{choose.disabled=false;}
-  });
-  actions.append(amount,choose,fileInput,status);
-  row.append(photo,details,actions);
+  const editImages=document.createElement('button');editImages.type='button';editImages.className='btn';
+  editImages.textContent=paths.length?'Galerie bearbeiten':'Bilder hinzufügen';
+  editImages.disabled=!product.sma_produkt_id;
+  editImages.addEventListener('click',()=>openGallery(product,editImages,0));
+  actions.append(amount,editImages);
+  row.append(media,details,actions);
   return row;
 }
+function statusGallery(message='',kind=''){
+  galleryStatus.className='gallery-status'+(kind?' '+kind:'');
+  galleryStatus.textContent=message;
+}
+function setGalleryBusy(busy){
+  gallery.busy=busy;
+  const paths=gallery.product?imagePaths(gallery.product):[];
+  galleryAdd.disabled=busy||paths.length>=MAX_IMAGES;
+  galleryCover.disabled=busy||!paths.length||gallery.index===0;
+  galleryDelete.disabled=busy||!paths.length;
+  document.getElementById('galleryClose').disabled=busy;
+}
+function openGallery(product,opener,index=0){
+  if(gallery.busy)return;
+  gallery.product=product;
+  gallery.index=Math.min(Math.max(0,index),Math.max(0,imagePaths(product).length-1));
+  gallery.opener=opener;
+  galleryBackdrop.classList.remove('hidden');
+  galleryBackdrop.setAttribute('aria-hidden','false');
+  document.body.classList.add('gallery-open');
+  statusGallery();renderGallery();galleryDialog.focus();
+}
+function closeGallery(){
+  if(gallery.busy)return;
+  gallery.version++;
+  galleryBackdrop.classList.add('hidden');
+  galleryBackdrop.setAttribute('aria-hidden','true');
+  document.body.classList.remove('gallery-open');
+  gallery.product=null;
+  // Re-rendered cards may replace the original focus target.
+  document.getElementById('produktListe').querySelector('.product-photo')?.focus();
+}
+document.getElementById('galleryClose').addEventListener('click',closeGallery);
+galleryBackdrop.addEventListener('click',event=>{if(event.target===galleryBackdrop)closeGallery();});
+document.addEventListener('keydown',event=>{
+  if(galleryBackdrop.classList.contains('hidden'))return;
+  if(event.key==='Escape'){event.preventDefault();closeGallery();}
+  if(gallery.busy)return;
+  const paths=gallery.product?imagePaths(gallery.product):[];
+  if(event.key==='ArrowRight'&&paths.length){gallery.index=(gallery.index+1)%paths.length;renderGallery();}
+  if(event.key==='ArrowLeft'&&paths.length){gallery.index=(gallery.index+paths.length-1)%paths.length;renderGallery();}
+});
+async function renderGallery(){
+  const product=gallery.product;
+  if(!product)return;
+  const paths=imagePaths(product);
+  gallery.index=Math.min(gallery.index,Math.max(0,paths.length-1));
+  const myVersion=++gallery.version;
+  document.getElementById('galleryTitle').textContent=product.produkt_name||'Produktbilder';
+  galleryCounter.textContent=paths.length+' / '+MAX_IMAGES+' Bilder';
+  galleryMain.replaceChildren();galleryThumbs.replaceChildren();
+  if(!paths.length){
+    const empty=document.createElement('div');empty.className='gallery-empty';
+    empty.textContent='Noch kein Bild vorhanden. Klicke auf „Bilder hinzufügen“.';
+    galleryMain.append(empty);
+  }else{
+    const selectedPath=paths[gallery.index];
+    const preview=document.createElement('div');preview.className='gallery-empty';
+    preview.textContent='Bild wird geladen …';galleryMain.append(preview);
+    imageUrl(selectedPath).then(url=>{
+      if(gallery.product!==product||gallery.version!==myVersion)return;
+      if(!url){preview.textContent='Bild konnte nicht geladen werden.';return;}
+      const image=document.createElement('img');image.alt='Produktbild '+(gallery.index+1);
+      image.src=url;image.onerror=()=>{preview.textContent='Bild konnte nicht geladen werden.';galleryMain.replaceChildren(preview);};
+      galleryMain.replaceChildren(image);
+    }).catch(()=>{if(gallery.version===myVersion)preview.textContent='Bild konnte nicht geladen werden.';});
+  }
+  for(let i=0;i<paths.length;i++){
+    const path=paths[i];
+    const btn=document.createElement('button');btn.type='button';
+    btn.className='gallery-thumb'+(i===gallery.index?' active':'');
+    btn.setAttribute('aria-label','Produktbild '+(i+1)+' anzeigen');
+    btn.textContent='▧';
+    btn.addEventListener('click',()=>{gallery.index=i;renderGallery();});
+    imageUrl(path).then(url=>{
+      if(!url||gallery.product!==product||gallery.version!==myVersion||!btn.isConnected)return;
+      const img=document.createElement('img');img.alt='Bild '+(i+1);img.src=url;
+      btn.replaceChildren(img);
+      if(i===0){const tag=document.createElement('span');tag.className='cover-tag';tag.textContent='Hauptbild';btn.append(tag);}
+    }).catch(()=>{});
+    galleryThumbs.append(btn);
+  }
+  if(paths.length<MAX_IMAGES){
+    const add=document.createElement('button');add.type='button';
+    add.className='gallery-thumb gallery-add-tile';add.textContent='+ Bild';
+    add.title='Weiteres Bild hinzufügen';
+    add.addEventListener('click',()=>galleryInput.click());
+    galleryThumbs.append(add);
+  }
+  setGalleryBusy(gallery.busy);
+}
+async function saveGalleryPaths(product,paths){
+  const result=await supabase.rpc('sma_produktbilder_setzen_v2',{
+    p_produkt_id:String(product.sma_produkt_id),p_bild_pfade:paths
+  });
+  if(result.error||result.data!==true)throw result.error||new Error('Bilder konnten nicht gespeichert werden.');
+  product.bild_pfade=[...paths];product.bild_pfad=paths[0]||null;
+}
+galleryAdd.addEventListener('click',()=>{if(!gallery.busy)galleryInput.click();});
+galleryInput.addEventListener('change',async()=>{
+  const files=[...(galleryInput.files||[])];galleryInput.value='';
+  const product=gallery.product;
+  if(!files.length||!product||gallery.busy)return;
+  const paths=imagePaths(product);
+  if(paths.length+files.length>MAX_IMAGES){statusGallery('Maximal '+MAX_IMAGES+' Bilder pro Produkt.','error');return;}
+  for(const file of files){
+    if(!IMAGE_TYPES[file.type]){statusGallery('Nur JPG, PNG oder WebP sind erlaubt.','error');return;}
+    if(file.size>MAX_BYTES){statusGallery('Jedes Bild darf maximal 5 MB groß sein.','error');return;}
+  }
+  setGalleryBusy(true);statusGallery('Bilder werden hochgeladen …');
+  const uploaded=[];
+  try{
+    for(const file of files){
+      const path=currentUserId+'/'+product.sma_produkt_id+'/'+crypto.randomUUID()+'.'+IMAGE_TYPES[file.type];
+      const result=await supabase.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:false});
+      if(result.error)throw result.error;
+      uploaded.push(path);
+    }
+    const next=[...paths,...uploaded];
+    await saveGalleryPaths(product,next);
+    gallery.index=paths.length;
+    renderProductList();
+    await renderGallery();
+    statusGallery(uploaded.length+' Bild(er) gespeichert.','ok');
+  }catch(error){
+    // Leave uploaded files in place on ambiguous RPC network errors rather than removing a file
+    // that the database might already reference. They can be cleaned up later if needed.
+    statusGallery('Upload fehlgeschlagen: '+(error?.message||'Unbekannter Fehler'),'error');
+  }finally{setGalleryBusy(false);}
+});
+galleryCover.addEventListener('click',async()=>{
+  const product=gallery.product;
+  if(!product||gallery.busy)return;
+  const paths=imagePaths(product);
+  if(gallery.index<=0||gallery.index>=paths.length)return;
+  const selected=paths.splice(gallery.index,1)[0];paths.unshift(selected);
+  setGalleryBusy(true);statusGallery('Hauptbild wird gespeichert …');
+  try{
+    await saveGalleryPaths(product,paths);gallery.index=0;
+    renderProductList();await renderGallery();statusGallery('Hauptbild geändert.','ok');
+  }catch(error){statusGallery('Änderung fehlgeschlagen: '+(error?.message||'Unbekannter Fehler'),'error');}
+  finally{setGalleryBusy(false);}
+});
+galleryDelete.addEventListener('click',async()=>{
+  const product=gallery.product;if(!product||gallery.busy)return;
+  const paths=imagePaths(product),toDelete=paths[gallery.index];
+  if(!toDelete||!window.confirm('Dieses Produktbild wirklich löschen?'))return;
+  const next=paths.filter(path=>path!==toDelete);
+  setGalleryBusy(true);statusGallery('Bild wird entfernt …');
+  try{
+    // First remove the DB reference; then remove the now-unreferenced private file.
+    await saveGalleryPaths(product,next);
+    signedCache.delete(toDelete);
+    gallery.index=Math.min(gallery.index,Math.max(0,next.length-1));
+    renderProductList();await renderGallery();
+    const removed=await supabase.storage.from(BUCKET).remove([toDelete]);
+    if(removed.error){
+      statusGallery('Bild aus der Galerie entfernt. Die Datei konnte nicht gelöscht werden: '+removed.error.message,'error');
+    }else statusGallery('Bild gelöscht.','ok');
+  }catch(error){statusGallery('Löschen fehlgeschlagen: '+(error?.message||'Unbekannter Fehler'),'error');}
+  finally{setGalleryBusy(false);}
+});
 function renderOrders(orders){
   const list=document.getElementById('bestellListe');
   list.replaceChildren();
@@ -327,7 +567,7 @@ if(sessionError||!session){
       document.getElementById('kundeIdValue').textContent=kunde.kunde_id||'–';
       const [prodRes,orderRes]=await Promise.all([
         supabase.from('sma_produkte')
-          .select('sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,created_at')
+          .select('sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at')
           .eq('user_id',session.user.id).order('created_at',{ascending:false}),
         supabase.from('sma_bestellungen')
           .select('markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung')
@@ -339,15 +579,13 @@ if(sessionError||!session){
       const orders=orderRes.data||[];
       document.getElementById('produktCount').textContent=products.length;
       document.getElementById('bestellCount').textContent=orders.length;
+      currentUserId=session.user.id;
+      productsState=products;
       if(prodRes.error){
         const msg=document.createElement('div');msg.className='empty';
         msg.textContent='Produkte konnten nicht geladen werden: '+prodRes.error.message;
         productList.append(msg);
-      }else if(!products.length){
-        productList.innerHTML='<div class="empty">Noch keine Produkte vorhanden.</div>';
-      }else{
-        for(const product of products) productList.append(makeProductCard(product,session.user.id));
-      }
+      }else renderProductList();
       if(orderRes.error){
         const msg=document.createElement('div');msg.className='empty';
         msg.textContent='Bestellungen konnten nicht geladen werden: '+orderRes.error.message;
