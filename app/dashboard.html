@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -6,19 +7,13 @@
 <title>SMA Dashboard</title>
 <style>
 :root{
-  --blue:#2f67d8;
-  --sidebar:#050505;
-  --bg:#f5f6f8;
-  --surface:#ffffff;
-  --border:#e4e7ec;
-  --text:#17191c;
-  --muted:#727984;
-  --green:#238b45;
-  --orange:#a86512;
-  --red:#b94a48;
+  --blue:#2f67d8;--sidebar:#050505;--bg:#f5f6f8;--surface:#fff;
+  --border:#e4e7ec;--text:#17191c;--muted:#727984;
+  --green:#238b45;--orange:#a86512;--red:#b94a48;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+button{font:inherit}
 .app{min-height:100vh;display:flex}
 .sidebar{width:270px;background:var(--sidebar);color:#fff;padding:24px 18px;display:flex;flex-direction:column}
 .logo{font-weight:900;font-size:22px;margin-bottom:28px}
@@ -28,9 +23,9 @@ body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text
 .nav-button:hover{background:#151515}
 .sidebar-footer{margin-top:auto;border-top:1px solid #1d1d1d;padding-top:16px;color:#9aa1ad;font-size:12px}
 .main{flex:1;min-width:0}
-.topbar{height:74px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px}
-.user{display:flex;align-items:center;gap:12px}
-.user-email{font-size:13px;color:var(--muted)}
+.topbar{min-height:74px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 28px}
+.user{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.user-email{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .logout{border:1px solid var(--border);background:#fff;border-radius:9px;padding:9px 13px;font-weight:700;cursor:pointer}
 .content{padding:28px}
 h1{margin:0 0 6px;font-size:32px}
@@ -45,8 +40,8 @@ h2{margin:0 0 14px;font-size:22px}
 .list{display:grid;gap:12px}
 .item{border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;justify-content:space-between;gap:18px;background:#fff}
 .item-title{font-weight:900;font-size:18px;margin-bottom:5px}
-.item-meta{color:var(--muted);font-size:13px;line-height:1.55}
-.amount{font-size:20px;font-weight:900;color:var(--blue);white-space:nowrap}
+.item-meta{color:var(--muted);font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.amount{font-size:21px;font-weight:900;color:var(--blue);white-space:nowrap}
 .badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
 .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#eef2f7;color:#445}
 .badge.green{background:#eef8f1;color:var(--green)}
@@ -54,8 +49,25 @@ h2{margin:0 0 14px;font-size:22px}
 .empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed #ccd2db;border-radius:14px;background:#fafbfc}
 .hidden{display:none!important}
 .blocked{max-width:620px;margin:70px auto;background:#fff;border:1px solid var(--border);border-radius:18px;padding:28px;text-align:center}
+/* Produktliste: ein Produkt pro Zeile, Bild links, Text in der Mitte, Preis rechts. */
+.product-item{display:grid;grid-template-columns:144px minmax(0,1fr) auto;align-items:start;gap:20px}
+.product-photo{width:144px;height:144px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#f4f6fa;display:grid;place-items:center}
+.product-photo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.product-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;color:#8e98aa;font-size:12px;padding:12px}
+.product-placeholder-icon{font-size:36px;line-height:1}
+.product-details{min-width:0}
+.product-description{margin-top:8px;white-space:pre-line}
+.product-actions{display:flex;flex-direction:column;align-items:flex-end;gap:12px;min-width:142px}
+.btn{border:1px solid var(--border);border-radius:9px;background:white;color:var(--text);padding:9px 11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn:disabled{opacity:.55;cursor:wait}
+.upload-note{font-size:12px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.upload-note.error{color:var(--red)}
+.upload-note.ok{color:var(--green)}
+.file-input{display:none}
+@media(max-width:1000px){.product-item{grid-template-columns:116px minmax(0,1fr)}.product-photo{width:116px;height:116px}.product-actions{grid-column:2;align-items:flex-start;min-width:0}}
 @media(max-width:900px){.sidebar{width:210px}.grid{grid-template-columns:1fr}}
-@media(max-width:650px){.app{display:block}.sidebar{width:100%;min-height:auto}.item{display:block}.amount{margin-top:12px}}
+@media(max-width:650px){.app{display:block}.sidebar{width:100%;min-height:auto}.topbar{padding:15px}.content{padding:15px}.item{display:block}.amount{margin-top:12px}.product-item{display:grid;grid-template-columns:104px minmax(0,1fr);gap:12px}.product-photo{width:104px;height:104px}.product-actions{grid-column:1 / -1;align-items:flex-start;flex-direction:row;flex-wrap:wrap}.product-actions .amount{margin-top:0}}
 </style>
 </head>
 <body>
@@ -74,13 +86,11 @@ h2{margin:0 0 14px;font-size:22px}
     <a class="nav-button" href="#bestellungen">↺ History</a>
     <a class="nav-button" href="#">⚙ Einstellungen</a>
     <a class="nav-button" href="../academy/index.html">? Tutorials</a>
-
     <div class="nav-section">Paket-Module</div>
     <a class="nav-button" href="#">⚡ 24/7 Verkäufer</a>
     <a class="nav-button" href="#shop">▦ Shop</a>
     <a class="nav-button" href="#">◇ Kundenassistent</a>
-    <a class="nav-button" href="#">⌘ Website & Domain</a>
-
+    <a class="nav-button" href="#">⌘ Website &amp; Domain</a>
     <div class="sidebar-footer">SMA<br>Social Media Automation</div>
   </aside>
 
@@ -97,7 +107,6 @@ h2{margin:0 0 14px;font-size:22px}
       <section id="uebersicht">
         <h1 id="welcomeTitle">Willkommen bei SMA</h1>
         <p class="lead">Dein zentraler Kundenbereich.</p>
-
         <div class="grid">
           <div class="card">
             <div class="card-title">Konto</div>
@@ -118,7 +127,7 @@ h2{margin:0 0 14px;font-size:22px}
       </section>
 
       <section id="shop" class="section card">
-        <h2>Shop & Produkte</h2>
+        <h2>Shop &amp; Produkte</h2>
         <div id="produktListe" class="list"></div>
       </section>
 
@@ -133,100 +142,217 @@ h2{margin:0 0 14px;font-size:22px}
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Dieser Publishable Key darf im Browser verwendet werden. Niemals einen Secret-/Service-Role-Key einfügen.
 const SUPABASE_URL = 'https://bnvnmdxosbnuzedokqgh.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
+const BUCKET = 'sma-produktbilder';
+const MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_TYPES = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-
-const euro = new Intl.NumberFormat('de-DE', { style:'currency', currency:'EUR' });
-const esc = (v='') => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const euro = new Intl.NumberFormat('de-DE', {style:'currency',currency:'EUR'});
+const esc = (v='') => String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const goLogin = () => window.location.replace('index.html');
-const signOut = async () => { await supabase.auth.signOut(); goLogin(); };
+const signOut = async () => { await supabase.auth.signOut();goLogin(); };
 
-document.getElementById('logoutButton').addEventListener('click', signOut);
-document.getElementById('blockedLogout').addEventListener('click', signOut);
+document.getElementById('logoutButton').addEventListener('click',signOut);
+document.getElementById('blockedLogout').addEventListener('click',signOut);
 
-const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-const session = sessionData?.session;
+function showBlocked(message){
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('blockedText').textContent=message;
+  document.getElementById('blocked').classList.remove('hidden');
+}
+function makePlaceholder(container){
+  container.replaceChildren();
+  const element=document.createElement('div');
+  element.className='product-placeholder';
+  const ico=document.createElement('span');
+  ico.className='product-placeholder-icon';
+  ico.textContent='▧';
+  const caption=document.createElement('span');
+  caption.textContent='Noch kein Produktbild';
+  element.append(ico,caption);
+  container.append(element);
+}
+async function displayPrivateImage(product, container){
+  if (!product.bild_pfad) return;
+  const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(product.bild_pfad, 3600);
+  if (error || !data?.signedUrl) return;
+  const img=document.createElement('img');
+  img.alt='Produktbild: '+(product.produkt_name||'Produkt');
+  img.loading='lazy';
+  img.onerror=()=>makePlaceholder(container);
+  img.src=data.signedUrl;
+  container.replaceChildren(img);
+}
+function makeBadge(label, isGreen=false, isOrange=false){
+  const badge=document.createElement('span');
+  badge.className='badge'+(isGreen?' green':isOrange?' orange':'');
+  badge.textContent=label;
+  return badge;
+}
+function makeProductCard(product,userId){
+  const row=document.createElement('article');
+  row.className='item product-item';
+  const photo=document.createElement('div');
+  photo.className='product-photo';
+  makePlaceholder(photo);
+  displayPrivateImage(product,photo);
+  const details=document.createElement('div');
+  details.className='product-details';
+  const name=document.createElement('div');
+  name.className='item-title';
+  name.textContent=product.produkt_name||'Produkt';
+  const meta=document.createElement('div');
+  meta.className='item-meta';
+  meta.textContent=(product.produkt_typ||'')+(product.sku?' · SKU '+product.sku:'')+'\nBestand: '+(product.bestand??0);
+  meta.style.whiteSpace='pre-line';
+  const description=document.createElement('div');
+  description.className='item-meta product-description';
+  description.textContent=product.beschreibung||'';
+  const badges=document.createElement('div');
+  badges.className='badges';
+  badges.append(makeBadge(product.aktiv?'Aktiv':'Inaktiv',!!product.aktiv));
+  if(product.shopify_aktiv) badges.append(makeBadge('Shopify aktiv',true));
+  if(product.digistore24_aktiv) badges.append(makeBadge('Digistore24 aktiv',true));
+  details.append(name,meta,description,badges);
 
-if (sessionError || !session) {
+  const actions=document.createElement('div');
+  actions.className='product-actions';
+  const amount=document.createElement('div');
+  amount.className='amount';
+  amount.textContent=euro.format(Number(product.preis||0));
+  const choose=document.createElement('button');
+  choose.type='button';
+  choose.className='btn';
+  choose.textContent=product.bild_pfad?'Bild austauschen':'Bild hinzufügen';
+  choose.disabled=!product.sma_produkt_id;
+  choose.title='Eigenes Bild (JPG, PNG oder WebP, maximal 5 MB)';
+  const fileInput=document.createElement('input');
+  fileInput.type='file';
+  fileInput.className='file-input';
+  fileInput.accept='image/jpeg,image/png,image/webp';
+  fileInput.setAttribute('aria-label','Bilddatei für '+(product.produkt_name||'Produkt'));
+  const status=document.createElement('span');
+  status.className='upload-note';
+  status.setAttribute('role','status');
+  status.setAttribute('aria-live','polite');
+  choose.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',async()=>{
+    const file=fileInput.files?.[0];
+    fileInput.value='';
+    if(!file) return;
+    status.className='upload-note';
+    if(!IMAGE_TYPES[file.type]){
+      status.textContent='Nur JPG, PNG oder WebP erlaubt.';
+      status.classList.add('error');return;
+    }
+    if(file.size>MAX_BYTES){
+      status.textContent='Bild darf maximal 5 MB groß sein.';
+      status.classList.add('error');return;
+    }
+    if(!product.sma_produkt_id){
+      status.textContent='Produkt-ID fehlt. Kein Upload möglich.';
+      status.classList.add('error');return;
+    }
+    choose.disabled=true;
+    status.textContent='Bild wird hochgeladen …';
+    const path=userId+'/'+product.sma_produkt_id+'/'+crypto.randomUUID()+'.'+IMAGE_TYPES[file.type];
+    try{
+      const upload=await supabase.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:false});
+      if(upload.error) throw upload.error;
+      // Die SECURITY-DEFINER-RPC prüft auth.uid(), Produktbesitz und Bildpfad.
+      const result=await supabase.rpc('sma_produktbild_setzen_v1',{
+        p_produkt_id:String(product.sma_produkt_id),
+        p_bild_pfad:path
+      });
+      if(result.error || result.data!==true){
+        await supabase.storage.from(BUCKET).remove([path]);
+        throw result.error||new Error('Bild konnte dem Produkt nicht zugeordnet werden.');
+      }
+      product.bild_pfad=path;
+      await displayPrivateImage(product,photo);
+      choose.textContent='Bild austauschen';
+      status.textContent='Produktbild gespeichert.';
+      status.classList.add('ok');
+    }catch(error){
+      status.textContent='Upload fehlgeschlagen: '+(error?.message||'Unbekannter Fehler');
+      status.classList.add('error');
+    }finally{choose.disabled=false;}
+  });
+  actions.append(amount,choose,fileInput,status);
+  row.append(photo,details,actions);
+  return row;
+}
+function renderOrders(orders){
+  const list=document.getElementById('bestellListe');
+  list.replaceChildren();
+  if(!orders.length){list.innerHTML='<div class="empty">Noch keine Bestellungen vorhanden.</div>';return;}
+  for(const order of orders){
+    const item=document.createElement('article');item.className='item';
+    const body=document.createElement('div');
+    const title=document.createElement('div');title.className='item-title';title.textContent=order.bestellnummer||'Bestellung';
+    const meta=document.createElement('div');meta.className='item-meta';
+    const date=order.erstellt_am?new Date(order.erstellt_am).toLocaleString('de-DE'):'';
+    meta.textContent=(order.markt||'')+(date?' · '+date:'');
+    const badges=document.createElement('div');badges.className='badges';
+    badges.append(makeBadge(order.zahlungsstatus||'–',true),makeBadge(order.lieferstatus||'–',false,true));
+    body.append(title,meta,badges);
+    const total=document.createElement('div');total.className='amount';
+    total.textContent=euro.format(Number(order.gesamtbetrag||0));
+    item.append(body,total);list.append(item);
+  }
+}
+
+const {data:sessionData,error:sessionError}=await supabase.auth.getSession();
+const session=sessionData?.session;
+if(sessionError||!session){
   goLogin();
-} else {
-  const { data: kunde, error: kundeError } = await supabase
-    .from('sma_kunden')
+}else{
+  const {data:kunde,error:kundeError}=await supabase.from('sma_kunden')
     .select('kunde_id,kunde_name,kunde_email,paket,aktiv,zahlung_bestaetigt,demo_delta_aktiv')
-    .eq('user_id', session.user.id)
-    .single();
-
-  if (kundeError || !kunde) {
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('blockedText').textContent = 'Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.';
-    document.getElementById('blocked').classList.remove('hidden');
-  } else {
-    const freigeschaltet = kunde.aktiv === true && (kunde.zahlung_bestaetigt === true || kunde.demo_delta_aktiv === true);
-
-    if (!freigeschaltet) {
-      document.getElementById('loading').classList.add('hidden');
-      document.getElementById('blockedText').textContent = 'Dein SMA-Konto ist noch nicht aktiv oder die Freischaltung wurde noch nicht bestätigt.';
-      document.getElementById('blocked').classList.remove('hidden');
-    } else {
-      document.getElementById('userEmail').textContent = kunde.kunde_email || session.user.email || '';
-      document.getElementById('welcomeTitle').textContent = 'Willkommen, ' + (kunde.kunde_name || 'SMA Kunde');
-      document.getElementById('kontoStatus').textContent = kunde.aktiv ? 'Aktiv' : 'Inaktiv';
-      document.getElementById('kontoBadge').textContent = kunde.aktiv ? 'Freigeschaltet' : 'Gesperrt';
-      document.getElementById('paketValue').textContent = (kunde.paket || '–').toUpperCase();
-      document.getElementById('kundeIdValue').textContent = kunde.kunde_id || '–';
-
-      const [prodRes, orderRes] = await Promise.all([
+    .eq('user_id',session.user.id).single();
+  if(kundeError||!kunde){
+    showBlocked('Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.');
+  }else{
+    const freigeschaltet=kunde.aktiv===true&&(kunde.zahlung_bestaetigt===true||kunde.demo_delta_aktiv===true);
+    if(!freigeschaltet){
+      showBlocked('Dein SMA-Konto ist noch nicht aktiv oder die Freischaltung wurde noch nicht bestätigt.');
+    }else{
+      document.getElementById('userEmail').textContent=kunde.kunde_email||session.user.email||'';
+      document.getElementById('welcomeTitle').textContent='Willkommen, '+(kunde.kunde_name||'SMA Kunde');
+      document.getElementById('kontoStatus').textContent=kunde.aktiv?'Aktiv':'Inaktiv';
+      document.getElementById('kontoBadge').textContent=kunde.aktiv?'Freigeschaltet':'Gesperrt';
+      document.getElementById('paketValue').textContent=(kunde.paket||'–').toUpperCase();
+      document.getElementById('kundeIdValue').textContent=kunde.kunde_id||'–';
+      const [prodRes,orderRes]=await Promise.all([
         supabase.from('sma_produkte')
-          .select('produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,created_at')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending:false }),
+          .select('sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,created_at')
+          .eq('user_id',session.user.id).order('created_at',{ascending:false}),
         supabase.from('sma_bestellungen')
           .select('markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung')
-          .eq('user_id', session.user.id)
-          .order('erstellt_am', { ascending:false })
+          .eq('user_id',session.user.id).order('erstellt_am',{ascending:false})
       ]);
-
-      const produkte = prodRes.data || [];
-      const bestellungen = orderRes.data || [];
-
-      document.getElementById('produktCount').textContent = produkte.length;
-      document.getElementById('bestellCount').textContent = bestellungen.length;
-
-      document.getElementById('produktListe').innerHTML = produkte.length ? produkte.map(p => `
-        <div class="item">
-          <div>
-            <div class="item-title">${esc(p.produkt_name || 'Produkt')}</div>
-            <div class="item-meta">
-              ${esc(p.produkt_typ || '')}${p.sku ? ' · SKU ' + esc(p.sku) : ''}<br>
-              Bestand: ${esc(p.bestand ?? 0)}${p.beschreibung ? '<br>' + esc(p.beschreibung) : ''}
-            </div>
-            <div class="badges">
-              <span class="badge ${p.aktiv ? 'green' : ''}">${p.aktiv ? 'Aktiv' : 'Inaktiv'}</span>
-              ${p.shopify_aktiv ? '<span class="badge green">Shopify aktiv</span>' : ''}
-              ${p.digistore24_aktiv ? '<span class="badge green">Digistore24 aktiv</span>' : ''}
-            </div>
-          </div>
-          <div class="amount">${euro.format(Number(p.preis || 0))}</div>
-        </div>
-      `).join('') : '<div class="empty">Noch keine Produkte vorhanden.</div>';
-
-      document.getElementById('bestellListe').innerHTML = bestellungen.length ? bestellungen.map(b => `
-        <div class="item">
-          <div>
-            <div class="item-title">${esc(b.bestellnummer || 'Bestellung')}</div>
-            <div class="item-meta">
-              ${esc(b.markt || '')}${b.erstellt_am ? ' · ' + new Date(b.erstellt_am).toLocaleString('de-DE') : ''}
-            </div>
-            <div class="badges">
-              <span class="badge green">${esc(b.zahlungsstatus || '–')}</span>
-              <span class="badge orange">${esc(b.lieferstatus || '–')}</span>
-            </div>
-          </div>
-          <div class="amount">${euro.format(Number(b.gesamtbetrag || 0))}</div>
-        </div>
-      `).join('') : '<div class="empty">Noch keine Bestellungen vorhanden.</div>';
-
+      const productList=document.getElementById('produktListe');
+      productList.replaceChildren();
+      const products=prodRes.data||[];
+      const orders=orderRes.data||[];
+      document.getElementById('produktCount').textContent=products.length;
+      document.getElementById('bestellCount').textContent=orders.length;
+      if(prodRes.error){
+        const msg=document.createElement('div');msg.className='empty';
+        msg.textContent='Produkte konnten nicht geladen werden: '+prodRes.error.message;
+        productList.append(msg);
+      }else if(!products.length){
+        productList.innerHTML='<div class="empty">Noch keine Produkte vorhanden.</div>';
+      }else{
+        for(const product of products) productList.append(makeProductCard(product,session.user.id));
+      }
+      if(orderRes.error){
+        const msg=document.createElement('div');msg.className='empty';
+        msg.textContent='Bestellungen konnten nicht geladen werden: '+orderRes.error.message;
+        document.getElementById('bestellListe').replaceChildren(msg);
+      }else renderOrders(orders);
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
     }
