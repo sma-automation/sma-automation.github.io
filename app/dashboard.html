@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -571,6 +572,48 @@ galleryDelete.addEventListener('click',async()=>{
   }catch(error){statusGallery('Löschen fehlgeschlagen: '+(error?.message||'Unbekannter Fehler'),'error');}
   finally{setGalleryBusy(false);}
 });
+// Statuswerte aus Shopify/Supabase bleiben unverändert; nur die Anzeige wird übersetzt.
+const zahlungsstatusTexte = {
+  paid: 'Bezahlt',
+  pending: 'Zahlung ausstehend',
+  authorized: 'Zahlung autorisiert',
+  partially_paid: 'Teilweise bezahlt',
+  unpaid: 'Nicht bezahlt',
+  partially_refunded: 'Teilweise erstattet',
+  refunded: 'Erstattet',
+  voided: 'Zahlung storniert',
+  expired: 'Zahlung abgelaufen',
+  failed: 'Zahlung fehlgeschlagen'
+};
+const lieferstatusTexte = {
+  fulfilled: 'Versendet',
+  unfulfilled: 'Noch nicht versendet',
+  partial: 'Teilweise versendet',
+  partially_fulfilled: 'Teilweise versendet',
+  restocked: 'Wieder eingelagert',
+  on_hold: 'Zurückgestellt',
+  scheduled: 'Versand geplant',
+  requested: 'Versand angefordert',
+  in_progress: 'In Bearbeitung',
+  delivered: 'Zugestellt'
+};
+function deutscherBestellstatus(wert,art){
+  const code=String(wert??'').trim().toLowerCase().replace(/[\s-]+/g,'_');
+  if(!code)return {text:'Nicht angegeben',green:false,orange:false};
+  if(art==='zahlung'){
+    return {
+      text:zahlungsstatusTexte[code]||'Zahlungsstatus unbekannt',
+      green:code==='paid',
+      orange:['pending','authorized','partially_paid','unpaid'].includes(code)
+    };
+  }
+  return {
+    text:lieferstatusTexte[code]||'Lieferstatus unbekannt',
+    green:code==='fulfilled'||code==='delivered',
+    orange:['unfulfilled','partial','partially_fulfilled','on_hold','scheduled','requested','in_progress'].includes(code)
+  };
+}
+
 function renderOrders(orders){
   const list=document.getElementById('bestellListe');
   list.replaceChildren();
@@ -583,7 +626,9 @@ function renderOrders(orders){
     const date=order.erstellt_am?new Date(order.erstellt_am).toLocaleString('de-DE'):'';
     meta.textContent=(order.markt||'')+(date?' · '+date:'');
     const badges=document.createElement('div');badges.className='badges';
-    badges.append(makeBadge(order.zahlungsstatus||'–',true),makeBadge(order.lieferstatus||'–',false,true));
+    const zahlung=deutscherBestellstatus(order.zahlungsstatus,'zahlung');
+    const lieferung=deutscherBestellstatus(order.lieferstatus,'lieferung');
+    badges.append(makeBadge(zahlung.text,zahlung.green,zahlung.orange),makeBadge(lieferung.text,lieferung.green,lieferung.orange));
     body.append(title,meta,badges);
     const total=document.createElement('div');total.className='amount';
     total.textContent=euro.format(Number(order.gesamtbetrag||0));
