@@ -1,12 +1,13 @@
 
 
+
 <!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#ffffff" />
-<title>SMA · Kunden-Shop · Checkout-Test V2</title>
+<title>SMA · Kunden-Shop</title>
 <style>
 :root{--ink:#16263d;--muted:#62738c;--line:#e3eaf2;--paper:#fff;--base:#f6f8fb;--blue:#315bdc;--navy:#101f3d;--green:#16835b;--radius:15px}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--base);font-family:Inter,"Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.45;color:var(--ink)}body.lock{overflow:hidden}button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #8da9ff;outline-offset:2px}a{color:inherit;text-decoration:none}
@@ -35,35 +36,39 @@
 </style>
 </head>
 <body>
-<div class="demo-bar">SMA KUNDEN-SHOP · SHOPIFY-CHECKOUT IN TESTPHASE · KEINE ECHTZAHLUNG DURCHFÜHREN</div>
+<div class="demo-bar" id="shopBanner">SMA KUNDEN-SHOP · KASSE NOCH NICHT FREIGEGEBEN</div>
 <header class="head"><div class="head-inner">
   <div class="logo"><span class="logo-mark">S</span><span class="logo-copy"><b id="merchantName">SMA Shop</b><small>Entdecke unsere Produkte</small></span></div>
   <label class="head-search"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8290a3" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="queryDesktop" type="search" placeholder="Produkte suchen …" autocomplete="off" aria-label="Produkte suchen"></label>
   <button class="cart-trigger" id="cartOpen" type="button" aria-label="Warenkorb öffnen"><span aria-hidden="true">🛒</span><span class="cart-label">Warenkorb</span><span class="cart-pill" id="cartCount">0</span></button>
 </div></header>
 <main class="wrap">
-  <section class="hero"><div><div class="eyebrow">DEIN SHOP · DIREKT AUS SMA</div><h1>Alles entdecken.<br>Einfach einkaufen.</h1><p>Entdecke unsere Produkte mit Bildern und Beschreibungen. SMA-Warenkorb und Shopify-Checkout werden derzeit im Testbetrieb verbunden.</p></div><div class="hero-orbit" aria-hidden="true"></div></section>
+  <section class="hero"><div><div class="eyebrow">DEIN SHOP · DIREKT AUS SMA</div><h1>Alles entdecken.<br>Einfach einkaufen.</h1><p id="heroDescription">Entdecke unsere Produkte mit Bildern und Beschreibungen. SMA-Warenkorb mit geprüfter Händlerzuordnung. Die Kasse wird erst nach ausdrücklicher Freigabe aktiviert.</p></div><div class="hero-orbit" aria-hidden="true"></div></section>
   <section aria-labelledby="catalogTitle"><div class="section-head"><div><h2 id="catalogTitle">Unsere Produkte</h2><p id="resultText">Entdecke den Katalog</p></div><span class="sort" style="display:flex;align-items:center">Neueste zuerst</span></div>
     <div class="mobile-search" style="display:none;align-items:center;border:1px solid var(--line);padding:0 13px;border-radius:11px;background:#fff;margin:0 0 14px"><span aria-hidden="true">⌕</span><input id="queryMobile" type="search" autocomplete="off" placeholder="Produkte suchen …" aria-label="Produkte suchen" style="height:46px;width:100%;border:0;outline:0;padding:0 10px;background:transparent;min-width:0"></div>
     
     <div id="grid" class="store-grid" aria-live="polite"></div>
     <div id="pager" class="pager"></div>
   </section>
-  <div class="note"><b>Hinweis:</b> Die Produkte stammen aus dem SMA-Netzwerk des jeweiligen Händlers. Der öffentliche Shop befindet sich in der Testphase. Checkout nur für den freigegebenen Testshop; bitte keine echten Zahlungen durchführen.</div>
+  <div class="note" id="shopNotice"><b>Hinweis:</b> Die Produkte stammen aus dem SMA-Netzwerk des jeweiligen Händlers. Die Kasse ist derzeit nicht freigeschaltet. Die Händlerzuordnung und die Zahlungsfreigabe werden serverseitig geprüft.</div>
   <footer class="footer">SMA · Kunden-Shop · Für Handy, Tablet und PC</footer>
 </main>
 <nav class="mobile-nav" aria-label="Mobile Shop-Navigation"><button id="mobileDiscover" class="active" type="button"><span class="ni">▦</span>Entdecken</button><button id="mobileCart" type="button"><span class="ni">🛒</span><span id="mobileCartLabel">Warenkorb</span></button><button id="mobileInfo" type="button"><span class="ni">ⓘ</span>Shop-Info</button></nav>
 <div class="overlay" id="galleryOverlay" role="presentation"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="galleryTitle"><div class="dialog-head"><div><h2 id="galleryTitle"></h2><p id="galleryCounter"></p></div><button class="close" id="galleryClose" aria-label="Galerie schließen">×</button></div><div id="galleryImage" class="gallery-img"></div><div id="galleryThumbs" class="thumbs"></div><div id="galleryDescription" class="dialog-copy"></div><div class="dialog-action"><div id="galleryPrice" class="price"></div><button class="add" id="galleryAdd">In den Warenkorb</button></div></section></div>
-<div class="overlay" id="cartOverlay" role="presentation" style="padding:0"><section class="cart-sheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle"><div class="cart-top"><div><h2 id="cartTitle">Dein Warenkorb</h2><div class="muted" style="font-size:12px;color:var(--muted)">Produkte dieses Shops</div></div><button class="close" id="cartClose" aria-label="Warenkorb schließen">×</button></div><div class="cart-list" id="cartLines"></div><div class="cart-summary"><div class="sumrow"><span>Zwischensumme (ohne Versand)</span><b id="cartTotal">0,00 €</b></div><button class="checkout" type="button" id="checkoutButton" disabled>Kasse noch nicht aktiviert</button><div class="checkout-status" id="checkoutStatus" role="status" aria-live="polite"></div><p class="disclaimer" id="checkoutHint">SMA ist in der Testphase. Noch keine echten Zahlungen durchführen.</p></div></section></div>
-<div class="overlay" id="infoOverlay"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="infoTitle"><div class="dialog-head"><h2 id="infoTitle">Über diesen Shop</h2><button class="close" id="infoClose" aria-label="Schließen">×</button></div><div class="info-box"><p><b>Jeder SMA-Unternehmer bekommt seinen eigenen öffentlichen Shop.</b> Endkunden sehen nur dessen veröffentlichte Produkte – ohne SMA-Anmeldung.</p><p>Die Produkte stammen aus SMA. Im kontrollierten Testbetrieb kann aus dem SMA-Warenkorb ein Shopify-Checkout geöffnet werden. Ohne ausdrücklichen Testmodus bleibt die Kasse gesperrt. Den Checkout nicht mit echten Zahlungsdaten abschließen.</p><p>Vor dem Live-Verkauf müssen Zahlungsanbieter, Bestellrückmeldung, Steuer-/Versandregeln und Händlerangaben vollständig geprüft sein.</p></div></section></div>
+<div class="overlay" id="cartOverlay" role="presentation" style="padding:0"><section class="cart-sheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle"><div class="cart-top"><div><h2 id="cartTitle">Dein Warenkorb</h2><div class="muted" style="font-size:12px;color:var(--muted)">Produkte dieses Shops</div></div><button class="close" id="cartClose" aria-label="Warenkorb schließen">×</button></div><div class="cart-list" id="cartLines"></div><div class="cart-summary"><div class="sumrow"><span>Zwischensumme (ohne Versand)</span><b id="cartTotal">0,00 €</b></div><button class="checkout" type="button" id="checkoutButton" disabled>Kasse noch nicht aktiviert</button><div class="checkout-status" id="checkoutStatus" role="status" aria-live="polite"></div><p class="disclaimer" id="checkoutHint">Die sichere Bezahlung ist noch nicht freigegeben.</p></div></section></div>
+<div class="overlay" id="infoOverlay"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="infoTitle"><div class="dialog-head"><h2 id="infoTitle">Über diesen Shop</h2><button class="close" id="infoClose" aria-label="Schließen">×</button></div><div class="info-box"><p><b>Jeder SMA-Unternehmer bekommt seinen eigenen öffentlichen Shop.</b> Endkunden sehen nur dessen veröffentlichte Produkte – ohne SMA-Anmeldung.</p><p>Die Produkte stammen aus SMA. Der SMA-Warenkorb wird erst nach Freigabe des Händlers und des Gesamtsystems mit der sicheren Shopify-Kasse verbunden. Shopify verarbeitet Bezahlung und Checkout.</p><p>Vor dem Live-Verkauf müssen Zahlungsanbieter, Bestellrückmeldung, Steuer-/Versandregeln und Händlerangaben vollständig geprüft sein.</p></div></section></div>
 <script>
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id);
 const API='https://bnvnmdxosbnuzedokqgh.supabase.co/functions/v1/sma-shop-produkte';
 const CHECKOUT_API='https://bnvnmdxosbnuzedokqgh.supabase.co/functions/v1/sma-shop-checkout';
-// Die Checkout-Edge-Function ist derzeit ausschließlich für den SMA-Testshop freigegeben.
-// Separater, bewusst zu aktivierender Browser-Testmodus: &checkout_test=1
+// Checkout V2: keine Freigabe per URL-Parameter oder Testmodus.
+// Für die geplante Liveschaltung zunächst NACH abgeschlossenen Tests
+// manuell auf true setzen. Zusätzlich prüft Supabase zwingend:
+// sma_shopify_konten.aktiv === true UND SMA_CHECKOUT_LIVE_ENABLED === "true".
+// Ein HTML-Schalter ersetzt NIEMALS diese beiden serverseitigen Prüfungen.
+const CHECKOUT_PUBLIC_ENABLED = false;
 const MAX_CHECKOUT_POSITIONS=20;
 const MAX_CHECKOUT_PER_ITEM=20;
 const MAX_CHECKOUT_TOTAL_QTY=40;
@@ -73,7 +78,13 @@ const euros=(amount,currency='EUR')=>{
 };
 const urlParams=new URLSearchParams(location.search);
 const slug=(urlParams.get('shop')||'').trim().toLowerCase();
-const checkoutTestEnabled=slug==='sma-testkunde' && urlParams.get('checkout_test')==='1';
+// Bewusst kein checkout_test und kein "sma-testkunde"-Sonderzugang.
+// Kunden kaufen über ihren individuellen ?shop=<shop-slug> ein.
+if(CHECKOUT_PUBLIC_ENABLED){
+  $('shopBanner').textContent='SMA KUNDEN-SHOP · SICHERE ZAHLUNG ÜBER SHOPIFY';
+  $('heroDescription').textContent='Entdecke unsere Produkte mit Bildern und Beschreibungen. Bezahle sicher über den Shopify-Checkout des jeweiligen Händlers.';
+  $('shopNotice').textContent='Hinweis: Die Produkte stammen aus SMA. Versand, Steuern und Bezahlung werden beim jeweiligen Shopify-Händler im Checkout angezeigt.';
+}
 let shopAvailable=false;
 let checkoutBusy=false;
 let page=1,totalPages=0,total=0,search='',requestSerial=0,timer=null,loading=false;
@@ -150,7 +161,7 @@ function addToCart(id){
  const qty=cart.get(id)||0;
  const totalQty=[...cart.values()].reduce((a,b)=>a+b,0);
  if(qty>=Math.min(p.stock,MAX_CHECKOUT_PER_ITEM)||totalQty>=MAX_CHECKOUT_TOTAL_QTY||(!cart.has(id)&&cart.size>=MAX_CHECKOUT_POSITIONS)){
-  openCart();showCheckoutMessage('Die Höchstmenge für den Checkout-Test ist erreicht.','error');return;
+  openCart();showCheckoutMessage('Die Höchstmenge für den Checkout ist erreicht.','error');return;
  }
  cart.set(id,qty+1);updateCartCount();showCheckoutMessage('');
 }
@@ -165,11 +176,11 @@ function updateCheckoutButton(){
  const button=$('checkoutButton');
  const hint=$('checkoutHint');
  const hasItems=cart.size>0;
- button.disabled=!checkoutTestEnabled||!shopAvailable||!hasItems||checkoutBusy;
+ button.disabled=!CHECKOUT_PUBLIC_ENABLED||!shopAvailable||!hasItems||checkoutBusy;
  button.textContent=checkoutBusy?'Checkout wird vorbereitet …':
-   checkoutTestEnabled?'Zum Shopify-Testcheckout':'Kasse noch nicht aktiviert';
- hint.textContent=checkoutTestEnabled
-   ?'Nur interner Checkout-Test. Shopify kann eine Testbestellung erzeugen. Keine echten Zahlungsdaten eingeben und keine Bestellung abschließen.'
+   CHECKOUT_PUBLIC_ENABLED?'Zur sicheren Shopify-Kasse':'Kasse noch nicht aktiviert';
+ hint.textContent=CHECKOUT_PUBLIC_ENABLED
+   ?'Die Zahlung und Versandkosten werden im sicheren Shopify-Checkout des jeweiligen Händlers angezeigt.'
    :'Die sichere Bezahlung ist noch nicht freigegeben. Der Warenkorb dient vorerst der Vorschau.';
 }
 function renderCart(){
@@ -223,14 +234,14 @@ function verifiedCheckoutUrl(value){
  }catch{return null}
 }
 async function startCheckout(){
- if(!checkoutTestEnabled||!shopAvailable||checkoutBusy||!cart.size)return;
+ if(!CHECKOUT_PUBLIC_ENABLED||!shopAvailable||checkoutBusy||!cart.size)return;
  if(cart.size>MAX_CHECKOUT_POSITIONS){showCheckoutMessage('Zu viele verschiedene Produkte.','error');return}
  const items=[...cart.entries()].map(([produkt_id,menge])=>({produkt_id,menge}));
  const totalQty=items.reduce((sum,item)=>sum+item.menge,0);
  if(totalQty>MAX_CHECKOUT_TOTAL_QTY||items.some(p=>!Number.isInteger(p.menge)||p.menge<1||p.menge>MAX_CHECKOUT_PER_ITEM)){
   showCheckoutMessage('Bitte die Produktmengen prüfen.','error');return;
  }
- if(!window.confirm('Shopify-Testcheckout öffnen?\n\nDies ist ausschließlich ein interner Test. Keine echten Zahlungsdaten eingeben und keine Bestellung abschließen.'))return;
+ if(!window.confirm('Zum sicheren Shopify-Checkout wechseln?\n\nProdukte und Mengen werden dem Shopify-Shop dieses Händlers übergeben. Versandkosten und Bezahlung werden dort angezeigt.'))return;
  checkoutBusy=true;renderCart();showCheckoutMessage('Der sichere Checkout-Link wird geprüft …','info');
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),15000);
@@ -245,11 +256,17 @@ async function startCheckout(){
   });
   const data=await response.json().catch(()=>null);
   if(!response.ok||data?.ok!==true){
-   const message=typeof data?.message==='string'?data.message:'Checkout konnte nicht vorbereitet werden.';
+   const message=response.status===403
+      ?'Die Kasse für diesen Shop ist noch nicht freigeschaltet.'
+      :response.status===404
+        ?'Dieser Shop ist nicht verfügbar.'
+        :typeof data?.message==='string'
+          ?data.message
+          :'Checkout konnte nicht vorbereitet werden.';
    throw new Error(message);
   }
   const link=verifiedCheckoutUrl(data.checkout_url);
-  if(!link||data.modus!=='shopify_test'||data.positionen!==items.length||data.gesamtmenge!==totalQty){
+  if(!link||data.modus!=='shopify_live'||data.positionen!==items.length||data.gesamtmenge!==totalQty){
    throw new Error('Checkout-Link konnte nicht sicher bestätigt werden.');
   }
   showCheckoutMessage('Weiterleitung zu Shopify …','info');
@@ -277,3 +294,4 @@ updateCartCount();loadPage(1);
 </script>
 </body>
 </html>
+⋮⋮⋮⋮
