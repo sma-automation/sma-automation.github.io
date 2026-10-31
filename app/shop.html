@@ -90,6 +90,65 @@ let checkoutBusy=false;
 let page=1,totalPages=0,total=0,search='',requestSerial=0,timer=null,loading=false;
 const knownProducts=new Map();
 const cart=new Map();let currentGallery=null,focusBefore=null;
+// Nur öffentliche Produktdaten und Mengen, getrennt je Händler.
+// Preise und Verfügbarkeit bleiben beim Checkout serverseitig geprüft.
+const CART_STORAGE_TTL=7*24*60*60*1000;
+const cartStorageKey=/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)&&slug.length<=63
+ ?'sma:cart:v1:'+slug:null;
+function persistCart(){
+ if(!cartStorageKey)return;
+ try{
+  if(!cart.size){localStorage.removeItem(cartStorageKey);return}
+  const items=[...cart].map(([id,qty])=>{
+   const p=knownProducts.get(id);
+   return {qty,product:{id:p.id,title:p.title,price:p.price,currency:p.currency,
+    stock:p.stock,shopifyReady:p.shopifyReady,images:p.images.slice(0,1)}};
+  });
+  localStorage.setItem(cartStorageKey,JSON.stringify({version:1,savedAt:Date.now(),items}));
+ }catch{/* Der Warenkorb bleibt bei gesperrtem Browserspeicher bedienbar. */}
+}
+function restoreCart(){
+ if(!cartStorageKey)return;
+ try{
+  const raw=localStorage.getItem(cartStorageKey);if(!raw)return;
+  if(raw.length>100000)throw new Error('Invalid cart size');
+  const saved=JSON.parse(raw);
+  if(saved?.version!==1||!Number.isFinite(saved.savedAt)||saved.savedAt>Date.now()
+    ||Date.now()-saved.savedAt>CART_STORAGE_TTL||!Array.isArray(saved.items)){
+   throw new Error('Invalid or expired cart');
+  }
+  let totalQty=0;
+  for(const item of saved.items.slice(0,MAX_CHECKOUT_POSITIONS)){
+   const p=item?.product;
+   if(!p||typeof p.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.id)||cart.has(p.id)
+     ||typeof p.title!=='string'||!Number.isFinite(p.price)||p.price<0
+     ||typeof p.currency!=='string'||! /^[A-Z]{3}$/.test(p.currency)
+     ||!Number.isInteger(p.stock)||p.stock<1||p.shopifyReady!==true
+     ||!Number.isInteger(item.qty)||item.qty<1)continue;
+   const qty=Math.min(item.qty,p.stock,MAX_CHECKOUT_PER_ITEM,MAX_CHECKOUT_TOTAL_QTY-totalQty);
+   if(qty<1)break;
+   const images=Array.isArray(p.images)?p.images.filter(u=>typeof u==='string'
+     &&u.length<=4096&&u.startsWith('https://')).slice(0,1):[];
+   knownProducts.set(p.id,{id:p.id,title:p.title.slice(0,300),price:p.price,
+    currency:p.currency,stock:p.stock,shopifyReady:true,images,description:'',category:'Produkt'});
+   cart.set(p.id,qty);totalQty+=qty;
+  }
+ }catch{
+  try{localStorage.removeItem(cartStorageKey)}catch{}
+ }
+}
+function reconcileCart(items,completeCatalog){
+ const currentIds=new Set(items.map(p=>p.id));
+ for(const [id,qty] of cart){
+  // Bei Suche oder weiteren Katalogseiten bleiben andere Positionen erhalten.
+  if(!currentIds.has(id)){if(completeCatalog)cart.delete(id);continue}
+  const p=knownProducts.get(id);
+  const available=Math.min(Math.floor(p.stock),MAX_CHECKOUT_PER_ITEM);
+  if(!p.shopifyReady||available<1)cart.delete(id);
+  else if(qty>available)cart.set(id,available);
+ }
+ persistCart();renderCart();
+}
 const pageSize=10;
 const pageTop=()=>document.getElementById('catalogTitle').scrollIntoView({behavior:'smooth'});
 function setResult(msg){$('resultText').textContent=msg}
@@ -142,6 +201,7 @@ async function loadPage(target=1,scroll=false){
   const items=(result.produkte||[]).map(normalized);
   const grid=$('grid');grid.replaceChildren();
   for(const p of items){knownProducts.set(p.id,p);grid.append(showCard(p))}
+  reconcileCart(items,!search&&target===1&&count<=pageSize&&items.length===count);
   if(!items.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Keine passenden Produkte gefunden.';grid.append(empty)}
   setResult(count+' Produkte gefunden · Seite '+page+' von '+Math.max(1,totalPages)+' · 10 pro Seite');renderPager();if(scroll)pageTop();
  }catch(err){if(seq!==requestSerial)return;shopAvailable=false;const el=document.createElement('div');el.className='empty';el.textContent='Der Shop ist momentan nicht erreichbar. Bitte später erneut versuchen.';$('grid').append(el);setResult('Shop konnte nicht geladen werden.');console.warn('SMA Shop:',err)}
@@ -163,7 +223,7 @@ function addToCart(id){
  if(qty>=Math.min(p.stock,MAX_CHECKOUT_PER_ITEM)||totalQty>=MAX_CHECKOUT_TOTAL_QTY||(!cart.has(id)&&cart.size>=MAX_CHECKOUT_POSITIONS)){
   openCart();showCheckoutMessage('Die Höchstmenge für den Checkout ist erreicht.','error');return;
  }
- cart.set(id,qty+1);updateCartCount();showCheckoutMessage('');
+ cart.set(id,qty+1);persistCart();updateCartCount();showCheckoutMessage('');
 }
 function updateCartCount(){const n=[...cart.values()].reduce((x,y)=>x+y,0);$('cartCount').textContent=n;$('mobileCartLabel').textContent=n?'Warenkorb ('+n+')':'Warenkorb'}
 function openCart(){renderCart();openOverlay('cartOverlay')}
@@ -220,7 +280,7 @@ function changeQty(id,delta){
  if(delta>0&&totalQty>=MAX_CHECKOUT_TOTAL_QTY)return;
  const qty=Math.min(Math.min(p.stock,MAX_CHECKOUT_PER_ITEM),qtyNow+delta);
  if(qty<=0)cart.delete(id);else cart.set(id,qty);
- showCheckoutMessage('');renderCart();
+ persistCart();showCheckoutMessage('');renderCart();
 }
 function verifiedCheckoutUrl(value){
  if(typeof value!=='string')return null;
@@ -290,6 +350,7 @@ $('checkoutButton').addEventListener('click',startCheckout);
 $('cartOpen').onclick=openCart;$('mobileCart').onclick=openCart;$('mobileDiscover').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});$('mobileInfo').onclick=()=>openOverlay('infoOverlay');$('cartClose').onclick=()=>closeOverlay('cartOverlay');$('infoClose').onclick=()=>closeOverlay('infoOverlay');$('galleryClose').onclick=()=>closeOverlay('galleryOverlay');
 for(const id of ['galleryOverlay','cartOverlay','infoOverlay'])$(id).addEventListener('click',e=>{if(e.target===$(id))closeOverlay(id)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){for(const id of ['galleryOverlay','cartOverlay','infoOverlay'])if($(id).classList.contains('open')){closeOverlay(id);break}}});
+restoreCart();
 updateCheckoutButton();
 updateCartCount();loadPage(1);
 })();
