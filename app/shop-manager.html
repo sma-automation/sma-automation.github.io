@@ -65,6 +65,14 @@ h2{margin:0 0 14px;font-size:22px}
 .upload-note{font-size:12px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
 .upload-note.error{color:var(--red)}
 .upload-note.ok{color:var(--green)}
+.stock-form{margin-top:13px;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:#f8faff;max-width:480px}
+.stock-label{display:block;font-size:12px;font-weight:800;margin-bottom:7px}
+.stock-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stock-input{width:108px;min-height:38px;padding:7px 9px;border:1px solid #abb8d0;border-radius:9px;font:inherit;color:var(--text);background:white}
+.stock-input:focus{outline:2px solid var(--blue);outline-offset:1px}
+.stock-submit{min-height:38px}
+.stock-feedback{margin-top:7px;color:var(--muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.stock-feedback.error{color:var(--red)}
 .file-input{display:none}
 @media(max-width:1000px){.product-item{grid-template-columns:116px minmax(0,1fr)}.product-photo{width:116px;height:116px}.product-actions{grid-column:2;align-items:flex-start;min-width:0}}
 @media(max-width:900px){.sidebar{width:210px}.grid{grid-template-columns:1fr}}
@@ -227,6 +235,9 @@ function makePlaceholder(container){
 const signedCache = new Map();
 let productsState=[];
 let currentUserId='';
+let currentCustomerId='';
+let stockRequestsState=new Map();
+let stockRequestsError=false;
 const paginationState={
   products:{page:1,total:0,request:0},
   orders:{page:1,total:0,request:0}
@@ -293,6 +304,79 @@ function makeBadge(label,isGreen=false,isOrange=false){
   badge.textContent=label;
   return badge;
 }
+async function loadStockRequests(products){
+  stockRequestsState=new Map();stockRequestsError=false;
+  const ids=products.filter(p=>p.shopify_aktiv&&p.sma_produkt_id).map(p=>String(p.sma_produkt_id));
+  if(!ids.length)return;
+  const {data,error}=await supabase.from('sma_bestandsauftraege')
+    .select('id,sma_produkt_id,gewuenscht_verfuegbar,status,created_at')
+    .in('sma_produkt_id',ids).in('status',['queued','processing'])
+    .order('created_at',{ascending:false});
+  if(error){stockRequestsError=true;return;}
+  for(const request of data||[]){
+    if(!stockRequestsState.has(request.sma_produkt_id)){
+      stockRequestsState.set(request.sma_produkt_id,request);
+    }
+  }
+}
+function makeStockEditor(product){
+  const request=stockRequestsState.get(product.sma_produkt_id);
+  const form=document.createElement('form');form.className='stock-form';
+  const label=document.createElement('label');label.className='stock-label';
+  label.textContent='Verfügbare Stückzahl festlegen';
+  const controls=document.createElement('div');controls.className='stock-controls';
+  const input=document.createElement('input');input.className='stock-input';
+  input.type='number';input.min='0';input.max='1000000';input.step='1';input.required=true;
+  input.setAttribute('aria-label','Gewünschte verfügbare Stückzahl für '+(product.produkt_name||'Produkt'));
+  input.value=String(request?.gewuenscht_verfuegbar??product.bestand??0);
+  const save=document.createElement('button');save.type='submit';save.className='btn stock-submit';
+  save.textContent=request?.status==='queued'?'Auftrag ändern':'Bestand speichern';
+  save.disabled=stockRequestsError||request?.status==='processing';
+  controls.append(input,save);
+  const feedback=document.createElement('div');feedback.className='stock-feedback';
+  feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
+  feedback.textContent=stockRequestsError?'Bestandsfunktion zurzeit nicht erreichbar.':
+    request?.status==='processing'?'Shopify-Übernahme wird verarbeitet.':
+    request?.status==='queued'?'Änderung vorgemerkt – Shopify hat sie noch nicht bestätigt.':
+    'Der neue Bestand gilt erst nach der Shopify-Bestätigung.';
+  form.append(label,controls,feedback);
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const quantity=Number(input.value);
+    if(!Number.isSafeInteger(quantity)||quantity<0||quantity>1000000){
+      feedback.className='stock-feedback error';
+      feedback.textContent='Bitte eine ganze Zahl von 0 bis 1.000.000 eingeben.';return;
+    }
+    save.disabled=true;feedback.className='stock-feedback';
+    feedback.textContent='Bestandsauftrag wird gespeichert …';
+    try{
+      let result;
+      if(request?.status==='queued'){
+        result=await supabase.from('sma_bestandsauftraege')
+          .update({gewuenscht_verfuegbar:quantity})
+          .eq('id',request.id).eq('status','queued')
+          .select('id,status').maybeSingle();
+      }else{
+        result=await supabase.from('sma_bestandsauftraege')
+          .insert({
+            user_id:currentUserId,kunde_id:currentCustomerId,
+            sma_produkt_id:String(product.sma_produkt_id),
+            gewuenscht_verfuegbar:quantity
+          }).select('id,status').single();
+      }
+      if(result.error)throw result.error;
+      if(!result.data)throw new Error('Der Auftrag wird bereits verarbeitet.');
+      feedback.textContent='Auftrag vorgemerkt. Der Ist-Bestand ändert sich erst nach der Shopify-Bestätigung.';
+      await loadProductsPage(paginationState.products.page);
+    }catch(error){
+      feedback.className='stock-feedback error';
+      feedback.textContent=error?.code==='23505'?
+        'Ein Bestandsauftrag ist bereits offen. Bitte die Seite aktualisieren.':
+        'Bestandsauftrag konnte nicht gespeichert werden. Bitte erneut versuchen.';
+    }finally{save.disabled=stockRequestsError||request?.status==='processing';}
+  });
+  return form;
+}
 function renderProductList(){
   const productList=document.getElementById('produktListe');
   productList.replaceChildren();
@@ -354,6 +438,9 @@ function makeProductCard(product,userId){
   if(product.shopify_aktiv)badges.append(makeBadge('Shopify aktiv',true));
   if(product.digistore24_aktiv)badges.append(makeBadge('Digistore24 aktiv',true));
   details.append(name,meta,description,badges);
+  if(product.shopify_aktiv&&product.sma_produkt_id){
+    details.append(makeStockEditor(product));
+  }
 
   const actions=document.createElement('div');actions.className='product-actions';
   const amount=document.createElement('div');amount.className='amount';
@@ -660,6 +747,8 @@ async function loadProductsPage(requestedPage=1){
   if(page>maxPage){await loadProductsPage(maxPage);return;}
   state.total=total;state.page=page;
   productsState=data||[];
+  await loadStockRequests(productsState);
+  if(request!==state.request)return;
   document.getElementById('produktCount').textContent=total;
   renderProductList();
   renderPagination('produktPagination',state,'Produkten',loadProductsPage);
@@ -703,6 +792,7 @@ if(sessionError||!session){
       showBlocked('Dein SMA-Konto ist noch nicht aktiv oder die Freischaltung wurde noch nicht bestätigt.');
     }else{
       currentUserId=session.user.id;
+      currentCustomerId=kunde.kunde_id;
       // Produkte und Bestellungen unabhängig und serverseitig mit je zehn Einträgen laden.
       await Promise.all([loadProductsPage(1),loadOrdersPage(1)]);
       document.getElementById('loading').classList.add('hidden');
