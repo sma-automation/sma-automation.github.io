@@ -238,12 +238,17 @@ function updateCheckoutButton(){
  const button=$('checkoutButton');
  const hint=$('checkoutHint');
  const hasItems=cart.size>0;
- button.disabled=!CHECKOUT_PUBLIC_ENABLED||!shopAvailable||!hasItems||checkoutBusy;
+ button.disabled=!CHECKOUT_PUBLIC_ENABLED||!shopAvailable||!hasItems||checkoutBusy||!cartCurrency();
  button.textContent=checkoutBusy?'Checkout wird vorbereitet …':
    CHECKOUT_PUBLIC_ENABLED?'Zur sicheren Shopify-Kasse':'Kasse noch nicht aktiviert';
  hint.textContent=CHECKOUT_PUBLIC_ENABLED
    ?'Die Zahlung und Versandkosten werden im sicheren Shopify-Checkout des jeweiligen Händlers angezeigt.'
    :'Die sichere Bezahlung ist noch nicht freigegeben. Der Warenkorb dient vorerst der Vorschau.';
+}
+function cartCurrency(){
+ const currencies=new Set([...cart.keys()].map(id=>knownProducts.get(id)?.currency));
+ const currency=currencies.size===0?'EUR':currencies.size===1?[...currencies][0]:'';
+ return /^[A-Z]{3}$/.test(currency)?currency:'';
 }
 function renderCart(){
  const host=$('cartLines');host.replaceChildren();let sum=0;
@@ -252,7 +257,7 @@ function renderCart(){
   empty.textContent='Dein Warenkorb ist leer.';host.append(empty);
  }
  for(const [id,qty] of cart){
-  const p=knownProducts.get(id);if(!p)continue;sum+=p.price*qty;
+  const p=knownProducts.get(id);if(!p)continue;sum+=Math.round(p.price*100)*qty;
   const row=document.createElement('div');row.className='cart-entry';
   const photo=image(p.images[0],p.title);
   const main=document.createElement('div');
@@ -270,7 +275,8 @@ function renderCart(){
   const amount=document.createElement('strong');amount.textContent=euros(p.price*qty,p.currency);
   row.append(photo,main,amount);host.append(row);
  }
- $('cartTotal').textContent=euros(sum);
+ const currency=cartCurrency();
+ $('cartTotal').textContent=currency?euros(sum/100,currency):'Unterschiedliche Währungen';
  updateCartCount();updateCheckoutButton();
 }
 function changeQty(id,delta){
@@ -284,13 +290,14 @@ function changeQty(id,delta){
  if(qty<=0)cart.delete(id);else cart.set(id,qty);
  persistCart();showCheckoutMessage('');renderCart();
 }
-function verifiedCheckoutUrl(value){
+function verifiedCheckoutUrl(value,domain){
  if(typeof value!=='string')return null;
  try{
   const url=new URL(value);
   // Checkout-Ziel kommt von der serverseitig geprüften SMA-Funktion.
   // Im Browser erlauben wir ausschließlich Shopify-Cart-Permalinks.
-  if(url.protocol!=='https:'||!url.hostname.endsWith('.myshopify.com')||url.username||url.password||url.port)return null;
+  if(typeof domain!=='string'||!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(domain))return null;
+  if(url.protocol!=='https:'||url.hostname!==domain||url.username||url.password||url.port)return null;
   if(!/^\/cart\/[0-9]+:[1-9][0-9]*(?:,[0-9]+:[1-9][0-9]*)*$/.test(url.pathname))return null;
   if(url.search||url.hash)return null;
   return url;
@@ -298,6 +305,7 @@ function verifiedCheckoutUrl(value){
 }
 async function startCheckout(){
  if(!CHECKOUT_PUBLIC_ENABLED||!shopAvailable||checkoutBusy||!cart.size)return;
+ if(!cartCurrency()){showCheckoutMessage('Bitte nur Produkte mit derselben Währung bestellen.','error');return}
  if(cart.size>MAX_CHECKOUT_POSITIONS){showCheckoutMessage('Zu viele verschiedene Produkte.','error');return}
  if([...cart.keys()].some(id=>knownProducts.get(id)?.shopifyReady!==true)){showCheckoutMessage('Ein Produkt ist nicht für Shopify freigegeben.','error');return}
  const items=[...cart.entries()].map(([produkt_id,menge])=>({produkt_id,menge}));
@@ -329,23 +337,43 @@ async function startCheckout(){
           :'Checkout konnte nicht vorbereitet werden.';
    throw new Error(message);
   }
-  const link=verifiedCheckoutUrl(data.checkout_url);
-  if(!link||data.modus!=='shopify_live'||data.positionen!==items.length||data.gesamtmenge!==totalQty){
+  const link=verifiedCheckoutUrl(data.checkout_url,data.shopify_domain);
+  if(!link||data.shop!==slug||data.modus!=='shopify_live'||data.positionen!==items.length||data.gesamtmenge!==totalQty||!Array.isArray(data.warenkorb)||data.warenkorb.length!==items.length||!/^[A-Z]{3}$/.test(data.waehrung)){
    throw new Error('Checkout-Link konnte nicht sicher bestätigt werden.');
   }
+  const variants=new Set();let cents=0,pricesChanged=false;
+  for(let i=0;i<items.length;i++){
+   const requested=items[i],line=data.warenkorb[i],p=knownProducts.get(requested.produkt_id);
+   if(!line||line.produkt_id!==requested.produkt_id||line.menge!==requested.menge||
+     !Number.isSafeInteger(line.bestand)||line.bestand<line.menge||
+     typeof line.einzelpreis!=='number'||!Number.isFinite(line.einzelpreis)||line.einzelpreis<0||
+     !/^[1-9][0-9]{5,24}$/.test(line.variante)||variants.has(line.variante))throw new Error('Warenkorb konnte nicht sicher bestätigt werden.');
+   if(!p||cart.get(requested.produkt_id)!==requested.menge||cart.size!==items.length)throw new Error('Der Warenkorb wurde geändert. Bitte erneut prüfen.');
+   variants.add(line.variante);
+   const priceCents=Math.round(line.einzelpreis*100);
+   if(!Number.isSafeInteger(priceCents)||line.summe!==priceCents*line.menge/100)throw new Error('Warenkorbpreis konnte nicht bestätigt werden.');
+   cents+=priceCents*line.menge;
+   if(Math.round(p.price*100)!==priceCents||p.currency!==data.waehrung)pricesChanged=true;
+  }
+  if(!Number.isSafeInteger(cents)||data.gesamtbetrag!==cents/100||link.pathname!=='/cart/'+data.warenkorb.map(p=>p.variante+':'+p.menge).join(','))throw new Error('Warenkorb konnte nicht sicher bestätigt werden.');
+  for(const line of data.warenkorb){
+   const p=knownProducts.get(line.produkt_id);p.price=line.einzelpreis;p.currency=data.waehrung;p.stock=line.bestand;
+  }
+  persistCart();
+  if(pricesChanged){showCheckoutMessage('Preise wurden aktualisiert. Bitte prüfe die neue Zwischensumme und gehe danach erneut zur Kasse.','info');return}
   showCheckoutMessage('Weiterleitung zu Shopify …','info');
   window.location.assign(link.href);
  }catch(error){
   const message=error?.name==='AbortError'
     ?'Zeitüberschreitung beim Checkout. Bitte später erneut versuchen.'
     :error instanceof TypeError
-      ?'Checkout derzeit nicht erreichbar. Bitte Netzwerkverbindung und Supabase-CORS prüfen.'
+      ?'Die Kasse ist derzeit nicht erreichbar. Bitte prüfe deine Internetverbindung und versuche es erneut.'
       :String(error?.message||'Checkout derzeit nicht möglich.');
   showCheckoutMessage(message,'error');
  }finally{
   clearTimeout(timeout);
   checkoutBusy=false;
-  updateCheckoutButton();
+  renderCart();
  }
 }
 $('checkoutButton').addEventListener('click',startCheckout);
@@ -360,3 +388,4 @@ updateCartCount();loadPage(1);
 </body>
 </html>
 ⋮⋮⋮⋮
+
