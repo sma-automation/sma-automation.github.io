@@ -73,6 +73,7 @@ h2{margin:0 0 14px;font-size:22px}
 .stock-submit{min-height:38px}
 .stock-feedback{margin-top:7px;color:var(--muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .stock-feedback.error{color:var(--red)}
+.stock-feedback.ok{color:var(--green)}
 .file-input{display:none}
 @media(max-width:1000px){.product-item{grid-template-columns:116px minmax(0,1fr)}.product-photo{width:116px;height:116px}.product-actions{grid-column:2;align-items:flex-start;min-width:0}}
 @media(max-width:900px){.sidebar{width:210px}.grid{grid-template-columns:1fr}}
@@ -238,6 +239,21 @@ let currentUserId='';
 let currentCustomerId='';
 let stockRequestsState=new Map();
 let stockRequestsError=false;
+const STOCK_REQUEST_FIELDS='id,sma_produkt_id,gewuenscht_verfuegbar,status,created_at';
+const stockTrackedRequests=new Map();
+const stockDrafts=new Map();
+const stockSaveErrors=new Map();
+const stockUncertainSaves=new Set();
+const stockSaving=new Set();
+const stockEditors=new Map();
+const stockViews=new Map();
+let stockRevision=0;
+let stockRefreshTimer=null;
+let stockRefreshRunning=false;
+let stockRefreshFailures=0;
+let stockFastUntil=0;
+let stockPageLoading=false;
+let stockPageSuspended=false;
 const paginationState={
   products:{page:1,total:0,request:0},
   orders:{page:1,total:0,request:0}
@@ -304,23 +320,106 @@ function makeBadge(label,isGreen=false,isOrange=false){
   badge.textContent=label;
   return badge;
 }
-async function loadStockRequests(products){
-  stockRequestsState=new Map();stockRequestsError=false;
+// Only read customer-visible columns. The worker's result and dispatch token stay server-side.
+async function readStockRequests(products,signal){
   const ids=products.filter(p=>p.shopify_aktiv&&p.sma_produkt_id).map(p=>String(p.sma_produkt_id));
-  if(!ids.length)return;
+  const requests=new Map();
+  if(!ids.length)return requests;
   const {data,error}=await supabase.from('sma_bestandsauftraege')
-    .select('id,sma_produkt_id,gewuenscht_verfuegbar,status,created_at')
+    .select(STOCK_REQUEST_FIELDS).eq('kunde_id',currentCustomerId)
     .in('sma_produkt_id',ids).in('status',['queued','processing'])
-    .order('created_at',{ascending:false});
-  if(error){stockRequestsError=true;return;}
+    .order('created_at',{ascending:false}).abortSignal(signal);
+  if(error)throw error;
   for(const request of data||[]){
-    if(!stockRequestsState.has(request.sma_produkt_id)){
-      stockRequestsState.set(request.sma_produkt_id,request);
+    if(!requests.has(request.sma_produkt_id))requests.set(request.sma_produkt_id,request);
+  }
+  // Keep following requests that just left the open queue, including failures.
+  const finishedIds=ids.filter(id=>!requests.has(id)&&stockTrackedRequests.has(id))
+    .map(id=>stockTrackedRequests.get(id));
+  if(finishedIds.length){
+    const finished=await supabase.from('sma_bestandsauftraege')
+      .select(STOCK_REQUEST_FIELDS).eq('kunde_id',currentCustomerId)
+      .in('id',finishedIds).abortSignal(signal);
+    if(finished.error)throw finished.error;
+    for(const request of finished.data||[])requests.set(request.sma_produkt_id,request);
+  }
+  return requests;
+}
+function acceptStockRequests(requests){
+  stockRequestsState=requests;
+  for(const [id,request] of requests){
+    stockTrackedRequests.set(id,request.id);
+    if(stockUncertainSaves.delete(id))stockSaveErrors.delete(id);
+  }
+  stockRequestsError=false;
+}
+function stockRefreshDelay(){
+  if(stockRefreshFailures)return Math.min(60000,2000*2**Math.min(stockRefreshFailures,5));
+  const pending=[...stockRequestsState.values()].some(r=>['queued','processing'].includes(r.status));
+  const awaitingStock=productsState.some(p=>{
+    const r=stockRequestsState.get(p.sma_produkt_id);
+    return r?.status==='applied'&&Number(p.bestand)!==Number(r.gewuenscht_verfuegbar);
+  });
+  if(Date.now()<stockFastUntil&&(pending||awaitingStock))return 2000;
+  return pending?15000:30000;
+}
+function scheduleStockRefresh(delay=stockRefreshDelay()){
+  clearTimeout(stockRefreshTimer);stockRefreshTimer=null;
+  if(stockPageSuspended||document.hidden||!currentUserId||!productsState.length)return;
+  stockRefreshTimer=setTimeout(refreshStock,delay);
+}
+function updateStockViews(){
+  for(const product of productsState){
+    const view=stockViews.get(product.sma_produkt_id);
+    if(view){
+      view.meta.textContent=(product.produkt_typ||'')+(product.sku?' · SKU '+product.sku:'')+'\nBestand: '+(product.bestand??0);
+      if(!String(product.beschreibung||'').trim())view.description.textContent=productDescription(product).text;
     }
+    stockEditors.get(product.sma_produkt_id)?.update();
   }
 }
+async function refreshStock(){
+  if(document.hidden||stockPageSuspended||!currentUserId)return;
+  if(stockRefreshRunning||stockPageLoading||stockSaving.size){scheduleStockRefresh(1000);return;}
+  const ids=productsState.map(p=>String(p.sma_produkt_id)).filter(Boolean);
+  if(!ids.length)return;
+  const pageRequest=paginationState.products.request,revision=stockRevision,userId=currentUserId;
+  const isCurrent=()=>pageRequest===paginationState.products.request&&revision===stockRevision&&userId===currentUserId&&!stockPageSuspended;
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),10000);
+  stockRefreshRunning=true;
+  try{
+    const [stock,requests]=await Promise.all([
+      supabase.from('sma_produkte').select('sma_produkt_id,bestand')
+        .eq('user_id',userId).in('sma_produkt_id',ids).abortSignal(controller.signal),
+      readStockRequests(productsState,controller.signal)
+    ]);
+    if(stock.error)throw stock.error;
+    if(!isCurrent())return;
+    const quantities=new Map((stock.data||[]).map(p=>[p.sma_produkt_id,p.bestand]));
+    for(const product of productsState){
+      if(quantities.has(product.sma_produkt_id))product.bestand=quantities.get(product.sma_produkt_id);
+    }
+    acceptStockRequests(requests);stockRefreshFailures=0;
+    updateStockViews();
+  }catch(error){
+    if(isCurrent()){
+      stockRequestsError=true;stockRefreshFailures++;
+      updateStockViews();
+    }
+  }finally{
+    clearTimeout(timeout);stockRefreshRunning=false;
+    scheduleStockRefresh();
+  }
+}
+document.addEventListener('visibilitychange',()=>scheduleStockRefresh(0));
+window.addEventListener('online',()=>scheduleStockRefresh(0));
+window.addEventListener('focus',()=>scheduleStockRefresh(0));
+window.addEventListener('pagehide',()=>{stockPageSuspended=true;clearTimeout(stockRefreshTimer);});
+window.addEventListener('pageshow',()=>{stockPageSuspended=false;scheduleStockRefresh(0);});
+
 function makeStockEditor(product){
-  const request=stockRequestsState.get(product.sma_produkt_id);
+  const id=String(product.sma_produkt_id);
   const form=document.createElement('form');form.className='stock-form';
   const label=document.createElement('label');label.className='stock-label';
   label.textContent='Verfügbare Stückzahl festlegen';
@@ -328,57 +427,80 @@ function makeStockEditor(product){
   const input=document.createElement('input');input.className='stock-input';
   input.type='number';input.min='0';input.max='1000000';input.step='1';input.required=true;
   input.setAttribute('aria-label','Gewünschte verfügbare Stückzahl für '+(product.produkt_name||'Produkt'));
-  input.value=String(request?.gewuenscht_verfuegbar??product.bestand??0);
   const save=document.createElement('button');save.type='submit';save.className='btn stock-submit';
-  save.textContent=request?.status==='queued'?'Auftrag ändern':'Bestand speichern';
-  save.disabled=stockRequestsError||request?.status==='processing';
-  controls.append(input,save);
   const feedback=document.createElement('div');feedback.className='stock-feedback';
   feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
-  feedback.textContent=stockRequestsError?'Bestandsfunktion zurzeit nicht erreichbar.':
-    request?.status==='processing'?'Shopify-Übernahme wird verarbeitet.':
-    request?.status==='queued'?'Änderung vorgemerkt – Shopify hat sie noch nicht bestätigt.':
-    'Der neue Bestand gilt erst nach der Shopify-Bestätigung.';
-  form.append(label,controls,feedback);
+  controls.append(input,save);form.append(label,controls,feedback);
+  function update(){
+    const request=stockRequestsState.get(id),saving=stockSaving.has(id);
+    const open=request&&['queued','processing'].includes(request.status);
+    const value=stockDrafts.get(id)??String(open?request.gewuenscht_verfuegbar:product.bestand??0);
+    if(input.value!==value)input.value=value;
+    input.disabled=saving||request?.status==='processing';
+    save.disabled=saving||stockRequestsError||request?.status==='processing';
+    save.textContent=request?.status==='queued'?'Auftrag ändern':'Bestand speichern';
+    let message='Der Bestand und die Rückmeldung werden automatisch aktualisiert.',kind='';
+    if(saving)message='Bestandsauftrag wird gespeichert …';
+    else if(stockRequestsError)message='Verbindung unterbrochen. Bestand wird automatisch erneut geprüft.';
+    else if(stockSaveErrors.has(id)){message=stockSaveErrors.get(id);kind='error';}
+    else if(request?.status==='processing')message='Shopify-Übernahme wird verarbeitet …';
+    else if(request?.status==='queued')message='Änderung vorgemerkt – Rückmeldung von Shopify wird erwartet …';
+    else if(request?.status==='failed'){message='Bestandsauftrag fehlgeschlagen. Bitte Bestand prüfen und erneut speichern.';kind='error';}
+    else if(request?.status==='cancelled')message='Bestandsauftrag wurde abgebrochen.';
+    else if(request?.status==='applied'){
+      message=Number(product.bestand)===Number(request.gewuenscht_verfuegbar)?
+        'Bestand von Shopify bestätigt: '+product.bestand+' Stück.':
+        'Bestandsauftrag von Shopify bestätigt. Die Bestandsanzeige wird weiter aktualisiert.';
+      kind='ok';
+    }
+    feedback.className='stock-feedback'+(kind?' '+kind:'');
+    if(feedback.textContent!==message)feedback.textContent=message;
+  }
+  stockEditors.set(id,{update,input,save,feedback});update();
+  input.addEventListener('input',()=>{
+    stockDrafts.set(id,input.value);stockSaveErrors.delete(id);stockUncertainSaves.delete(id);update();
+  });
   form.addEventListener('submit',async event=>{
     event.preventDefault();
+    const request=stockRequestsState.get(id);
+    if(stockSaving.has(id)||stockRequestsError||request?.status==='processing')return;
     const quantity=Number(input.value);
-    if(!Number.isSafeInteger(quantity)||quantity<0||quantity>1000000){
-      feedback.className='stock-feedback error';
-      feedback.textContent='Bitte eine ganze Zahl von 0 bis 1.000.000 eingeben.';return;
+    if(!input.value.trim()||!Number.isSafeInteger(quantity)||quantity<0||quantity>1000000){
+      stockSaveErrors.set(id,'Bitte eine ganze Zahl von 0 bis 1.000.000 eingeben.');update();return;
     }
-    save.disabled=true;feedback.className='stock-feedback';
-    feedback.textContent='Bestandsauftrag wird gespeichert …';
+    stockSaving.add(id);stockRevision++;clearTimeout(stockRefreshTimer);update();
     try{
       let result;
       if(request?.status==='queued'){
         result=await supabase.from('sma_bestandsauftraege')
           .update({gewuenscht_verfuegbar:quantity})
           .eq('id',request.id).eq('status','queued')
-          .select('id,status').maybeSingle();
+          .select(STOCK_REQUEST_FIELDS).maybeSingle();
       }else{
         result=await supabase.from('sma_bestandsauftraege')
-          .insert({
-            user_id:currentUserId,kunde_id:currentCustomerId,
-            sma_produkt_id:String(product.sma_produkt_id),
-            gewuenscht_verfuegbar:quantity
-          }).select('id,status').single();
+          .insert({user_id:currentUserId,kunde_id:currentCustomerId,
+            sma_produkt_id:id,gewuenscht_verfuegbar:quantity})
+          .select(STOCK_REQUEST_FIELDS).single();
       }
       if(result.error)throw result.error;
       if(!result.data)throw new Error('Der Auftrag wird bereits verarbeitet.');
-      feedback.textContent='Auftrag vorgemerkt. Der Ist-Bestand ändert sich erst nach der Shopify-Bestätigung.';
-      await loadProductsPage(paginationState.products.page);
+      stockRequestsState.set(id,result.data);stockTrackedRequests.set(id,result.data.id);
+      stockDrafts.delete(id);stockSaveErrors.delete(id);
     }catch(error){
-      feedback.className='stock-feedback error';
-      feedback.textContent=error?.code==='23505'?
-        'Ein Bestandsauftrag ist bereits offen. Bitte die Seite aktualisieren.':
-        'Bestandsauftrag konnte nicht gespeichert werden. Bitte erneut versuchen.';
-    }finally{save.disabled=stockRequestsError||request?.status==='processing';}
+      stockUncertainSaves.add(id);
+      stockSaveErrors.set(id,error?.code==='23505'?
+        'Ein Bestandsauftrag ist bereits offen. Sein Status wird automatisch geladen.':
+        'Speichern konnte nicht bestätigt werden. Bestand wird automatisch erneut geprüft.');
+    }finally{
+      stockSaving.delete(id);stockRevision++;stockFastUntil=Date.now()+120000;
+      updateStockViews();scheduleStockRefresh(0);
+    }
   });
   return form;
 }
 function renderProductList(){
   const productList=document.getElementById('produktListe');
+  stockEditors.clear();stockViews.clear();
   productList.replaceChildren();
   if(!productsState.length){
     const empty=document.createElement('div');empty.className='empty';
@@ -437,6 +559,7 @@ function makeProductCard(product,userId){
   badges.append(makeBadge(product.aktiv?'Aktiv':'Inaktiv',!!product.aktiv));
   if(product.shopify_aktiv)badges.append(makeBadge('Shopify aktiv',true));
   if(product.digistore24_aktiv)badges.append(makeBadge('Digistore24 aktiv',true));
+  stockViews.set(product.sma_produkt_id,{meta,description});
   details.append(name,meta,description,badges);
   if(product.shopify_aktiv&&product.sma_produkt_id){
     details.append(makeStockEditor(product));
@@ -733,25 +856,33 @@ async function loadProductsPage(requestedPage=1){
   const request=++state.request;
   const page=Math.max(1,Math.floor(requestedPage));
   const from=(page-1)*PAGE_SIZE;
+  clearTimeout(stockRefreshTimer);stockPageLoading=true;
+  productsState=[];stockEditors.clear();stockViews.clear();
   showLoading('produktListe','Produkte werden geladen …');
-  const {data,error,count}=await supabase.from('sma_produkte')
-    .select(PRODUKT_FELDER,{count:'exact'})
-    .eq('user_id',currentUserId)
-    .order('created_at',{ascending:false})
-    .order('sma_produkt_id',{ascending:true})
-    .range(from,from+PAGE_SIZE-1);
-  if(request!==state.request)return;
-  if(error){showLoading('produktListe','Produkte konnten nicht geladen werden: '+error.message);return;}
-  const total=count??0;
-  const maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
-  if(page>maxPage){await loadProductsPage(maxPage);return;}
-  state.total=total;state.page=page;
-  productsState=data||[];
-  await loadStockRequests(productsState);
-  if(request!==state.request)return;
-  document.getElementById('produktCount').textContent=total;
-  renderProductList();
-  renderPagination('produktPagination',state,'Produkten',loadProductsPage);
+  try{
+    const {data,error,count}=await supabase.from('sma_produkte')
+      .select(PRODUKT_FELDER,{count:'exact'}).eq('user_id',currentUserId)
+      .order('created_at',{ascending:false}).order('sma_produkt_id',{ascending:true})
+      .range(from,from+PAGE_SIZE-1);
+    if(request!==state.request)return;
+    if(error)throw error;
+    const total=count??0,maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
+    if(page>maxPage){await loadProductsPage(maxPage);return;}
+    let requests;
+    try{requests=await readStockRequests(data||[],AbortSignal.timeout(10000));}
+    catch(error){if(request===state.request)stockRequestsError=true;}
+    if(request!==state.request)return;
+    state.total=total;state.page=page;productsState=data||[];
+    if(requests)acceptStockRequests(requests);
+    else stockRequestsState=new Map();
+    if([...stockRequestsState.values()].some(r=>['queued','processing'].includes(r.status)))stockFastUntil=Date.now()+120000;
+    document.getElementById('produktCount').textContent=total;
+    renderProductList();renderPagination('produktPagination',state,'Produkten',loadProductsPage);
+  }catch(error){
+    if(request===state.request)showLoading('produktListe','Produkte konnten nicht geladen werden: '+error.message);
+  }finally{
+    if(request===state.request){stockPageLoading=false;scheduleStockRefresh();}
+  }
 }
 async function loadOrdersPage(requestedPage=1){
   const state=paginationState.orders;
@@ -803,4 +934,5 @@ if(sessionError||!session){
 </script>
 </body>
 </html>
+
 
