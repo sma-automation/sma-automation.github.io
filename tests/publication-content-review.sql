@@ -1,4 +1,8 @@
 begin;
+-- Isolate rate accounting from earlier real tests; ROLLBACK restores the exact prior row.
+insert into sma_private.publication_review_rate_v1(user_id,window_started,attempts,last_started)
+values('20be25c6-a763-4981-a25a-d503e32e4e25',now(),0,null)
+on conflict(user_id) do update set window_started=excluded.window_started,attempts=0,last_started=null;
 insert into sma_private.publication_files_v1(id,customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,width_px,height_px,duration_ms)
 values('fa330000-0000-4000-8000-000000000001',4,'20be25c6-a763-4981-a25a-d503e32e4e25','fixture_content_review','Prüffall.png','image','image/png','sha256:'||repeat('a',64)||':1',now(),1000,1080,1080,null);
 set local role authenticated;
