@@ -155,6 +155,7 @@ body.gallery-open{overflow:hidden}
 
       <section id="shop" class="section card">
         <h2>Shop &amp; Produkte</h2>
+        <p id="checkoutTestLink" class="hidden" style="margin:0 0 16px"><a class="btn" href="checkout-test.html" target="_top">Checkout V2 testen</a></p>
         <div id="produktListe" class="list"></div>
         <nav id="produktPagination" class="pagination" aria-label="Produktseiten"></nav>
       </section>
@@ -913,7 +914,7 @@ if(sessionError||!session){
   goLogin();
 }else{
   const {data:kunde,error:kundeError}=await supabase.from('sma_kunden')
-    .select('kunde_id,kunde_name,kunde_email,paket,aktiv,zahlung_bestaetigt,demo_delta_aktiv')
+    .select('kunde_id,kunde_name,kunde_email,paket,aktiv,zahlung_bestaetigt,demo_delta_aktiv,shop_slug')
     .eq('user_id',session.user.id).single();
   if(kundeError||!kunde){
     showBlocked('Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.');
@@ -924,6 +925,7 @@ if(sessionError||!session){
     }else{
       currentUserId=session.user.id;
       currentCustomerId=kunde.kunde_id;
+      if(kunde.shop_slug==='sma-testkunde')document.getElementById('checkoutTestLink').classList.remove('hidden');
       // Produkte und Bestellungen unabhängig und serverseitig mit je zehn Einträgen laden.
       await Promise.all([loadProductsPage(1),loadOrdersPage(1)]);
       document.getElementById('loading').classList.add('hidden');
