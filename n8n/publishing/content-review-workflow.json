@@ -1,0 +1,882 @@
+{
+  "name": "SMA – Dateiinhaltsprüfung V1",
+  "nodes": [
+    {
+      "id": "4fb60309-b717-468c-883f-ea7801de4e5c",
+      "name": "Inhalt prüfen",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-publication-content-review-v1",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://sma-automation.com"
+        }
+      },
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7d1fb669-61a1-4191-bcd0-18cefbc5e630"
+    },
+    {
+      "id": "eb84387e-41b0-48b3-8a91-a892c7d3a987",
+      "name": "Anfrage prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const r=$input.first().json,a=r.headers?.authorization,b=r.body;return [{json:typeof a==='string'&&/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(a)&&typeof b?.asset_id==='string'&&/^[a-f0-9-]{36}$/i.test(b.asset_id)&&typeof b.asset_revision==='string'&&b.asset_revision.length<=250?{ok:true,auth:a,input:{asset_id:b.asset_id,asset_revision:b.asset_revision}}:{ok:false,code:'AUTH_REQUIRED'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "4a163dc1-4ecd-418b-9f89-ffa5c2bec0c2",
+      "name": "Anmeldung vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3d9521a-4aa2-48cb-bcb3-57ead0ac234c",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "fdf1298b-50f2-4987-8dc2-c24395a1836b",
+      "name": "Prüfung reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_review_v1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth }}"
+            }
+          ]
+        },
+        "jsonBody": "={{ {p_action:'start',p_input:$json.input} }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "38a2439a-6436-4bb2-9066-1daaa415d0e0",
+      "name": "Antwort vorbereiten",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const r=$input.first().json;const codes=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','FILE_UNAVAILABLE','FILE_CHANGED','FILE_REFRESH_REQUIRED','FOLDER_UNAVAILABLE','CHECKSUM_REQUIRED','MEDIA_UNSUPPORTED','REVIEW_RUNNING','REVIEW_RATE_LIMITED','VIDEO_PLAN_REQUIRED'];return [{json:{ok:r.ok===true,review:r.ok===true?r.review:undefined,code:codes.includes(r.code)?r.code:'REVIEW_UNAVAILABLE',run:r.ok===true&&typeof r.lease_id==='string'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "ffabdf24-8949-479c-b8fe-971e213d4785",
+      "name": "Prüfantwort",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:$json.ok,...($json.ok?{review:$json.review}:{code:$json.code})} }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://sma-automation.com"
+              },
+              {
+                "name": "Vary",
+                "value": "Origin"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.5,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "61990ea9-efd4-4f2c-a741-c9fe86aa49bb",
+      "name": "Neue Prüfung?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6acd24d4-640f-4565-950e-b33c8fd4fee9",
+              "leftValue": "={{ $json.run === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "id": "5f191116-1f71-4edb-a32b-8eb18a7607bd",
+      "name": "Kundenordner zuordnen",
+      "type": "n8n-nodes-base.dataTable",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('Prüfung reservieren').first().json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $('Prüfung reservieren').first().json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "typeVersion": 1,
+      "position": [
+        1540,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6d44a27e-69b3-4b57-a86e-9998179326b4",
+      "name": "Ordner prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Prüfung reservieren').first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7b85d318-4f9b-4d30-84f0-a9bd7b7ca5a7",
+      "name": "Dateistand lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Prüfung reservieren').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,capabilities(canDownload),imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "20394fe9-dd26-4188-93c3-5b3b8264c0cb",
+      "name": "Dateistand prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nconst POLICY='visual-2026-11-01.1';\nconst MODELS='nudity-2.1,violence,weapon,gore-2.0,offensive-2.0,recreational_drug,self-harm';\nconst FIELDS={\n nudity:['nudity.sexual_activity','nudity.sexual_display','nudity.erotica','nudity.suggestive_classes.sextoy','nudity.suggestive'],\n violence:['violence.prob'],weapons:['weapon.classes.firearm','weapon.classes.knife','weapon.classes.firearm_gesture'],\n gore:['gore.prob'],hate:['offensive.nazi','offensive.confederate','offensive.supremacist','offensive.terrorist'],\n drugs:['recreational_drug.prob'],self_harm:['self-harm.prob']\n};\nfunction eligible(f){\n if(!f||!Number.isSafeInteger(Number(f.size_bytes))||Number(f.size_bytes)<=0)throw Error('FILE_METADATA_INVALID');\n if(!/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\\d+$/.test(f.revision||''))throw Error('CHECKSUM_REQUIRED');\n if(f.media_kind==='image'){\n  if(!['image/jpeg','image/png','image/webp'].includes(f.mime_type)||Number(f.size_bytes)>12000000)throw Error('MEDIA_UNSUPPORTED');\n }else if(f.media_kind==='video'){\n  if(!['video/mp4','video/quicktime','video/webm'].includes(f.mime_type)||Number(f.size_bytes)>=50000000||!Number.isFinite(f.duration_ms)||f.duration_ms<=0||f.duration_ms>=60000)throw Error('MEDIA_UNSUPPORTED');\n }else throw Error('MEDIA_UNSUPPORTED');\n return f;\n}\nfunction sameFile(meta,context,folders,catalogFiles){\n const f=catalogFiles({files:[meta]},folders)[0];eligible(f);\n if(meta.capabilities?.canDownload!==true||f.drive_file_id!==context.drive_file_id||f.revision!==context.asset_revision||f.mime_type!==context.mime_type||String(f.size_bytes)!==String(context.size_bytes)||f.duration_ms!==context.duration_ms)throw Error('FILE_CHANGED');\n return f;\n}\nfunction verifyBytes(buffer,f){\n eligible(f);if(buffer.length!==Number(f.size_bytes))throw Error('FILE_CHANGED');\n const crypto=require('crypto');const [algorithm,expected]=f.revision.split(':');\n if(crypto.createHash(algorithm).update(buffer).digest('hex')!==expected)throw Error('FILE_CHANGED');\n // Signature/animation gate, not a decoder or codec/colour-space validation.\n if(f.mime_type==='image/jpeg'&&!(buffer[0]===255&&buffer[1]===216&&buffer[2]===255))throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='image/png'){\n  if(buffer.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('MEDIA_UNSUPPORTED');\n  let pos=8,end=false;while(pos+12<=buffer.length){const n=buffer.readUInt32BE(pos),type=buffer.subarray(pos+4,pos+8).toString('ascii');if(n>buffer.length-pos-12||type==='acTL')throw Error('MEDIA_UNSUPPORTED');pos+=n+12;if(type==='IEND'){end=true;break;}}\n  if(!end||pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(f.mime_type==='image/webp'){\n  if(buffer.subarray(0,4).toString()!=='RIFF'||buffer.subarray(8,12).toString()!=='WEBP'||buffer.length!==buffer.readUInt32LE(4)+8)throw Error('MEDIA_UNSUPPORTED');\n  let pos=12;while(pos+8<=buffer.length){const type=buffer.subarray(pos,pos+4).toString(),n=buffer.readUInt32LE(pos+4);if(n>buffer.length-pos-8||['ANIM','ANMF'].includes(type)||(type==='VP8X'&&n>0&&(buffer[pos+8]&2)))throw Error('MEDIA_UNSUPPORTED');pos+=8+n+(n%2);}if(pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(['video/mp4','video/quicktime'].includes(f.mime_type)&&buffer.subarray(4,8).toString()!=='ftyp')throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='video/webm'&&buffer.subarray(0,4).toString('hex')!=='1a45dfa3')throw Error('MEDIA_UNSUPPORTED');\n return crypto.createHash('sha256').update(buffer).digest('hex');\n}\nfunction normalizeReview(response,kind,durationMs){\n if(response?.status!=='success')throw Error('PROVIDER_FAILED');\n const frames=kind==='image'?[response]:response.data?.frames;\n if(!Array.isArray(frames)||!frames.length||frames.length>125)throw Error('REVIEW_INCOMPLETE');\n if(kind==='video'){\n  if(!Number.isFinite(durationMs)||durationMs<=0||durationMs>=60000)throw Error('MEDIA_UNSUPPORTED');\n  let last=-1;for(const f of frames){const p=f.info?.position;if(!Number.isFinite(p)||p<0||p<=last||p>durationMs||p-last>1100)throw Error('REVIEW_INCOMPLETE');last=p;}\n  if(frames[0].info.position>100||durationMs-last>1100)throw Error('REVIEW_INCOMPLETE');\n }\n const scores={};for(const [category,paths] of Object.entries(FIELDS)){\n  let score=0;for(const f of frames)for(const path of paths){const v=path.split('.').reduce((o,k)=>o?.[k],f);if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('REVIEW_INCOMPLETE');score=Math.max(score,v);}\n  scores[category]=score;\n }\n const flagged=Object.entries(scores).filter(([,v])=>v>=0.35).map(([k])=>k);\n return {policy_version:POLICY,outcome:flagged.length?'needs_review':'clear',categories:flagged,frames_checked:frames.length,sampling_ms:kind==='video'?1000:0,can_publish:false};\n}\n\nreturn [{json:sameFile($input.first().json,$('Prüfung reservieren').first().json,$('Ordner prüfen').first().json.folders,catalogFiles)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ad5f8572-ee86-4149-b30f-32b1268a19d8",
+      "name": "Datei herunterladen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Prüfung reservieren').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "alt",
+              "value": "media"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Range",
+              "value": "={{ 'bytes=0-'+(Number($json.size_bytes)-1) }}"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a9be0d9e-15f9-4d9f-ae69-75bb0a497b50",
+      "name": "Dateiinhalt binden",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst POLICY='visual-2026-11-01.1';\nconst MODELS='nudity-2.1,violence,weapon,gore-2.0,offensive-2.0,recreational_drug,self-harm';\nconst FIELDS={\n nudity:['nudity.sexual_activity','nudity.sexual_display','nudity.erotica','nudity.suggestive_classes.sextoy','nudity.suggestive'],\n violence:['violence.prob'],weapons:['weapon.classes.firearm','weapon.classes.knife','weapon.classes.firearm_gesture'],\n gore:['gore.prob'],hate:['offensive.nazi','offensive.confederate','offensive.supremacist','offensive.terrorist'],\n drugs:['recreational_drug.prob'],self_harm:['self-harm.prob']\n};\nfunction eligible(f){\n if(!f||!Number.isSafeInteger(Number(f.size_bytes))||Number(f.size_bytes)<=0)throw Error('FILE_METADATA_INVALID');\n if(!/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\\d+$/.test(f.revision||''))throw Error('CHECKSUM_REQUIRED');\n if(f.media_kind==='image'){\n  if(!['image/jpeg','image/png','image/webp'].includes(f.mime_type)||Number(f.size_bytes)>12000000)throw Error('MEDIA_UNSUPPORTED');\n }else if(f.media_kind==='video'){\n  if(!['video/mp4','video/quicktime','video/webm'].includes(f.mime_type)||Number(f.size_bytes)>=50000000||!Number.isFinite(f.duration_ms)||f.duration_ms<=0||f.duration_ms>=60000)throw Error('MEDIA_UNSUPPORTED');\n }else throw Error('MEDIA_UNSUPPORTED');\n return f;\n}\nfunction sameFile(meta,context,folders,catalogFiles){\n const f=catalogFiles({files:[meta]},folders)[0];eligible(f);\n if(meta.capabilities?.canDownload!==true||f.drive_file_id!==context.drive_file_id||f.revision!==context.asset_revision||f.mime_type!==context.mime_type||String(f.size_bytes)!==String(context.size_bytes)||f.duration_ms!==context.duration_ms)throw Error('FILE_CHANGED');\n return f;\n}\nfunction verifyBytes(buffer,f){\n eligible(f);if(buffer.length!==Number(f.size_bytes))throw Error('FILE_CHANGED');\n const crypto=require('crypto');const [algorithm,expected]=f.revision.split(':');\n if(crypto.createHash(algorithm).update(buffer).digest('hex')!==expected)throw Error('FILE_CHANGED');\n // Signature/animation gate, not a decoder or codec/colour-space validation.\n if(f.mime_type==='image/jpeg'&&!(buffer[0]===255&&buffer[1]===216&&buffer[2]===255))throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='image/png'){\n  if(buffer.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('MEDIA_UNSUPPORTED');\n  let pos=8,end=false;while(pos+12<=buffer.length){const n=buffer.readUInt32BE(pos),type=buffer.subarray(pos+4,pos+8).toString('ascii');if(n>buffer.length-pos-12||type==='acTL')throw Error('MEDIA_UNSUPPORTED');pos+=n+12;if(type==='IEND'){end=true;break;}}\n  if(!end||pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(f.mime_type==='image/webp'){\n  if(buffer.subarray(0,4).toString()!=='RIFF'||buffer.subarray(8,12).toString()!=='WEBP'||buffer.length!==buffer.readUInt32LE(4)+8)throw Error('MEDIA_UNSUPPORTED');\n  let pos=12;while(pos+8<=buffer.length){const type=buffer.subarray(pos,pos+4).toString(),n=buffer.readUInt32LE(pos+4);if(n>buffer.length-pos-8||['ANIM','ANMF'].includes(type)||(type==='VP8X'&&n>0&&(buffer[pos+8]&2)))throw Error('MEDIA_UNSUPPORTED');pos+=8+n+(n%2);}if(pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(['video/mp4','video/quicktime'].includes(f.mime_type)&&buffer.subarray(4,8).toString()!=='ftyp')throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='video/webm'&&buffer.subarray(0,4).toString('hex')!=='1a45dfa3')throw Error('MEDIA_UNSUPPORTED');\n return crypto.createHash('sha256').update(buffer).digest('hex');\n}\nfunction normalizeReview(response,kind,durationMs){\n if(response?.status!=='success')throw Error('PROVIDER_FAILED');\n const frames=kind==='image'?[response]:response.data?.frames;\n if(!Array.isArray(frames)||!frames.length||frames.length>125)throw Error('REVIEW_INCOMPLETE');\n if(kind==='video'){\n  if(!Number.isFinite(durationMs)||durationMs<=0||durationMs>=60000)throw Error('MEDIA_UNSUPPORTED');\n  let last=-1;for(const f of frames){const p=f.info?.position;if(!Number.isFinite(p)||p<0||p<=last||p>durationMs||p-last>1100)throw Error('REVIEW_INCOMPLETE');last=p;}\n  if(frames[0].info.position>100||durationMs-last>1100)throw Error('REVIEW_INCOMPLETE');\n }\n const scores={};for(const [category,paths] of Object.entries(FIELDS)){\n  let score=0;for(const f of frames)for(const path of paths){const v=path.split('.').reduce((o,k)=>o?.[k],f);if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('REVIEW_INCOMPLETE');score=Math.max(score,v);}\n  scores[category]=score;\n }\n const flagged=Object.entries(scores).filter(([,v])=>v>=0.35).map(([k])=>k);\n return {policy_version:POLICY,outcome:flagged.length?'needs_review':'clear',categories:flagged,frames_checked:frames.length,sampling_ms:kind==='video'?1000:0,can_publish:false};\n}\n\nconst item=$input.first(),f=$('Dateistand prüfen').first().json;const bytes=await this.helpers.getBinaryDataBuffer(0,'data');const sha256=verifyBytes(bytes,f);return [{json:{sha256,kind:f.media_kind,duration_ms:f.duration_ms},binary:item.binary}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "fa453fca-0344-4b26-b182-763202fe0b90",
+      "name": "Sichtprüfung ausführen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.kind==='video'?'https://api.sightengine.com/1.0/video/check-sync.json':'https://api.sightengine.com/1.0/check.json' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "media",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "models",
+              "value": "nudity-2.1,violence,weapon,gore-2.0,offensive-2.0,recreational_drug,self-harm"
+            },
+            {
+              "name": "interval",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        0
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "udmCdOLJO30LPkaK",
+          "name": "Sightengine API – SMA"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "108af3fe-0fc5-4a72-880a-d3839f5befb4",
+      "name": "Prüfergebnis auswerten",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst POLICY='visual-2026-11-01.1';\nconst MODELS='nudity-2.1,violence,weapon,gore-2.0,offensive-2.0,recreational_drug,self-harm';\nconst FIELDS={\n nudity:['nudity.sexual_activity','nudity.sexual_display','nudity.erotica','nudity.suggestive_classes.sextoy','nudity.suggestive'],\n violence:['violence.prob'],weapons:['weapon.classes.firearm','weapon.classes.knife','weapon.classes.firearm_gesture'],\n gore:['gore.prob'],hate:['offensive.nazi','offensive.confederate','offensive.supremacist','offensive.terrorist'],\n drugs:['recreational_drug.prob'],self_harm:['self-harm.prob']\n};\nfunction eligible(f){\n if(!f||!Number.isSafeInteger(Number(f.size_bytes))||Number(f.size_bytes)<=0)throw Error('FILE_METADATA_INVALID');\n if(!/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\\d+$/.test(f.revision||''))throw Error('CHECKSUM_REQUIRED');\n if(f.media_kind==='image'){\n  if(!['image/jpeg','image/png','image/webp'].includes(f.mime_type)||Number(f.size_bytes)>12000000)throw Error('MEDIA_UNSUPPORTED');\n }else if(f.media_kind==='video'){\n  if(!['video/mp4','video/quicktime','video/webm'].includes(f.mime_type)||Number(f.size_bytes)>=50000000||!Number.isFinite(f.duration_ms)||f.duration_ms<=0||f.duration_ms>=60000)throw Error('MEDIA_UNSUPPORTED');\n }else throw Error('MEDIA_UNSUPPORTED');\n return f;\n}\nfunction sameFile(meta,context,folders,catalogFiles){\n const f=catalogFiles({files:[meta]},folders)[0];eligible(f);\n if(meta.capabilities?.canDownload!==true||f.drive_file_id!==context.drive_file_id||f.revision!==context.asset_revision||f.mime_type!==context.mime_type||String(f.size_bytes)!==String(context.size_bytes)||f.duration_ms!==context.duration_ms)throw Error('FILE_CHANGED');\n return f;\n}\nfunction verifyBytes(buffer,f){\n eligible(f);if(buffer.length!==Number(f.size_bytes))throw Error('FILE_CHANGED');\n const crypto=require('crypto');const [algorithm,expected]=f.revision.split(':');\n if(crypto.createHash(algorithm).update(buffer).digest('hex')!==expected)throw Error('FILE_CHANGED');\n // Signature/animation gate, not a decoder or codec/colour-space validation.\n if(f.mime_type==='image/jpeg'&&!(buffer[0]===255&&buffer[1]===216&&buffer[2]===255))throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='image/png'){\n  if(buffer.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('MEDIA_UNSUPPORTED');\n  let pos=8,end=false;while(pos+12<=buffer.length){const n=buffer.readUInt32BE(pos),type=buffer.subarray(pos+4,pos+8).toString('ascii');if(n>buffer.length-pos-12||type==='acTL')throw Error('MEDIA_UNSUPPORTED');pos+=n+12;if(type==='IEND'){end=true;break;}}\n  if(!end||pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(f.mime_type==='image/webp'){\n  if(buffer.subarray(0,4).toString()!=='RIFF'||buffer.subarray(8,12).toString()!=='WEBP'||buffer.length!==buffer.readUInt32LE(4)+8)throw Error('MEDIA_UNSUPPORTED');\n  let pos=12;while(pos+8<=buffer.length){const type=buffer.subarray(pos,pos+4).toString(),n=buffer.readUInt32LE(pos+4);if(n>buffer.length-pos-8||['ANIM','ANMF'].includes(type)||(type==='VP8X'&&n>0&&(buffer[pos+8]&2)))throw Error('MEDIA_UNSUPPORTED');pos+=8+n+(n%2);}if(pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(['video/mp4','video/quicktime'].includes(f.mime_type)&&buffer.subarray(4,8).toString()!=='ftyp')throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='video/webm'&&buffer.subarray(0,4).toString('hex')!=='1a45dfa3')throw Error('MEDIA_UNSUPPORTED');\n return crypto.createHash('sha256').update(buffer).digest('hex');\n}\nfunction normalizeReview(response,kind,durationMs){\n if(response?.status!=='success')throw Error('PROVIDER_FAILED');\n const frames=kind==='image'?[response]:response.data?.frames;\n if(!Array.isArray(frames)||!frames.length||frames.length>125)throw Error('REVIEW_INCOMPLETE');\n if(kind==='video'){\n  if(!Number.isFinite(durationMs)||durationMs<=0||durationMs>=60000)throw Error('MEDIA_UNSUPPORTED');\n  let last=-1;for(const f of frames){const p=f.info?.position;if(!Number.isFinite(p)||p<0||p<=last||p>durationMs||p-last>1100)throw Error('REVIEW_INCOMPLETE');last=p;}\n  if(frames[0].info.position>100||durationMs-last>1100)throw Error('REVIEW_INCOMPLETE');\n }\n const scores={};for(const [category,paths] of Object.entries(FIELDS)){\n  let score=0;for(const f of frames)for(const path of paths){const v=path.split('.').reduce((o,k)=>o?.[k],f);if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('REVIEW_INCOMPLETE');score=Math.max(score,v);}\n  scores[category]=score;\n }\n const flagged=Object.entries(scores).filter(([,v])=>v>=0.35).map(([k])=>k);\n return {policy_version:POLICY,outcome:flagged.length?'needs_review':'clear',categories:flagged,frames_checked:frames.length,sampling_ms:kind==='video'?1000:0,can_publish:false};\n}\n\nconst f=$('Dateiinhalt binden').first().json;return [{json:{result:normalizeReview($input.first().json,f.kind,f.duration_ms),sha256:f.sha256}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3080,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "005dda6a-1baa-417a-908e-b9945cbbe055",
+      "name": "Dateistand erneut lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Prüfung reservieren').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,capabilities(canDownload),imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        3300,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "16124d37-ff00-4be0-8d65-c8609e61d512",
+      "name": "Unveränderte Datei bestätigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nconst POLICY='visual-2026-11-01.1';\nconst MODELS='nudity-2.1,violence,weapon,gore-2.0,offensive-2.0,recreational_drug,self-harm';\nconst FIELDS={\n nudity:['nudity.sexual_activity','nudity.sexual_display','nudity.erotica','nudity.suggestive_classes.sextoy','nudity.suggestive'],\n violence:['violence.prob'],weapons:['weapon.classes.firearm','weapon.classes.knife','weapon.classes.firearm_gesture'],\n gore:['gore.prob'],hate:['offensive.nazi','offensive.confederate','offensive.supremacist','offensive.terrorist'],\n drugs:['recreational_drug.prob'],self_harm:['self-harm.prob']\n};\nfunction eligible(f){\n if(!f||!Number.isSafeInteger(Number(f.size_bytes))||Number(f.size_bytes)<=0)throw Error('FILE_METADATA_INVALID');\n if(!/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\\d+$/.test(f.revision||''))throw Error('CHECKSUM_REQUIRED');\n if(f.media_kind==='image'){\n  if(!['image/jpeg','image/png','image/webp'].includes(f.mime_type)||Number(f.size_bytes)>12000000)throw Error('MEDIA_UNSUPPORTED');\n }else if(f.media_kind==='video'){\n  if(!['video/mp4','video/quicktime','video/webm'].includes(f.mime_type)||Number(f.size_bytes)>=50000000||!Number.isFinite(f.duration_ms)||f.duration_ms<=0||f.duration_ms>=60000)throw Error('MEDIA_UNSUPPORTED');\n }else throw Error('MEDIA_UNSUPPORTED');\n return f;\n}\nfunction sameFile(meta,context,folders,catalogFiles){\n const f=catalogFiles({files:[meta]},folders)[0];eligible(f);\n if(meta.capabilities?.canDownload!==true||f.drive_file_id!==context.drive_file_id||f.revision!==context.asset_revision||f.mime_type!==context.mime_type||String(f.size_bytes)!==String(context.size_bytes)||f.duration_ms!==context.duration_ms)throw Error('FILE_CHANGED');\n return f;\n}\nfunction verifyBytes(buffer,f){\n eligible(f);if(buffer.length!==Number(f.size_bytes))throw Error('FILE_CHANGED');\n const crypto=require('crypto');const [algorithm,expected]=f.revision.split(':');\n if(crypto.createHash(algorithm).update(buffer).digest('hex')!==expected)throw Error('FILE_CHANGED');\n // Signature/animation gate, not a decoder or codec/colour-space validation.\n if(f.mime_type==='image/jpeg'&&!(buffer[0]===255&&buffer[1]===216&&buffer[2]===255))throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='image/png'){\n  if(buffer.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('MEDIA_UNSUPPORTED');\n  let pos=8,end=false;while(pos+12<=buffer.length){const n=buffer.readUInt32BE(pos),type=buffer.subarray(pos+4,pos+8).toString('ascii');if(n>buffer.length-pos-12||type==='acTL')throw Error('MEDIA_UNSUPPORTED');pos+=n+12;if(type==='IEND'){end=true;break;}}\n  if(!end||pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(f.mime_type==='image/webp'){\n  if(buffer.subarray(0,4).toString()!=='RIFF'||buffer.subarray(8,12).toString()!=='WEBP'||buffer.length!==buffer.readUInt32LE(4)+8)throw Error('MEDIA_UNSUPPORTED');\n  let pos=12;while(pos+8<=buffer.length){const type=buffer.subarray(pos,pos+4).toString(),n=buffer.readUInt32LE(pos+4);if(n>buffer.length-pos-8||['ANIM','ANMF'].includes(type)||(type==='VP8X'&&n>0&&(buffer[pos+8]&2)))throw Error('MEDIA_UNSUPPORTED');pos+=8+n+(n%2);}if(pos!==buffer.length)throw Error('MEDIA_UNSUPPORTED');\n }\n if(['video/mp4','video/quicktime'].includes(f.mime_type)&&buffer.subarray(4,8).toString()!=='ftyp')throw Error('MEDIA_UNSUPPORTED');\n if(f.mime_type==='video/webm'&&buffer.subarray(0,4).toString('hex')!=='1a45dfa3')throw Error('MEDIA_UNSUPPORTED');\n return crypto.createHash('sha256').update(buffer).digest('hex');\n}\nfunction normalizeReview(response,kind,durationMs){\n if(response?.status!=='success')throw Error('PROVIDER_FAILED');\n const frames=kind==='image'?[response]:response.data?.frames;\n if(!Array.isArray(frames)||!frames.length||frames.length>125)throw Error('REVIEW_INCOMPLETE');\n if(kind==='video'){\n  if(!Number.isFinite(durationMs)||durationMs<=0||durationMs>=60000)throw Error('MEDIA_UNSUPPORTED');\n  let last=-1;for(const f of frames){const p=f.info?.position;if(!Number.isFinite(p)||p<0||p<=last||p>durationMs||p-last>1100)throw Error('REVIEW_INCOMPLETE');last=p;}\n  if(frames[0].info.position>100||durationMs-last>1100)throw Error('REVIEW_INCOMPLETE');\n }\n const scores={};for(const [category,paths] of Object.entries(FIELDS)){\n  let score=0;for(const f of frames)for(const path of paths){const v=path.split('.').reduce((o,k)=>o?.[k],f);if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('REVIEW_INCOMPLETE');score=Math.max(score,v);}\n  scores[category]=score;\n }\n const flagged=Object.entries(scores).filter(([,v])=>v>=0.35).map(([k])=>k);\n return {policy_version:POLICY,outcome:flagged.length?'needs_review':'clear',categories:flagged,frames_checked:frames.length,sampling_ms:kind==='video'?1000:0,can_publish:false};\n}\n\nsameFile($input.first().json,$('Prüfung reservieren').first().json,$('Ordner prüfen').first().json.folders,catalogFiles);const c=$('Prüfung reservieren').first().json,r=$('Prüfergebnis auswerten').first().json;return [{json:{p_asset_id:c.asset_id,p_lease_id:c.lease_id,p_result:r.result,p_sha256:r.sha256}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3520,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "eb6349d7-8e37-41f4-8d77-af14c0ae60df",
+      "name": "Prüfergebnis speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_review_finish_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        3740,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7182c051-2c2a-4b28-a8e4-a9a3ced66647",
+      "name": "Prüffehler zuordnen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const c=$('Prüfung reservieren').first().json;const r=$input.first().json;const msg=String(r.message||r.error?.message||r.error||'');const codes=['FOLDER_UNAVAILABLE','FILE_CHANGED','CHECKSUM_REQUIRED','MEDIA_UNSUPPORTED','REVIEW_INCOMPLETE','PROVIDER_FAILED'];return [{json:{p_asset_id:c.asset_id,p_lease_id:c.lease_id,p_error:codes.find(x=>msg.includes(x))||'REVIEW_UNAVAILABLE'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2420,
+        400
+      ]
+    },
+    {
+      "id": "1d4232ef-8f42-4545-ae76-fe899cfc3940",
+      "name": "Prüffehler speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_review_finish_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Inhalt prüfen": {
+      "main": [
+        [
+          {
+            "node": "Anfrage prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfrage prüfen": {
+      "main": [
+        [
+          {
+            "node": "Anmeldung vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anmeldung vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Prüfung reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Antwort vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüfung reservieren": {
+      "main": [
+        [
+          {
+            "node": "Antwort vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Antwort vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Antwort vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Prüfantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüfantwort": {
+      "main": [
+        [
+          {
+            "node": "Neue Prüfung?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neue Prüfung?": {
+      "main": [
+        [
+          {
+            "node": "Kundenordner zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenordner zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Ordner prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dateistand lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand lesen": {
+      "main": [
+        [
+          {
+            "node": "Dateistand prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand prüfen": {
+      "main": [
+        [
+          {
+            "node": "Datei herunterladen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei herunterladen": {
+      "main": [
+        [
+          {
+            "node": "Dateiinhalt binden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateiinhalt binden": {
+      "main": [
+        [
+          {
+            "node": "Sichtprüfung ausführen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sichtprüfung ausführen": {
+      "main": [
+        [
+          {
+            "node": "Prüfergebnis auswerten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüfergebnis auswerten": {
+      "main": [
+        [
+          {
+            "node": "Dateistand erneut lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand erneut lesen": {
+      "main": [
+        [
+          {
+            "node": "Unveränderte Datei bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unveränderte Datei bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Prüfergebnis speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüfergebnis speichern": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Prüffehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüffehler zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Prüffehler speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 210,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "active": false
+}

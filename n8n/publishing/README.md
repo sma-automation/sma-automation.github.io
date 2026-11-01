@@ -57,3 +57,7 @@ Referenzen: https://developers.google.com/workspace/drive/api/reference/rest/v3/
 ## Technische Medienvorprüfung
 
 Die Dateizuordnung hat jetzt einen eigenen Abschnitt „Medienprüfung“ je Portal. Er zeigt gemeldetes Format, Größe, Auflösung und Videolänge sowie erkannte Probleme und noch offene Prüfungen. Keine automatische Freigabe oder Übernahme alter Sicherheitsresultate. Umfang, Quellen, SQL-Deployment und Tests stehen in [MEDIA_PRECHECK.md](MEDIA_PRECHECK.md).
+
+## Visuelle Dateiprüfung
+
+Die separate versionsgebundene Sicherheitsprüfung ist in [CONTENT_REVIEW.md](CONTENT_REVIEW.md) beschrieben. Sie nutzt vorhandene Sightengine-Credentials, liefert ein gemeinsames Prüfergebnis für alle Portal-Kacheln und erteilt keine Veröffentlichungsfreigabe. Nach der Medienvorprüfung muss `supabase/sql/publication-content-review.sql` als jüngster Funktionsstand angewandt werden.
