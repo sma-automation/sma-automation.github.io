@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout V2 testen · SMA</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#17223a;background:#f4f6f9;font-size:16px}*{box-sizing:border-box}body{margin:0}main{max-width:900px;margin:40px auto;padding:0 20px}a{color:#315ccb}header{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:30px}.brand{font-weight:900;letter-spacing:.12em}h1{font-size:30px;margin:0 0 12px}h2{font-size:20px;margin:0 0 18px}p{line-height:1.6}.muted{color:#59677e}.card{background:white;border:1px solid #dce2ed;border-radius:16px;padding:24px;margin:20px 0}.badge{display:inline-block;font-size:13px;font-weight:bold;border-radius:20px;padding:7px 11px;background:#eaf0ff;color:#254ca4;margin-bottom:16px}.line{display:grid;grid-template-columns:auto 1fr 100px;align-items:center;gap:15px;padding:18px 0;border-bottom:1px solid #e5e9f0}.line label{display:block;line-height:1.5}.line small{display:block;margin-top:5px;color:#59677e}input[type=checkbox]{width:20px;height:20px;accent-color:#3c62ce}input[type=number]{width:100%;min-height:44px;border:1px solid #aab7cf;border-radius:8px;padding:10px;font:inherit}.qty-label{font-size:12px;margin-bottom:5px}button,.button{display:inline-block;background:#3c62ce;color:white;border:0;border-radius:10px;padding:13px 18px;font:inherit;font-weight:bold;cursor:pointer;text-decoration:none}button:disabled{opacity:.5;cursor:default}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #91b1ff;outline-offset:3px}.actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:22px}.secondary{background:#edf1f8;color:#17223a}.status{line-height:1.6;padding:14px;border-radius:10px;background:#edf1f8}.status.ok{background:#e9f7ef;color:#17673b}.status.error{background:#fff0ed;color:#9e2b20}.result-line{display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid #e5e9f0;padding:12px 0}.total{font-size:23px;font-weight:bold}.hidden,[hidden]{display:none!important}footer{font-size:13px;color:#59677e;margin:25px 0 40px}@media(max-width:600px){main{margin:22px auto;padding:0 14px}.card{padding:18px}h1{font-size:26px}header{font-size:14px}.line{gap:10px;grid-template-columns:22px minmax(0,1fr) 75px}.result-line{gap:10px}}
+</style></head><body><main>
+<header><span class="brand">SMA</span><a href="dashboard.html#shop">Zurück zum Dashboard</a></header>
+<span class="badge">CHECKOUT V2 · INTERNER TEST</span>
+<h1>Warenkorb prüfen</h1>
+<p class="muted">Prüfe deine Produkte und Mengen vor der späteren Freigabe. Dieser Test erstellt keine Bestellung und löst keine Zahlung aus.</p>
+<p id="status" class="status" role="status" aria-live="polite">Anmeldung wird geprüft …</p>
+<section id="selection" class="card" hidden aria-labelledby="selectionTitle">
+<h2 id="selectionTitle">Produkte auswählen</h2><div id="products"></div>
+<p class="muted">Bis zu 20 Produkte, höchstens 20 Stück je Produkt und 40 Stück insgesamt. Der verfügbare Bestand wird beim Test erneut geprüft.</p>
+<div class="actions"><button id="check" type="button" disabled>Checkout testen</button><button id="reload" type="button" class="secondary">Bestand aktualisieren</button><a id="publicShop" target="_blank" rel="noopener">Öffentlichen Shop ansehen</a></div>
+</section>
+<section id="result" class="card" hidden aria-labelledby="resultTitle"><h2 id="resultTitle">Geprüfter Warenkorb</h2><div id="resultLines"></div><p id="resultTotal" class="total"></p><p id="resultNote" class="muted"></p><p class="muted">Die Preise stammen aus SMA. Versand, Steuern und der endgültige Preis werden später in der Shopify-Kasse bestätigt.</p></section>
+<footer>Nur für den angemeldeten Inhaber des SMA-Testshops. Die öffentliche Kasse wird durch diesen Test nicht freigeschaltet.</footer>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
+const $=id=>document.getElementById(id);
+const money=(v,c='EUR')=>new Intl.NumberFormat('de-AT',{style:'currency',currency:c}).format(v);
+let customer=null, userId=null, busy=false;
+const rows=[];
+function status(message,tone=''){$('status').textContent=message;$('status').className='status '+tone;}
+function items(){return rows.filter(r=>r.check.checked).map(r=>({produkt_id:r.id,menge:Number(r.qty.value)}));}
+function setBusy(value){busy=value;for(const r of rows){r.check.disabled=busy||r.unavailable;r.qty.disabled=busy||r.unavailable;}$('reload').disabled=busy;update();}
+function update(){const list=items();$('check').disabled=busy||!list.length;$('check').textContent=busy?'Wird geprüft …':'Checkout testen';}
+function edited(){$('result').hidden=true;status('Warenkorb geändert. Bitte erneut testen.');update();}
+async function load(){
+ setBusy(true);$('result').hidden=true;status('Produkte und Bestand werden geladen …');
+ try{
+  const {data,error}=await supabase.from('sma_produkte').select('sma_produkt_id,produkt_name,sku,preis,waehrung,bestand').eq('user_id',userId).eq('kunde_id',customer.kunde_id).eq('aktiv',true).eq('shopify_aktiv',true).order('created_at',{ascending:false}).limit(101);
+  if(error)throw new Error('Produkte konnten nicht geladen werden. Bitte erneut versuchen.');
+  if(data.length>100)throw new Error('Dieser Test unterstützt bis zu 100 Produkte im Katalog.');
+  rows.length=0;$('products').replaceChildren();
+  for(const p of data){
+   const row=document.createElement('div');row.className='line';
+   const check=document.createElement('input');check.type='checkbox';check.id='select-'+p.sma_produkt_id;
+   const label=document.createElement('label');label.htmlFor=check.id;label.textContent=p.produkt_name;
+   const meta=document.createElement('small');meta.textContent=(p.sku||'')+' · '+money(p.preis,p.waehrung)+' · Bestand: '+p.bestand;label.append(meta);
+   const quantity=document.createElement('div');const qtyLabel=document.createElement('label');qtyLabel.className='qty-label';qtyLabel.textContent='Menge';
+   const qty=document.createElement('input');qty.type='number';qty.min='1';qty.max='20';qty.step='1';qty.value='1';qty.id='qty-'+p.sma_produkt_id;qty.setAttribute('aria-label','Menge für '+p.produkt_name);qtyLabel.htmlFor=qty.id;
+   const unavailable=Number(p.bestand)<1;check.checked=!unavailable&&!rows.some(r=>r.check.checked);
+   check.addEventListener('change',edited);qty.addEventListener('input',edited);
+   quantity.append(qtyLabel,qty);row.append(check,label,quantity);$('products').append(row);rows.push({id:p.sma_produkt_id,check,qty,unavailable});
+  }
+  $('selection').hidden=false;status(data.length?'Wähle Produkte und starte den Checkout-Test.':'Noch keine aktiven Shopify-Produkte vorhanden.');
+ }catch(error){status(error.message,'error');}finally{setBusy(false);}
+}
+async function run(){
+ if(busy)return;
+ const list=items();
+ if(!list.length||list.length>20||list.some(x=>!Number.isInteger(x.menge)||x.menge<1||x.menge>20)||list.reduce((n,x)=>n+x.menge,0)>40){status('Bitte die Produktmengen prüfen: 1–20 je Produkt, höchstens 40 insgesamt.','error');return;}
+ setBusy(true);$('result').hidden=true;status('Händler, Produkte, Bestand und Kaufadresse werden geprüft …');
+ try{
+  const {data,error}=await supabase.functions.invoke('sma-shop-checkout-test',{body:{shop:customer.shop_slug,items:list},timeout:15000});
+  if(error){let detail=null;try{detail=await error.context?.json();}catch{}throw new Error(detail?.message||'Test derzeit nicht erreichbar. Bitte erneut versuchen.');}
+  if(data?.ok!==true||data.modus!=='dry_run'||data.checkout_url!==null||data.zahlung_ausgeloest!==false||data.live_checkout_unveraendert!==true||!Array.isArray(data.warenkorb))throw new Error('Testergebnis konnte nicht bestätigt werden.');
+  $('resultLines').replaceChildren();
+  for(const item of data.warenkorb){const line=document.createElement('div');line.className='result-line';const label=document.createElement('span');label.textContent=item.menge+' × '+item.name;const amount=document.createElement('strong');amount.textContent=money(item.summe,data.waehrung);line.append(label,amount);$('resultLines').append(line);}
+  $('resultTotal').textContent='SMA-Warenwert: '+money(data.gesamtbetrag,data.waehrung);
+  $('resultNote').textContent=data.haendler_freigegeben?'Die Händlerzuordnung ist freigegeben. Der Test verändert die öffentliche Kasse nicht.':'Die Händlerfreigabe für öffentliche Käufe bleibt gesperrt.';
+  $('result').hidden=false;status(data.message,'ok');
+ }catch(error){status(error.message,'error');}finally{setBusy(false);}
+}
+$('check').addEventListener('click',run);$('reload').addEventListener('click',load);
+try{
+ const {data:sessionData,error:sessionError}=await supabase.auth.getSession();
+ if(sessionError||!sessionData.session){status('Bitte zuerst im SMA-Dashboard anmelden.');const login=document.createElement('a');login.href='index.html';login.textContent=' Zur Anmeldung';$('status').append(login);}
+ else{
+  userId=sessionData.session.user.id;
+  const {data,error}=await supabase.from('sma_kunden').select('kunde_id,shop_slug,shop_oeffentlich,aktiv,zahlung_bestaetigt,demo_delta_aktiv').eq('user_id',userId).single();
+  if(error||!data||data.shop_slug!=='sma-testkunde'||data.aktiv!==true||data.shop_oeffentlich!==true||!(data.zahlung_bestaetigt===true||data.demo_delta_aktiv===true))status('Dieser Checkout-Test ist für dein Konto nicht verfügbar.');
+  else{customer=data;$('publicShop').href='shop.html?shop='+encodeURIComponent(customer.shop_slug);await load();}
+ }
+}catch{status('Anmeldung konnte nicht geprüft werden. Bitte das Dashboard erneut öffnen.','error');}
+</script></main></body></html>
