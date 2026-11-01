@@ -1,30 +1,52 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>SMA · Kundenbereich</title>
-<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f9;color:#151b27}#state{max-width:560px;margin:15vh auto;padding:32px;background:white;border:1px solid #dfe3eb;border-radius:20px;text-align:center}.brand{display:flex;justify-content:center;align-items:center;gap:9px;font-weight:800;font-size:24px;margin-bottom:24px;color:#4065d8}.brand span{background:#f0f3ff;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);padding:13px 22px}button,a{font:inherit}button{border:1px solid #dfe3eb;padding:11px 18px;border-radius:10px;background:white;cursor:pointer;margin:8px}#retry{background:#4065d8;color:white}#dashboard{border:0;display:block;width:100%;height:100dvh}[hidden]{display:none!important}p{line-height:1.6}</style></head>
+<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f9;color:#151b27}#state{max-width:560px;margin:15vh auto;padding:32px;background:white;border:1px solid #dfe3eb;border-radius:20px;text-align:center}.brand{display:flex;justify-content:center;align-items:center;gap:9px;font-weight:800;font-size:24px;margin-bottom:24px;color:#4065d8}.brand span{background:#f0f3ff;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);padding:13px 22px}button,a{font:inherit}button{border:1px solid #dfe3eb;padding:11px 18px;border-radius:10px;background:white;cursor:pointer;margin:8px}#retry{background:#4065d8;color:white}#dashboard{border:0;display:block;width:100%;height:100dvh}[hidden]{display:none!important}p{line-height:1.6}#portalOptimizer{padding:0;border:1px solid #dce3ef;border-radius:18px;width:min(680px,calc(100vw - 24px));height:min(700px,82dvh);max-width:none;max-height:calc(100dvh - 24px);box-shadow:0 24px 80px #17233b44;overflow:hidden;background:#f5f7fc}#portalOptimizer::backdrop{background:#17233b66}.optimizer-header{height:64px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;background:white;border-bottom:1px solid #dfe3eb}.optimizer-header h2{margin:0;font-size:19px}.optimizer-header button{margin:0;padding:7px 11px;color:#52617b}#optimizerFrames{height:calc(100% - 64px)}#optimizerFrames iframe{display:block;border:0;width:100%;height:100%}@media(max-width:520px){#portalOptimizer{height:88dvh;border-radius:14px}.optimizer-header{height:56px;padding:10px 14px}.optimizer-header h2{font-size:17px}#optimizerFrames{height:calc(100% - 56px)}}
+</style></head>
 <body><section id="state" role="status"><div class="brand" aria-label="SMA"><span>S</span>=<span>M</span>=<span>A</span></div><h1 id="heading">Dein SMA-Dashboard wird geladen</h1><p id="message">Die Anmeldung wird geprüft …</p><button id="retry" hidden>Erneut laden</button><button id="logout" hidden>Abmelden</button></section>
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
+<dialog id="portalOptimizer" aria-labelledby="optimizerTitle"><div class="optimizer-header"><h2 id="optimizerTitle">Portal optimieren</h2><button id="optimizerClose" type="button" aria-label="Schließen">✕</button></div><div id="optimizerFrames"></div></dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
 const frame=document.getElementById('dashboard');
 const state=document.getElementById('state');
-// Add the optional text-preview panel after the authenticated dashboard arrives.
+const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
+const optimizer=document.getElementById('portalOptimizer');
+const optimizerFrames=document.getElementById('optimizerFrames');
+let optimizerTrigger=null;
+function openOptimizer(portal,trigger){
+  optimizerTrigger=trigger;
+  document.getElementById('optimizerTitle').textContent=portalNames[portal]+' optimieren';
+  let preview=optimizerFrames.querySelector('[data-portal="'+portal+'"]');
+  if(!preview){
+    preview=document.createElement('iframe');preview.dataset.portal=portal;preview.title=portalNames[portal]+' – Text und Shop-Link';
+    const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('portal',portal);preview.src=url.href;
+    optimizerFrames.append(preview);
+  }
+  for(const el of optimizerFrames.children)el.hidden=el!==preview;
+  if(!optimizer.open)optimizer.showModal();
+}
+function clearOptimizer(){if(optimizer.open)optimizer.close();optimizerFrames.replaceChildren();optimizerTrigger=null;}
+document.getElementById('optimizerClose').addEventListener('click',()=>optimizer.close());
+optimizer.addEventListener('close',()=>optimizerTrigger?.focus());
+// Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
   const page=doc?.getElementById('page-publishing');
-  if(!page||doc.getElementById('smaPublicationPanel'))return;
-  const panel=doc.createElement('details');panel.id='smaPublicationPanel';
-  panel.style.cssText='margin:20px 0;padding:18px;border:1px solid #dfe3eb;border-radius:16px;background:white';
-  const title=doc.createElement('summary');title.textContent='Portaltexte mit Shop-Link vorbereiten';title.style.cssText='cursor:pointer;font-weight:700;color:#3157cd';
-  const intro=doc.createElement('p');intro.textContent='Eigene Textvorschauen für YouTube, Instagram, Facebook und TikTok erstellen und bearbeiten.';intro.style.cssText='line-height:1.6;color:#62718a';
-  panel.append(title,intro);
-  panel.addEventListener('toggle',()=>{
-    if(!panel.open||doc.getElementById('smaPublicationPreview'))return;
-    const preview=doc.createElement('iframe');preview.id='smaPublicationPreview';preview.title='SMA Beitragsvorschau';preview.src=new URL('publication-preview.html?embedded=1',window.location.href).href;preview.style.cssText='width:100%;height:1100px;border:0;display:block';panel.append(preview);
-  });
-  const heading=page.querySelector('h1,h2');
-  if(heading?.nextElementSibling)heading.nextElementSibling.after(panel);else page.prepend(panel);
+  if(!page)return;
+  const style=doc.createElement('style');style.textContent=`
+    #page-publishing .platform-card{grid-template-columns:48px minmax(0,1fr) auto}
+    #page-publishing .sma-optimize{grid-column:3;grid-row:1;border:1px solid #c7d3f8;background:#edf2ff;color:#3157cd;border-radius:10px;padding:10px 16px;font:700 14px Arial,sans-serif;cursor:pointer;white-space:nowrap}
+    #page-publishing .sma-optimize:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
+    @media(max-width:520px){#page-publishing .platform-card{grid-template-columns:40px minmax(0,1fr)}#page-publishing .sma-optimize{grid-column:2;grid-row:2;justify-self:start;padding:9px 14px}}
+  `;doc.head.append(style);
+  for(const card of page.querySelectorAll('.platform-card')){
+    const portal=Object.keys(portalNames).find(key=>portalNames[key]===card.querySelector('.platform-info strong')?.textContent.trim());
+    if(!portal||card.querySelector('.sma-optimize'))continue;
+    const button=doc.createElement('button');button.type='button';button.className='sma-optimize';button.textContent='Optimieren';button.dataset.portal=portal;button.setAttribute('aria-haspopup','dialog');
+    button.addEventListener('click',event=>{event.stopPropagation();openOptimizer(portal,button);});card.append(button);
+  }
 });
 let pending;
 let signedOut=false;
@@ -43,24 +65,23 @@ async function load(){
   if(pending)return pending;
   pending=(async()=>{
     document.getElementById('retry').hidden=true;
-    try{const html=await dashboardHtml();if(signedOut)return;frame.srcdoc=html;frame.hidden=false;state.hidden=true;}
+    try{const html=await dashboardHtml();if(signedOut)return;clearOptimizer();frame.srcdoc=html;frame.hidden=false;state.hidden=true;}
     catch(error){frame.hidden=true;frame.removeAttribute('srcdoc');state.hidden=false;document.getElementById('heading').textContent='SMA-Dashboard';document.getElementById('message').textContent=error.message;document.getElementById('retry').hidden=false;document.getElementById('logout').hidden=false;}
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
-  const preview=frame.contentDocument?.getElementById('smaPublicationPreview');
-  if(event.origin===window.location.origin&&preview&&event.source===preview.contentWindow&&event.data?.type==='sma-publication-preview-height'){
-    const height=event.data.height;if(Number.isFinite(height))preview.style.height=Math.min(12000,Math.max(600,height+24))+'px';return;
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-close'&&[...optimizerFrames.children].some(el=>event.source===el.contentWindow)){
+    optimizer.close();return;
   }
   if(event.origin!==window.location.origin||event.source!==frame.contentWindow)return;
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 

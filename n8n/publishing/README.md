@@ -1,6 +1,6 @@
 # Portaltext-Vorschau V1
 
-Erste, isolierte Ausbaustufe zu Issue #11. Der authentifizierte Veröffentlichungsbereich erhält eine aufklappbare Textvorschau. Beschreibung, Zielgruppe und Ziel liefern das Ausgangsmaterial; es wird noch keine Kundendatei gelesen. Die Vorschau ist ausdrücklich `can_publish: false` und ist nicht mit einem Upload-Pfad verbunden.
+Erste, isolierte Ausbaustufe zu Issue #11. Jede vorhandene Portal-Kachel im authentifizierten Veröffentlichungsbereich erhält einen Button „Optimieren“. Er öffnet ein kompaktes Fenster nur für das gewählte Portal. Beschreibung, Zielgruppe und Ziel liefern das Ausgangsmaterial; es wird noch keine Kundendatei gelesen. Die Vorschau ist ausdrücklich `can_publish: false` und ist nicht mit einem Upload-Pfad verbunden.
 
 Pro ausgewähltem Portal werden Titel/Einstieg, eigener Beitragstext, höchstens drei relevante Hashtags und konkrete Prüfhinweise erstellt. Das sind redaktionelle Grenzen, keine vollständige Prüfung sämtlicher Portalregeln. Fakten, Rechte, Werbe-/KI-Kennzeichnung, Medienformat und die Nutzbarkeit des Links müssen in folgenden Ausbaustufen geprüft werden. Reichweite oder Ranking werden nicht garantiert.
 
@@ -8,8 +8,8 @@ Der Shop-Link wird ausschließlich aus dem aktiven, berechtigten Kundenkonto in 
 
 ## Komponenten
 
-- `app/dashboard.html`: fügt eine optionale Vorschau in den authentifizierten Veröffentlichungsbereich ein. Vorhandene Dashboard-, OAuth- und Abmeldefunktionen bleiben erhalten.
-- `app/publication-preview.html` und `app/assets/publication-preview.js`: mobile Oberfläche, letzte Vorschau laden, Titel/Text bearbeiten und mit Versionsprüfung speichern.
+- `app/dashboard.html`: ergänzt die bestehenden Portal-Kacheln um „Optimieren“ und öffnet einen begrenzten Dialog. Vorhandene Dashboard-, OAuth- und Abmeldefunktionen bleiben erhalten.
+- `app/publication-preview.html` und `app/assets/publication-preview.js`: mobile Oberfläche, jeweils letzte Vorschau des gewählten Portals laden, Titel/Text bearbeiten und mit Versionsprüfung speichern. Bestehende gemeinsame Vorschauen bleiben lesbar; Änderungen an einem Portal erhalten die anderen Texte.
 - `supabase/sql/publication-preview.sql`: private Tabellen, authentifizierte RPC mit Eigentümerprüfung sowie ausschließlich serverseitig aufrufbare Abschluss-RPC. RLS und fehlende direkte Client-Tabellenrechte sind beabsichtigt.
 - `prepare-preview.cjs`: Eingabe-, Modell- und Ausgabevalidierung. OpenAI Responses mit bestehender SMA-Verbindung, `store:false`, strengem JSON-Schema. Nur die Inhaltsangaben werden an das Modell übermittelt, keine Kunden-ID, Shop-Adresse oder Sitzung.
 - `preview-workflow.json`: Export des separaten aktiven n8n-Workflows `9dNstQ4E2uXpZ18Z`. Enthält Credential-Referenzen, keine Credential-Geheimnisse. `build-workflow.py` erzeugt einen neuen Importentwurf aus dem geprüften Kern; nicht blind über eine aktive Version importieren.
@@ -35,3 +35,5 @@ Pages-Deployment und Anmeldung im echten SMA-Dashboard geprüft. Vier Portaltext
 Ein erster Modelllauf wurde von der Fehlerbehandlung abgefangen; seine genaue Ursache wurde bei damals generischer Fehlererfassung nicht gespeichert. Daraus wird kein behobener Modellfehler behauptet. Die Ausgabegrenzen werden nun zusätzlich im JSON-Schema vorgegeben. Für spätere Fehler speichert ausschließlich die private Auftragstabelle eine fest erlaubte Kategorie; Rohfehler, Sitzungen und Modellantworten werden nicht als Diagnose persistiert. Ablehnungen oder ungültige Ausgaben können weiterhin auftreten und erzeugen keine veröffentlichbare Vorschau.
 
 Aktiver n8n-Stand: `a239be17-7071-4e88-9de2-355e818b7e10`, 14 Knoten, keine Pins; sämtliche Inhaltsprotokolle aus, Timeout 150 Sekunden. Weitere technische Umsetzung bleibt in Issue #11 offen, insbesondere tatsächliche Dateianalyse, plattformspezifische Medien-/Metadatenprüfung und Übernahme des freigegebenen Textstands in die Upload-Adapter.
+
+Portal-Oberfläche (01.11.2026): Gemeinsame ausklappbare Kachel entfernt. Vier Buttons in den bestehenden Kacheln; Dialog maximal 680 × 700 px, zusätzlich an den Bildschirm begrenzt, mit eigenem Scrollbereich. Inhalt/Ziel bei vorhandenem Text eingeklappt; neue Generierung nur für das gewählte Portal. `tests/publication-portal-scope.sql` prüft getrennte letzte Vorschauen und Kundentrennung unter der authenticated-Rolle.
