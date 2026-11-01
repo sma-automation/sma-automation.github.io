@@ -184,12 +184,112 @@
       "name": "Ordner prüfen",
       "type": "n8n-nodes-base.code",
       "parameters": {
-        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Eigene Dateiliste reservieren').first().json)}];"
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Eigene Dateiliste reservieren').first().json)}];"
       },
       "typeVersion": 2,
       "position": [
         1320,
         0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7843a479-c3f6-41c8-9024-5f9a4d1b029a",
+      "name": "Uploadordner lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Ordner prüfen').first().json.folders[0] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,trashed,capabilities(canListChildren)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        -220
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4bdc0906-e48d-4aa8-bf7e-36a2bf3ad9cc",
+      "name": "Verarbeitungsordner lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Ordner prüfen').first().json.folders[1] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,trashed,capabilities(canListChildren)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        -220
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "ed7c1a04-5f6b-48b0-966d-d6371ff85f2c",
+      "name": "Ordnerzugriff bestätigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nreturn [{json:accessibleFolders([$('Uploadordner lesen').first().json,$('Verarbeitungsordner lesen').first().json],$('Ordner prüfen').first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1980,
+        -220
       ],
       "onError": "continueErrorOutput"
     },
@@ -249,7 +349,7 @@
       "name": "Dateien prüfen",
       "type": "n8n-nodes-base.code",
       "parameters": {
-        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nconst c=$('Eigene Dateiliste reservieren').first().json;return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_files:catalogFiles($input.first().json,$('Ordner prüfen').first().json.folders)}}];"
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nconst c=$('Eigene Dateiliste reservieren').first().json;return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_files:catalogFiles($input.first().json,$('Ordner prüfen').first().json.folders)}}];"
       },
       "typeVersion": 2,
       "position": [
@@ -495,6 +595,46 @@
       ]
     },
     "Ordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Uploadordner lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateifehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uploadordner lesen": {
+      "main": [
+        [
+          {
+            "node": "Verarbeitungsordner lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verarbeitungsordner lesen": {
+      "main": [
+        [
+          {
+            "node": "Ordnerzugriff bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ordnerzugriff bestätigen": {
       "main": [
         [
           {

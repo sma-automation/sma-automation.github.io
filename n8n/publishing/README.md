@@ -61,3 +61,9 @@ Die Dateizuordnung hat jetzt einen eigenen Abschnitt „Medienprüfung“ je Por
 ## Visuelle Dateiprüfung
 
 Die separate versionsgebundene Sicherheitsprüfung ist in [CONTENT_REVIEW.md](CONTENT_REVIEW.md) beschrieben. Sie nutzt vorhandene Sightengine-Credentials, liefert ein gemeinsames Prüfergebnis für alle Portal-Kacheln und erteilt keine Veröffentlichungsfreigabe. Nach der Medienvorprüfung muss `supabase/sql/publication-content-review.sql` als jüngster Funktionsstand angewandt werden.
+
+### Erreichbarkeit der Ordner und Live-Test
+
+Vor jedem `files.list` liest der Katalog beide zugeordneten Ordner einzeln und verlangt die erwartete ID, den Ordnertyp, `trashed:false` sowie `capabilities.canListChildren:true`. Ein fehlender oder nicht zugänglicher Ordner wird als `FOLDER_UNAVAILABLE` behandelt. Die bisherige Liste und ihr erfolgreicher Abgleichzeitpunkt bleiben erhalten; ein leeres Suchergebnis allein belegt keinen erreichbaren leeren Ordner.
+
+Am 01.11.2026 im echten Testkundenkonto bestätigt: die bisherigen beiden Ordner waren über die vorhandene Drive-Verbindung nicht erreichbar. Nach dem Fehlerfall wurde nur dessen Ordnerpaar auf eine neu angelegte private Testablage umgestellt. Ein neutrales PNG wurde anschließend korrekt katalogisiert. Die Katalogkorrektur läuft als Version `e71d42b9-f428-47a6-b9ea-7dee1c12f418` mit 18 Knoten und unveränderten Speicher-/Timeout-Einstellungen. Die SQL-Regression prüft ausdrücklich den Erhalt vorhandener Dateien und des letzten Erfolgszeitpunkts nach einem Ordnerfehler.

@@ -33,6 +33,16 @@ do $$ declare r jsonb; begin
  r:=public.sma_publication_files_finish_v1('20be25c6-a763-4981-a25a-d503e32e4e25',null,'[]');assert r->>'code'='INVALID_LEASE';
 end $$;
 reset role;
+-- An inaccessible folder must not turn a previously verified catalog into an empty success.
+update sma_private.publication_file_sync_v1 set lease_id='fa110000-0000-4000-8000-000000000009',lease_until=now()+interval '2 minutes',finished_at='2026-01-01T00:00:00Z' where user_id='20be25c6-a763-4981-a25a-d503e32e4e25';
+set local role service_role;
+do $$ declare r jsonb; begin
+ r:=public.sma_publication_files_finish_v1('20be25c6-a763-4981-a25a-d503e32e4e25','fa110000-0000-4000-8000-000000000009','[]','FOLDER_UNAVAILABLE');
+ assert r->>'code'='FOLDER_UNAVAILABLE',r::text;
+ assert exists(select 1 from sma_private.publication_files_v1 where id='fa110000-0000-4000-8000-000000000001' and available and revision='version:1');
+ assert exists(select 1 from sma_private.publication_file_sync_v1 where user_id='20be25c6-a763-4981-a25a-d503e32e4e25' and lease_id is null and lease_until is null and finished_at='2026-01-01T00:00:00Z');
+end $$;
+reset role;
 update sma_private.publication_files_v1 set revision='version:2' where id='fa110000-0000-4000-8000-000000000001';
 set local role authenticated;
 do $$ declare r jsonb; begin
