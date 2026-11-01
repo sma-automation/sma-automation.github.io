@@ -1,0 +1,41 @@
+-- Run after order-reconciliation.sql in a transaction; every fixture is rolled back.
+create temp table recovery_assertions(name text,passed boolean);
+create function pg_temp.ok(n text,v boolean) returns void language plpgsql as $$ begin if v is not true then raise exception 'Failed: %',n; end if; insert into recovery_assertions values(n,true); end $$;
+update sma_private.order_reconciliation_v1 set enabled=false;
+insert into sma_private.order_reconciliation_v1(account_id,enabled)
+select s.id,true from public.sma_shopify_konten s join public.sma_kunden k on k.id=s.sma_kunden_id where k.aktiv and (k.zahlung_bestaetigt or k.demo_delta_aktiv) order by s.id limit 1
+on conflict(account_id) do update set enabled=true,next_run_at=now()-interval '1 minute',lease_until=null;
+create temp table fixture as select public.sma_order_reconcile_v1('claim') as claim;
+select pg_temp.ok('claim succeeds',(select (claim->>'claimed')::boolean from fixture));
+select pg_temp.ok('concurrent/duplicate claim skipped',public.sma_order_reconcile_v1('claim')->>'claimed'='false');
+alter table fixture add payload jsonb;
+update fixture set payload=jsonb_build_object('complete',true,'pages',1,'shop_domain',claim->>'shop_domain','markt_konto_id',claim->>'markt_konto_id','kunde_id',claim->>'kunde_id','orders',jsonb_build_array(jsonb_build_object('externe_bestell_id','gid://shopify/Order/99999999000001','bestellnummer','#RECOVERY-ROLLBACK','erstellt_am',now()-interval '2 days','quelle_aktualisiert_am',now()-interval '1 day','zahlungsstatus','paid','lieferstatus','unfulfilled','gesamtbetrag','45.89','waehrung','EUR')));
+create function pg_temp.complete() returns jsonb language sql as $$ select public.sma_order_reconcile_v1('complete',(claim->>'account_id')::bigint,(claim->>'lease_id')::uuid,payload) from fixture $$;
+create function pg_temp.reclaim() returns void language plpgsql as $$ begin update sma_private.order_reconciliation_v1 set next_run_at=now()-interval '1 minute'; update fixture set claim=public.sma_order_reconcile_v1('claim'); end $$;
+select pg_temp.ok('missed creation recovered',pg_temp.complete()->>'inserted'='1');
+select pg_temp.ok('owner derived server-side',exists(select 1 from public.sma_bestellungen b join public.sma_kunden k on k.kunde_id=b.kunde_id and k.user_id=b.user_id where b.externe_bestell_id='gid://shopify/Order/99999999000001'));
+select pg_temp.reclaim();
+select pg_temp.ok('same snapshot does not write',pg_temp.complete()->>'unchanged'='1');
+select pg_temp.reclaim();
+update fixture set payload=jsonb_set(jsonb_set(payload,'{orders,0,quelle_aktualisiert_am}',to_jsonb(now()-interval '12 hours')),'{orders,0,zahlungsstatus}','"refunded"');
+select pg_temp.ok('newer refund recovered',pg_temp.complete()->>'updated'='1');
+select pg_temp.reclaim();
+update fixture set payload=jsonb_set(jsonb_set(payload,'{orders,0,quelle_aktualisiert_am}',to_jsonb(now()-interval '1 day')),'{orders,0,zahlungsstatus}','"paid"');
+select pg_temp.ok('newer webhook retained',pg_temp.complete()->>'newer_in_sma'='1');
+select pg_temp.reclaim();
+update fixture set payload=jsonb_set(payload,'{orders,0,quelle_aktualisiert_am}',to_jsonb(now()-interval '12 hours'));
+select pg_temp.ok('equal timestamp conflict visible',pg_temp.complete()->>'timestamp_conflicts'='1');
+select pg_temp.ok('conflict keeps canonical refund',(select zahlungsstatus='refunded' from public.sma_bestellungen where externe_bestell_id='gid://shopify/Order/99999999000001'));
+select pg_temp.reclaim();
+do $$ begin begin perform public.sma_order_reconcile_v1('complete',(claim->>'account_id')::bigint,'00000000-0000-0000-0000-000000000000',payload) from fixture; raise exception 'TEST_EXPECTED_FAILURE'; exception when others then if SQLERRM='TEST_EXPECTED_FAILURE' then raise; end if; end; perform pg_temp.ok('invalid lease denied',true); end $$;
+do $$ begin begin perform public.sma_order_reconcile_v1('complete',(claim->>'account_id')::bigint,(claim->>'lease_id')::uuid,jsonb_set(payload,'{shop_domain}','"wrong.myshopify.com"')) from fixture; raise exception 'TEST_EXPECTED_FAILURE'; exception when others then if SQLERRM='TEST_EXPECTED_FAILURE' then raise; end if; end; perform pg_temp.ok('cross-shop data denied',true); end $$;
+do $$ begin begin perform public.sma_order_reconcile_v1('complete',(claim->>'account_id')::bigint,(claim->>'lease_id')::uuid,jsonb_set(payload,'{complete}','false')) from fixture; raise exception 'TEST_EXPECTED_FAILURE'; exception when others then if SQLERRM='TEST_EXPECTED_FAILURE' then raise; end if; end; perform pg_temp.ok('incomplete pagination denied',true); end $$;
+do $$ begin begin perform public.sma_order_reconcile_v1('complete',(claim->>'account_id')::bigint,(claim->>'lease_id')::uuid,jsonb_set(payload,'{orders}',(payload->'orders')||(payload->'orders'))) from fixture; raise exception 'TEST_EXPECTED_FAILURE'; exception when others then if SQLERRM='TEST_EXPECTED_FAILURE' then raise; end if; end; perform pg_temp.ok('duplicate orders denied',true); end $$;
+do $$ begin begin perform public.sma_order_reconcile_v1('complete',(claim->>'account_id')::bigint,(claim->>'lease_id')::uuid,jsonb_set(payload,'{orders,0,gesamtbetrag}','"NaN"')) from fixture; raise exception 'TEST_EXPECTED_FAILURE'; exception when others then if SQLERRM='TEST_EXPECTED_FAILURE' then raise; end if; end; perform pg_temp.ok('invalid money denied',true); end $$;
+select pg_temp.ok('failure recorded',(select public.sma_order_reconcile_v1('fail',(claim->>'account_id')::bigint,(claim->>'lease_id')::uuid)->>'status'='failed' from fixture));
+select pg_temp.ok('retry scheduled',(select next_run_at<=clock_timestamp()+interval '5 minutes' and lease_until is null from sma_private.order_reconciliation_v1 where account_id=(select (claim->>'account_id')::bigint from fixture)));
+select pg_temp.ok('anonymous RPC denied',not has_function_privilege('anon','public.sma_order_reconcile_v1(text,bigint,uuid,jsonb)','execute'));
+select pg_temp.ok('authenticated RPC denied',not has_function_privilege('authenticated','public.sma_order_reconcile_v1(text,bigint,uuid,jsonb)','execute'));
+select pg_temp.ok('service RPC allowed',has_function_privilege('service_role','public.sma_order_reconcile_v1(text,bigint,uuid,jsonb)','execute'));
+select pg_temp.ok('audit not client-readable',not has_table_privilege('authenticated','sma_private.order_reconciliation_v1','select'));
+select * from recovery_assertions;

@@ -1,0 +1,744 @@
+{
+  "name": "SMA – Shopify Bestellabgleich V1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "fd00a11d-e9d5-467e-bc87-2027a492bf3e",
+      "name": "Alle 15 Minuten",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4acc0df1-c246-4c36-9c79-b316af61c07e",
+      "name": "Manuell prüfen",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_order_reconcile_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'claim'} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "6370f711-ca11-46f0-b161-cee7a3f71da7",
+      "name": "Abgleich beanspruchen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ce113777-a5db-47b2-b38e-129136cb8c9b",
+              "leftValue": "={{ $json.claimed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "effd010f-1dd2-479c-abcc-a54a214c70cf",
+      "name": "Konto vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "xulE0cKcCpqv3q1r",
+          "mode": "list",
+          "cachedResultName": "SMA_Markt_Konten",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/xulE0cKcCpqv3q1r"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "markt",
+              "keyValue": "shopify"
+            },
+            {
+              "keyName": "aktiv",
+              "condition": "isTrue"
+            },
+            {
+              "keyName": "bestell_sync_aktiv",
+              "condition": "isTrue"
+            },
+            {
+              "keyName": "verbindungs_status",
+              "keyValue": "verbunden"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('Abgleich beanspruchen').item.json.kunde_id }}"
+            },
+            {
+              "keyName": "markt_konto_id",
+              "keyValue": "={{ $('Abgleich beanspruchen').item.json.markt_konto_id }}"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "id": "95de9129-ac68-4656-9bab-32fec15fda40",
+      "name": "Marktkonto laden",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const claim=$('Abgleich beanspruchen').item.json;\nconst rows=$input.all();\nif(rows.length!==1) throw Error('AMBIGUOUS_ACCOUNT');\nconst a=rows[0].json;\nif(a.kunde_id!==claim.kunde_id || a.markt_konto_id!==claim.markt_konto_id || a.markt!=='shopify' || a.aktiv!==true || a.bestell_sync_aktiv!==true || a.verbindungs_status!=='verbunden' || String(a.shop_url||'').replace(/\\/$/,'')!=='https://'+claim.shop_domain || !a.credential_ref) throw Error('ACCOUNT_MISMATCH');\nreturn [{json:a,pairedItem:{item:0}}];"
+      },
+      "id": "023d5638-dd36-4b02-9fbd-687adcbd0852",
+      "name": "Marktkonto absichern",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "OTtmukPdGBvjLKU0",
+          "mode": "list",
+          "cachedResultName": "SMA_Markt_Credentials",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/OTtmukPdGBvjLKU0"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.kunde_id }}"
+            },
+            {
+              "keyName": "markt_konto_id",
+              "keyValue": "={{ $json.markt_konto_id }}"
+            },
+            {
+              "keyName": "markt",
+              "keyValue": "shopify"
+            },
+            {
+              "keyName": "credential_ref",
+              "keyValue": "={{ $json.credential_ref }}"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "id": "b97876c9-a23d-404c-9550-e6ba46bdb081",
+      "name": "Credential laden",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$('Marktkonto absichern').item.json;const rows=$input.all();\nif(rows.length!==1) throw Error('AMBIGUOUS_CREDENTIAL');const c=rows[0].json;\nif(c.kunde_id!==a.kunde_id || c.markt_konto_id!==a.markt_konto_id || c.markt!=='shopify' || c.credential_ref!==a.credential_ref || !c.credential_blob) throw Error('CREDENTIAL_MISMATCH');\nreturn [{json:c,pairedItem:{item:0}}];"
+      },
+      "id": "d12fad88-343c-46cf-a75e-daa99f9a7f22",
+      "name": "Credential absichern",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "action": "decrypt",
+        "value": "={{ $json.credential_blob }}",
+        "dataPropertyName": "credential_json"
+      },
+      "id": "dd6325a3-90c7-4de4-8bf9-3823d0dfb644",
+      "name": "Credential entschlüsseln",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        0
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "A5Z1vnrWBKRp7jsY",
+          "name": "SMA – Credential Verschlüsselung"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw=$input.first().json.credential_json??$input.first().json.datacredential_json;\nconst c=typeof raw==='string'?JSON.parse(raw):raw;\nif(typeof c?.client_id!=='string'||!c.client_id||typeof c?.client_secret!=='string'||!c.client_secret) throw Error('INVALID_CREDENTIAL');\nreturn [{json:{client_id:c.client_id,client_secret:c.client_secret},pairedItem:{item:0}}];"
+      },
+      "id": "2cdb6376-d15e-41d1-91af-e3e401d23432",
+      "name": "Zugang vorbereiten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://'+$('Abgleich beanspruchen').item.json.shop_domain+'/admin/oauth/access_token' }}",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $json.client_secret }}"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "c864e11b-2a4d-4d86-9c38-b6cab95b048c",
+      "name": "Shopify Token holen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t=$input.first().json;\nif(typeof t.access_token!=='string'||!t.access_token) throw Error('MISSING_TOKEN');\nconst scopes=String(t.scope||'').split(',');if(!scopes.includes('read_orders')) throw Error('MISSING_READ_ORDERS');\nreturn [{json:{access_token:t.access_token},pairedItem:{item:0}}];"
+      },
+      "id": "89bc932a-2a01-411c-9f18-9e4ab3f76b47",
+      "name": "Token prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://'+$('Abgleich beanspruchen').item.json.shop_domain+'/admin/api/2026-07/graphql.json' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({query:\"query SMAOrderRecovery($after: String, $filter: String!, $first: Int!) { orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $filter) { nodes { id name createdAt updatedAt displayFinancialStatus displayFulfillmentStatus currentTotalPriceSet { shopMoney { amount currencyCode } } } pageInfo { hasNextPage endCursor } } }\",variables:{first:50,after:null,filter:\"updated_at:<='\"+$('Abgleich beanspruchen').item.json.cutoff+\"'\"} }) }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "variables",
+                    "value": "={{ { ...$request.body.variables, after: $response.body?.data?.orders?.pageInfo?.endCursor || null } }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !!$response.body.errors?.length || $response.body.data?.orders?.pageInfo?.hasNextPage !== true }}",
+              "limitPagesFetched": true,
+              "maxRequests": 200,
+              "requestInterval": 750
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "e91af3c2-678a-428b-9d6f-278516516109",
+      "name": "Shopify Seiten lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nfunction validatePages(pages, claim, now = Date.now()) {\n  if (!claim?.claimed || !/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(claim.shop_domain || '')) throw Error('INVALID_CLAIM');\n  if (!Array.isArray(pages) || !pages.length || pages.length > 200) throw Error('INVALID_PAGES');\n  const ids = new Set(), cursors = new Set(), orders = [];\n  const financial = new Set(['AUTHORIZED','EXPIRED','PAID','PARTIALLY_PAID','PARTIALLY_REFUNDED','PENDING','REFUNDED','VOIDED']);\n  const fulfillment = new Set(['FULFILLED','FULFILLMENT_NOT_REQUIRED','IN_PROGRESS','ON_HOLD','OPEN','PARTIALLY_FULFILLED','PENDING_FULFILLMENT','REQUEST_DECLINED','RESTOCKED','SCHEDULED','UNFULFILLED']);\n  pages.forEach((page, index) => {\n    if (page?.error || (page?.errors && (!Array.isArray(page.errors) || page.errors.length))) throw Error('SHOPIFY_ERROR');\n    const connection = page?.data?.orders, info = connection?.pageInfo;\n    if (!Array.isArray(connection?.nodes) || typeof info?.hasNextPage !== 'boolean') throw Error('INVALID_PAGE');\n    if (info.hasNextPage !== (index < pages.length - 1)) throw Error('INCOMPLETE_PAGINATION');\n    if (info.hasNextPage && (typeof info.endCursor !== 'string' || !info.endCursor || cursors.has(info.endCursor))) throw Error('INVALID_CURSOR');\n    if (info.endCursor) cursors.add(info.endCursor);\n    for (const o of connection.nodes) {\n      const money = o?.currentTotalPriceSet?.shopMoney;\n      const created = Date.parse(o?.createdAt), updated = Date.parse(o?.updatedAt);\n      if (!/^gid:\\/\\/shopify\\/Order\\/[0-9]+$/.test(o?.id || '') || ids.has(o.id)) throw Error('INVALID_ORDER_ID');\n      if (typeof o.name !== 'string' || !o.name || o.name.length > 255 || !Number.isFinite(created) || !Number.isFinite(updated) || updated < created || updated > now + 300000) throw Error('INVALID_ORDER');\n      if (o.displayFinancialStatus !== null && !financial.has(o.displayFinancialStatus)) throw Error('INVALID_FINANCIAL_STATUS');\n      if (!fulfillment.has(o.displayFulfillmentStatus)) throw Error('INVALID_FULFILLMENT_STATUS');\n      if (typeof money?.amount !== 'string' || !/^\\d+(?:\\.\\d+)?$/.test(money.amount) || Number(money.amount) > 1e12 || !/^[A-Z]{3}$/.test(money?.currencyCode || '')) throw Error('INVALID_MONEY');\n      ids.add(o.id);\n      orders.push({externe_bestell_id:o.id,bestellnummer:o.name,erstellt_am:o.createdAt,\n        quelle_aktualisiert_am:o.updatedAt,zahlungsstatus:(o.displayFinancialStatus || 'UNKNOWN').toLowerCase(),\n        lieferstatus:o.displayFulfillmentStatus.toLowerCase(),gesamtbetrag:money.amount,waehrung:money.currencyCode});\n    }\n  });\n  if (orders.length > 10000) throw Error('ORDER_LIMIT');\n  return {complete:true,pages:pages.length,shop_domain:claim.shop_domain,\n    markt_konto_id:claim.markt_konto_id,kunde_id:claim.kunde_id,orders};\n}\n\n\nconst c=$('Abgleich beanspruchen').item.json;return [{json:validatePages($input.all().map(x=>x.json),c),pairedItem:{item:0}}];"
+      },
+      "id": "e26165d3-9200-4233-9f0a-c38cda7c05d7",
+      "name": "Bestellungen validieren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_order_reconcile_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'complete',p_account_id:$('Abgleich beanspruchen').item.json.account_id,p_lease:$('Abgleich beanspruchen').item.json.lease_id,p_result:$json} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "ea80e058-ac7f-4c6f-bae0-80ac58da79ca",
+      "name": "Abgleich speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3120,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_order_reconcile_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'fail',p_account_id:$('Abgleich beanspruchen').item.json.account_id,p_lease:$('Abgleich beanspruchen').item.json.lease_id} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "b08eb75c-e61d-4f74-9208-d0d7f2831344",
+      "name": "Fehler festhalten",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "f0368e15-6def-4960-98c3-6cb888da781b",
+      "name": "Abgleich beendet",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        224
+      ]
+    }
+  ],
+  "connections": {
+    "Alle 15 Minuten": {
+      "main": [
+        [
+          {
+            "node": "Abgleich beanspruchen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manuell prüfen": {
+      "main": [
+        [
+          {
+            "node": "Abgleich beanspruchen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Abgleich beanspruchen": {
+      "main": [
+        [
+          {
+            "node": "Konto vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Konto vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Marktkonto laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Abgleich beendet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marktkonto laden": {
+      "main": [
+        [
+          {
+            "node": "Marktkonto absichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marktkonto absichern": {
+      "main": [
+        [
+          {
+            "node": "Credential laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential laden": {
+      "main": [
+        [
+          {
+            "node": "Credential absichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential absichern": {
+      "main": [
+        [
+          {
+            "node": "Credential entschlüsseln",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential entschlüsseln": {
+      "main": [
+        [
+          {
+            "node": "Zugang vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zugang vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Shopify Token holen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify Token holen": {
+      "main": [
+        [
+          {
+            "node": "Token prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token prüfen": {
+      "main": [
+        [
+          {
+            "node": "Shopify Seiten lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify Seiten lesen": {
+      "main": [
+        [
+          {
+            "node": "Bestellungen validieren",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bestellungen validieren": {
+      "main": [
+        [
+          {
+            "node": "Abgleich speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Abgleich speichern": {
+      "main": [
+        [
+          {
+            "node": "Abgleich beanspruchen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fehler festhalten": {
+      "main": [
+        [
+          {
+            "node": "Abgleich beanspruchen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 480,
+    "availableInMCP": false
+  },
+  "pinData": {}
+}
