@@ -33,13 +33,13 @@ Facebook: verständlicher Kontext und konkreter Nutzen, natürlicher Text.
 TikTok: sehr kurzer passender Einstieg und kompakte Caption.
 Titel höchstens 80 Zeichen, body höchstens 1200 Zeichen. Keine pauschalen Superlative, Reichweitengarantien, erfundenen Trends oder künstliches Engagement-Bait.
 Hashtags separat, maximal 3 sachlich passende Begriffe ohne #. Keine Links, Domainnamen, @Mentions, Shop-Platzhalter oder Hashtags in title/body. Den Shop-Link fügt SMA nachträglich aus geprüften Kundendaten hinzu. Keine Aussage 'Link im Profil'. Keine Werbung-/KI-Kennzeichnung erfinden: deren Bestätigung erfolgt gesondert.
-review_notes enthält nur konkrete, nötige Inhaltsprüfungen (maximal 5 kurze Hinweise), keine internen technischen Erklärungen. Bei ausreichenden Angaben ist eine leere Liste erlaubt.`,
+review_notes enthält nur konkrete, nötige Inhaltsprüfungen (maximal 5 Hinweise mit jeweils höchstens 200 Zeichen), keine internen technischen Erklärungen. Bei ausreichenden Angaben ist eine leere Liste erlaubt. Nenne keine Shop-Link-, Profil-Link-, Formatierungs- oder Veröffentlichungsaufgaben in review_notes; diese Liste dient nur fehlenden inhaltlichen Angaben. Der Shop-Link wird garantiert automatisch ergänzt.`,
     input: JSON.stringify({ source_text: input.source_text, audience: input.audience, goal: input.goal, language: input.language, media_kind: input.media_kind, platforms: input.platforms }),
     text: { format: { type: 'json_schema', name: 'sma_publication_preview_v1', strict: true, schema: {
-      type: 'object', additionalProperties: false, required: ['drafts'], properties: { drafts: { type: 'array', items: {
+      type: 'object', additionalProperties: false, required: ['drafts'], properties: { drafts: { type: 'array', minItems: input.platforms.length, maxItems: input.platforms.length, items: {
         type: 'object', additionalProperties: false, required: ['platform','title','body','hashtags','review_notes'], properties: {
-          platform: {type:'string',enum:input.platforms}, title:{type:'string'}, body:{type:'string'},
-          hashtags:{type:'array',items:{type:'string'}}, review_notes:{type:'array',items:{type:'string'}}
+          platform: {type:'string',enum:input.platforms}, title:{type:'string',minLength:1,maxLength:80}, body:{type:'string',minLength:10,maxLength:1200},
+          hashtags:{type:'array',maxItems:3,items:{type:'string',minLength:1,maxLength:50}}, review_notes:{type:'array',maxItems:5,items:{type:'string',minLength:1,maxLength:200}}
         }
       } } }
     } } }

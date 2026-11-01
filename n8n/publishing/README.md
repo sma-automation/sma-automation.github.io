@@ -27,3 +27,11 @@ n8n-Import übernimmt Workflow-Einstellungen nicht zuverlässig: vor Aktivierung
 `node --test tests/*.test.cjs` umfasst Generator- und Frontendtests, einschließlich Mehrfachklicks, deaktivierter Sitzung, Versionkonflikten, Shop-Link-Erhalt, unvollständiger Modellantworten und unerlaubter Ausgaben. `tests/publication-preview.sql` wird als Transaktion mit Rollback ausgeführt und prüft Berechtigungen, Eigentümer, Idempotenz, Lease und Bearbeitung. Keine Testbestellung und kein Social-Post wird erzeugt.
 
 Quellen für die API-Verwendung: https://developers.openai.com/api/docs/guides/migrate-to-responses und https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-langchain.openai/text-operations/ . YouTube-Beschreibungen werden zusätzlich nach UTF-8-Bytes, TikTok-Texte nach UTF-16-Einheiten begrenzt. Die Prüfung der aktuellen vollständigen Portalvorgaben bleibt Bestandteil der Medien-/Veröffentlichungsadapter.
+
+## Live-Prüfstand vom 01.11.2026
+
+Pages-Deployment und Anmeldung im echten SMA-Dashboard geprüft. Vier Portaltexte wurden in zwei Live-Durchläufen erfolgreich erstellt; der abschließende Lauf mit den engeren Ausgabegrenzen benötigte rund zehn Sekunden. Titelbearbeitung wurde gespeichert (Revision 2) und nach Neuladen wiederhergestellt; in jeder gespeicherten Caption blieb genau ein eigener Shop-Link erhalten.
+
+Ein erster Modelllauf wurde von der Fehlerbehandlung abgefangen; seine genaue Ursache wurde bei damals generischer Fehlererfassung nicht gespeichert. Daraus wird kein behobener Modellfehler behauptet. Die Ausgabegrenzen werden nun zusätzlich im JSON-Schema vorgegeben. Für spätere Fehler speichert ausschließlich die private Auftragstabelle eine fest erlaubte Kategorie; Rohfehler, Sitzungen und Modellantworten werden nicht als Diagnose persistiert. Ablehnungen oder ungültige Ausgaben können weiterhin auftreten und erzeugen keine veröffentlichbare Vorschau.
+
+Aktiver n8n-Stand: `a239be17-7071-4e88-9de2-355e818b7e10`, 14 Knoten, keine Pins; sämtliche Inhaltsprotokolle aus, Timeout 150 Sekunden. Weitere technische Umsetzung bleibt in Issue #11 offen, insbesondere tatsächliche Dateianalyse, plattformspezifische Medien-/Metadatenprüfung und Übernahme des freigegebenen Textstands in die Upload-Adapter.

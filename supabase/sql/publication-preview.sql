@@ -16,6 +16,7 @@ create table if not exists sma_private.publication_previews_v1 (
   revision integer not null default 1,
   error_code text
 );
+alter table sma_private.publication_previews_v1 add column if not exists diagnostic_code text;
 create index if not exists publication_previews_v1_owner_created_idx on sma_private.publication_previews_v1(user_id,created_at desc);
 create table if not exists sma_private.publication_rate_v1 (
   user_id uuid primary key,
@@ -149,7 +150,7 @@ begin
   elsif jsonb_array_length(p_preview->'drafts')<>jsonb_array_length(j.input->'platforms') then failure:='INVALID_PREVIEW';
   end if;
   if failure is not null then
-    update sma_private.publication_previews_v1 set status='failed',error_code=failure,finished_at=now() where id=j.id;
+    update sma_private.publication_previews_v1 set status='failed',error_code=failure,diagnostic_code=case when p_error in ('MODEL_INCOMPLETE','MODEL_REFUSED','MODEL_INVALID','MODEL_INVALID_TEXT','MODEL_UNEXPECTED_LINK','MODEL_INVALID_PLATFORM','MODEL_INVALID_HASHTAGS','CAPTION_TOO_LONG','RUNTIME_BUFFER','CONTEXT_NOT_READY','INVALID_SHOP','HTTP_400','HTTP_401','HTTP_403','HTTP_429','HTTP_500','HTTP_502','HTTP_503','HTTP_504') then p_error else 'UNCLASSIFIED' end,finished_at=now() where id=j.id;
     return jsonb_build_object('ok',false,'status','failed','id',j.id,'code',failure);
   end if;
   update sma_private.publication_previews_v1 set status='completed',preview=p_preview,finished_at=now() where id=j.id;
