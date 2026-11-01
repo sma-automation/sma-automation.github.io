@@ -59,7 +59,8 @@ begin
 
   if p_action in ('get','latest') then
     if p_action='latest' then
-      select * into j from sma_private.publication_previews_v1 q where q.user_id=uid order by q.created_at desc limit 1;
+      if p_input ? 'platform' and (jsonb_typeof(p_input->'platform') is distinct from 'string' or p_input->>'platform' not in ('youtube','instagram','facebook','tiktok')) then return jsonb_build_object('ok',false,'code','INVALID_PLATFORMS'); end if;
+      select * into j from sma_private.publication_previews_v1 q where q.user_id=uid and (not (p_input ? 'platform') or (q.input->'platforms') ? (p_input->>'platform')) order by q.created_at desc limit 1;
     else
       select * into j from sma_private.publication_previews_v1 q where q.id=p_id and q.user_id=uid;
     end if;
