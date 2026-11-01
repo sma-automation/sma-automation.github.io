@@ -162,6 +162,7 @@ body.gallery-open{overflow:hidden}
 
       <section id="bestellungen" class="section card">
         <h2>Bestellungen</h2>
+        <p id="bestellStatus" class="item-meta" role="status" aria-live="polite">Bestellungen werden automatisch aktualisiert.</p>
         <div id="bestellListe" class="list"></div>
         <nav id="bestellPagination" class="pagination" aria-label="Bestellseiten"></nav>
       </section>
@@ -255,6 +256,13 @@ let stockRefreshFailures=0;
 let stockFastUntil=0;
 let stockPageLoading=false;
 let stockPageSuspended=false;
+let orderRefreshTimer=null;
+let orderRefreshController=null;
+let orderRefreshFailures=0;
+let orderRefreshEnabled=false;
+let orderPageLoading=false;
+let orderRequestedPage=1;
+let orderSignature=null;
 const paginationState={
   products:{page:1,total:0,request:0},
   orders:{page:1,total:0,request:0}
@@ -413,11 +421,17 @@ async function refreshStock(){
     scheduleStockRefresh();
   }
 }
-document.addEventListener('visibilitychange',()=>scheduleStockRefresh(0));
-window.addEventListener('online',()=>scheduleStockRefresh(0));
-window.addEventListener('focus',()=>scheduleStockRefresh(0));
-window.addEventListener('pagehide',()=>{stockPageSuspended=true;clearTimeout(stockRefreshTimer);});
-window.addEventListener('pageshow',()=>{stockPageSuspended=false;scheduleStockRefresh(0);});
+function resumeShopRefresh(){scheduleStockRefresh(0);scheduleOrderRefresh(0);}
+document.addEventListener('visibilitychange',()=>{
+  scheduleStockRefresh(0);
+  if(document.hidden)stopOrderRefresh();else scheduleOrderRefresh(0);
+});
+window.addEventListener('online',resumeShopRefresh);
+window.addEventListener('focus',resumeShopRefresh);
+window.addEventListener('pagehide',()=>{
+  stockPageSuspended=true;clearTimeout(stockRefreshTimer);stopOrderRefresh();
+});
+window.addEventListener('pageshow',()=>{stockPageSuspended=false;resumeShopRefresh();});
 
 function makeStockEditor(product){
   const id=String(product.sma_produkt_id);
@@ -814,7 +828,7 @@ function renderOrders(orders){
 
 // Daten werden seitenweise aus Supabase geladen, damit auch große Shops vollständig erreichbar bleiben.
 const PRODUKT_FELDER='sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at';
-const BESTELL_FELDER='markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung';
+const BESTELL_FELDER='id,markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung';
 
 function showLoading(elementId,message){
   const element=document.getElementById(elementId);
@@ -885,26 +899,68 @@ async function loadProductsPage(requestedPage=1){
     if(request===state.request){stockPageLoading=false;scheduleStockRefresh();}
   }
 }
-async function loadOrdersPage(requestedPage=1){
+function orderRefreshDelay(){return Math.min(60000,15000*2**Math.min(orderRefreshFailures,2));}
+function scheduleOrderRefresh(delay=orderRefreshDelay()){
+  clearTimeout(orderRefreshTimer);orderRefreshTimer=null;
+  if(!orderRefreshEnabled||stockPageSuspended||document.hidden||!currentUserId)return;
+  orderRefreshTimer=setTimeout(()=>loadOrdersPage(orderRequestedPage,{background:true}),delay);
+}
+function stopOrderRefresh(){
+  clearTimeout(orderRefreshTimer);orderRefreshTimer=null;
+  orderRefreshController?.abort();orderRefreshController=null;
+  paginationState.orders.request++;orderPageLoading=false;
+}
+function setOrderStatus(message='Bestellungen werden automatisch aktualisiert.'){
+  document.getElementById('bestellStatus').textContent=message;
+}
+async function loadOrdersPage(requestedPage=1,{background=false}={}){
+  if(!currentUserId||stockPageSuspended)return;
+  if(background&&(document.hidden||orderPageLoading))return;
   const state=paginationState.orders;
   const request=++state.request;
-  const page=Math.max(1,Math.floor(requestedPage));
+  const userId=currentUserId;
+  const page=Number.isFinite(requestedPage)?Math.max(1,Math.floor(requestedPage)):1;
   const from=(page-1)*PAGE_SIZE;
-  showLoading('bestellListe','Bestellungen werden geladen …');
-  const {data,error,count}=await supabase.from('sma_bestellungen')
-    .select(BESTELL_FELDER,{count:'exact'})
-    .eq('user_id',currentUserId)
-    .order('erstellt_am',{ascending:false})
-    .range(from,from+PAGE_SIZE-1);
-  if(request!==state.request)return;
-  if(error){showLoading('bestellListe','Bestellungen konnten nicht geladen werden: '+error.message);return;}
-  const total=count??0;
-  const maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
-  if(page>maxPage){await loadOrdersPage(maxPage);return;}
-  state.total=total;state.page=page;
-  document.getElementById('bestellCount').textContent=total;
-  renderOrders(data||[]);
-  renderPagination('bestellPagination',state,'Bestellungen',loadOrdersPage);
+  clearTimeout(orderRefreshTimer);orderRefreshTimer=null;
+  orderRefreshController?.abort();
+  const controller=new AbortController();orderRefreshController=controller;
+  const timeout=setTimeout(()=>controller.abort(),10000);
+  const isCurrent=()=>request===state.request&&userId===currentUserId&&!stockPageSuspended;
+  orderPageLoading=true;orderRefreshEnabled=true;orderRequestedPage=page;
+  if(!background){
+    orderSignature=null;
+    showLoading('bestellListe','Bestellungen werden geladen …');
+    setOrderStatus('Bestellungen werden geladen …');
+  }
+  try{
+    const {data,error,count}=await supabase.from('sma_bestellungen')
+      .select(BESTELL_FELDER,{count:'exact'})
+      .eq('user_id',userId)
+      .order('erstellt_am',{ascending:false}).order('id',{ascending:false})
+      .range(from,from+PAGE_SIZE-1).abortSignal(controller.signal);
+    if(!isCurrent())return;
+    if(error)throw error;
+    const total=count??0,maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
+    if(page>maxPage){orderPageLoading=false;await loadOrdersPage(maxPage,{background});return;}
+    const rows=data||[],signature=JSON.stringify([page,total,rows]);
+    const paginationChanged=!background||state.total!==total||state.page!==page;
+    state.total=total;state.page=page;
+    if(signature!==orderSignature){renderOrders(rows);orderSignature=signature;}
+    document.getElementById('bestellCount').textContent=total;
+    if(paginationChanged)renderPagination('bestellPagination',state,'Bestellungen',loadOrdersPage);
+    orderRefreshFailures=0;setOrderStatus();
+  }catch(error){
+    if(isCurrent()){
+      orderRefreshFailures++;
+      if(!background)showLoading('bestellListe','Bestellungen konnten nicht geladen werden.');
+      setOrderStatus('Verbindung unterbrochen. Bestellungen werden automatisch erneut geladen.');
+    }
+  }finally{
+    clearTimeout(timeout);
+    if(isCurrent()){
+      orderPageLoading=false;orderRefreshController=null;scheduleOrderRefresh();
+    }
+  }
 }
 
 if(window.self===window.top){window.location.replace('dashboard.html#shop');}
