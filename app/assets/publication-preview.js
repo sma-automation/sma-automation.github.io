@@ -5,6 +5,9 @@ const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 const messages={AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0,dirty=false;
+let reviewStatus=null;
+const reviewEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-content-review-v1';
+Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
 const fileEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1';
 Object.assign(messages,{FILE_UNAVAILABLE:'Diese Datei ist nicht mehr im zugeordneten Kundenordner verfügbar.',FILE_CHANGED:'Die Datei wurde geändert. Aktualisiere die Dateiliste und erstelle einen neuen passenden Text.',FILE_REFRESH_REQUIRED:'Bitte aktualisiere zuerst die Dateiliste.',ASSIGNMENT_CHANGED:'Der zugeordnete Text wurde außerhalb dieser Datei geändert. Bitte erstelle einen neuen Text für die Datei.',ASSIGNMENT_CONFLICT:'Die Zuordnung wurde inzwischen geändert. Lade den gespeicherten Text erneut.',FOLDER_UNAVAILABLE:'Dein Kundenordner konnte noch nicht eindeutig zugeordnet werden.',FILE_SYNC_UNAVAILABLE:'Die Dateiliste konnte nicht aktualisiert werden. Bitte versuche es erneut.',FILE_SYNC_RUNNING:'Die Dateiliste wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_RATE_LIMITED:'Bitte warte kurz, bevor du die Dateien erneut aktualisierst.',FILE_CATALOG_TOO_LARGE:'Der Kundenordner enthält mehr Dateien als diese Ansicht vollständig laden kann.',FILE_METADATA_INVALID:'Die Dateiinformationen sind unvollständig. Bitte prüfe die Dateien im Kundenordner.',PORTAL_REQUIRES_VIDEO:'Für dieses Portal wird derzeit eine Videodatei benötigt.',TEXT_ALREADY_ASSIGNED:'Dieser Text gehört bereits zu einer anderen Datei. Bitte erstelle einen eigenen Text.',FILE_FORMAT_MISMATCH:'Die Textvorbereitung passt nicht zur ausgewählten Dateiart.'});
 const params=new URLSearchParams(location.search);
@@ -18,7 +21,7 @@ if(selectedPortal){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){busy=value;$('assetSelect').disabled=value;$('refreshFiles').disabled=value;$('inputFields').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;}
+function lock(value){busy=value;syncReviewButton();$('assetSelect').disabled=value;$('refreshFiles').disabled=value;$('inputFields').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;}
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
 async function rpc(action,input={},id=null){const {data,error}=await supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 function sourceInput(){const form=new FormData($('previewForm'));return {source_text:form.get('source_text').trim(),audience:form.get('audience').trim(),goal:form.get('goal').trim(),language:form.get('language'),media_kind:selectedAsset?selectedAsset.media_kind:selectedPortal==='youtube'?'video':form.get('media_kind'),platforms:selectedPortal?[selectedPortal]:form.getAll('platforms')};}
@@ -56,6 +59,7 @@ async function loadFiles(preferredId=null){
  if(old&&!selectedAsset)throw Error(messages.FILE_UNAVAILABLE);
 }
 function resetMediaCheck(message='Wähle zuerst eine Datei aus.'){
+ reviewStatus=null;$('contentReviewStatus').textContent=selectedAsset?'Für diese Datei liegt noch kein Prüfergebnis vor.':'Wähle zuerst eine Datei aus.';syncReviewButton();
  $('mediaSummary').textContent='Medienprüfung · '+(selectedAsset?'noch offen':'Datei auswählen');
  $('mediaStatus').textContent=message;$('mediaFacts').textContent='';$('mediaChecks').replaceChildren();$('mediaPanel').open=false;
 }
@@ -70,9 +74,39 @@ async function loadMediaCheck(){
   const changes=m.status==='needs_changes';$('mediaSummary').textContent='Medienprüfung · '+(changes?'Überarbeitung nötig':'weitere Prüfung nötig');$('mediaStatus').textContent=(m.profile||'Datei')+': '+(changes?'Bitte korrigiere die markierten Punkte.':'Die Vorprüfung ist vorhanden. Offene Punkte sind unten aufgeführt.');
   const f=m.facts||{};const facts=[];if(f.mime_type)facts.push(f.mime_type);if(Number.isFinite(f.size_bytes))facts.push((f.size_bytes/1000000).toLocaleString('de-DE',{maximumFractionDigits:2})+' MB');if(f.width_px&&f.height_px)facts.push(f.width_px+' × '+f.height_px+' Pixel');if(Number.isFinite(f.duration_ms))facts.push((f.duration_ms/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' Sekunden');$('mediaFacts').textContent='Dateiangaben: '+facts.join(' · ');
   const order={fail:0,pending:1,pass:2};for(const c of [...m.checks].sort((a,b)=>(order[a.status]??3)-(order[b.status]??3))){if(!Object.hasOwn(order,c.status)||typeof c.message!=='string')continue;const li=document.createElement('li');li.dataset.state=c.status;li.textContent=({fail:'Zu korrigieren: ',pending:'Noch offen: ',pass:'Geprüft: '})[c.status]+c.message;$('mediaChecks').append(li);}
+  if(m.content_review)renderReview(m.content_review,file);
   $('mediaPanel').open=changes;
  }catch(e){if(selectedAsset?.id===file.id)resetMediaCheck(e.message);}
 }
+function syncReviewButton(){ $('reviewContent').disabled=busy||!selectedAsset||selectedAsset.media_kind==='video'||reviewStatus==='completed'||reviewStatus==='processing'; }
+function renderReview(r,file){
+ if(!r||r.can_publish!==false||r.asset_id!==file.id||r.asset_revision!==file.revision||r.policy_version!=='visual-2026-11-01.1'||!['unreviewed','processing','completed','failed'].includes(r.status))throw Error(messages.REVIEW_INCOMPLETE);
+ if(selectedAsset?.id!==file.id||selectedAsset?.revision!==file.revision)return;
+ reviewStatus=r.status;let message='Für diesen Dateistand liegt noch keine visuelle Sicherheitsprüfung vor.';
+ if(file.media_kind==='video'&&r.status==='unreviewed')message=messages.VIDEO_PLAN_REQUIRED;
+ if(r.status==='processing')message='Die visuelle Sicherheitsprüfung läuft. Du kannst den Status erneut laden.';
+ if(r.status==='failed')message=messages[r.error_code]||messages.REVIEW_UNAVAILABLE;
+ if(r.status==='completed'){
+  if(r.result?.can_publish!==false||!['clear','needs_review'].includes(r.result?.outcome))throw Error(messages.REVIEW_INCOMPLETE);
+  message=r.result.outcome==='clear'?'Visuell geprüft: keine Auffälligkeit unter den SMA-Prüfgrenzen. Die endgültige Freigabe steht noch aus.':'Visuell geprüft: mögliche Auffälligkeiten – bitte den Inhalt vor der Freigabe prüfen.';
+  const labels={nudity:'Nacktheit / sexuelle Inhalte',violence:'Gewalt',weapons:'Waffen',gore:'drastische Darstellungen',hate:'Hasssymbole',drugs:'Drogen',self_harm:'Selbstverletzung'};
+  const labelsFound=(r.result.categories||[]).map(c=>labels[c]).filter(Boolean);if(labelsFound.length)message+=' Hinweise: '+labelsFound.join(', ')+'.';
+  if(file.media_kind==='video')message+=' Geprüft wurden '+r.result.frames_checked+' Einzelbilder im Abstand von ungefähr einer Sekunde; Ton ist nicht enthalten.';
+ }
+ $('contentReviewStatus').textContent=message;syncReviewButton();
+}
+$('reviewContent').addEventListener('click',async()=>{
+ if(busy||!selectedAsset||selectedAsset.media_kind==='video'||['processing','completed'].includes(reviewStatus))return;const file=selectedAsset;lock(true);$('contentReviewStatus').textContent='Die visuelle Sicherheitsprüfung wird gestartet …';
+ try{
+  const auth=await session();const response=await fetch(reviewEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(45000)});
+  const d=await response.json();if(!response.ok||!d?.ok)throw Error(errorText(d));renderReview(d.review,file);
+  for(let i=0;i<48&&reviewStatus==='processing';i++){
+   await new Promise(resolve=>setTimeout(resolve,5000));if(selectedAsset?.id!==file.id||selectedAsset?.revision!==file.revision)return;
+   const {data,error}=await supabase.rpc('sma_publication_review_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error(errorText(data));renderReview(data.review,file);
+  }
+  if(selectedAsset?.id===file.id){await loadMediaCheck();$('mediaPanel').open=true;}
+ }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
+});
 async function loadLatest(){lock(true);try{
  await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
