@@ -9,6 +9,23 @@ const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publi
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
 const frame=document.getElementById('dashboard');
 const state=document.getElementById('state');
+// Add the optional text-preview panel after the authenticated dashboard arrives.
+frame.addEventListener('load',()=>{
+  const doc=frame.contentDocument;
+  const page=doc?.getElementById('page-publishing');
+  if(!page||doc.getElementById('smaPublicationPanel'))return;
+  const panel=doc.createElement('details');panel.id='smaPublicationPanel';
+  panel.style.cssText='margin:20px 0;padding:18px;border:1px solid #dfe3eb;border-radius:16px;background:white';
+  const title=doc.createElement('summary');title.textContent='Portaltexte mit Shop-Link vorbereiten';title.style.cssText='cursor:pointer;font-weight:700;color:#3157cd';
+  const intro=doc.createElement('p');intro.textContent='Eigene Textvorschauen für YouTube, Instagram, Facebook und TikTok erstellen und bearbeiten.';intro.style.cssText='line-height:1.6;color:#62718a';
+  panel.append(title,intro);
+  panel.addEventListener('toggle',()=>{
+    if(!panel.open||doc.getElementById('smaPublicationPreview'))return;
+    const preview=doc.createElement('iframe');preview.id='smaPublicationPreview';preview.title='SMA Beitragsvorschau';preview.src=new URL('publication-preview.html?embedded=1',window.location.href).href;preview.style.cssText='width:100%;height:1100px;border:0;display:block';panel.append(preview);
+  });
+  const heading=page.querySelector('h1,h2');
+  if(heading?.nextElementSibling)heading.nextElementSibling.after(panel);else page.prepend(panel);
+});
 let pending;
 let signedOut=false;
 async function dashboardHtml(){
@@ -35,6 +52,10 @@ async function logout(){signedOut=true;frame.hidden=true;frame.removeAttribute('
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
+  const preview=frame.contentDocument?.getElementById('smaPublicationPreview');
+  if(event.origin===window.location.origin&&preview&&event.source===preview.contentWindow&&event.data?.type==='sma-publication-preview-height'){
+    const height=event.data.height;if(Number.isFinite(height))preview.style.height=Math.min(12000,Math.max(600,height+24))+'px';return;
+  }
   if(event.origin!==window.location.origin||event.source!==frame.contentWindow)return;
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
@@ -42,3 +63,4 @@ window.addEventListener('message',event=>{
 supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
+
