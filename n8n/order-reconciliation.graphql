@@ -1,0 +1,10 @@
+query SMAOrderRecovery($after: String, $filter: String!, $first: Int!) {
+  orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $filter) {
+    nodes {
+      id name createdAt updatedAt
+      displayFinancialStatus displayFulfillmentStatus
+      currentTotalPriceSet { shopMoney { amount currencyCode } }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
