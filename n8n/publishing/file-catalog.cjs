@@ -17,6 +17,15 @@ function verifiedFolders(rows,context){
  if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');
  return {folders,q:"trashed = false and ("+folders.map(f=>"'"+f+"' in parents").join(' or ')+") and (mimeType contains 'image/' or mimeType contains 'video/')"};
 }
+function accessibleFolders(metadata,context){
+ const folders=context?.folders;
+ if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');
+ for(let i=0;i<folders.length;i++){
+  const f=metadata[i];
+  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');
+ }
+ return context;
+}
 function catalogFiles(response,folders){
  if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');
  if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');
@@ -29,4 +38,4 @@ function catalogFiles(response,folders){
   return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};
  });
 }
-module.exports={verifiedFolders,catalogFiles};
+module.exports={verifiedFolders,accessibleFolders,catalogFiles};

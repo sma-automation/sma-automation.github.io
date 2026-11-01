@@ -78,10 +78,11 @@ test('compiled n8n nodes execute the adapter contract with verified bytes and re
  const sha=require('crypto').createHash('sha256').update(png).digest('hex');
  const f={...context,revision:'sha256:'+sha+':1',size_bytes:png.length};
  const reserved={...f,review:{policy_version:POLICY}},binary={data:{id:'n8n-binary-fixture'}};
- const binding=vm.runInNewContext('(async function(){'+source('Dateiinhalt binden')+'})',{require,$input:{first:()=>({binary})},$:(name)=>({first:()=>({json:name==='Dateistand prüfen'?f:reserved})})});
- const [bound]=await binding.call({helpers:{getBinaryDataBuffer:async()=>png}});
+ const binding=vm.runInNewContext('(async function(){'+source('Dateiinhalt binden')+'})',{require,helpers:{getBinaryDataBuffer:async()=>png},$input:{first:()=>({binary})},$:(name)=>({first:()=>({json:name==='Dateistand prüfen'?f:reserved})})});
+ // Match n8n's unbound async invocation: the helper belongs to its global sandbox.
+ const [bound]=await binding();
  assert.equal(bound.json.sha256,sha);assert.equal(bound.json.provider,'sightengine');assert.equal(bound.binary,binary);
  const evaluate=vm.runInNewContext('(async function(){'+source('Prüfergebnis auswerten')+'})',{$input:{first:()=>({json:cleanProvider})},$:()=>({first:()=>bound})});
  const [result]=await evaluate();assert.equal(result.json.result.outcome,'clear');assert.equal(result.json.result.can_publish,false);assert.equal(result.json.sha256,sha);
- reserved.review.policy_version='local-fixture-v1';await assert.rejects(()=>binding.call({helpers:{getBinaryDataBuffer:async()=>png}}),/INCOMPLETE/);
+ reserved.review.policy_version='local-fixture-v1';await assert.rejects(()=>binding(),/INCOMPLETE/);
 });

@@ -41,7 +41,7 @@ Für den späteren Serverbetrieb siehe [SELF_HOSTED_REVIEW.md](SELF_HOSTED_REVIE
 
 Node-Tests prüfen fehlende Modellwerte, Abdeckung der Videostichproben, Prüfsummen/Größe/Signatur, animierte Dateien, Versions-/Ordnergrenzen, fixe Dienstziele und Frontend-Zustände. SQL-Tests laufen mit Rollback und prüfen Eigentümergrenzen, Versionswechsel, Cache, Wiederholungsbegrenzung, Rollen, Abschlussberechtigung und Auftragswiederholung. Kein Test legt Medien in überwachten Kundenordnern ab.
 
-Live-Dienstprüfung: selbst erzeugtes neutrales Bild erfolgreich mit vollständiger Modellantwort; neutrales dreisekündiges Video vom Anbieter wegen fehlendem Videozugriff im kostenlosen Tarif abgewiesen. Diese Verbindungstests ersetzen keinen End-to-End-Test mit einer echten Datei aus dem Kundenordner.
+Live-Dienstprüfung: selbst erzeugtes neutrales Bild erfolgreich mit vollständiger Modellantwort; neutrales dreisekündiges Video vom Anbieter wegen fehlendem Videozugriff im kostenlosen Tarif abgewiesen. Der anschließende vollständige Kundenpfad ist im folgenden Prüfprotokoll dokumentiert.
 
 ## Primärquellen
 
@@ -57,3 +57,15 @@ Live-Dienstprüfung: selbst erzeugtes neutrales Bild erfolgreich mit vollständi
 - https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/
 
 Produktionsworkflow: `mWoUMjzxAsfggRHU` – „SMA – Dateiinhaltsprüfung V1“. Die vorherigen neutralen Prüfknoten wurden vor der Veröffentlichung entfernt. Endpunkt: `POST /webhook/sma-publication-content-review-v1`. Die kostenlose Dienstverbindung wurde tatsächlich geprüft; die Videosperre ist sowohl in der Datenbank als auch im Frontend wirksam.
+
+## Vollständiger Kundenpfad geprüft — 01.11.2026
+
+Die echte Dashboard-Prüfung deckte zwei Fehler auf: nicht erreichbare Kundenordner wurden bisher als leere Liste behandelt; anschließend verhinderte eine eingebettete `use strict`-Direktive den Zugriff auf `this.helpers` im n8n-Codekontext. Der Katalog prüft nun beide Ordner vor der Suche. Nur der eingebettete Binärdatenknoten entfernt die Modul-Direktive; die Bibliotheksdateien behalten Strict Mode. Der Regressionstest ruft den Code wie n8n ohne künstlich gebundenes `this` auf.
+
+Ein selbst erzeugtes neutrales PNG (640 × 480, 2612 Bytes, SHA-256 `6ddd17606406e321a537be27e0ac129da352c15fafacfc855ced828d91be76bc`) wurde in einer neuen privaten Testkundenablage abgelegt. Diese Ablage gehört zu keinem der geprüften aktiven Drive-Trigger. Nach Katalogabgleich und Auswahl im Instagram-Fenster wurde der echte Prüfauftrag am 01.11.2026 um 20:41:28 UTC abgeschlossen: `completed`, `clear`, keine auffälligen Kategorien, ein geprüftes Bild, exakt passende SHA-256 und weiterhin `can_publish:false`. Keine Rohantwort, kein Bild und keine Sitzung wurden als n8n-Ausführungsdaten gespeichert.
+
+Auch das Facebook-Fenster zeigte denselben gespeicherten Prüfstatus bei deaktiviertem Prüfbutton; keine zweite Portalprüfung wurde ausgelöst.
+
+Ein erneuter `start` für denselben Dateistand lieferte das abgeschlossene Ergebnis ohne neue Lease und ohne zusätzlichen Versuch. Der zuerst fehlgeschlagene Lauf und der erfolgreiche Wiederholungsversuch ergeben zusammen zwei reservierte Versuche; die isolierte Download-Diagnose rief keinen Bildanbieter auf. Das neutrale Prüfbild bleibt als klar benannte Testdatei in der privaten Testablage erhalten. Es wurde kein Social-Post erstellt.
+
+Aktive Korrekturversion: `7f3159eb-90f3-4677-a1aa-3fed3dc330fe`, 20 Knoten, keine Pins, vier Speicheroptionen aus, Timeout 210 Sekunden, Aufruf nur durch denselben Besitzer. Export gegen Generator geprüft (n8n lässt beim Binärdownload den Standardfeldnamen `data` weg). 131 Node-Tests sowie SQL-Regression mit Rollback bestanden. Der manuelle Diagnoseworkflow bleibt unveröffentlicht.
