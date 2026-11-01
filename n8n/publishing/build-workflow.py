@@ -21,7 +21,7 @@ node('Portaltexte erstellen','httpRequest',{**http,'url':'https://api.openai.com
 code('Text und Shop-Link prüfen',core+"\nconst ctx=$('Konto und Shop prüfen').first().json; return [{json:{p_id:ctx.id,p_lease:ctx.lease_id,p_preview:makePreview($input.first().json,ctx)}}];",1680,onError='continueErrorOutput')
 cred={'httpHeaderAuth':{'id':'FZk3cg0UNdbolH4q','name':'SMA Supabase Secret'}}
 node('Vorschau speichern','httpRequest',{**http,'url':'https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_preview_finish_v1','authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth','jsonBody':'={{ $json }}'},1920,version=4.5,credentials=cred,onError='continueErrorOutput')
-code('Fehler zuordnen',"const ctx=$('Konto und Shop prüfen').first().json; return [{json:{p_id:ctx.id,p_lease:ctx.lease_id,p_error:'PREPARATION_FAILED'}}];",1440,300)
+code('Fehler zuordnen',Path('n8n/publishing/failure-code.js').read_text(),1440,300)
 node('Fehler speichern','httpRequest',{**http,'url':'https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_preview_finish_v1','authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth','jsonBody':'={{ $json }}'},1680,300,4.5,credentials=cred,onError='continueErrorOutput')
 code('Sichere Fehlermeldung',"return [{json:{ok:false,code:'PREPARATION_UNAVAILABLE'}}];",1920,500)
 code('Antwort bereinigen',"const r=$input.first().json; const out={ok:r.ok===true}; for(const k of ['status','id','preview','revision','code','error_code']) if(r[k]!==undefined)out[k]=r[k]; return [{json:out}];",2160,100)
