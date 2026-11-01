@@ -20,6 +20,18 @@ Die Bytes gehen direkt an den bereits eingerichteten Dienst Sightengine. Kein ö
 
 ## Einrichtung
 
+### Austauschbare Prüfschnittstelle
+
+Die Auswertung ist vom Anbieter getrennt:
+
+- `content-review.cjs`: unveränderte Dateibindung und Prüfsummen; gemeinsame Auswertung vollständiger Kategorien und zeitlicher Abdeckung.
+- `review-providers.cjs`: aktives Sightengine-Profil, Modellfeld-Zuordnung und explizite Verfügbarkeit. Der Produktionsworkflow nutzt `prepareReview` und `completeReview`. Anbieter/URLs aus Browserangaben werden nicht übernommen. Es gibt keinen automatischen Wechsel zu einem bezahlten Tarif oder anderen Dienst. Die Videosperre gilt zusätzlich im Workflow-Code.
+- `self-hosted-review.cjs`: getesteter, netzwerkfreier Anfrage-/Antwortvertrag für einen späteren eigenen Dienst. **Kein Server, Modell, Tarif oder lokaler Prüfdienst wurde damit eingerichtet.** Dieser Adapter ist nicht in den Produktionsworkflow eingebunden.
+
+Der aktuelle Schlüssel `visual-2026-11-01.1` bleibt dauerhaft an das bisherige Sightengine-Profil gebunden. Kategorieauswertung, Grenze 0,35 und gespeicherte Resultate behalten ihre Bedeutung. Jede Änderung von Anbieter, Modell, Kategorienbedeutung, Schwellenwerten oder Stichprobenverfahren braucht eine neue Prüfregelversion und eine abgestimmte Datenbank-/Frontend-Freigabe; alte Ergebnisse dürfen nicht unter dem neuen Profil als aktuell gelten.
+
+Für den späteren Serverbetrieb siehe [SELF_HOSTED_REVIEW.md](SELF_HOSTED_REVIEW.md). Ein Modell mit nur drei geprüften Kategorien erfüllt den Sieben-Kategorien-Vertrag nicht. Fehlende Abdeckung bleibt unvollständig, auch wenn der Dienst selbst „clear“ meldet.
+
 1. Nach `publication-files.sql` / `publication-media-precheck.sql`: `supabase/sql/publication-content-review.sql` anwenden. Alte Basismigrationen später nicht erneut als aktuellen Funktionsstand aufspielen.
 2. `python n8n/publishing/build-content-review.py` aus dem Repository-Verzeichnis ausführen und den separaten Workflow importieren. Credentials sind ausschließlich Referenzen auf die vorhandenen Drive-, Sightengine- und Supabase-Verbindungen.
 3. Importierte n8n-Einstellungen ausdrücklich kontrollieren: v1, vier Speicheroptionen auf „Do not save“, Timeout 210 Sekunden, Aufruf nur durch eigenen Workflow-Besitzer, keine angehefteten Daten. n8n übernimmt importierte Einstellungen nicht zuverlässig.

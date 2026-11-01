@@ -1,12 +1,5 @@
 'use strict';
-const POLICY='visual-2026-11-01.1';
-const MODELS='nudity-2.1,violence,weapon,gore-2.0,offensive-2.0,recreational_drug,self-harm';
-const FIELDS={
- nudity:['nudity.sexual_activity','nudity.sexual_display','nudity.erotica','nudity.suggestive_classes.sextoy','nudity.suggestive'],
- violence:['violence.prob'],weapons:['weapon.classes.firearm','weapon.classes.knife','weapon.classes.firearm_gesture'],
- gore:['gore.prob'],hate:['offensive.nazi','offensive.confederate','offensive.supremacist','offensive.terrorist'],
- drugs:['recreational_drug.prob'],self_harm:['self-harm.prob']
-};
+const CATEGORIES=Object.freeze(['nudity','violence','weapons','gore','hate','drugs','self_harm']);
 function eligible(f){
  if(!f||!Number.isSafeInteger(Number(f.size_bytes))||Number(f.size_bytes)<=0)throw Error('FILE_METADATA_INVALID');
  if(!/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(f.revision||''))throw Error('CHECKSUM_REQUIRED');
@@ -41,20 +34,23 @@ function verifyBytes(buffer,f){
  if(f.mime_type==='video/webm'&&buffer.subarray(0,4).toString('hex')!=='1a45dfa3')throw Error('MEDIA_UNSUPPORTED');
  return crypto.createHash('sha256').update(buffer).digest('hex');
 }
-function normalizeReview(response,kind,durationMs){
- if(response?.status!=='success')throw Error('PROVIDER_FAILED');
- const frames=kind==='image'?[response]:response.data?.frames;
+// Provider-neutral frame contract. Providers map their full coverage into these
+// categories; absent categories are errors, never zero-probability defaults.
+function normalizeFrames(frames,kind,durationMs,policyVersion){
+ if(!['image','video'].includes(kind))throw Error('MEDIA_UNSUPPORTED');
+ if(typeof policyVersion!=='string'||!/^[-a-z0-9.]{3,100}$/.test(policyVersion))throw Error('REVIEW_INCOMPLETE');
  if(!Array.isArray(frames)||!frames.length||frames.length>125)throw Error('REVIEW_INCOMPLETE');
+ if(kind==='image'&&(frames.length!==1||frames[0]?.position_ms!==0))throw Error('REVIEW_INCOMPLETE');
  if(kind==='video'){
   if(!Number.isFinite(durationMs)||durationMs<=0||durationMs>=60000)throw Error('MEDIA_UNSUPPORTED');
-  let last=-1;for(const f of frames){const p=f.info?.position;if(!Number.isFinite(p)||p<0||p<=last||p>durationMs||p-last>1100)throw Error('REVIEW_INCOMPLETE');last=p;}
-  if(frames[0].info.position>100||durationMs-last>1100)throw Error('REVIEW_INCOMPLETE');
+  let last=-1;for(const f of frames){const p=f?.position_ms;if(!Number.isFinite(p)||p<0||p<=last||p>durationMs||p-last>1100)throw Error('REVIEW_INCOMPLETE');last=p;}
+  if(frames[0].position_ms>100||durationMs-last>1100)throw Error('REVIEW_INCOMPLETE');
  }
- const scores={};for(const [category,paths] of Object.entries(FIELDS)){
-  let score=0;for(const f of frames)for(const path of paths){const v=path.split('.').reduce((o,k)=>o?.[k],f);if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('REVIEW_INCOMPLETE');score=Math.max(score,v);}
+ const scores={};for(const category of CATEGORIES){
+  let score=0;for(const f of frames){const v=f?.scores?.[category];if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('REVIEW_INCOMPLETE');score=Math.max(score,v);}
   scores[category]=score;
  }
  const flagged=Object.entries(scores).filter(([,v])=>v>=0.35).map(([k])=>k);
- return {policy_version:POLICY,outcome:flagged.length?'needs_review':'clear',categories:flagged,frames_checked:frames.length,sampling_ms:kind==='video'?1000:0,can_publish:false};
+ return {policy_version:policyVersion,outcome:flagged.length?'needs_review':'clear',categories:flagged,frames_checked:frames.length,sampling_ms:kind==='video'?1000:0,can_publish:false};
 }
-module.exports={POLICY,MODELS,FIELDS,eligible,sameFile,verifyBytes,normalizeReview};
+module.exports={CATEGORIES,eligible,sameFile,verifyBytes,normalizeFrames};
