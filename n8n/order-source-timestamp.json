@@ -1,0 +1,10 @@
+{
+  "node": "SMA – Supabase – Bestellung spiegeln",
+  "change": "Append one JSON body parameter; preserve credentials, headers, URL, conflict key and all existing mappings.",
+  "parameter": {
+    "name": "quelle_aktualisiert_am",
+    "value": "={{ $('SMA – Shopify Bestellungen – Webhook').first().json.body.updated_at }}"
+  },
+  "source": "Signed order payload, after existing HMAC verification.",
+  "scope": "Canonical Supabase orders used by the SMA dashboard. The legacy n8n data table is not the canonical revision guard."
+}
