@@ -12,7 +12,7 @@ const requestedPortal=params.get('portal');
 const selectedPortal=Object.hasOwn(names,requestedPortal)?requestedPortal:null;
 if(params.get('embedded')==='1')document.body.classList.add('embedded');
 if(selectedPortal){
- $('assetPanel').hidden=false;document.body.classList.add('portal-mode');$('portalSelection').hidden=true;$('portalNote').hidden=false;$('portalStatus').hidden=false;
+ $('assetPanel').hidden=false;$('mediaPanel').hidden=false;document.body.classList.add('portal-mode');$('portalSelection').hidden=true;$('portalNote').hidden=false;$('portalStatus').hidden=false;
  document.querySelector('h1').textContent=names[selectedPortal]+' optimieren';$('resultHeading').textContent='Text für '+names[selectedPortal];$('generate').textContent='Text optimieren';
 }
 
@@ -55,7 +55,26 @@ async function loadFiles(preferredId=null){
  $('assetStatus').textContent=selectedAsset?'Ausgewählt: '+selectedAsset.name:assets.length?'Wähle eine Datei aus deinem Kundenordner.':'Noch keine passenden Dateien geladen. Über „Dateien aktualisieren“ wird dein Kundenordner geprüft.';
  if(old&&!selectedAsset)throw Error(messages.FILE_UNAVAILABLE);
 }
+function resetMediaCheck(message='Wähle zuerst eine Datei aus.'){
+ $('mediaSummary').textContent='Medienprüfung · '+(selectedAsset?'noch offen':'Datei auswählen');
+ $('mediaStatus').textContent=message;$('mediaFacts').textContent='';$('mediaChecks').replaceChildren();$('mediaPanel').open=false;
+}
+async function loadMediaCheck(){
+ resetMediaCheck();if(!selectedAsset)return;
+ const file=selectedAsset;resetMediaCheck('Die Dateiangaben werden geprüft …');
+ try{
+  const r=await fileRpc('check',{asset_id:file.id,asset_revision:file.revision,platform:selectedPortal});
+  if(selectedAsset?.id!==file.id||selectedAsset?.revision!==file.revision)return;
+  const m=r.media_check;
+  if(!m||m.can_publish!==false||m.asset_id!==file.id||m.asset_revision!==file.revision||!['needs_review','needs_changes'].includes(m.status)||!Array.isArray(m.checks))throw Error('Die Medienprüfung ist noch nicht verfügbar.');
+  const changes=m.status==='needs_changes';$('mediaSummary').textContent='Medienprüfung · '+(changes?'Überarbeitung nötig':'weitere Prüfung nötig');$('mediaStatus').textContent=(m.profile||'Datei')+': '+(changes?'Bitte korrigiere die markierten Punkte.':'Die Vorprüfung ist vorhanden. Offene Punkte sind unten aufgeführt.');
+  const f=m.facts||{};const facts=[];if(f.mime_type)facts.push(f.mime_type);if(Number.isFinite(f.size_bytes))facts.push((f.size_bytes/1000000).toLocaleString('de-DE',{maximumFractionDigits:2})+' MB');if(f.width_px&&f.height_px)facts.push(f.width_px+' × '+f.height_px+' Pixel');if(Number.isFinite(f.duration_ms))facts.push((f.duration_ms/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' Sekunden');$('mediaFacts').textContent='Dateiangaben: '+facts.join(' · ');
+  const order={fail:0,pending:1,pass:2};for(const c of [...m.checks].sort((a,b)=>(order[a.status]??3)-(order[b.status]??3))){if(!Object.hasOwn(order,c.status)||typeof c.message!=='string')continue;const li=document.createElement('li');li.dataset.state=c.status;li.textContent=({fail:'Zu korrigieren: ',pending:'Noch offen: ',pass:'Geprüft: '})[c.status]+c.message;$('mediaChecks').append(li);}
+  $('mediaPanel').open=changes;
+ }catch(e){if(selectedAsset?.id===file.id)resetMediaCheck(e.message);}
+}
 async function loadLatest(){lock(true);try{
+ await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
  if(data.status==='empty'){clearDraft();status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Text für '+selectedAsset.name+' geladen.':'Gespeicherte Textvorlage geladen.');
@@ -76,6 +95,6 @@ $('previewForm').addEventListener('submit',async event=>{
  }catch(e){status(e.message,true);}finally{lock(false);syncMedia();}
 });
 $('save').addEventListener('click',async()=>{if(busy||!current)return;const edits=[...$('drafts').children].map(card=>({platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),body:card.querySelector('[data-field=body]').value.trim()}));const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}lock(true);$('saveStatus').textContent='Wird gespeichert …';try{const result=selectedAsset?await fileRpc('save',{...fileContext(),title:edits[0].title,body:edits[0].body}):await rpc('save',{revision:current.revision,drafts},current.id);render(result);if(selectedAsset){const bound=selectedAsset.assignments?.find(a=>a.platform===selectedPortal);if(bound)bound.revision=result.assignment_revision;fileChanged();}status('Änderungen gespeichert. Der Shop-Link ist weiterhin enthalten.');}catch(e){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}finally{lock(false);syncMedia();}});
-supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;$('assetSelect').replaceChildren();$('assetStatus').textContent='';status(messages.AUTH_REQUIRED,true);}});
+supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;$('assetSelect').replaceChildren();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&window.parent!==window){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 try{await session();let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}if(ready)await loadLatest();}catch(e){lock(true);status(e.message,true);}
