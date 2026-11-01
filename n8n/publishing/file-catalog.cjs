@@ -1,5 +1,14 @@
 'use strict';
 const DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;
+// Drive may not have finished extracting video metadata yet. Missing values
+// stay unknown; they must never become zero or a successful media inspection.
+function mediaMetadata(f){
+ const video=f.mimeType?.startsWith('video/');
+ const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};
+ const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;
+ const duration=video&&typeof m.durationMillis==='string'&&/^\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;
+ return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};
+}
 function verifiedFolders(rows,context){
  const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;
  const norm=x=>String(x||'').trim().toLowerCase();
@@ -17,7 +26,7 @@ function catalogFiles(response,folders){
   if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\u0000-\u001f\u202a-\u202e\u2066-\u2069]/u.test(f.name)||! /^(image|video)\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');
   if(!/^\d{1,18}$/.test(f.size||'')||!/^\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');
   const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';
-  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size)};
+  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};
  });
 }
 module.exports={verifiedFolders,catalogFiles};

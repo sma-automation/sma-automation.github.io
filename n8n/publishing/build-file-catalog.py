@@ -1,9 +1,16 @@
 import json,uuid
 from pathlib import Path
 core=Path('n8n/publishing/file-catalog.cjs').read_text().split('module.exports=')[0]
+previous_path=Path('n8n/publishing/file-catalog-workflow.json')
+previous=json.loads(previous_path.read_text()) if previous_path.exists() else {}
+previous_nodes={n['name']:n for n in previous.get('nodes',[])}
 nodes=[];connections={}
 def node(name,typ,p,x,y=0,v=1,**kw):
- n={'id':str(uuid.uuid4()),'name':name,'type':'n8n-nodes-base.'+typ,'parameters':p,'typeVersion':v,'position':[x,y],**kw};nodes.append(n);return n
+ old=previous_nodes.get(name,{})
+ if 'webhookId' in old:kw['webhookId']=old['webhookId']
+ if 'conditions' in p and old.get('parameters',{}).get('conditions'):
+  for new_c,old_c in zip(p['conditions']['conditions'],old['parameters']['conditions']['conditions']):new_c['id']=old_c['id']
+ n={'id':old.get('id',str(uuid.uuid4())),'name':name,'type':'n8n-nodes-base.'+typ,'parameters':p,'typeVersion':v,'position':[x,y],**kw};nodes.append(n);return n
 def code(name,s,x,y=0,**kw):return node(name,'code',{'jsCode':s},x,y,2,**kw)
 def edge(a,b,port=0):
  m=connections.setdefault(a,{'main':[]})['main']
@@ -21,7 +28,7 @@ node('Eigene Dateiliste reservieren','httpRequest',{**http,'url':'https://bnvnmd
 cond('Konto freigegeben?','={{ $json.ok === true && !!$json.lease_id }}',880)
 node('Kundenordner zuordnen','dataTable',{'operation':'get','dataTableId':{'__rl':True,'value':'oVIgtuR95fFUbMrN','mode':'list','cachedResultName':'SMA_Kunden'},'matchType':'allConditions','filters':{'conditions':[{'keyName':'kunde_id','keyValue':'={{ $json.n8n_kunde_id }}'},{'keyName':'kunde_email','keyValue':'={{ $json.kunde_email }}'},{'keyName':'zugang_aktiv','condition':'isTrue'}]},'limit':2},1100,v=1,alwaysOutputData=True,onError='continueErrorOutput')
 code('Ordner prüfen',core+"\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Eigene Dateiliste reservieren').first().json)}];",1320,onError='continueErrorOutput')
-node('Dateimetadaten aus Drive lesen','httpRequest',{'url':'https://www.googleapis.com/drive/v3/files','authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'queryParameters':{'parameters':[{'name':'q','value':'={{ $json.q }}'},{'name':'pageSize','value':'1000'},{'name':'fields','value':'nextPageToken,incompleteSearch,files(id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum)'},{'name':'spaces','value':'drive'}]},'options':opts},1540,v=4.5,credentials=drive,onError='continueErrorOutput')
+node('Dateimetadaten aus Drive lesen','httpRequest',{'url':'https://www.googleapis.com/drive/v3/files','authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'queryParameters':{'parameters':[{'name':'q','value':'={{ $json.q }}'},{'name':'pageSize','value':'1000'},{'name':'fields','value':'nextPageToken,incompleteSearch,files(id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis))'},{'name':'spaces','value':'drive'}]},'options':opts},1540,v=4.5,credentials=drive,onError='continueErrorOutput')
 code('Dateien prüfen',core+"\nconst c=$('Eigene Dateiliste reservieren').first().json;return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_files:catalogFiles($input.first().json,$('Ordner prüfen').first().json.folders)}}];",1760,onError='continueErrorOutput')
 node('Dateiliste speichern','httpRequest',{**http,'url':'https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_finish_v1','authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth','jsonBody':'={{ $json }}'},1980,v=4.5,credentials=cred,onError='continueErrorOutput')
 code('Dateifehler zuordnen',"const c=$('Eigene Dateiliste reservieren').first().json;const r=$input.first().json;const msg=String(r.message||r.error?.message||r.error||'');const known=['FOLDER_UNAVAILABLE','FILE_CATALOG_TOO_LARGE','FILE_METADATA_INVALID'];return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_error:known.find(x=>msg.includes(x))||'FILE_SYNC_UNAVAILABLE'}}];",1540,320)

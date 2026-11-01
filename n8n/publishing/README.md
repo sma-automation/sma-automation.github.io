@@ -53,3 +53,7 @@ Grenzen: Metadaten von höchstens 1000 Bild-/Videodateien in den beiden direkten
 Prüfungen: `node --test tests/publication-page.test.cjs tests/publication-file-catalog.test.cjs tests/publication-preview.test.cjs` (23 Tests); `tests/publication-files.sql` prüft zwei getrennte Dateien, fremden Zugriff, getrennte Portale, Speichern, Versionskonflikte, service_role-Publisher-Vertrag und Rollenrechte mit anschließendem Rollback. Keine Testdatei wird in einen automatisch überwachten Drive-Ordner gelegt. Supabase-Advisor: keine neue Warnung zu dieser Erweiterung; private Tabellen ohne Browser-Policies sind bewusst nur über die kontrollierten RPCs erreichbar. Bereits bestehende Warnungen zu anderen Funktionen/Passwortschutz bleiben außerhalb dieser Änderung.
 
 Referenzen: https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list und https://developers.google.com/workspace/drive/api/reference/rest/v3/files ; https://supabase.com/docs/guides/database/functions und https://supabase.com/docs/guides/database/postgres/row-level-security .
+
+## Technische Medienvorprüfung
+
+Die Dateizuordnung hat jetzt einen eigenen Abschnitt „Medienprüfung“ je Portal. Er zeigt gemeldetes Format, Größe, Auflösung und Videolänge sowie erkannte Probleme und noch offene Prüfungen. Keine automatische Freigabe oder Übernahme alter Sicherheitsresultate. Umfang, Quellen, SQL-Deployment und Tests stehen in [MEDIA_PRECHECK.md](MEDIA_PRECHECK.md).
