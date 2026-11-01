@@ -1,0 +1,633 @@
+{
+  "name": "SMA – Dateizuordnung – Kundenordner V1",
+  "nodes": [
+    {
+      "id": "f9f0dac4-60f2-4997-8812-ecc5e0c0bf45",
+      "name": "Dateien abgleichen",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-publication-files-v1",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://sma-automation.com"
+        }
+      },
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "cb4d6f52-104e-49e3-9fc4-586bd44cb486"
+    },
+    {
+      "id": "440b042d-2b6d-4fad-afae-84ae4710604b",
+      "name": "Anfrage prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const a=$input.first().json.headers?.authorization;return [{json:typeof a==='string'&&/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(a)?{ok:true,auth:a}:{ok:false,code:'AUTH_REQUIRED'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "f1c1acab-8631-4e6e-8b09-8c355d0d4428",
+      "name": "Anmeldung vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ddc670bf-8df7-4839-8bcc-df44eb3ade00",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "c6bc9107-2819-417f-b39d-51b081e3ba54",
+      "name": "Eigene Dateiliste reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_v1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth }}"
+            }
+          ]
+        },
+        "jsonBody": "={{ {p_action:'sync_start'} }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "27525fe8-b235-4663-85c5-21913441045a",
+      "name": "Konto freigegeben?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "910d86d1-42bc-454f-83f8-c56a4390687a",
+              "leftValue": "={{ $json.ok === true && !!$json.lease_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "9fe6de78-0d0a-4af9-af7d-7e12200d769f",
+      "name": "Kundenordner zuordnen",
+      "type": "n8n-nodes-base.dataTable",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "typeVersion": 1,
+      "position": [
+        1100,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "79c8f46a-6bc8-4d81-a32b-1ab658139740",
+      "name": "Ordner prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size)};\n });\n}\n\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Eigene Dateiliste reservieren').first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d49e8864-f9c2-4142-ae3f-499655f63d68",
+      "name": "Dateimetadaten aus Drive lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "1000"
+            },
+            {
+              "name": "fields",
+              "value": "nextPageToken,incompleteSearch,files(id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum)"
+            },
+            {
+              "name": "spaces",
+              "value": "drive"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "c04ad8ad-0d34-43cc-87f9-67e4964a6015",
+      "name": "Dateien prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size)};\n });\n}\n\nconst c=$('Eigene Dateiliste reservieren').first().json;return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_files:catalogFiles($input.first().json,$('Ordner prüfen').first().json.folders)}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "b2aad2c6-f549-49f8-873b-0c29d9bd7512",
+      "name": "Dateiliste speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_finish_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6fe0e12e-3c28-4647-bc7b-30a4f65d041e",
+      "name": "Dateifehler zuordnen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const c=$('Eigene Dateiliste reservieren').first().json;const r=$input.first().json;const msg=String(r.message||r.error?.message||r.error||'');const known=['FOLDER_UNAVAILABLE','FILE_CATALOG_TOO_LARGE','FILE_METADATA_INVALID'];return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_error:known.find(x=>msg.includes(x))||'FILE_SYNC_UNAVAILABLE'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1540,
+        320
+      ]
+    },
+    {
+      "id": "40cd922b-b131-42bb-acac-5abbf85d16d7",
+      "name": "Dateifehler speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_finish_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6b1b0931-6101-44f0-a5e0-1c1182d30805",
+      "name": "Sichere Dateifehlermeldung",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "return [{json:{ok:false,code:'FILE_SYNC_UNAVAILABLE'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1980,
+        500
+      ]
+    },
+    {
+      "id": "85e2dc22-1c46-4049-af22-dbc9c3ed834e",
+      "name": "Dateiantwort bereinigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const r=$input.first().json;return [{json:{ok:r.ok===true,...(r.ok===true?{count:r.count}:{code:['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','FOLDER_UNAVAILABLE','FILE_CATALOG_TOO_LARGE','FILE_METADATA_INVALID','FILE_SYNC_RUNNING','FILE_SYNC_RATE_LIMITED'].includes(r.code)?r.code:'FILE_SYNC_UNAVAILABLE'})}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2200,
+        100
+      ]
+    },
+    {
+      "id": "b48ec520-0b77-42f4-9694-650a709b00ab",
+      "name": "Dateiantwort",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://sma-automation.com"
+              },
+              {
+                "name": "Vary",
+                "value": "Origin"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.5,
+      "position": [
+        2420,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Dateien abgleichen": {
+      "main": [
+        [
+          {
+            "node": "Anfrage prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfrage prüfen": {
+      "main": [
+        [
+          {
+            "node": "Anmeldung vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anmeldung vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Eigene Dateiliste reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateiantwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eigene Dateiliste reservieren": {
+      "main": [
+        [
+          {
+            "node": "Konto freigegeben?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Dateifehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Konto freigegeben?": {
+      "main": [
+        [
+          {
+            "node": "Kundenordner zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateiantwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenordner zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Ordner prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateifehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dateimetadaten aus Drive lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateifehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateimetadaten aus Drive lesen": {
+      "main": [
+        [
+          {
+            "node": "Dateien prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateifehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateien prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dateiliste speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dateifehler zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateiliste speichern": {
+      "main": [
+        [
+          {
+            "node": "Dateiantwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Dateifehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateifehler zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Dateifehler speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateifehler speichern": {
+      "main": [
+        [
+          {
+            "node": "Dateiantwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Dateifehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sichere Dateifehlermeldung": {
+      "main": [
+        [
+          {
+            "node": "Dateiantwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateiantwort bereinigen": {
+      "main": [
+        [
+          {
+            "node": "Dateiantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 120,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "active": false
+}

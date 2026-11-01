@@ -14,20 +14,22 @@ const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 const optimizer=document.getElementById('portalOptimizer');
 const optimizerFrames=document.getElementById('optimizerFrames');
-let optimizerTrigger=null;
+let optimizerTrigger=null,selectedFileId=null;
+let fileView=null;
 function openOptimizer(portal,trigger){
   optimizerTrigger=trigger;
   document.getElementById('optimizerTitle').textContent=portalNames[portal]+' optimieren';
-  let preview=optimizerFrames.querySelector('[data-portal="'+portal+'"]');
+  const frameKey=portal+':'+(selectedFileId||'template');
+  let preview=[...optimizerFrames.children].find(el=>el.dataset.key===frameKey);
   if(!preview){
-    preview=document.createElement('iframe');preview.dataset.portal=portal;preview.title=portalNames[portal]+' – Text und Shop-Link';
-    const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('portal',portal);preview.src=url.href;
+    preview=document.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Text und Shop-Link';
+    const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('portal',portal);if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;
     optimizerFrames.append(preview);
   }
   for(const el of optimizerFrames.children)el.hidden=el!==preview;
   if(!optimizer.open)optimizer.showModal();
 }
-function clearOptimizer(){if(optimizer.open)optimizer.close();optimizerFrames.replaceChildren();optimizerTrigger=null;}
+function clearOptimizer(){if(optimizer.open)optimizer.close();optimizerFrames.replaceChildren();optimizerTrigger=null;selectedFileId=null;}
 document.getElementById('optimizerClose').addEventListener('click',()=>optimizer.close());
 optimizer.addEventListener('close',()=>optimizerTrigger?.focus());
 // Extend the existing portal cards; no extra shared publishing card.
@@ -41,6 +43,7 @@ frame.addEventListener('load',()=>{
     #page-publishing .sma-optimize:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
     @media(max-width:520px){#page-publishing .platform-card{grid-template-columns:40px minmax(0,1fr)}#page-publishing .sma-optimize{grid-column:2;grid-row:2;justify-self:start;padding:9px 14px}}
   `;doc.head.append(style);
+  fileView=attachFileList(doc,page);
   for(const card of page.querySelectorAll('.platform-card')){
     const portal=Object.keys(portalNames).find(key=>portalNames[key]===card.querySelector('.platform-info strong')?.textContent.trim());
     if(!portal||card.querySelector('.sma-optimize'))continue;
@@ -48,6 +51,27 @@ frame.addEventListener('load',()=>{
     button.addEventListener('click',event=>{event.stopPropagation();openOptimizer(portal,button);});card.append(button);
   }
 });
+function attachFileList(doc,page){
+ const slot=doc.getElementById('publishingFilesSlot');if(!slot)return null;
+ const style=doc.createElement('style');style.textContent=`#publishingFilesSlot{display:block;min-height:0;padding:16px;text-align:left}.sma-file-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.sma-file-toolbar button,.sma-file-row button,.sma-file-pages button{border:1px solid #c7d3f8;border-radius:9px;background:#edf2ff;color:#3157cd;padding:9px 13px;font:700 14px Arial,sans-serif;cursor:pointer}.sma-file-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-top:1px solid #e2e6ee}.sma-file-row>div{min-width:0}.sma-file-row strong{display:block;overflow-wrap:anywhere}.sma-file-row small{display:block;color:#65718a;margin-top:6px;line-height:1.5}.sma-file-row button[aria-pressed=true]{background:#4065d8;color:white}.sma-file-pages{display:flex;align-items:center;gap:12px;margin-top:12px}.sma-file-pages button:disabled{opacity:.45;cursor:default}`;doc.head.append(style);
+ const toolbar=doc.createElement('div');toolbar.className='sma-file-toolbar';const refresh=doc.createElement('button');refresh.textContent='Dateien aktualisieren';refresh.type='button';const message=doc.createElement('span');message.setAttribute('role','status');message.style.fontSize='13px';toolbar.append(refresh,message);
+ const selection=doc.createElement('p');selection.style.fontSize='13px';const list=doc.createElement('div');const pages=doc.createElement('div');pages.className='sma-file-pages';slot.replaceChildren(toolbar,selection,list,pages);
+ let files=[],pageNumber=0,loading=false,lastSync=0;
+ const say=text=>message.textContent=text;
+ function draw(){list.replaceChildren();pages.replaceChildren();selection.textContent=selectedFileId?'Datei ausgewählt. Öffne oben „Optimieren“ beim gewünschten Portal.':'Wähle eine Datei und anschließend oben das gewünschte Portal über „Optimieren“.';
+  if(!files.length){selection.textContent='Noch keine Bild- oder Videodateien im zugeordneten Kundenordner.';return;}
+  pageNumber=Math.min(pageNumber,Math.max(0,Math.ceil(files.length/10)-1));
+  for(const f of files.slice(pageNumber*10,pageNumber*10+10)){const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('div');const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});row.append(info,choose);list.append(row);}
+  if(files.length>10){const back=doc.createElement('button');back.textContent='Zurück';back.disabled=pageNumber===0;back.addEventListener('click',()=>{pageNumber--;draw();});const next=doc.createElement('button');next.textContent='Weiter';next.disabled=(pageNumber+1)*10>=files.length;next.addEventListener('click',()=>{pageNumber++;draw();});const count=doc.createElement('span');count.textContent='Seite '+(pageNumber+1)+' von '+Math.ceil(files.length/10);pages.append(back,count,next);}
+ }
+ async function load(sync=false){if(loading)return;loading=true;refresh.disabled=true;try{
+  if(sync){say('Kundenordner wird geprüft …');const {data,error}=await supabase.auth.getSession();if(error||!data?.session)throw Error('Bitte melde dich erneut an.');const res=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1',{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});const body=await res.json();if(!res.ok||!body.ok){if(!['FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING'].includes(body.code))throw Error(body.code==='FOLDER_UNAVAILABLE'?'Dein Kundenordner konnte nicht eindeutig zugeordnet werden.':'Die Dateien konnten noch nicht aktualisiert werden. Bitte erneut versuchen.');}else lastSync=Date.now();}
+  const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list'});if(error||!data?.ok)throw Error('Die Dateiliste konnte nicht geladen werden.');files=data.files||[];if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;draw();say(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.');
+ }catch(e){say(e.message);}finally{loading=false;refresh.disabled=false;}}
+ refresh.addEventListener('click',()=>load(true));
+ for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))button.addEventListener('click',()=>load(Date.now()-lastSync>60000));
+ load(false);return {load};
+}
 let pending;
 let signedOut=false;
 async function dashboardHtml(){
@@ -74,6 +98,7 @@ async function logout(){signedOut=true;clearOptimizer();frame.hidden=true;frame.
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-file-updated'&&[...optimizerFrames.children].some(el=>event.source===el.contentWindow)){fileView?.load(false);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-close'&&[...optimizerFrames.children].some(el=>event.source===el.contentWindow)){
     optimizer.close();return;
   }
