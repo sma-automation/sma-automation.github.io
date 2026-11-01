@@ -32,7 +32,7 @@ Der aktuelle Schlüssel `visual-2026-11-01.1` bleibt dauerhaft an das bisherige 
 
 Für den späteren Serverbetrieb siehe [SELF_HOSTED_REVIEW.md](SELF_HOSTED_REVIEW.md). Ein Modell mit nur drei geprüften Kategorien erfüllt den Sieben-Kategorien-Vertrag nicht. Fehlende Abdeckung bleibt unvollständig, auch wenn der Dienst selbst „clear“ meldet.
 
-1. Nach `publication-files.sql` / `publication-media-precheck.sql`: `supabase/sql/publication-content-review.sql` anwenden. Alte Basismigrationen später nicht erneut als aktuellen Funktionsstand aufspielen.
+1. Nach `publication-files.sql` / `publication-media-precheck.sql`: `supabase/sql/publication-content-review.sql` anwenden. Anschließend `publication-media-profiles.sql` für die aktuellen Portalhinweise anwenden. Alte Basismigrationen später nicht erneut als aktuellen Funktionsstand aufspielen.
 2. `python n8n/publishing/build-content-review.py` aus dem Repository-Verzeichnis ausführen und den separaten Workflow importieren. Credentials sind ausschließlich Referenzen auf die vorhandenen Drive-, Sightengine- und Supabase-Verbindungen.
 3. Importierte n8n-Einstellungen ausdrücklich kontrollieren: v1, vier Speicheroptionen auf „Do not save“, Timeout 210 Sekunden, Aufruf nur durch eigenen Workflow-Besitzer, keine angehefteten Daten. n8n übernimmt importierte Einstellungen nicht zuverlässig.
 4. Separaten Workflow veröffentlichen. Hauptworkflow und tägliche Veröffentlichung bleiben unberührt.

@@ -60,7 +60,7 @@ Die Dateizuordnung hat jetzt einen eigenen Abschnitt „Medienprüfung“ je Por
 
 ## Visuelle Dateiprüfung
 
-Die separate versionsgebundene Sicherheitsprüfung ist in [CONTENT_REVIEW.md](CONTENT_REVIEW.md) beschrieben. Sie nutzt vorhandene Sightengine-Credentials, liefert ein gemeinsames Prüfergebnis für alle Portal-Kacheln und erteilt keine Veröffentlichungsfreigabe. Nach der Medienvorprüfung muss `supabase/sql/publication-content-review.sql` als jüngster Funktionsstand angewandt werden.
+Die separate versionsgebundene Sicherheitsprüfung ist in [CONTENT_REVIEW.md](CONTENT_REVIEW.md) beschrieben. Sie nutzt vorhandene Sightengine-Credentials, liefert ein gemeinsames Prüfergebnis für alle Portal-Kacheln und erteilt keine Veröffentlichungsfreigabe. Nach der Medienvorprüfung zuerst `supabase/sql/publication-content-review.sql`, danach `supabase/sql/publication-media-profiles.sql` anwenden. Der jüngste Stand trennt portalbezogene Empfehlungen von Pflichtprüfungen; Details in [MEDIA_PRECHECK.md](MEDIA_PRECHECK.md).
 
 ### Erreichbarkeit der Ordner und Live-Test
 

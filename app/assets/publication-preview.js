@@ -61,7 +61,7 @@ async function loadFiles(preferredId=null){
 function resetMediaCheck(message='Wähle zuerst eine Datei aus.'){
  reviewStatus=null;$('contentReviewStatus').textContent=selectedAsset?'Für diese Datei liegt noch kein Prüfergebnis vor.':'Wähle zuerst eine Datei aus.';syncReviewButton();
  $('mediaSummary').textContent='Medienprüfung · '+(selectedAsset?'noch offen':'Datei auswählen');
- $('mediaStatus').textContent=message;$('mediaFacts').textContent='';$('mediaChecks').replaceChildren();$('mediaPanel').open=false;
+ $('mediaStatus').textContent=message;$('mediaFacts').textContent='';$('mediaChecks').replaceChildren();$('mediaScope').textContent='';$('mediaRecommendations').replaceChildren();$('mediaRecommendationsPanel').hidden=true;$('mediaPanel').open=false;
 }
 async function loadMediaCheck(){
  resetMediaCheck();if(!selectedAsset)return;
@@ -72,8 +72,11 @@ async function loadMediaCheck(){
   const m=r.media_check;
   if(!m||m.can_publish!==false||m.asset_id!==file.id||m.asset_revision!==file.revision||!['needs_review','needs_changes'].includes(m.status)||!Array.isArray(m.checks))throw Error('Die Medienprüfung ist noch nicht verfügbar.');
   const changes=m.status==='needs_changes';$('mediaSummary').textContent='Medienprüfung · '+(changes?'Überarbeitung nötig':'weitere Prüfung nötig');$('mediaStatus').textContent=(m.profile||'Datei')+': '+(changes?'Bitte korrigiere die markierten Punkte.':'Die Vorprüfung ist vorhanden. Offene Punkte sind unten aufgeführt.');
-  const f=m.facts||{};const facts=[];if(f.mime_type)facts.push(f.mime_type);if(Number.isFinite(f.size_bytes))facts.push(f.size_bytes<1000?f.size_bytes+' Byte':f.size_bytes<1000000?(f.size_bytes/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' kB':(f.size_bytes/1000000).toLocaleString('de-DE',{maximumFractionDigits:2})+' MB');if(f.width_px&&f.height_px)facts.push(f.width_px+' × '+f.height_px+' Pixel');if(Number.isFinite(f.duration_ms))facts.push((f.duration_ms/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' Sekunden');$('mediaFacts').textContent='Dateiangaben: '+facts.join(' · ');
+  $('mediaScope').textContent=typeof m.scope_notice==='string'?m.scope_notice:'';
+  const f=m.facts||{};const facts=[];if(f.mime_type)facts.push(f.mime_type);if(Number.isFinite(f.size_bytes))facts.push(f.size_bytes<1000?f.size_bytes+' Byte':f.size_bytes<1000000?(f.size_bytes/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' kB':(f.size_bytes/1000000).toLocaleString('de-DE',{maximumFractionDigits:2})+' MB');if(f.width_px&&f.height_px)facts.push(f.width_px+' × '+f.height_px+' Pixel');if(Number.isFinite(f.duration_ms))facts.push((f.duration_ms/1000).toLocaleString('de-DE',{maximumFractionDigits:2})+' Sekunden');$('mediaFacts').textContent=(m.facts_source==='drive_metadata'?'Von Drive gemeldete Dateiangaben: ':'Dateiangaben: ')+facts.join(' · ');
   const order={fail:0,pending:1,pass:2};for(const c of [...m.checks].sort((a,b)=>(order[a.status]??3)-(order[b.status]??3))){if(!Object.hasOwn(order,c.status)||typeof c.message!=='string')continue;const li=document.createElement('li');li.dataset.state=c.status;li.textContent=({fail:'Zu korrigieren: ',pending:'Noch offen: ',pass:'Geprüft: '})[c.status]+c.message;$('mediaChecks').append(li);}
+  if(Array.isArray(m.recommendations)){for(const item of m.recommendations){if(!item||!['matches','suggested','unknown'].includes(item.status)||typeof item.message!=='string')continue;const li=document.createElement('li');li.textContent=item.message;$('mediaRecommendations').append(li);}}
+  $('mediaRecommendationsPanel').hidden=!$('mediaRecommendations').children.length;
   if(m.content_review)renderReview(m.content_review,file);
   $('mediaPanel').open=changes;
  }catch(e){if(selectedAsset?.id===file.id)resetMediaCheck(e.message);}
