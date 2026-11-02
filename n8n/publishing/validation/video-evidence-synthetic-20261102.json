@@ -1,0 +1,56 @@
+{
+  "ok": true,
+  "manifest": {
+    "schema": "sma-video-evidence-v1",
+    "sha256": "e22947fb18432bca8c56cb306897e6f97596534ae86fa05fd082d6b6905595bd",
+    "size_bytes": 46058,
+    "duration_ms": 8000,
+    "width": 640,
+    "height": 360,
+    "positions_ms": [
+      0,
+      981,
+      1962,
+      2944,
+      3925,
+      4906,
+      5887,
+      6869,
+      7850
+    ],
+    "sampling": "representative_frames_not_full_moderation",
+    "audio_status": "extracted",
+    "frames.jpg": {
+      "sha256": "a493f1eec0ed8cb141e769b60194dd0e91f7274b5dd2748a36803fa6095a12be",
+      "size_bytes": 62130
+    },
+    "audio.wav": {
+      "sha256": "8330e3fcce2f8a68201ffb7203bbe8d5622554215fe7e0b74f615371bfa7344e",
+      "size_bytes": 256078
+    }
+  },
+  "transcript": "This is a synthetic test, a blue square moves from left to right.",
+  "audio_status": "transcribed",
+  "recognition": {
+    "description": "Eine einfache Grafik: Vor hellem Hintergrund steht oben links der Text „SMA SYNTHETIC TEST“. Ein einfarbiges, kräftig blaues Quadrat behält Größe und Form bei und wandert über die gezeigten Frames hinweg schrittweise von links nach rechts. Sonst keine erkennbaren Objekte oder Handlungen. Die gesprochene Aussage beschreibt einen synthetischen Test mit einem blauen Quadrat, das sich von links nach rechts bewegt; das passt zu den sichtbaren Frames.",
+    "visible_text": [
+      "SMA SYNTHETIC TEST"
+    ],
+    "observations": [
+      "Das blaue Quadrat erscheint im ersten Frame weit links.",
+      "In den folgenden Frames nimmt seine horizontale Position stetig zu; es rückt jeweils weiter nach rechts.",
+      "Die Größe des Quadrats bleibt konstant; keine Drehung oder Verformung erkennbar.",
+      "Der Text „SMA SYNTHETIC TEST“ bleibt in allen sichtbaren Frames unverändert an ähnlicher Position.",
+      "Kein weiteres bewegtes Element sichtbar.",
+      "Die Tonspur-Behauptung über ein links-nach-rechts bewegtes blaues Quadrat stimmt mit den Bildframes überein."
+    ],
+    "uncertainties": [
+      "Nur Stichproben der Bewegung sind sichtbar; gleichförmige Geschwindigkeit kann nicht bestätigt werden.",
+      "Zwischen den gezeigten Frames könnten kurzzeitige Stopps oder Richtungswechsel stattgefunden haben, die hier nicht erfasst sind.",
+      "Exakte Positionen, Geschwindigkeiten und Timing innerhalb des Videos sind aus den Einzelbildern nicht ableitbar."
+    ]
+  },
+  "can_publish": false,
+  "manual_probe_only": true,
+  "temporary_container_deleted": true
+}
