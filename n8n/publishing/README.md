@@ -1,5 +1,7 @@
 # Portaltext-Vorschau V1
 
+Aktuelle Priorität und Live-Stand: [Kundenprodukt und Textverlauf](LIVE_PRODUCT.md).
+
 Erste, isolierte Ausbaustufe zu Issue #11. Jede vorhandene Portal-Kachel im authentifizierten Veröffentlichungsbereich erhält einen Button „Optimieren“. Er öffnet ein kompaktes Fenster nur für das gewählte Portal. Beschreibung, Zielgruppe und Ziel liefern das Ausgangsmaterial; es wird noch keine Kundendatei gelesen. Die Vorschau ist ausdrücklich `can_publish: false` und ist nicht mit einem Upload-Pfad verbunden.
 
 Pro ausgewähltem Portal werden Titel/Einstieg, eigener Beitragstext, höchstens drei relevante Hashtags und konkrete Prüfhinweise erstellt. Das sind redaktionelle Grenzen, keine vollständige Prüfung sämtlicher Portalregeln. Fakten, Rechte, Werbe-/KI-Kennzeichnung, Medienformat und die Nutzbarkeit des Links müssen in folgenden Ausbaustufen geprüft werden. Reichweite oder Ranking werden nicht garantiert.

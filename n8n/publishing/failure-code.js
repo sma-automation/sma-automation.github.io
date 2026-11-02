@@ -2,7 +2,7 @@ const ctx=$('Konto und Shop prüfen').first().json;
 const raw=$input.first().json;
 const err=raw.error;
 const message=typeof err==='string'?err:typeof err?.message==='string'?err.message:typeof raw.message==='string'?raw.message:'';
-const allowed=['MODEL_INCOMPLETE','MODEL_REFUSED','MODEL_INVALID','MODEL_INVALID_TEXT','MODEL_UNEXPECTED_LINK','MODEL_INVALID_PLATFORM','MODEL_INVALID_HASHTAGS','CAPTION_TOO_LONG','CONTEXT_NOT_READY','INVALID_SHOP'];
+const allowed=['CAPTION_TOO_SIMILAR','CAPTION_HISTORY_UNAVAILABLE','MODEL_INCOMPLETE','MODEL_REFUSED','MODEL_INVALID','MODEL_INVALID_TEXT','MODEL_UNEXPECTED_LINK','MODEL_INVALID_PLATFORM','MODEL_INVALID_HASHTAGS','CAPTION_TOO_LONG','CONTEXT_NOT_READY','INVALID_SHOP'];
 let code=allowed.find(c=>message===c||message.startsWith(c+' ['))||'UNCLASSIFIED';
 if(message.includes('Buffer is not defined'))code='RUNTIME_BUFFER';
 const status=Number(err?.statusCode||err?.httpCode||raw.statusCode);
