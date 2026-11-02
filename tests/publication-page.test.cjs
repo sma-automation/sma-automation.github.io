@@ -17,7 +17,7 @@ test('save conflicts preserve user edits and show recovery guidance',async()=>{c
 test('per-portal editor loads only its scope and keeps other saved portal texts unchanged',async()=>{const other={...result.preview.drafts[0],platform:'tiktok',title:'TikTok Ausgangstitel',body:'Unveränderter TikTok Ausgangstext.'};const combined={...result,preview:{...result.preview,drafts:[result.preview.drafts[0],other]}};const p=await boot({portal:'youtube',latest:combined,saveResponse:{...combined,revision:2}});assert.equal(p.calls.find(c=>c.p_action==='latest').p_input.platform,'youtube');assert.equal(p.get('drafts').children.length,1);assert.equal(p.get('drafts').children[0].dataset.platform,'youtube');assert.equal(p.get('sourcePanel').open,false);assert.equal(p.get('portalSelection').hidden,true);p.get('drafts').children[0].querySelector('textarea').value='Bearbeiteter YouTube-Text ohne neue Produktbehauptungen.';await p.save();const saved=p.calls.find(c=>c.p_action==='save').p_input.drafts;assert.equal(saved.length,2);assert.equal(saved[1].title,other.title);assert.equal(saved[1].body,other.body);});
 test('generation from a portal card requests exactly that portal',async()=>{for(const portal of ['youtube','instagram','facebook','tiktok']){const p=await boot({portal,fetchResponse:async()=>({...result,preview:{...result.preview,drafts:[{...result.preview.drafts[0],platform:portal}]}})});await p.run();const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.deepEqual(request.platforms,[portal]);if(portal==='youtube')assert.equal(request.media_kind,'video');assert.equal(p.get('drafts').children.length,1);assert.equal(p.get('drafts').children[0].dataset.platform,portal);}});
 
-const ownFile={id:'fa110000-0000-4000-8000-000000000001',name:'Meine Datei A.mp4',media_kind:'video',revision:'version:1',assignments:[]};
+const ownFile={id:'fa110000-0000-4000-8000-000000000001',name:'Meine Datei A.mp4',media_kind:'video',revision:'version:1',verified_at:new Date().toISOString(),assignments:[]};
 test('file editor never falls back to unrelated latest portal text',async()=>{const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async args=>args.p_action==='list'?{ok:true,files:[ownFile]}:{ok:true,status:'empty'}});assert.equal(p.calls.some(c=>c.p_action==='latest'),false);assert.equal(p.get('result').hidden,true);assert.equal(p.get('source_text').value,'');assert.equal(p.calls.find(c=>c.p_action==='get').p_input.asset_id,ownFile.id);});
 test('generation binds the returned revision to the selected file and portal',async()=>{const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async args=>args.p_action==='list'?{ok:true,files:[ownFile]}:args.p_action==='assign'?{...result,assignment_revision:1}:{ok:true,status:'empty'}});await p.run();const bind=p.calls.find(c=>c.p_action==='assign');assert.equal(bind.p_input.asset_id,ownFile.id);assert.equal(bind.p_input.asset_revision,'version:1');assert.equal(bind.p_input.platform,'youtube');assert.equal(bind.p_input.preview_id,result.id);assert.equal(bind.p_input.preview_revision,1);assert.equal(bind.p_input.assignment_revision,0);assert.match(p.get('saveStatus').textContent,/zugeordnet/);});
 test('file edits carry assignment revision and cannot use the unscoped save endpoint',async()=>{const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async args=>args.p_action==='list'?{ok:true,files:[ownFile]}:{...result,assignment_revision:4}});p.get('drafts').children[0].querySelector('textarea').value='Bearbeiteter Text nur für Datei A.';await p.save();const saves=p.calls.filter(c=>c.p_action==='save');assert.equal(saves.length,1);assert.equal(saves[0].name,'sma_publication_files_v1');assert.equal(saves[0].p_input.assignment_revision,4);assert.equal(saves[0].p_input.asset_id,ownFile.id);assert.equal(saves[0].p_input.platform,'youtube');});
@@ -282,4 +282,80 @@ test('missing or unknown recognition subject cannot feed automatic content',asyn
   const p=await boot({...automaticOptions,magicResponse:async()=>({ok:true,analysis:{...magicAnalysis,result:{...magicAnalysis.result,subject_type}}}),fetchResponse:async()=>({ok:true,analysis:{...magicAnalysis,result:{...magicAnalysis.result,subject_type}}})});
   await p.get('magicText').click();assert.equal(p.calls.some(c=>c.url?.endsWith('sma-publication-preview-v1')),false);assert.equal(p.get('source_text').value,'');
  }
+});
+
+const staleTime=new Date(Date.now()-20*60*1000).toISOString();
+const freshFile=(overrides={})=>({...ownFile,assignments:[],verified_at:new Date().toISOString(),...overrides});
+const isCatalog=url=>url?.endsWith('/sma-publication-files-v1');
+const isCaption=url=>url?.endsWith('/sma-publication-preview-v1');
+test('stale, missing and future timestamps refresh before generation without reloading or losing source edits',async()=>{
+ for(const verified_at of [staleTime,undefined,new Date(Date.now()+60*60*1000).toISOString()]){
+  let listed=0;
+  const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile({verified_at:++listed===1?verified_at:new Date().toISOString()})]}:a.p_action==='assign'?{...result,assignment_revision:1}:{ok:true,status:'empty'},fetchResponse:async url=>isCatalog(url)?{ok:true}:result});
+  const sourceText='Meine gesicherten Angaben zu diesem Video bleiben unverändert.';
+  p.get('source_text').value=sourceText;p.get('previewForm').events.input();await p.run();
+  assert.deepEqual(p.calls.filter(c=>c.url).map(c=>isCatalog(c.url)?'sync':'caption'),['sync','caption']);
+  assert.equal(JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body).source_text,sourceText);
+  assert.equal(p.get('source_text').value,sourceText);assert.equal(p.calls.filter(c=>c.p_action==='get').length,1);
+  assert.match(p.get('saveStatus').textContent,/zugeordnet/);assert.equal(p.get('inputFields').disabled,false);
+ }
+});
+test('automatic refresh before saving preserves edited title, body and source fields',async()=>{
+ let listed=0;
+ const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile({verified_at:++listed===1?staleTime:new Date().toISOString(),assignments:[{platform:'youtube',revision:4,status:'assigned'}]})]}:a.p_action==='get'?{...result,assignment_revision:4}:a.p_action==='save'?{...result,assignment_revision:5}:{ok:true,status:'empty'},fetchResponse:async()=>({ok:true})});
+ const card=p.get('drafts').children[0];card.querySelector('[data-field=title]').value='Mein bearbeiteter Titel';card.querySelector('textarea').value='Mein bearbeiteter Beitragstext bleibt erhalten.';card.events.input();
+ p.get('source_text').value='Meine zusätzlichen eigenen gesicherten Angaben.';p.get('previewForm').events.input();
+ await p.save();const save=p.calls.find(c=>c.p_action==='save');
+ assert.equal(save.p_input.title,'Mein bearbeiteter Titel');assert.equal(save.p_input.body,'Mein bearbeiteter Beitragstext bleibt erhalten.');assert.equal(save.p_input.assignment_revision,4);
+ assert.equal(p.get('source_text').value,'Meine zusätzlichen eigenen gesicherten Angaben.');assert.equal(p.calls.filter(c=>c.p_action==='get').length,1);
+ assert.equal(p.calls.filter(c=>isCatalog(c.url)).length,1);assert.match(p.get('status').textContent,/Änderungen gespeichert/);
+});
+test('cached Magic content also checks a stale file before generating and binding its caption',async()=>{
+ let listed=0;
+ const p=await boot({...automaticOptions,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[{...photo,assignments:[],verified_at:++listed===1?staleTime:new Date().toISOString()}]}:a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'},fetchResponse:async url=>isCatalog(url)?{ok:true}:instagramResult});
+ await p.get('magicText').click();
+ assert.deepEqual(p.calls.filter(c=>c.url).map(c=>isCatalog(c.url)?'sync':'caption'),['sync','caption']);
+ assert.equal(JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body).source_text,magicAnalysis.result.source_text);
+ assert.equal(p.calls.find(c=>c.p_action==='assign').p_input.asset_revision,photo.revision);assert.equal(p.get('magicText').disabled,false);
+});
+test('removed or changed files and concurrent assignments stop before generation and keep the customer input',async()=>{
+ for(const [after,expected] of [[[],/nicht mehr/],[[freshFile({revision:'version:2'})],/Datei wurde geändert/],[[freshFile({assignments:[{platform:'youtube',revision:1,status:'assigned'}]})],/Zuordnung wurde inzwischen/]]){
+  let listed=0;
+  const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:++listed===1?[freshFile({verified_at:staleTime})]:after}:{ok:true,status:'empty'},fetchResponse:async()=>({ok:true})});
+  p.get('source_text').value='Meine ursprünglichen gesicherten Angaben.';p.get('previewForm').events.input();await p.run();
+  assert.equal(p.calls.some(c=>isCaption(c.url)||c.p_action==='assign'),false);assert.equal(p.get('source_text').value,'Meine ursprünglichen gesicherten Angaben.');assert.match(p.get('status').textContent,expected);assert.equal(p.get('inputFields').disabled,false);
+ }
+});
+test('a rejected catalog refresh preserves the edited draft and does not save stale data',async()=>{
+ const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile({verified_at:staleTime})]}:a.p_action==='get'?{...result,assignment_revision:1}:{ok:true,status:'empty'},fetchResponse:async()=>({ok:false,code:'FILE_SYNC_RATE_LIMITED'})});
+ const body=p.get('drafts').children[0].querySelector('textarea');body.value='Meine ungespeicherten Änderungen bleiben hier.';await p.save();
+ assert.equal(p.calls.some(c=>c.p_action==='save'),false);assert.equal(body.value,'Meine ungespeicherten Änderungen bleiben hier.');assert.match(p.get('status').textContent,/warte kurz/);assert.match(p.get('saveStatus').textContent,/noch nicht gespeichert/);assert.equal(p.get('save').disabled,false);
+});
+test('server freshness rejection refreshes and retries the same assignment once without generating a second caption',async()=>{
+ for(const rejectsTwice of [false,true]){
+  let assigns=0;
+  const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile()]}:a.p_action==='assign'?(++assigns===1||rejectsTwice?{ok:false,code:'FILE_REFRESH_REQUIRED'}:{...result,assignment_revision:1}):{ok:true,status:'empty'},fetchResponse:async url=>isCatalog(url)?{ok:true}:result});
+  await p.run();assert.equal(assigns,2);assert.equal(p.calls.filter(c=>isCatalog(c.url)).length,1);assert.equal(p.calls.filter(c=>isCaption(c.url)).length,1);
+  const binds=p.calls.filter(c=>c.p_action==='assign');assert.deepEqual(binds[0].p_input,binds[1].p_input);assert.equal(p.get('result').hidden,rejectsTwice);
+ }
+});
+test('retry after a failed assignment reuses the completed caption; an intentional new generation is separate',async()=>{
+ let assigns=0;
+ const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile()]}:a.p_action==='assign'?(++assigns===1?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:{...result,assignment_revision:assigns}):{ok:true,status:'empty'}});
+ await p.run();assert.equal(p.get('result').hidden,true);await p.run();
+ assert.equal(p.calls.filter(c=>isCaption(c.url)).length,1);const binds=p.calls.filter(c=>c.p_action==='assign');assert.deepEqual(binds[0].p_input,binds[1].p_input);assert.equal(p.get('result').hidden,false);
+ await p.run();assert.equal(p.calls.filter(c=>isCaption(c.url)).length,2);
+});
+test('Magic retries a server freshness rejection with the same file identity and no duplicate successful recognition',async()=>{
+ let starts=0;
+ const p=await boot({...automaticOptions,magicResponse:async()=>({ok:true,analysis:{...magicAnalysis,status:'failed',result:null,error_code:'MAGIC_TIMEOUT'}}),fetchResponse:async url=>isCatalog(url)?{ok:true}:url.endsWith('/sma-publication-magic-effect-v1')?(++starts===1?{ok:false,code:'FILE_REFRESH_REQUIRED'}:{ok:true,analysis:magicAnalysis}):instagramResult});
+ await p.get('magicText').click();assert.equal(starts,2);assert.equal(p.calls.filter(c=>isCatalog(c.url)).length,1);assert.equal(p.calls.filter(c=>isCaption(c.url)).length,1);
+ const posts=p.calls.filter(c=>c.url?.endsWith('/sma-publication-magic-effect-v1'));assert.equal(posts[0].options.body,posts[1].options.body);assert.match(p.get('saveStatus').textContent,/zugeordnet/);
+});
+test('logout while refreshing blocks caption generation and cannot restore customer content',async()=>{
+ let release;
+ const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile({verified_at:staleTime})]}:{ok:true,status:'empty'},fetchResponse:()=>new Promise(resolve=>release=resolve)});
+ p.get('source_text').value='Eigene Angaben, die bei Abmeldung verschwinden müssen.';
+ const run=p.run();await new Promise(resolve=>setImmediate(resolve));p.signOut();release({ok:true});await run;
+ assert.equal(p.calls.some(c=>isCaption(c.url)||c.p_action==='assign'),false);assert.equal(p.calls.filter(c=>c.p_action==='list').length,1);assert.equal(p.get('source_text').value,'');assert.equal(p.get('result').hidden,true);assert.equal(p.get('inputFields').disabled,true);assert.match(p.get('status').textContent,/melde dich/);
 });
