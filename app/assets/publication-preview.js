@@ -212,46 +212,62 @@ async function loadLatest(){lock(true);try{
  }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
 
 function resetMagic(){magicState=null;$('magicPanel').hidden=!selectedAsset||selectedAsset.media_kind!=='image';$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
-function syncMagicButton(){$('recognizePhoto').disabled=busy||!selectedAsset||selectedAsset.media_kind!=='image'||magicState?.status==='processing'||magicState?.status==='completed';$('applyMagic').disabled=busy;}
+function magicPhotoHint(file=selectedAsset){
+ if(!file||file.media_kind!=='image')return '';
+ const formatUnsupported=file.mime_type&&!['image/jpeg','image/png','image/webp'].includes(file.mime_type);
+ const sizeUnsupported=Number.isFinite(file.size_bytes)&&(file.size_bytes<1||file.size_bytes>12000000);
+ return formatUnsupported||sizeUnsupported?'Für die automatische Fotoerkennung wähle ein statisches JPG, PNG oder WebP bis 12 MB. Du kannst den Inhalt dieser Datei unter „Inhalt und Ziel“ selbst beschreiben.':'';
+}
+function syncMagicButton(){
+ $('recognizePhoto').disabled=busy||!selectedAsset||selectedAsset.media_kind!=='image'||!!magicPhotoHint()||magicState?.status==='completed';
+ $('recognizePhoto').textContent=magicState?.status==='processing'?'Erkennungsstand laden':magicState?.status==='failed'?'Foto erneut erkennen':'Foto erkennen';$('applyMagic').disabled=busy;
+}
+function magicErrorText(code){return ({MEDIA_UNSUPPORTED:'Die automatische Fotoerkennung unterstützt statische JPG-, PNG- und WebP-Bilder bis 12 MB. Bitte wähle ein passendes Foto oder beschreibe den Inhalt selbst.',MAGIC_TIMEOUT:'Die Fotoerkennung wurde nicht rechtzeitig abgeschlossen. Du kannst sie erneut starten.',MAGIC_RATE_LIMITED:'Bitte warte etwas, bevor du weitere Fotos erkennen lässt.',MAGIC_PHOTO_REQUIRED:'Der Magic Effect benötigt hier ein Foto.',MAGIC_RUNNING:'Eine Fotoerkennung läuft bereits.'})[code]||messages[code]||'Die Fotoerkennung konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function photoStillSelected(file){return selectedAsset?.id===file.id&&selectedAsset?.revision===file.revision;}
 function showMagic(r,file){
  if(!photoStillSelected(file))return false;
  if(!r||r.asset_id!==file.id||r.asset_revision!==file.revision||r.policy_version!=='magic-photo-2026-11-02.1'||r.can_publish!==false)throw Error('Für dieses Foto liegt noch kein vollständiges Erkennungsergebnis vor.');
- magicState=r;$('magicPanel').hidden=false;
- const messages={unrecognized:'Dieses Foto wurde noch nicht erkannt.',processing:'Der Magic Effect erkennt das Motiv und liest sichtbare Aufschriften …',failed:'Die Fotoerkennung konnte nicht abgeschlossen werden. Bitte versuche es erneut.'};
- $('magicStatus').textContent=messages[r.status]||'';
+ if(!['unrecognized','processing','failed','completed'].includes(r.status))throw Error('Die Fotoerkennung ist noch nicht vollständig.');
  if(r.status==='completed'){
   const v=r.result;
-  if(!v||v.can_publish!==false||v.requires_confirmation!==true||typeof v.description!=='string'||typeof v.source_text!=='string'||v.source_text.length>8000||!Array.isArray(v.uncertainties))throw Error('Die Fotoerkennung ist noch nicht vollständig.');
+  if(!v||v.can_publish!==false||v.requires_confirmation!==true||typeof v.description!=='string'||!v.description.trim()||typeof v.source_text!=='string'||v.source_text.length<30||v.source_text.length>8000||!Array.isArray(v.uncertainties)||v.uncertainties.some(x=>typeof x!=='string'))throw Error('Die Fotoerkennung ist noch nicht vollständig.');
+ }
+ magicState=r;$('magicPanel').hidden=false;
+ const labels={unrecognized:'Dieses Foto wurde noch nicht erkannt.',processing:'Der Magic Effect erkennt das Motiv und liest sichtbare Aufschriften …',failed:magicErrorText(r.error_code)};
+ $('magicStatus').textContent=labels[r.status]||'';
+ if(r.status==='completed'){
+  const v=r.result;
   $('magicSummary').textContent=v.description+(v.uncertainties.length?'\nNoch zu prüfen: '+v.uncertainties.join(' '):'');
   const unclear=v.subject_type==='unclear';$('applyMagic').hidden=unclear;
   $('magicStatus').textContent=unclear?'Das Motiv ist nicht sicher erkennbar. Bitte beschreibe es selbst oder verwende ein deutlicheres Foto.':'Foto erkannt. Prüfe die Beschreibung und die lesbaren Aufschriften.';
-  if(!unclear&&!$('source_text').value.trim()){$('source_text').value=v.source_text;$('sourcePanel').open=true;$('magicStatus').textContent='Foto erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
+  if(!unclear&&!sourceDirty&&!$('source_text').value.trim()){$('source_text').value=v.source_text;$('sourcePanel').open=true;$('magicStatus').textContent='Foto erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
  }
  syncMagicButton();return true;
 }
 async function magicRpc(file){const {data,error}=await supabase.rpc('sma_publication_magic_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error('Die Fotoerkennung ist gerade nicht verfügbar.');return data.analysis;}
 async function loadMagicEffect(autoStart=false){
  const file=selectedAsset;resetMagic();if(!file||file.media_kind!=='image')return;
+ const hint=magicPhotoHint(file);if(hint){$('magicStatus').textContent=hint;return;}
  try{
   const r=await magicRpc(file);if(!showMagic(r,file))return;
-  if(autoStart&&r.status==='unrecognized'&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))await recognizePhoto();
+  if(autoStart&&(r.status==='processing'||(r.status==='unrecognized'&&!sourceDirty&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
  }catch(e){if(photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto(){
  if(busy||!selectedAsset||selectedAsset.media_kind!=='image'||magicState?.status==='completed')return;
+ const hint=magicPhotoHint();if(hint){$('magicStatus').textContent=hint;return;}
  const file=selectedAsset;lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
  try{
   if(magicState?.status!=='processing'){
    const auth=await session();const response=await fetch(magicEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(25000)});
-   const d=await response.json();if(!response.ok||!d.ok)throw Error(messages[d?.code]||({MAGIC_RATE_LIMITED:'Bitte warte etwas, bevor du weitere Fotos erkennen lässt.',MAGIC_PHOTO_REQUIRED:'Der Magic Effect benötigt hier ein Foto.',MAGIC_RUNNING:'Eine Fotoerkennung läuft bereits.'}[d?.code])||'Die Fotoerkennung konnte nicht gestartet werden.');
+   const d=await response.json();if(!response.ok||!d.ok)throw Error(magicErrorText(d?.code));
    if(!showMagic(d.analysis,file))return;
   }
   for(let i=0;i<80&&magicState?.status==='processing';i++){
    await new Promise(resolve=>setTimeout(resolve,3000));if(!photoStillSelected(file))return;
    if(!showMagic(await magicRpc(file),file))return;
   }
-  if(photoStillSelected(file)&&magicState?.status==='processing')$('magicStatus').textContent='Die Fotoerkennung läuft noch. Lade den gespeicherten Stand gleich erneut.';
+  if(photoStillSelected(file)&&magicState?.status==='processing')$('magicStatus').textContent='Die Fotoerkennung läuft noch. Klicke auf „Erkennungsstand laden“, um das Ergebnis weiter abzurufen.';
  }catch(e){if(photoStillSelected(file))$('magicStatus').textContent=e.message;}
  finally{if(photoStillSelected(file))lock(false);}
 }

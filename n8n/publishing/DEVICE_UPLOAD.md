@@ -14,7 +14,7 @@ whole-directory permission is requested or forced.
 - Version: `c50c60d0-ed32-4792-80b4-617a6276f803`.
 - Endpoint: `POST /webhook/sma-publication-device-upload-v1` (`start` / `finish`).
 - Supabase migrations: `publication_device_upload_v1`, `publication_upload_catalog_race_v1`, `publication_upload_google_session_v1`.
-- UI cache version 11; native transfer module `app/assets/device-upload.mjs`.
+- UI cache version 12; native transfer module `app/assets/device-upload.mjs`.
 - Workflow code, credentials references and connections checked against live
   export; n8n regenerates node IDs and positions when importing.
 - Executions/manual/progress data are not saved; control request timeout 120 s.
