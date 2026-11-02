@@ -1,5 +1,7 @@
 # Portaltext-Vorschau V1
 
+Aktuelle Gesamtbewertung vom 02.11.2026: [PUBLISHING_AUDIT_2026-11-02.md](PUBLISHING_AUDIT_2026-11-02.md). Die vorhandene Datei-/Portalzuordnung garantiert noch keine neue Caption je Veröffentlichung. Der vorbereitete interne Vertrag für neue Texte, Verlaufskontrolle und identische Retries steht in [CAPTION_VARIATION.md](CAPTION_VARIATION.md); dauerhafte Speicherung und Publisher-Anbindung sind noch offen.
+
 Erste, isolierte Ausbaustufe zu Issue #11. Jede vorhandene Portal-Kachel im authentifizierten Veröffentlichungsbereich erhält einen Button „Optimieren“. Er öffnet ein kompaktes Fenster nur für das gewählte Portal. Beschreibung, Zielgruppe und Ziel liefern das Ausgangsmaterial; es wird noch keine Kundendatei gelesen. Die Vorschau ist ausdrücklich `can_publish: false` und ist nicht mit einem Upload-Pfad verbunden.
 
 Pro ausgewähltem Portal werden Titel/Einstieg, eigener Beitragstext, höchstens drei relevante Hashtags und konkrete Prüfhinweise erstellt. Das sind redaktionelle Grenzen, keine vollständige Prüfung sämtlicher Portalregeln. Fakten, Rechte, Werbe-/KI-Kennzeichnung, Medienformat und die Nutzbarkeit des Links müssen in folgenden Ausbaustufen geprüft werden. Reichweite oder Ranking werden nicht garantiert.
