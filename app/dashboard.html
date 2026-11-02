@@ -17,7 +17,7 @@ let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,publishingPage
 let optimizerTrigger=null,selectedFileId=null;
 let fileView=null;
 function showPublishing(){
- if(!publishingPage)return;optimizerPage.hidden=true;
+ if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
  for(const child of publishingPage.children)child.classList.remove('sma-publishing-hidden');
  optimizerTrigger?.focus();
 }
@@ -28,11 +28,11 @@ function openOptimizer(portal,trigger,restoring=false){
  let preview=[...(optimizerFrames?.children||[])].find(el=>el.dataset.key===frameKey);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','13');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','14');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
- optimizerPage.hidden=false;optimizerPage.scrollIntoView({block:'start'});optimizerHeading.focus();
+ publishingPage.classList.add('sma-optimizing');optimizerPage.hidden=false;optimizerPage.scrollIntoView({block:'start'});optimizerHeading.focus();
  if(!restoring){const route={smaOptimization:true,portal,assetId:selectedFileId};if(!history.state?.smaOptimization)history.pushState(route,'', '#optimieren/'+portal);else history.replaceState(route,'', '#optimieren/'+portal);}
 }
 function clearOptimizer(){optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(history.state?.smaOptimization)history.replaceState(null,'',location.pathname+location.search);}
@@ -41,7 +41,7 @@ function attachOptimizerPage(doc,page){
  publishingPage=page;optimizerPage=doc.createElement('section');optimizerPage.id='smaOptimizationPage';optimizerPage.hidden=true;
  const header=doc.createElement('header');header.className='sma-optimization-header';const back=doc.createElement('button');back.type='button';back.textContent='← Zurück zur Veröffentlichung';back.addEventListener('click',closeOptimizer);
  optimizerHeading=doc.createElement('h1');optimizerHeading.tabIndex=-1;header.append(back,optimizerHeading);optimizerFrames=doc.createElement('div');optimizerFrames.id='smaOptimizerFrames';optimizerPage.append(header,optimizerFrames);page.append(optimizerPage);
- const style=doc.createElement('style');style.textContent=`.sma-publishing-hidden{display:none!important}#smaOptimizationPage{border:0;background:transparent;padding:0;margin:0;width:100%;min-width:0}#smaOptimizationPage[hidden],#smaOptimizerFrames iframe[hidden]{display:none!important}.sma-optimization-header{margin-bottom:18px}.sma-optimization-header button{border:0;background:transparent;padding:8px 0;color:#4065d8;font:600 14px Arial,sans-serif;cursor:pointer}.sma-optimization-header h1{font-size:28px;margin:12px 0 0;line-height:1.25;outline:none}#smaOptimizerFrames{width:100%;min-width:0}#smaOptimizerFrames iframe{display:block;border:0;width:100%;height:1100px;min-height:400px}@media(max-width:650px){.sma-optimization-header h1{font-size:23px}}`;doc.head.append(style);
+ const style=doc.createElement('style');style.textContent=`.sma-publishing-hidden{display:none!important}.sma-optimizing{background:#fff!important}#smaOptimizationPage{border:0;background:transparent;padding:0;margin:0;width:100%;min-width:0}#smaOptimizationPage[hidden],#smaOptimizerFrames iframe[hidden]{display:none!important}.sma-optimization-header{margin-bottom:18px}.sma-optimization-header button{border:0;background:transparent;padding:8px 0;color:#4065d8;font:600 14px Arial,sans-serif;cursor:pointer}.sma-optimization-header h1{font-size:28px;margin:12px 0 0;line-height:1.25;outline:none}#smaOptimizerFrames{width:100%;min-width:0}#smaOptimizerFrames iframe{display:block;border:0;width:100%;height:1100px;min-height:400px}@media(max-width:650px){.sma-optimization-header h1{font-size:23px}}`;doc.head.append(style);
 }
 // Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{

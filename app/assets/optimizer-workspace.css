@@ -1,0 +1,42 @@
+body.wide{background:#fff}
+body.wide main{display:block;max-width:none;width:100%;padding:0}
+body.wide #optimizerToolbar{display:flex;align-items:stretch;flex-wrap:wrap;gap:0 8px;border-bottom:1px solid #e0e5ef;margin:0 0 22px;padding:0}
+body.wide #optimizerToolbar button{display:block;flex:0 1 auto;border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;color:#627087;font-size:14px;line-height:1.4;font-weight:600;padding:13px 11px 16px;margin:0 0 -1px;min-height:48px}
+body.wide #optimizerToolbar button[aria-pressed=true]{color:#3157cd;border-bottom-color:#4065d8}
+body.wide #optimizerToolbar button:hover{background:#f2f4f8}
+body.wide #workspaceFiles,body.wide #workspaceMedia{background:transparent;border:0;border-radius:0;margin:0;padding:0;min-height:470px}
+body.wide #workspaceSource,body.wide #workspaceText{min-height:470px}
+body.wide .file-picker-body{padding:0}
+body.wide #filePickerList{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 16px;padding:0;margin:0;list-style:none}
+body.wide #filePickerList .file-picker-row{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;border:0;padding:0}
+body.wide #filePickerList .gallery-select{position:relative;display:block;width:100%;padding:0;border:0;border-radius:7px;background:#e7ebf3;overflow:hidden;line-height:1}
+body.wide #filePickerList .gallery-select[aria-pressed=true]{outline:3px solid #4065d8;outline-offset:3px}
+body.wide #filePickerList .gallery-select[aria-pressed=true]::after{content:'✓';position:absolute;top:9px;right:9px;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#4065d8;color:#fff;font-size:17px}
+body.wide #filePickerList .gallery-visual{aspect-ratio:3/4;font-size:32px}
+body.wide #filePickerList .gallery-label{position:absolute;bottom:10px;left:10px;max-width:calc(100% - 20px);background:#17233bde;color:#fff;border-radius:4px;padding:5px 8px;font-size:12px;line-height:1.35;font-weight:400}
+body.wide #filePickerList .file-picker-info{min-width:0;font-size:12px;color:#65718a}
+body.wide #filePickerList .file-picker-info summary{cursor:pointer}
+body.wide #filePickerList .file-picker-info strong{display:block;font-size:12px;font-weight:400;overflow-wrap:anywhere;margin-top:7px}
+body.wide #filePickerList .file-picker-info small{display:block;font-size:12px;margin-top:4px}
+body.wide #workspaceSearch{max-width:420px;margin-bottom:20px}
+body.wide #filePickerCount{margin:0 0 16px;font-size:13px;color:#65718a}
+body.wide #workspaceFiles.has-files:not(.folder-view) #filePickerCount{display:none}
+body.wide #workspaceFiles:not(.has-files) #filePickerCount{display:grid;place-items:center;min-height:320px;text-align:center}
+body.wide #filePickerPages{justify-content:flex-start;gap:18px;font-size:13px;margin-top:22px}
+body.wide #fileSwitchNotice{margin:0 0 20px}
+body.wide #portalStatus:empty,body.wide #filePickerStatus:empty{display:none}
+body.wide #portalStatus{margin:0 0 16px;font-size:13px}
+body.wide #uploadPanel{margin-bottom:20px;font-size:13px}
+body.wide #sourcePanel,body.wide #result,body.wide #mediaPanel{border:0;border-radius:0;background:transparent;padding:0;margin:0;max-width:1000px}
+body.wide #sourcePanel>section{border:0;background:transparent;margin:0;padding:0}
+body.wide #sourceSummary,body.wide #mediaSummary{display:none}
+body.wide .media-body{padding:0}
+body.wide #magicPanel{max-width:1000px;padding:0 0 24px;margin-bottom:24px;border-bottom:1px solid #e0e5ef}
+body.wide #workspaceSelectedPreview{margin:0 0 24px}
+body.wide #workspaceSelectedPreview>summary{font-size:14px;font-weight:600;cursor:pointer;color:#3157cd}
+body.wide #assetPreview{max-width:640px;background:transparent;border:0;padding:0;justify-content:start}
+body.wide #assetPreviewMedia img,body.wide #assetPreviewMedia video{max-height:500px}
+body.wide .draft textarea{min-height:240px}
+body.wide #workspaceTextEmpty{padding:45px 0}
+@media(max-width:1050px){body.wide #filePickerList{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){body.wide #filePickerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}body.wide #optimizerToolbar{gap:0 5px}body.wide #optimizerToolbar button{font-size:13px;padding:11px 8px 13px;min-height:46px}body.wide #filePickerList .gallery-label{font-size:11px}body.wide #workspaceFiles,body.wide #workspaceSource,body.wide #workspaceText,body.wide #workspaceMedia{min-height:380px}body.wide input,body.wide textarea{font-size:16px}}
