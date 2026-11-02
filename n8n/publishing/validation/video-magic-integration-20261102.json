@@ -1,0 +1,13 @@
+{
+  "policy_version": "magic-video-2026-11-02.1",
+  "synthetic_source_sha256": "e22947fb18432bca8c56cb306897e6f97596534ae86fa05fd082d6b6905595bd",
+  "frames_verified": 9,
+  "audio_status": "transcribed",
+  "content_comparison": "model_checked_sampled_evidence",
+  "temporary_container_deleted": true,
+  "production_result_persisted_and_reloaded_with_synthetic_owner": true,
+  "test_rows_rolled_back": true,
+  "unauthenticated_webhook_code": "AUTH_REQUIRED",
+  "customer_browser_end_to_end": "not_performed",
+  "can_publish": false
+}

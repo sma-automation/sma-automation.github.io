@@ -1,6 +1,10 @@
-# Videoanalyse im bestehenden n8n: isolierter Integrationstest
+# Video-Magic-Effect im bestehenden n8n
 
-Stand 02.11.2026: Der neue Ablauf verarbeitet MP4-Bytefolgen über die vorhandene OpenAI-Anbindung. Ein synthetischer Sprachclip und die vom Nutzer ausdrücklich freigegebene echte MP4 wurden getestet. Dies ist ein **unveröffentlichter manueller Test**, kein freigeschalteter Dashboard-Endpunkt. Fotoerkennung, Dashboard, Kundendatenbank und bestehende Publisher werden nicht verändert.
+Stand 02.11.2026: Die geprüfte Videoanalyse ist zusätzlich als authentifizierter Dashboard-Workflow umgesetzt. `video-magic-workflow.json` nutzt den vorhandenen n8n-/OpenAI-/Drive-/Supabase-Zugang. Die separate Fotoerkennung und die geschützten Hauptworkflows bleiben unverändert. Der neue Workflow heißt **SMA – Magic Effect – Videoanalyse V1**, ID `a1F5Ps0B3sXMh70S`, Webhook `sma-publication-video-magic-effect-v1`.
+
+Neue Videos starten nur per Magic-Effect-Klick. Der Button unter „Inhalt und Ziel“ übernimmt die Beschreibung, der Button unter „Text für …“ führt anschließend die bestehende portalbezogene Texterstellung und Dateizuordnung aus. Ergebnisse werden kundenspezifisch für die exakte Dateirevision gespeichert; Wiederöffnen lädt den Cache. Eigene ungespeicherte Angaben benötigen weiterhin die ausdrückliche Ersetzungsaktion.
+
+Die SQL-Erweiterung `supabase/sql/publication-video-magic.sql` ist additiv: authentifizierte Eigentümer-/Kontoprüfung, 15-Minuten-Katalogfrische, gemeinsame Begrenzung mit Fotos (6 neue Analysen/Stunde, 30 Sekunden Abstand, ein laufender Auftrag je Kunde), 12-Minuten-Lease, private Speicherung und ausschließlich Service-Role-Abschluss. Der Workflow antwortet vor der Analyse, prüft Kundenordner und Drive-Revision vor und nach der Verarbeitung, läuft maximal 10 Minuten und entfernt temporäre Container auch auf dem Fehlerpfad bestmöglich. Bei Prozessabbruch greift der Container-Inaktivitätsablauf.
 
 ## Ablauf und Bindung
 
@@ -13,12 +17,12 @@ Stand 02.11.2026: Der neue Ablauf verarbeitet MP4-Bytefolgen über die vorhanden
 7. Ein zweiter Modellaufruf gleicht den Entwurf gegen genau dieselben Frames und dasselbe Transkript ab. Er soll unbelegte Detailbezeichnungen und Wirkbehauptungen entfernen. Auch dieser Abgleich ist eine Modellbewertung von Stichproben, keine Garantie der Richtigkeit und keine lückenlose Inhaltsprüfung. Unvollständige Antworten, Refusals, falsche Felder, Steuerzeichen und übergroße Ergebnisse werden verworfen.
 8. Bei erfolgreichem Abschluss wird ausschließlich der für diesen Test angelegte temporäre Container entfernt; dessen ID und Löschbestätigung werden geprüft. Der Kunden-Test liest anschließend den Drive-Dateistand erneut und akzeptiert nur die identische verfügbare Revision. Nach früheren Fehlern greift bisher der Container-Inaktivitätsablauf. n8n speichert keine erfolgreichen, fehlgeschlagenen oder manuellen Ausführungsdaten und keine Zwischenstände. OpenAI-Antworten werden mit `store:false` angefordert; dies ist keine Aussage über weitergehende Anbieter-Aufbewahrungsregeln.
 
-## Grenzen vor Produktivbetrieb
+## Umfang und Grenzen
 
-- MP4 mit SHA-256, bis 24 MB, höchstens 60 Sekunden, ein Videostream, höchstens ein Audiostream, Seitenlänge bis 4096 Pixel. Der normale Dashboard-Upload kann größere Dateien aufnehmen; diese Grenze betrifft ausschließlich den neuen Analysetest.
+- MP4 mit SHA-256, bis 24 MB, höchstens 60 Sekunden, ein Videostream, höchstens ein Audiostream, Seitenlänge bis 4096 Pixel. Der normale Dashboard-Upload kann größere Dateien aufnehmen; diese Grenze betrifft ausschließlich die automatische Videoanalyse.
 - Höchstens 21 gleichmäßig verteilte Frames. Das ist Inhaltsmaterial für Beschreibungen, keine lückenlose Sicherheits- oder Portalprüfung.
-- Noch kein authentifizierter Video-Webhook, keine Video-Reservierung/Rate-Limits in Supabase, keine automatische Übernahme ins Dashboard. Der Dateistand wird im manuellen Ablauf vor und nach der Analyse geprüft; die spätere Speicherung benötigt zusätzlich dieselbe Eigentümer-/Lease-Bindung wie die Fotoerkennung.
-- Noch kein freigegebener Beitragstext, keine Prüfung eines finalen Posts gegen sämtliche Videoinhalte und keine Portalveröffentlichung. `can_publish:false`, `manual_probe_only:true` und `content_comparison:model_checked_sampled_evidence` beschreiben den begrenzten Testumfang.
+- Der Produktionsweg speichert Beschreibung, Beobachtungen, OCR, getrennte Zusammenfassung der gesprochenen Aussagen, Rohtranskript und Belegbindung. `source_text` wird serverseitig abgeleitet; fremde Quellen oder Clienttexte können das Ergebnis nicht ersetzen.
+- Noch kein freigegebener Beitragstext, keine Prüfung eines finalen Posts gegen sämtliche Videoinhalte und keine Portalveröffentlichung. `can_publish:false`, `requires_confirmation:true` und `content_comparison:model_checked_sampled_evidence` beschreiben den begrenzten Analyseumfang. `manual_probe_only:true` gilt nur für den getrennten Testworkflow.
 - Der Nutzer hat die Übertragung der bereits hochgeladenen MP4 einschließlich Bild-/Tonderivaten an die bestehende OpenAI-Anbindung ausdrücklich freigegeben. Nur diese ausgewählte Datei wurde im separaten privaten Test verwendet. Der synthetische Test enthält weiterhin ausschließlich selbst erzeugte Formen, einen festen Schriftzug und künstliche Sprache, keinen Drive-Zugriff und keine Kundendatei-ID.
 
 ## Reproduktion
@@ -35,6 +39,12 @@ Der Fixture-Generator benötigt ffmpeg mit libflite, libx264 und drawtext. Er ve
 
 Die ursprüngliche Kontaktblatt-Erkennung übersah kleine lesbare Einblendungen im Kundenvideo. Die größeren Einzelbilder erkannten diese Texte im erneuten Durchlauf. Ein ungenaues Beschreibungsdetail war Anlass für den zusätzlichen Entwurfsabgleich. Deshalb ist ein technischer Erfolg ausdrücklich keine inhaltliche Abnahme jeder Modellbehauptung.
 
-Manueller synthetischer n8n-Test: `Ga4qjgjbpmCoUyGA`, **SMA – Synthetischer Videoanalyse-Test**, 33 Nodes. Separater privater Kundentest: 36 Nodes. Beide unveröffentlicht. 20 relevante Node-Tests bestehen; die lokale ffmpeg-Ausführung mit und ohne Ton wurde zusätzlich geprüft. Cloud-Nachweise und ihr genauer Umfang stehen unter `validation/`; Kunden-IDs, Rohtranskripte und Kundenvideobilder werden dort nicht abgelegt.
+Manueller synthetischer n8n-Test: `Ga4qjgjbpmCoUyGA`, **SMA – Synthetischer Videoanalyse-Test**, 33 Nodes. Separater privater Kundentest: 36 Nodes. Beide unveröffentlicht. 227 automatisierte Node-Tests bestehen; die lokale ffmpeg-Ausführung mit und ohne Ton wurde zusätzlich geprüft. Cloud-Nachweise und ihr genauer Umfang stehen unter `validation/`; Kunden-IDs, Rohtranskripte und Kundenvideobilder werden dort nicht abgelegt.
 
 Offizielle Grundlagen: [Code Interpreter](https://developers.openai.com/api/docs/guides/tools-code-interpreter), [Container erstellen](https://developers.openai.com/api/reference/resources/containers/methods/create), [Container-Dateien](https://developers.openai.com/api/reference/resources/containers/subresources/files/methods/create), [Transkription](https://developers.openai.com/api/docs/guides/speech-to-text).
+
+## Integrationsnachweis
+
+Der synthetische Sprachclip wurde mit dem produktiven Ergebnisschema erneut in n8n ausgeführt: neun hashgeprüfte Einzelbilder, korrektes Transkript, getrennte Tonzusammenfassung, zweiter Inhaltsabgleich und bestätigte Container-Entfernung. Das tatsächliche Cloud-Ergebnis wurde anschließend durch den produktiven Supabase-Reservierungs-/Abschluss-/Leseweg unter einer ausschließlich synthetischen Testidentität gespeichert und wieder abgerufen; alle Testdaten wurden zurückgerollt. Der öffentliche Webhook weist eine Anfrage ohne Anmeldung mit `AUTH_REQUIRED` ab. Die exportierte n8n-Konfiguration stimmt mit den generierten Parametern und Verbindungen überein.
+
+`tests/publication-video-magic.sql` prüft ausschließlich künstliche Identitäten/Dateien, Rollenrechte, Fremdzugriff, Revision, Cache, Rate-Limit, Ergebnisgrenzen, Audio-Konsistenz und Lease-Replay. Die Browserlogik prüft expliziten Videostart, Wiederladen, Inhalts-/Textübernahme, exakte Dateizuordnung und Erhalt eigener Änderungen. Ein vollständiger Klickdurchlauf im echten angemeldeten Kundenbrowser ist damit noch nicht behauptet.
