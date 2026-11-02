@@ -19,10 +19,12 @@ Validierung: 137 Node-Tests erfolgreich; SQL-Tests für Normalisierung, Ähnlich
 - **Portalübergabe:** Konkreten Portal-Endpunkt und aktuellen Kontoumfang prüfen; alle dafür erforderlichen Medienparameter, Textfelder, Berechtigungen, Sichtbarkeitsentscheidungen und Kennzeichnungen übergeben. Fehlende notwendige Prüfungen sperren den neuen Freigabeweg. Upload und erfolgreiche Verarbeitung/Veröffentlichung sind getrennte Zustände.
 - **Abnahme:** Den vollständigen Weg mit den vorhandenen Anbindungen prüfen. Fehler, veränderte Dateien, Zeitüberschreitungen und Wiederholungen dürfen weder ungeprüfte Freigaben noch Doppelpostings erzeugen.
 
-Die Kundenversion ist noch nicht vollständig abgenommen: Magic Effect muss mit der Fotoquelle verbunden werden; OCR/Transkript/Inhaltsabgleich und der endgültige Übergang zu den Portal-Publishern müssen durchgängig nachgewiesen sein. Die getrennten lokalen Worker-Module sind dafür keine Live-Fertigmeldung. Alle neuen Vorbereitungsergebnisse bleiben bis zur vollständigen Freigabe `can_publish:false`.
+Die Kundenversion ist noch nicht vollständig abgenommen: Magic Effect ist mit der Fotoquelle verbunden; sein vollständiger Kundendurchlauf muss noch bestätigt werden; OCR/Transkript/Inhaltsabgleich und der endgültige Übergang zu den Portal-Publishern müssen durchgängig nachgewiesen sein. Die getrennten lokalen Worker-Module sind dafür keine Live-Fertigmeldung. Alle neuen Vorbereitungsergebnisse bleiben bis zur vollständigen Freigabe `can_publish:false`.
 
 Die dokumentierten Übertragungsanforderungen sind verbindlich. Eine vollständige Offenlegung oder garantierte Bevorzugung durch interne Empfehlungsalgorithmen wird nicht behauptet.
 
 ## Rückkehr zur bisherigen Textvorbereitung
 
 Zuerst die vorherige n8n-Version `a239be17-7071-4e88-9de2-355e818b7e10` wiederherstellen. Bei Bedarf danach ausschließlich die beiden Caption-Trigger deaktivieren und die Definitionen von `publication_preview_request_v1` aus `publication-files.sql` sowie `sma_publication_preview_finish_v1` aus `publication-preview.sql` wiederherstellen. Die private Verlaufstabelle behalten; keine gespeicherten Texte löschen. Die bisherigen SQL-Dateien nicht pauschal erneut über alle bestehenden Funktionen ausführen.
+
+Fotoerkennung, Grenzen und Live-Version: [Magic Effect](MAGIC_EFFECT.md).

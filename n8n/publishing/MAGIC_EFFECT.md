@@ -1,0 +1,17 @@
+# Magic Effect: tatsächliche Fotos im vorhandenen n8n erkennen
+
+Die Fotoerkennung läuft mit den bestehenden Google-Drive-, OpenAI- und Supabase-Anbindungen. Ein separater Server oder neuer Anbieter ist dafür nicht erforderlich. Verwendet wird weiterhin `gpt-5`; die Bildanalyse verursacht reguläre Nutzung beim bestehenden OpenAI-Konto, keinen zusätzlichen Tarifabschluss.
+
+Der Kundenbereich lädt zunächst ein vorhandenes Ergebnis für die ausgewählte Datei. Für ein neues Foto mit verifizierbarer Dateirevision und leerer Beschreibung startet die Erkennung automatisch. Der Ablauf prüft Benutzer/Kunde und Kundenordner, liest aktuelle Drive-Metadaten, lädt die tatsächlichen Bildbytes, prüft Prüfsumme und Dateisignatur und übergibt das Foto als Bild an die Responses API. Dateiname und Marketingbeschreibung dienen nicht als Motivquelle. Vor dem Speichern wird der Dateistand erneut abgefragt.
+
+Das Ergebnis enthält Motivbeschreibung, sichtbare Beobachtungen, lesbare Aufschriften und Unsicherheiten. Es wird an Kunde, Datei, Dateirevision und Analyseversion gebunden. Ein vorhandener eigener Beschreibungstext bleibt erhalten; „Erkannten Inhalt übernehmen“ ersetzt ihn nur auf ausdrücklichen Klick. Ein unklar erkanntes Motiv wird nicht automatisch als Inhaltsgrundlage übernommen. Bei Abmeldung verschwinden Erkennung und Inhaltsfelder.
+
+Die Erkennung ist ein prüfbarer Entwurf (`requires_confirmation:true`, `can_publish:false`). Sie bestätigt keine Materialeigenschaften, Echtheit, Shop-Artikelidentität, Preise oder Verfügbarkeit. Ein Etikett ist eine sichtbare Aufschrift, kein verifizierter Produktdatensatz. Text in einem Foto wird als untrusted Daten behandelt. Die bestehende Sightengine-Sicherheitsprüfung und die abschließende Portalprüfung bleiben separate Schritte.
+
+Aktiver n8n-Workflow: `dheEkIi8KUNqHpmq`; veröffentlichte Version `fef38092-ae24-4046-bbd7-5a8d3fb4365a`; 21 Nodes. Migration: `publication_magic_effect_v1`. Der Export stimmt mit der geprüften Definition überein; n8n lässt lediglich den Standardwert `outputPropertyName=data` im Downloadschritt weg. Keine angehefteten Testdaten. Erfolgreiche, fehlgeschlagene und manuelle Ausführungsdaten sowie Zwischenstände werden nicht gespeichert. Ausführungszeitlimit: 210 Sekunden; DB-Lease: vier Minuten. Pro Kunde höchstens sechs neue Erkennungen pro Stunde, mindestens 30 Sekunden Abstand; gleicher unveränderter Dateistand nutzt das gespeicherte Ergebnis.
+
+Unterstützt werden derzeit statische JPEG-, PNG- und WebP-Fotos bis 12 MB. Animierte PNG/WebP und Videos werden nicht als Fotos analysiert. Video-Frames, Tontranskript, vollständige inhaltliche Übereinstimmung und die endgültigen Publisher-Adapter sind damit nicht erledigt.
+
+Validierung: 147 Node-Tests bestanden, darunter echte Bytebindung, Dateinamenunabhängigkeit, fehlerhafte/abgebrochene Modellantworten, automatische Übernahme, Schutz eigener Eingaben, falsche Dateirevision und Abmeldung. SQL-Rollbacktests prüfen Benutzer-/Dateizuordnung, Prüfsumme, Lease, Wiederholung, Cache, Rate-Limit und serverseitig zusammengesetzte Inhaltsgrundlage. Keine zusätzlichen Sicherheitswarnungen. Ein echter Durchlauf vom angemeldeten Kundenbereich über Drive und OpenAI bis zum gespeicherten Ergebnis steht noch aus: Die SMA-Anmeldung in der Testsitzung ist abgelaufen. Die technischen Tests ersetzen diesen Nachweis nicht.
+
+Offizielle API-Grundlage: [Bildanalyse](https://developers.openai.com/api/docs/guides/images-vision), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
