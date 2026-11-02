@@ -1,0 +1,1054 @@
+{
+  "name": "SMA – Geräte-Upload – Entwürfe V1",
+  "nodes": [
+    {
+      "id": "7cdca1d0-0a40-4c88-8b50-3b30f68efc20",
+      "name": "Geräte-Upload",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-publication-device-upload-v1",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://sma-automation.com"
+        }
+      },
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "2a1432c0-e338-4329-a6a2-4c337b7fa270"
+    },
+    {
+      "id": "455fd0b0-af89-4336-b1a3-eb33409e256d",
+      "name": "Anfrage prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nreturn [{json:uploadRequest($input.first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "7ada2b17-9a15-4ff3-a208-59070ec906b1",
+      "name": "Anfrage gültig?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c7a13e46-8f36-4805-ae34-09c6b6ed6f33",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "c86e6bc4-ea90-4eab-b801-8f5113866280",
+      "name": "Upload reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_upload_v1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth }}"
+            }
+          ]
+        },
+        "jsonBody": "={{ {p_action:$json.action,p_input:$json.input} }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "94ecd101-619d-42ba-bdd5-648804d6c2b9",
+      "name": "Upload verfügbar?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7800cd84-6881-44bd-a96d-2c58cf56f531",
+              "leftValue": "={{ $json.ok === true && $json.status !== \"completed\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "1ee2a3f0-795d-4ad7-bec5-8ff6f9e7c30c",
+      "name": "Sitzung initialisieren?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ca169452-6557-4792-acc2-157c13a5b599",
+              "leftValue": "={{ $json.initialize === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "84adb6a0-919c-4a4e-9ab8-6ffdbd91c022",
+      "name": "Fertigstellen?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1b0595b0-2be8-4728-92f4-9d2783b5132b",
+              "leftValue": "={{ $(\"Anfrage prüfen\").first().json.action === \"finish\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "id": "29991c5d-d9cd-462e-8fec-75a8574d2ee3",
+      "name": "Kundenordner zuordnen",
+      "type": "n8n-nodes-base.dataTable",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $(\"Upload reservieren\").first().json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $(\"Upload reservieren\").first().json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "typeVersion": 1,
+      "position": [
+        1540,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "e458ea78-8c3c-4ad9-a390-a912361f7ce6",
+      "name": "Entwurfsordner prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nreturn [{json:uploadFolder($input.all().map(x=>x.json),$(\"Upload reservieren\").first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "09dd1162-5d32-4f62-b3e5-88a28cdb687a",
+      "name": "Neuer Upload?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c2076bb8-01c3-47f2-96e8-3cdefafb04fd",
+              "leftValue": "={{ $(\"Upload reservieren\").first().json.initialize === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "id": "cc443981-eec4-4230-b66c-337b675a9a57",
+      "name": "Zielordner lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Entwurfsordner prüfen\").first().json.folder_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,trashed,capabilities(canAddChildren)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2200,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ee078eb9-4a5b-4f09-8eda-932e40ee36d9",
+      "name": "Schreibziel bestätigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const f=$input.first().json;if(f.id!==$(\"Entwurfsordner prüfen\").first().json.folder_id||f.mimeType!==\"application/vnd.google-apps.folder\"||f.trashed!==false||f.capabilities?.canAddChildren!==true)throw Error(\"FOLDER_UNAVAILABLE\");return [{json:{ok:true}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ac1deb7a-1085-4713-b61c-4c72cc939111",
+      "name": "Datei-ID reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files/generateIds",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "count",
+              "value": "1"
+            },
+            {
+              "name": "space",
+              "value": "drive"
+            },
+            {
+              "name": "type",
+              "value": "files"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "aaf49444-8af3-43b0-afa0-f7fa1b289cac",
+      "name": "Datei-ID prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const ids=$input.first().json.ids;if(!Array.isArray(ids)||ids.length!==1||!/^[A-Za-z0-9_-]{10,200}$/.test(ids[0]))throw Error(\"UPLOAD_UNAVAILABLE\");return [{json:{drive_file_id:ids[0]}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2860,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6a168395-bd3b-4faa-8e19-29d59a3b9570",
+      "name": "Übertragung vorbereiten",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Upload-Content-Type",
+              "value": "={{ $(\"Upload reservieren\").first().json.mime_type }}"
+            },
+            {
+              "name": "X-Upload-Content-Length",
+              "value": "={{ String($(\"Upload reservieren\").first().json.size_bytes) }}"
+            },
+            {
+              "name": "Origin",
+              "value": "https://sma-automation.com"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {id:$json.drive_file_id,name:$(\"Upload reservieren\").first().json.name,mimeType:$(\"Upload reservieren\").first().json.mime_type,parents:[$(\"Entwurfsordner prüfen\").first().json.folder_id],appProperties:{sma_upload_id:$(\"Upload reservieren\").first().json.upload_id,sma_draft:\"true\"} } }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a182963e-69d5-4397-9c44-977081067a7f",
+      "name": "Sitzung binden",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nconst c=$(\"Upload reservieren\").first().json;return [{json:{p_id:c.upload_id,p_lease_id:c.lease_id,p_drive_file_id:$(\"Datei-ID prüfen\").first().json.drive_file_id,p_folder_id:$(\"Entwurfsordner prüfen\").first().json.folder_id,p_upload_url:uploadSession($input.first().json)}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3300,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "f9621941-62e4-444c-b260-7e44727adf2d",
+      "name": "Uploadsitzung speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_upload_bind_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        3520,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "935446e5-4e0b-43d1-ba90-882d4761979c",
+      "name": "Hochgeladene Datei prüfen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Upload reservieren\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,appProperties,imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2200,
+        300
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "aded95bf-3155-4abf-835b-39bc4562784b",
+      "name": "Datei zuordnen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nconst c=$(\"Upload reservieren\").first().json;return [{json:{p_id:c.upload_id,p_file:uploadedFile($input.first().json,c,$(\"Entwurfsordner prüfen\").first().json.folder_id)}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5e4b1034-ca6e-4b56-9c4d-2c7c428e9ff9",
+      "name": "Upload abschließen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_upload_finish_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "2a91148b-0582-4670-8e6b-515b387e6fd8",
+      "name": "Uploadfehler",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const msg=String($input.first().json.message||$input.first().json.error?.message||'');return [{json:{ok:false,code:msg.includes('FOLDER_UNAVAILABLE')?'FOLDER_UNAVAILABLE':msg.includes('UPLOAD_INCOMPLETE')?'UPLOAD_INCOMPLETE':'UPLOAD_UNAVAILABLE'}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3520,
+        500
+      ]
+    },
+    {
+      "id": "03e73c4d-2944-49f4-a21f-1874728de62b",
+      "name": "Sichere Uploadantwort",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nreturn [{json:uploadAnswer($input.first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3740,
+        200
+      ]
+    },
+    {
+      "id": "93fbd882-65a9-4780-a79c-c5199b8cef45",
+      "name": "Uploadantwort",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://sma-automation.com"
+              },
+              {
+                "name": "Vary",
+                "value": "Origin"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.5,
+      "position": [
+        3960,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Geräte-Upload": {
+      "main": [
+        [
+          {
+            "node": "Anfrage prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfrage prüfen": {
+      "main": [
+        [
+          {
+            "node": "Anfrage gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfrage gültig?": {
+      "main": [
+        [
+          {
+            "node": "Upload reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload reservieren": {
+      "main": [
+        [
+          {
+            "node": "Upload verfügbar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload verfügbar?": {
+      "main": [
+        [
+          {
+            "node": "Sitzung initialisieren?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sitzung initialisieren?": {
+      "main": [
+        [
+          {
+            "node": "Kundenordner zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fertigstellen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fertigstellen?": {
+      "main": [
+        [
+          {
+            "node": "Kundenordner zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenordner zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Entwurfsordner prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entwurfsordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Neuer Upload?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neuer Upload?": {
+      "main": [
+        [
+          {
+            "node": "Zielordner lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hochgeladene Datei prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zielordner lesen": {
+      "main": [
+        [
+          {
+            "node": "Schreibziel bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schreibziel bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Datei-ID reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei-ID reservieren": {
+      "main": [
+        [
+          {
+            "node": "Datei-ID prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei-ID prüfen": {
+      "main": [
+        [
+          {
+            "node": "Übertragung vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übertragung vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Sitzung binden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sitzung binden": {
+      "main": [
+        [
+          {
+            "node": "Uploadsitzung speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uploadsitzung speichern": {
+      "main": [
+        [
+          {
+            "node": "Sichere Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hochgeladene Datei prüfen": {
+      "main": [
+        [
+          {
+            "node": "Datei zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Upload abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload abschließen": {
+      "main": [
+        [
+          {
+            "node": "Sichere Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uploadfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uploadfehler": {
+      "main": [
+        [
+          {
+            "node": "Sichere Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sichere Uploadantwort": {
+      "main": [
+        [
+          {
+            "node": "Uploadantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 120,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "active": false
+}
