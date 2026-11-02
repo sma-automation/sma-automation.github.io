@@ -1,0 +1,119 @@
+{
+  "validated_on": "2026-11-02",
+  "schema": "sma-video-evidence-v2",
+  "scope": "manual_unpublished_integration_probe",
+  "workflow_nodes": 33,
+  "source_sha256": "e22947fb18432bca8c56cb306897e6f97596534ae86fa05fd082d6b6905595bd",
+  "manifest": {
+    "schema": "sma-video-evidence-v2",
+    "sha256": "e22947fb18432bca8c56cb306897e6f97596534ae86fa05fd082d6b6905595bd",
+    "size_bytes": 46058,
+    "duration_ms": 8000,
+    "width": 640,
+    "height": 360,
+    "positions_ms": [
+      0,
+      981,
+      1962,
+      2944,
+      3925,
+      4906,
+      5887,
+      6869,
+      7850
+    ],
+    "sampling": "representative_frames_not_full_moderation",
+    "audio_status": "extracted",
+    "frames": [
+      {
+        "name": "frame-000.jpg",
+        "position_ms": 0,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7423,
+        "sha256": "78c22bc3202a127aa8cd1f208328da62b1d36a20f3c292ba976268d43da45e5e"
+      },
+      {
+        "name": "frame-001.jpg",
+        "position_ms": 981,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7594,
+        "sha256": "a22a8168aaff99c880952b179b6eaa431eca80d842938965a216b3906111e633"
+      },
+      {
+        "name": "frame-002.jpg",
+        "position_ms": 1962,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7287,
+        "sha256": "fa3820438240b579e920c8b36d6bd7c2cc0af6627bc75eaf3667c07c54aceee8"
+      },
+      {
+        "name": "frame-003.jpg",
+        "position_ms": 2944,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7579,
+        "sha256": "93b20e74207583b07b8d6538597aacfb5e9223ffcbb84d0f9d8e304c7352acca"
+      },
+      {
+        "name": "frame-004.jpg",
+        "position_ms": 3925,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7428,
+        "sha256": "14eb32246489af309d5142df277ca660a10d3757a72793e4312690e0c86730fc"
+      },
+      {
+        "name": "frame-005.jpg",
+        "position_ms": 4906,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7577,
+        "sha256": "4d07f621e18b2ff036748b5d1af57e3975406d67e7d7b13652d14c7bd74bb6ae"
+      },
+      {
+        "name": "frame-006.jpg",
+        "position_ms": 5887,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7293,
+        "sha256": "64148f6ce8e8949f5f8c5376ff2e6883ce7e562bf560949b6e021b68d624f5f1"
+      },
+      {
+        "name": "frame-007.jpg",
+        "position_ms": 6869,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7585,
+        "sha256": "026bc9636b1865386f7170050d30761f0e117cb718c9fb97304cecb8e7a94b1a"
+      },
+      {
+        "name": "frame-008.jpg",
+        "position_ms": 7850,
+        "width": 640,
+        "height": 360,
+        "size_bytes": 7434,
+        "sha256": "89b44c95b1a6c674de8e169600ec963fbf566cbbcb69955523790e35b4a2859e"
+      }
+    ],
+    "frames.jpg": {
+      "sha256": "f7e03c91ff0745dd95fa8d20efbd98c9d8e936cf253463d91ead1219fc8b3352",
+      "size_bytes": 61980
+    },
+    "audio.wav": {
+      "sha256": "8330e3fcce2f8a68201ffb7203bbe8d5622554215fe7e0b74f615371bfa7344e",
+      "size_bytes": 256078
+    }
+  },
+  "transcript": "This is a synthetic test, a blue square moves from left to right.",
+  "visible_text": [
+    "SMA SYNTHETIC TEST"
+  ],
+  "scene_recognition_verified": "blue square moving horizontally from left to right",
+  "content_comparison": "model_checked_sampled_evidence",
+  "temporary_container_deleted": true,
+  "execution_data_persistence": false,
+  "can_publish": false
+}

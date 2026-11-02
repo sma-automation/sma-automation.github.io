@@ -1,0 +1,30 @@
+{
+  "validated_on": "2026-11-02",
+  "schema": "sma-video-evidence-v2",
+  "scope": "manual_unpublished_integration_probe",
+  "customer_media_consent": "explicit_video_and_derivatives_to_existing_openai_connection",
+  "customer_ids_and_raw_outputs_in_repository": false,
+  "workflow_nodes": 36,
+  "source_hash_size_and_revision_verified_before_and_after": true,
+  "frames": {
+    "count": 12,
+    "width": 720,
+    "height": 1280,
+    "downloaded_bytes_hash_checked": true,
+    "larger_frames_detected_overlay_text_missed_in_contact_sheet": true
+  },
+  "audio_status": "no_audio_stream",
+  "transcript_empty": true,
+  "content_comparison": "model_checked_sampled_evidence",
+  "visual_spot_check_completed": true,
+  "temporary_container_deleted": true,
+  "execution_data_persistence": false,
+  "dashboard_enabled": false,
+  "can_publish": false,
+  "limitations": [
+    "Sampled frames, not continuous video inspection.",
+    "Model comparison is not guaranteed factual correctness.",
+    "This real fixture does not test speech transcription.",
+    "Authenticated multi-customer job reservation and dashboard integration remain pending."
+  ]
+}

@@ -4,7 +4,7 @@ class Element{constructor(tag='div'){this.tag=tag;this.children=[];this.events={
 const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
 async function boot({portal=null,asset=null,files=[],filesRpc=null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[];let authChange;const win={addEventListener(){}};win.parent=win;
- const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token'}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_magic_v1'?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
+ const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token'}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
@@ -213,6 +213,31 @@ test('a completed device upload uses the selected local video and removes long p
 });
 
 const instagramResult={...result,preview:{...result.preview,drafts:[{...result.preview.drafts[0],platform:'instagram'}]}};
+const supportedVideo={...ownFile,mime_type:'video/mp4',size_bytes:1000,duration_ms:10000,revision:'sha256:'+'a'.repeat(64)+':1'};
+const videoAnalysis={...magicAnalysis,asset_id:supportedVideo.id,asset_revision:supportedVideo.revision,policy_version:'magic-video-2026-11-02.1',result:{...magicAnalysis.result,policy_version:'magic-video-2026-11-02.1',description:'Ein blaues Quadrat bewegt sich von links nach rechts.',source_text:'Automatische Videoerkennung: Ein blaues Quadrat bewegt sich von links nach rechts. Das Video enthält keine Tonspur.',audio_status:'no_audio_stream',content_comparison:'model_checked_sampled_evidence',evidence:{source_sha256:'a'.repeat(64)}}};
+const videoFiles=async a=>a.p_action==='list'?{ok:true,files:[supportedVideo]}:a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'};
+test('new video waits for explicit Magic click, then recognizes, generates and assigns to the exact video',async()=>{
+ let started=false,reads=0;
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:videoFiles,formTracksDom:true,timer:fn=>setImmediate(fn),
+ magicResponse:async()=>({ok:true,analysis:started&&++reads>0?videoAnalysis:{...videoAnalysis,status:'unrecognized',result:null}}),
+ fetchResponse:async url=>{if(url.endsWith('sma-publication-video-magic-effect-v1')){started=true;return {ok:true,analysis:{...videoAnalysis,status:'processing',result:null}};}return instagramResult;}});
+ assert.equal(p.calls.some(c=>c.url),false);assert.equal(p.get('magicText').disabled,false);assert.equal(p.get('recognizePhoto').textContent,'Video erkennen');
+ await p.get('magicText').click();
+ const requests=p.calls.filter(c=>c.url);assert.equal(requests.length,2);assert.match(requests[0].url,/video-magic-effect-v1$/);assert.equal(JSON.parse(requests[1].options.body).source_text,videoAnalysis.result.source_text);
+ assert.equal(JSON.parse(requests[1].options.body).media_kind,'video');assert.equal(p.calls.find(c=>c.p_action==='assign').p_input.asset_revision,supportedVideo.revision);
+ assert.match(p.get('magicSummary').textContent,/keine Tonspur/);assert.equal(p.get('result').hidden,false);
+});
+test('cached video recognition survives reopen without provider call and respects existing customer edits',async()=>{
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:videoFiles,formTracksDom:true,magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
+ assert.equal(p.get('source_text').value,videoAnalysis.result.source_text);assert.equal(p.calls.some(c=>c.url),false);
+ p.get('source_text').value='Eigener Inhalt bleibt stehen.';p.get('previewForm').events.input();await p.get('magicSource').click();assert.equal(p.get('magicReplaceNotice').hidden,false);assert.equal(p.get('source_text').value,'Eigener Inhalt bleibt stehen.');
+});
+test('cached video must match video policy, source hash and comparison result',async()=>{
+ for(const patch of [{policy_version:'magic-photo-2026-11-02.1'},{result:{...videoAnalysis.result,evidence:{source_sha256:'b'.repeat(64)}}},{result:{...videoAnalysis.result,content_comparison:null}}]){
+  const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:videoFiles,formTracksDom:true,magicResponse:async()=>({ok:true,analysis:{...videoAnalysis,...patch}})});
+  assert.equal(p.get('source_text').value,'');assert.equal(p.calls.some(c=>c.url),false);assert.match(p.get('magicStatus').textContent,/kein vollständiges/);
+ }
+});
 const automaticFiles=async a=>a.p_action==='list'?{ok:true,files:[photo]}:a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'};
 const automaticOptions={portal:'instagram',asset:photo.id,filesRpc:automaticFiles,formTracksDom:true,magicResponse:async()=>({ok:true,analysis:magicAnalysis}),fetchResponse:async()=>instagramResult};
 test('one Magic click prepares recognized content without asking for a caption or audience',async()=>{
@@ -259,12 +284,12 @@ test('Magic preserves unsaved customer changes until the explicit replacement ac
  await p.get('magicText').click();await p.get('confirmMagicReplace').click();assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);
  assert.equal(p.calls.filter(c=>c.url).length,1);
 });
-test('video and unsupported photo never start a fake automatic recognition or caption',async()=>{
+test('unsupported video and photo never start automatic recognition or caption',async()=>{
  for(const file of [ownFile,{...photo,mime_type:'image/heic'}]){
   const p=await boot({...automaticOptions,asset:file.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:{ok:true,status:'empty'}});
   assert.equal(p.get('magicSource').disabled,true);assert.equal(p.get('magicText').disabled,true);
   await p.get('magicText').click();assert.equal(p.calls.some(c=>c.url),false);assert.equal(p.get('source_text').value,'');
-  assert.match(p.get('magicTextHint').textContent,file.media_kind==='video'?/Bildfolge und Ton noch nicht verfügbar/:/JPG, PNG oder WebP/);
+  assert.match(p.get('magicTextHint').textContent,file.media_kind==='video'?/MP4 bis 24 MB/:/JPG, PNG oder WebP/);
  }
 });
 test('unclear recognition cannot become an automatic caption',async()=>{
