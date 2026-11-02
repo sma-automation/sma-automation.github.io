@@ -119,7 +119,7 @@ async function loadLatest(){lock(true);try{
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Text für '+selectedAsset.name+' geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
 
-function resetMagic(){magicState=null;$('magicPanel').hidden=!selectedAsset||selectedAsset.media_kind!=='image';$('magicStatus').textContent='';$('magicSummary').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
+function resetMagic(){magicState=null;$('magicPanel').hidden=!selectedAsset||selectedAsset.media_kind!=='image';$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
 function syncMagicButton(){$('recognizePhoto').disabled=busy||!selectedAsset||selectedAsset.media_kind!=='image'||magicState?.status==='processing'||magicState?.status==='completed';$('applyMagic').disabled=busy;}
 function photoStillSelected(file){return selectedAsset?.id===file.id&&selectedAsset?.revision===file.revision;}
 function showMagic(r,file){
@@ -134,7 +134,7 @@ function showMagic(r,file){
   $('magicSummary').textContent=v.description+(v.uncertainties.length?'\nNoch zu prüfen: '+v.uncertainties.join(' '):'');
   const unclear=v.subject_type==='unclear';$('applyMagic').hidden=unclear;
   $('magicStatus').textContent=unclear?'Das Motiv ist nicht sicher erkennbar. Bitte beschreibe es selbst oder verwende ein deutlicheres Foto.':'Foto erkannt. Prüfe die Beschreibung und die lesbaren Aufschriften.';
-  if(!unclear&&!$('source_text').value.trim()){$('source_text').value=v.source_text;$('sourcePanel').open=true;}
+  if(!unclear&&!$('source_text').value.trim()){$('source_text').value=v.source_text;$('sourcePanel').open=true;$('magicStatus').textContent='Foto erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
  }
  syncMagicButton();return true;
 }
@@ -164,7 +164,13 @@ async function recognizePhoto(){
  finally{if(photoStillSelected(file))lock(false);}
 }
 $('recognizePhoto').addEventListener('click',recognizePhoto);
-$('applyMagic').addEventListener('click',()=>{if(busy||magicState?.status!=='completed'||magicState.asset_id!==selectedAsset?.id||magicState.asset_revision!==selectedAsset?.revision||magicState.result?.subject_type==='unclear')return;$('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;attempt=null;$('magicStatus').textContent='Erkannter Inhalt übernommen. Prüfe die Angaben vor dem Erstellen der Portaltexte.';});
+$('applyMagic').addEventListener('click',()=>{
+ if(busy||magicState?.status!=='completed'||magicState.asset_id!==selectedAsset?.id||magicState.asset_revision!==selectedAsset?.revision||magicState.result?.subject_type==='unclear')return;
+ $('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;attempt=null;
+ const message='Erkannter Inhalt übernommen. Prüfe die Beschreibung und klicke anschließend auf „'+$('generate').textContent+'“.';
+ $('magicStatus').textContent=message;$('magicApplied').textContent=message;$('magicApplied').hidden=false;
+ $('source_text').focus({preventScroll:true});$('sourcePanel').scrollIntoView({block:'start'});
+});
 
 $('assetSelect').addEventListener('change',async()=>{if(busy)return;if(dirty){$('assetSelect').value=selectedAsset?.id||'';status('Bitte speichere deine Änderungen zuerst oder lade den letzten gespeicherten Text.',true);return;}const id=$('assetSelect').value;selectedAsset=assets.find(a=>a.id===id)||null;assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;clearDraft();$('assetStatus').textContent=selectedAsset?'Ausgewählt: '+selectedAsset.name:'Allgemeine Textvorlage · ohne Dateizuordnung';syncMedia();await loadLatest();});
 $('refreshFiles').addEventListener('click',async()=>{if(busy)return;if(dirty){status('Bitte speichere zuerst deine Änderungen.',true);return;}lock(true);try{status('Dein Kundenordner wird geprüft …');const auth=await session();const r=await fetch(fileEndpoint,{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});const d=await r.json();if(!r.ok||!d.ok)throw Error(errorText(d));await loadFiles();fileChanged();await loadLatest();}catch(e){status(e.message,true);}finally{lock(false);syncMedia();}});
