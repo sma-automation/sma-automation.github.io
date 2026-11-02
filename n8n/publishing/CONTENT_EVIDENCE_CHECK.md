@@ -1,0 +1,35 @@
+# Erster Abgleich von Medienbelegen und Produktdaten
+
+Stand 2. November 2026. `content-evidence-check.cjs` ergänzt die vorbereiteten OCR-/Sprachmodule um einen deterministischen Preisabgleich und einen gemeinsamen, versionsgebundenen Prüfdatensatz. Der Abgleich läuft lokal ohne Anbieteraufrufe. Er erkennt bestimmte Datenabweichungen; er ist noch kein semantischer Vergleich des gesamten Beitrags. Weder Dashboard noch n8n, Datenbank oder Publisher sind daran angeschlossen.
+
+## Interner Aufruf
+
+`compareEvidence({context, preview, product, evidence, approved_profiles}, nowMs)` erhält ausschließlich vom vertrauenswürdigen Serverworker zusammengestellte Snapshots. Es gibt keinen öffentlichen Endpunkt. Gleiche IDs sind keine Authentifizierung: Vor dem Aufruf muss der Worker Kunde, berechtigte Datei, aktuelle Textzuordnung und berechtigtes Produkt tatsächlich aus den bestehenden Quellen lesen. Ein Browser darf keine Produktpreise, Sprachbelege oder freigegebenen Modellprofile vorgeben.
+
+`context` bindet `customer_id`, `asset_id`, `asset_revision`, `content_sha256`, `size_bytes`, `media_kind`, `portal`, `text_revision`, `product_id`, `product_revision` und `language`. IDs und Revisionen werden als nicht leere Strings übergeben; Bytegröße als positive sichere Ganzzahl. Unterstützt sind die vorhandenen vier Portale und Deutsch/Englisch. Bei Video ist zusätzlich `audio_present` als bekannte Tatsache oder unbekannt nötig.
+
+`preview` enthält dieselben Kunden-, Datei-, Portal- und Textrevisionen plus `title` und `body`. Der Aufrufer muss den gesamten später zu sendenden Text einschließlich eventueller Bildtexte separat berücksichtigen; eine gekürzte Beschreibung gilt nicht als vollständiger Beitrag.
+
+`product` enthält `customer_id`, `id`, `revision`, `verified_at`, `currency` (EUR/USD/GBP), `price_minor` (Cent beziehungsweise entsprechende Untereinheit als sichere Ganzzahl oder null) und `available` (true/false/null). `available` muss aus den tatsächlich maßgeblichen Produkt-/Bestandsregeln stammen; ein vorhandenes Bild oder ein Shop-Link beweist keine Lieferbarkeit. `verified_at` ist der echte letzte erfolgreiche Produktabruf, nicht die aktuelle Uhrzeit beim Zusammenstellen eines alten Datensatzes. Nach 15 Minuten oder bei einem Zeitpunkt in der Zukunft fordert der Abgleich eine Aktualisierung und vergleicht keine Preise gegen den veralteten Snapshot. Die Ausgabe nennt `facts_valid_until` oder null. Diese Frist ist eine vorläufige technische Obergrenze, keine Garantie gegen zwischenzeitliche Änderungen.
+
+`evidence` enthält maximal einen Bildtext- und einen Sprachbeleg, jeweils in einem Envelope mit Kunden-ID, Datei-ID und Dateiversion. `result` ist das echte Ergebnis aus `recognizeImage` beziehungsweise `transcribe_bytes`. Inhaltssumme und Bytegröße müssen zur aktuellen Datei passen. `approved_profiles` ist eine serverseitige Liste ausdrücklich erlaubter `model_profile_sha256` pro Schema. Ein synthetischer Testhash ist keine Freigabe eines realen Modells. Die tatsächlichen Modelle müssen vor Kundenbetrieb beurteilt und festgelegt werden. Bei abweichendem Modell-/Dateistand oder manipuliertem zusammengefasstem Text wird der Datensatz abgewiesen.
+
+Das Modul rekonstruiert OCR-Text aus Wörtern beziehungsweise Sprachtext aus den Segmenten und vergleicht ihn mit dem übergebenen Gesamtergebnis. Zeitmarken, Sprache und grundlegende Ergebniskennungen müssen passen. Dies ist eine zusätzliche Vertragsprüfung, kein unabhängiger Modellnachweis und kein Ersatz für die Prüfung des authentifizierten Auftragsabschlusses.
+
+## Tatsächlicher Umfang
+
+Erkannt werden ausdrücklich markierte Geldbeträge mit EUR, USD, GBP oder €. Unterstützt sind deutsche und englische Zahlenformate, etwa `1.299,95 €` beziehungsweise `USD 1,299.95`. Die Umwandlung erfolgt in ganzzahlige Untereinheiten ohne gerundete Fließkommapreise. Uneindeutige Zahlen, negative Beträge oder nicht unterstützte Gruppierung werden als offen markiert. Andere Währungssymbole, ausgeschriebene Zahlen, Prozentangaben, Spannen und andere Schreibweisen sind nicht vollständig abgedeckt. Eine sprachliche Aussage wie „neunzehn Euro“ wird von diesem ersten Abgleich nicht als Preis erkannt.
+
+Eine andere erkannte Zahl oder Währung ergibt `PRICE_DIFFERS_FROM_PRODUCT`, mit Quelle Portal/OCR/Sprache. Das beweist nur, dass die erkannte Preisangabe vom aktuellen Produkt-Snapshot abweicht: Altpreise, Varianten, Versand und Mengenrabatte benötigen Kontext. Auch passende Preise ergeben deshalb `PRICE_CONTEXT_REQUIRES_REVIEW`. Unsicherer OCR-Text und jedes Transkript bleiben prüfbedürftig. Aus unsicherem OCR wird kein verbindlicher Preisfehler abgeleitet.
+
+Frische Produktdaten mit `available:false` erzeugen einen konkreten Verfügbarkeitshinweis. Unbekannte Verfügbarkeit bleibt unbekannt; veraltete Daten werden nicht als aktuelle Nichtverfügbarkeit behauptet. Fehlende OCR, fehlendes Transkript bei bekannter Tonspur und unbekannter Audiostatus werden gesondert genannt. Leere Erkennung ist kein Nachweis fehlenden Inhalts. Video-Bildinhalt bleibt ausdrücklich offen, da eine Bild-OCR noch keine Videoanalyse ersetzt.
+
+Alle Ergebnisse bleiben `outcome:needs_review`, `semantic_alignment:pending`, `can_publish:false`. Das Modul bestätigt weder die Produktaussagen noch Bild-/Produktidentität, Rechte, Musik, Werbekennzeichnungen oder Zielkonten. Es führt keine automatische Korrektur aus und erfindet keine fehlenden Daten. Promptanweisungen innerhalb von Bildtext oder Sprache bleiben gewöhnliche Referenzdaten.
+
+Die Ausgabe bindet Kunde, Datei, Dateiinhalt, Textrevision, Portal, Produktrevision, Produktfakten, Sprache und verwendete Quellen über `input_sha256`. Jede Text-/Produktänderung verändert die Kennung. Sie ist kein Berechtigungsnachweis und keine dauerhaft gültige Freigabe. Zeitabhängige Gültigkeit und weiterhin erlaubte Modellprofile sind vor jeder späteren Nutzung erneut serverseitig zu prüfen. Der Aufrufer darf Quellen nicht ungefiltert in Ausführungslogs schreiben.
+
+## Tests und nächster Anschluss
+
+`node --test tests/publication-content-evidence.test.cjs` prüft unterschiedliche Preise/Währungen, Dezimal- und Tausenderformate, fremde Kunden, alte Datei-/Text-/Produktrevisionen, unbekannte Modelle, manipulierten Text, fehlende Quellen, veraltete Daten, unsichere Wörter, Segmentzeiten und geänderte Eingabekennungen. Diese Fälle verwenden synthetische, ausdrücklich lokale Datensätze. Sie belegen keinen Abgleich mit der live verbundenen Produktdatenbank.
+
+Für den nächsten Schritt müssen die tatsächlichen Datei-, Text- und Produktdatensätze im Worker abgerufen und mit Auftrag und Modellergebnissen zusammengeführt werden. Anschließend folgt der semantische Aussagenabgleich: Bezieht sich die Aussage wirklich auf dieses Produkt und diese Variante? Sind Wirkungen, Preiszusätze, Mengen, Lieferzusagen und Beschreibungen belegt? Dafür ist ein eigener bewerteter lokaler Modell-/Prüfweg oder ein vorhandener ausdrücklich autorisierter Dienst nötig. Dieser erste Abgleich richtet keinen solchen Dienst ein und ruft das bestehende Textmodell nicht zusätzlich auf.

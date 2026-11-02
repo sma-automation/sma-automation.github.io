@@ -1,6 +1,6 @@
 # Lokale Spracherkennung für die Serverübernahme
 
-Stand 2. November 2026. `speech_transcription.py` ergänzt die vorbereiteten Medienmodule um ein lokal ausführbares Transkript mit Zeitmarken. Die Verarbeitung wurde tatsächlich mit einem lokalen Whisper-Modell und einem elfsekündigen öffentlichen englischen Sprachbeispiel ausgeführt. Das ist ein Funktionsnachweis, keine Qualitätsmessung auf Kundenvideos. Deutsch ist als feste Eingabesprache vorgesehen, aber noch nicht mit einem deutschen Sprachbeispiel getestet. Ein Live-Anschluss an SMA besteht noch nicht.
+Stand 2. November 2026. `speech_transcription.py` ergänzt die vorbereiteten Medienmodule um ein lokal ausführbares Transkript mit Zeitmarken. Die Verarbeitung wurde tatsächlich mit einem lokalen Whisper-Modell und einem elfsekündigen öffentlichen englischen Sprachbeispiel ausgeführt. Das ist ein Funktionsnachweis, keine Qualitätsmessung auf Kundenvideos. Zusätzlich wurde ein 2,2-sekündiges deutsches Aussprachebeispiel korrekt erkannt. Auch dieser kurze Test ist keine Qualitätsmessung für deutsche Kundenvideos. Ein Live-Anschluss an SMA besteht noch nicht.
 
 ## Ablauf und Aufruf
 
@@ -49,8 +49,12 @@ SMA_SPEECH_TEST_WAV=/path/to/jfk-11000ms.wav \
 python tests/publication_speech_test.py -v
 ```
 
-Der echte Modelltest benötigt die öffentliche JFK-Testdatei aus dem offiziellen OpenAI-Whisper-Repository, lokal in Mono-PCM-WAV mit 16 kHz umgewandelt. Der Test lädt nichts herunter. Die vier Python-Tests laufen auch über `tests/publication-speech.test.cjs`; ohne Integrationsschalter werden die entsprechenden System-/Modellfälle ausdrücklich übersprungen. Der isolierte Testlauf prüfte echte Transkription, Segmentdaten, Inhaltskennung, Modelländerung, fehlende Modelle, tatsächliche WAV-Dekodierung, beschädigte Dateien, Dauergrenze und das sichere CLI-Fehlerformat. Kein Kundenmedium wurde verwendet.
+Der echte Modelltest benötigt die öffentliche JFK-Testdatei aus dem offiziellen OpenAI-Whisper-Repository, lokal in Mono-PCM-WAV mit 16 kHz umgewandelt. Der Test lädt nichts herunter. Die fünf Python-Tests laufen auch über `tests/publication-speech.test.cjs`; ohne Integrationsschalter werden die entsprechenden System-/Modellfälle ausdrücklich übersprungen. Der isolierte Testlauf prüfte echte Transkription, Segmentdaten, Inhaltskennung, Modelländerung, fehlende Modelle, tatsächliche WAV-Dekodierung, beschädigte Dateien, Dauergrenze und das sichere CLI-Fehlerformat. Kein Kundenmedium wurde verwendet.
 
 Weiter offen sind Qualitätsmessung einschließlich Deutsch, verbindliche Modellauswahl durch den Betreiber, der Live-Transport mit Reservierung/Dateiversion/Mandantentrennung sowie Speicherung/Löschung und Anzeige. Danach folgt der semantische Abgleich mit OCR, berechtigten aktuellen Produktdaten und dem bearbeiteten Portaltext. Der Worker muss vor Abschluss erneut den tatsächlichen Drive-Stand und die Kontozuordnung prüfen. Weder ein Transkript noch die vorbereitete Bild-OCR gibt eine Veröffentlichung frei. Bestehende n8n-Workflows, Datenbank und Publisher wurden für diesen Baustein nicht verändert.
 
 Primärquellen: https://github.com/SYSTRAN/faster-whisper (lokale Modelle, Generator), https://pypi.org/project/faster-whisper/1.2.1/ (getestete Paketversion), https://huggingface.co/Systran/faster-whisper-tiny (Testmodell), https://github.com/openai/whisper/blob/main/tests/jfk.flac (öffentliche Testquelle), https://www.ffmpeg.org/ffprobe.html (Stream-/Containerdaten).
+
+## Deutscher Funktionsnachweis
+
+Der zusätzliche Integrationstest verwendet „De-guten Morgen.ogg“ von Jeuwre, Wikimedia Commons, CC BY-SA 4.0: https://commons.wikimedia.org/wiki/File:De-guten_Morgen.ogg, Lizenz https://creativecommons.org/licenses/by-sa/4.0/. Für den Test wurde die Datei lokal in Mono-PCM-WAV mit 16 kHz umgewandelt. Ergebnis des lokalen Modells: „Guten Morgen!“, Dauer 2200 ms. SHA-256 der getesteten WAV-Variante: `cce5ec27e8f7ff3ee6b4c1bc78702aea1324554f1c1f1e174a62f4798c7bc64a`. Die Audiodatei wird nicht im Repository verteilt. Der Test ist über `SMA_SPEECH_GERMAN_INTEGRATION=1` und `SMA_SPEECH_GERMAN_TEST_WAV=/path/to/german.wav` zuschaltbar und lädt keine Datei herunter.
