@@ -1,6 +1,9 @@
 import json,uuid
 from pathlib import Path
 core=Path('n8n/publishing/prepare-preview.cjs').read_text().split('module.exports =')[0]
+previous_path=Path('n8n/publishing/preview-workflow.json')
+previous=json.loads(previous_path.read_text()) if previous_path.exists() else {}
+previous_nodes={n['name']:n for n in previous.get('nodes',[])}
 nodes=[];connections={}
 def node(name,typ,params,x,y=0,version=1,**kw):
  n={'parameters':params,'id':str(uuid.uuid4()),'name':name,'type':'n8n-nodes-base.'+typ,'typeVersion':version,'position':[x,y],**kw};nodes.append(n);return n
@@ -28,5 +31,12 @@ code('Antwort bereinigen',"const r=$input.first().json; const out={ok:r.ok===tru
 node('Antwort','respondToWebhook',{'respondWith':'json','responseBody':'={{ $json }}','options':{'responseCode':200,'responseHeaders':{'entries':[{'name':'Cache-Control','value':'no-store'},{'name':'Access-Control-Allow-Origin','value':'https://sma-automation.com'},{'name':'Vary','value':'Origin'}]}}},2400,100,1.5)
 for a,b,port in [('Textvorschau anfordern','Eingabe prüfen',0),('Eingabe prüfen','Eingabe gültig?',0),('Eingabe gültig?','Konto und Shop prüfen',0),('Eingabe gültig?','Antwort bereinigen',1),('Konto und Shop prüfen','Neue Vorschau?',0),('Konto und Shop prüfen','Sichere Fehlermeldung',1),('Neue Vorschau?','Textauftrag vorbereiten',0),('Neue Vorschau?','Antwort bereinigen',1),('Textauftrag vorbereiten','Portaltexte erstellen',0),('Textauftrag vorbereiten','Fehler zuordnen',1),('Portaltexte erstellen','Text und Shop-Link prüfen',0),('Portaltexte erstellen','Fehler zuordnen',1),('Text und Shop-Link prüfen','Vorschau speichern',0),('Text und Shop-Link prüfen','Fehler zuordnen',1),('Vorschau speichern','Antwort bereinigen',0),('Vorschau speichern','Sichere Fehlermeldung',1),('Fehler zuordnen','Fehler speichern',0),('Fehler speichern','Antwort bereinigen',0),('Fehler speichern','Sichere Fehlermeldung',1),('Sichere Fehlermeldung','Antwort bereinigen',0),('Antwort bereinigen','Antwort',0)]:edge(a,b,port)
 w={'name':'SMA – Portaltexte und Shop-Link – Vorschau V1','nodes':nodes,'connections':connections,'pinData':{},'settings':{'executionOrder':'v1','saveDataErrorExecution':'none','saveDataSuccessExecution':'none','saveManualExecutions':False,'saveExecutionProgress':False,'executionTimeout':150,'callerPolicy':'workflowsFromSameOwner','availableInMCP':False},'active':False}
+for n in nodes:
+ if n['name'] in previous_nodes:
+  old=previous_nodes[n['name']]
+  for k in ['id','webhookId','position']:
+   if k in old:n[k]=old[k]
+for k,v in previous.get('settings',{}).items():
+ if k not in w['settings']:w['settings'][k]=v
 Path('n8n/publishing/preview-workflow.json').write_text(json.dumps(w,ensure_ascii=False,indent=2))
 print(len(nodes),'nodes; no publishing nodes')
