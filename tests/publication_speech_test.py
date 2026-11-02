@@ -93,5 +93,16 @@ class SpeechTests(unittest.TestCase):
         self.assertEqual(cli.stderr, b'')
 
 
+    @unittest.skipUnless(os.environ.get('SMA_SPEECH_GERMAN_INTEGRATION') == '1', 'requires local model and German fixture')
+    def test_actual_german_speech(self):
+        data = Path(os.environ['SMA_SPEECH_GERMAN_TEST_WAV']).read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        result = speech.transcribe_bytes(data, len(data), sha, os.environ['SMA_SPEECH_MODEL_DIR'], 'de')
+        self.assertIn('guten morgen', result['text'].lower())
+        self.assertEqual(result['decoded_duration_ms'], 2200)
+        self.assertFalse(result['can_publish'])
+        self.assertTrue(result['needs_review'])
+
+
 if __name__ == '__main__':
     unittest.main()
