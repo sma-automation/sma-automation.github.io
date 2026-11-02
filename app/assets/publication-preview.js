@@ -1,5 +1,6 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
+import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -24,7 +25,7 @@ if(selectedPortal){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut;busy=value;syncReviewButton();syncMagicButton();for(const id of ['browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
+function lock(value){value=value||signedOut;busy=value;syncReviewButton();syncMagicButton();for(const id of ['deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
 async function rpc(action,input={},id=null){const {data,error}=await supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 function sourceInput(){const form=new FormData($('previewForm'));return {source_text:form.get('source_text').trim(),audience:form.get('audience').trim(),goal:form.get('goal').trim(),language:form.get('language'),media_kind:selectedAsset?selectedAsset.media_kind:selectedPortal==='youtube'?'video':form.get('media_kind'),platforms:selectedPortal?[selectedPortal]:form.getAll('platforms')};}
@@ -56,7 +57,7 @@ function clearDraft(){resetMagic();current=null;dirty=false;sourceDirty=false;at
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 function renderSelectedFile(){
  $('selectedFileName').textContent=selectedAsset?selectedAsset.name:'Noch keine Datei ausgewählt';
- $('assetStatus').textContent=selectedAsset?'Ausgewählte Datei · '+(selectedAsset.media_kind==='image'?'Bild':'Video'):'Klicke auf „Dateien durchsuchen“ und wähle eine Datei aus der Liste.';
+ $('assetStatus').textContent=selectedAsset?'Ausgewählte Datei · '+(selectedAsset.media_kind==='image'?'Bild':'Video'):'„Dateien durchsuchen“ öffnet dein Gerät. Bereits hochgeladene Dateien findest du unter „Kundenordner öffnen“.';
 }
 function renderFilePicker(){
  const query=$('fileSearch').value.trim().toLocaleLowerCase('de');
@@ -90,6 +91,50 @@ async function requestFileSelection(id,discard=false){
  pendingAssetId=null;$('fileSwitchNotice').hidden=true;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();$('assetPanel').scrollIntoView({block:'start'});await loadLatest();
 }
+const uploadEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-device-upload-v1';
+Object.assign(messages,{UPLOAD_FORMAT:'Bitte wähle eine Bild- oder Videodatei, zum Beispiel JPG, PNG, HEIC, MP4 oder MOV. Dokumentdateien wie PDF oder Word können über diesen Veröffentlichungsweg nicht gepostet werden.',UPLOAD_SIZE:'Bitte wähle eine nicht leere Datei bis 4 GB.',UPLOAD_RATE_LIMITED:'Das Uploadlimit ist erreicht (30 Dateien pro Stunde, 20 GB pro Tag). Bitte versuche es später erneut.',UPLOAD_UNAVAILABLE:'Der Upload ist momentan nicht erreichbar. Du kannst die Übertragung erneut versuchen.',UPLOAD_NETWORK:'Die Verbindung wurde unterbrochen. Klicke auf „Upload fortsetzen“.',UPLOAD_EXPIRED:'Die Uploadsitzung ist abgelaufen. Bitte wähle die Datei erneut über „Dateien durchsuchen“.',UPLOAD_INITIALIZING:'Der Upload wird noch vorbereitet. Bitte versuche „Upload fortsetzen“ in zwei Minuten erneut.',UPLOAD_INCOMPLETE:'Die hochgeladene Datei konnte noch nicht bestätigt werden. Bitte klicke auf „Upload fortsetzen“.',UPLOAD_CONFLICT:'Die Datei hat sich geändert. Bitte wähle sie erneut aus.'});
+let deviceUpload=null,uploadController=null;
+function chooseDeviceFile(){if(busy||signedOut||!selectedPortal)return;$('deviceFile').value='';$('deviceFile').accept=['youtube','tiktok'].includes(selectedPortal)?'video/*':'image/*,video/*';$('deviceFile').click();}
+$('deviceBrowse').addEventListener('click',chooseDeviceFile);
+$('deviceBrowseResult').addEventListener('click',chooseDeviceFile);
+async function uploadCall(body,signal){
+ const auth=await session();signal.throwIfAborted();
+ const response=await fetch(uploadEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify(body),credentials:'omit',cache:'no-store',signal:AbortSignal.any([signal,AbortSignal.timeout(90000)])});
+ const data=await response.json();signal.throwIfAborted();if(!response.ok||!data?.ok)throw Error(data?.code||'UPLOAD_UNAVAILABLE');
+ if(data.upload_id!==body.upload_id||data.can_publish!==false)throw Error('UPLOAD_UNAVAILABLE');return data;
+}
+async function runDeviceUpload(){
+ if(busy||signedOut||!deviceUpload)return;
+ const job=deviceUpload,controller=new AbortController();uploadController=controller;lock(true);
+ $('uploadPanel').hidden=false;$('retryUpload').hidden=true;$('cancelUpload').hidden=false;$('uploadStatus').textContent='„'+job.file.name+'“ wird für deinen Kundenordner vorbereitet …';
+ let completed=null;
+ try{
+  let data=await uploadCall({action:'start',upload_id:job.id,...job.meta},controller.signal);
+  if(data.status!=='completed'){
+   if(data.status!=='ready')throw Error('UPLOAD_UNAVAILABLE');
+   await transferDeviceFile({file:job.file,url:data.upload_url,mime:job.meta.mime_type,signal:controller.signal,onProgress:(bytes,total)=>{if(signedOut||controller.signal.aborted)return;const percent=Math.floor(bytes/total*100);$('uploadProgress').value=percent;$('uploadStatus').textContent='„'+job.file.name+'“ · '+percent+' % hochgeladen';}});
+   $('uploadStatus').textContent='Übertragung abgeschlossen. Die Datei wird deinem Kundenordner zugeordnet …';
+   data=await uploadCall({action:'finish',upload_id:job.id},controller.signal);
+  }
+  if(data.status!=='completed'||typeof data.asset_id!=='string')throw Error('UPLOAD_INCOMPLETE');
+  await loadFiles();controller.signal.throwIfAborted();
+  if(!assets.some(f=>f.id===data.asset_id))throw Error('UPLOAD_INCOMPLETE');
+  completed=data.asset_id;deviceUpload=null;$('deviceFile').value='';$('uploadProgress').value=100;
+  $('uploadStatus').textContent='„'+job.file.name+'“ wurde hochgeladen. Die Medienprüfung folgt separat.';fileChanged();
+ }catch(e){
+  if(!signedOut){$('uploadStatus').textContent=controller.signal.aborted?'Upload angehalten. Mit „Upload fortsetzen“ kannst du weitermachen.':errorText({code:e.message});$('retryUpload').hidden=false;}
+ }finally{uploadController=null;$('cancelUpload').hidden=true;lock(false);}
+ if(completed&&!signedOut){if(dirty||sourceDirty)openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
+}
+$('deviceFile').addEventListener('change',async()=>{
+ if(busy||signedOut)return;const file=$('deviceFile').files?.[0];if(!file)return;
+ try{const meta=deviceFileMetadata(file,selectedPortal);deviceUpload={id:crypto.randomUUID(),file,meta};$('uploadProgress').value=0;await runDeviceUpload();}
+ catch(e){$('uploadPanel').hidden=false;$('uploadStatus').textContent=errorText({code:e.message});$('retryUpload').hidden=true;$('cancelUpload').hidden=true;}
+});
+$('retryUpload').addEventListener('click',runDeviceUpload);
+$('cancelUpload').addEventListener('click',()=>uploadController?.abort());
+window.addEventListener('beforeunload',event=>{if(uploadController){event.preventDefault();event.returnValue='';}});
+
 $('browseFiles').addEventListener('click',()=>openFilePicker($('browseFiles')));
 $('browseResultFiles').addEventListener('click',()=>openFilePicker($('browseResultFiles')));
 $('closeFilePicker').addEventListener('click',()=>$('filePicker').close());
@@ -240,6 +285,6 @@ $('previewForm').addEventListener('submit',async event=>{
  }catch(e){status(e.message,true);}finally{lock(false);syncMedia();}
 });
 $('save').addEventListener('click',async()=>{if(busy||!current)return;const edits=[...$('drafts').children].map(card=>({platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),body:card.querySelector('[data-field=body]').value.trim()}));const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}lock(true);$('saveStatus').textContent='Wird gespeichert …';try{const result=selectedAsset?await fileRpc('save',{...fileContext(),title:edits[0].title,body:edits[0].body}):await rpc('save',{revision:current.revision,drafts},current.id);render(result);if(selectedAsset){const bound=selectedAsset.assignments?.find(a=>a.platform===selectedPortal);if(bound)bound.revision=result.assignment_revision;fileChanged();}status('Änderungen gespeichert. Der Shop-Link ist weiterhin enthalten.');}catch(e){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}finally{lock(false);syncMedia();}});
-supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','audience','goal','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
-window.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
+supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','audience','goal','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+window.addEventListener('keydown',event=>{if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 try{await session();let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}if(ready)await loadLatest();}catch(e){lock(true);status(e.message,true);}
