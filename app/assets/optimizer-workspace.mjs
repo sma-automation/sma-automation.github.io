@@ -17,9 +17,10 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
   media.setAttribute('aria-label', 'Medienprüfung');
   const source = make('div', 'workspaceSource');
   const text = make('div', 'workspaceText');
-  const panels = { files, folder: files, media, source, text };
+  const examples = $('exampleFiles');
+  const panels = { files, folder: files, media, examples, source, text };
   // Keep moved controls connected so getElementById and their existing handlers still work.
-  main.append(toolbar, files, media, source, text);
+  main.append(toolbar, files, media, examples, source, text);
   const buttons = {};
   let active = 'files';
   function tab(key, label) {
@@ -32,7 +33,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
     return button;
   }
   toolbar.append(tab('files', 'Datei für dieses Portal'), $('deviceBrowse'), $('browseFiles'), $('refreshFiles'),
-    tab('media', 'Medienprüfung'), tab('source', 'Inhalt und Ziel'), tab('text', 'Text für ' + portalName));
+    tab('media', 'Medienprüfung'), tab('examples', 'Vorschau-Beispieldateien'), tab('source', 'Inhalt und Ziel'), tab('text', 'Text für ' + portalName));
+  $('refreshFiles').classList.add('toolbar-action');
   buttons.folder = $('browseFiles');
   buttons.folder.removeAttribute('aria-haspopup');
   buttons.folder.setAttribute('aria-controls', files.id);
@@ -45,23 +47,38 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
   $('pickerRefresh').parentElement.hidden = true;
   $('chooseGeneralTemplate').parentElement.hidden = true;
   const search = make('div', 'workspaceSearch');
-  search.append(doc.querySelector('label[for="fileSearch"]'), $('fileSearch'));
+  const searchControls = make('div'); searchControls.className = 'search-controls';
+  const searchButton = make('button', 'workspaceSearchButton', 'Suchen');
+  searchButton.type = 'button'; searchButton.className = 'secondary';
+  searchButton.addEventListener('click', () => { onGallery(); $('fileSearch').focus(); });
+  searchControls.append($('fileSearch'), searchButton);
+  search.append(doc.querySelector('label[for="fileSearch"]'), searchControls);
   pickerBody.prepend(search, $('fileSwitchNotice'));
   const selectedPreview = make('details', 'workspaceSelectedPreview');
   selectedPreview.hidden = true;
   selectedPreview.append(make('summary', null, 'Ausgewählte Datei ansehen'), $('assetPreview'), $('fileDetails'));
   media.append(selectedPreview, $('mediaPanel'));
-  source.append($('magicPanel'), $('sourcePanel'));
+  const evidence = make('details', 'workspaceMagicEvidence');
+  evidence.append(make('summary', null, 'Erkennung ansehen'), $('magicPanel'));
+  source.append($('magicActionsSource'), evidence, $('sourcePanel'));
+  $('magicActionsSource').hidden = false;
+  $('magicActionsText').hidden = false;
   const empty = make('div', 'workspaceTextEmpty');
   empty.append(make('p', null, 'Noch kein Beitragstext vorbereitet.'));
   const start = make('button', null, 'Inhalt und Ziel öffnen');
   start.type = 'button'; start.className = 'secondary';
   start.addEventListener('click', () => show('source'));
   empty.append(start);
-  text.append($('portalNote'), empty, $('result'));
+  text.append($('magicActionsText'), $('portalNote'), empty, $('result'));
+  const statusRow = make('div', 'workspaceStatus');
+  statusRow.append($('portalStatus'));
+  const viewText = make('button', 'workspaceViewText', 'Text ansehen');
+  viewText.type = 'button'; viewText.className = 'secondary';
+  viewText.addEventListener('click', () => show('text'));
+  viewText.hidden = true; statusRow.append(viewText);
   $('assetPanel').hidden = true;
   $('resultFileActions').hidden = true;
-  main.append(toolbar, $('uploadPanel'), $('portalStatus'), files, media, source, text);
+  main.append(toolbar, $('uploadPanel'), statusRow, $('magicReplaceNotice'), files, media, examples, source, text);
 
   function show(key) {
     if (!Object.hasOwn(panels, key)) return;
@@ -75,13 +92,15 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
     if (key === 'media') $('mediaPanel').open = true;
     for (const video of media.querySelectorAll('video')) if (key !== 'media') video.pause();
     empty.hidden = !$('result').hidden;
+    viewText.hidden = $('result').hidden || key === 'text';
+    statusRow.hidden = key === 'examples';
     if (changed && (key === 'files' || key === 'folder')) onGallery();
   }
   show('files');
   return {
     show,
     galleryVisible: () => active === 'files' || active === 'folder',
-    textAvailable(value) { empty.hidden = value; },
+    textAvailable(value) { empty.hidden = value; viewText.hidden = !value || active === 'text'; },
     selection(file) { selectedPreview.hidden = !file; selectedPreview.open = false; },
   };
 }

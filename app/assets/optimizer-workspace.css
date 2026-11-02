@@ -40,3 +40,79 @@ body.wide .draft textarea{min-height:240px}
 body.wide #workspaceTextEmpty{padding:45px 0}
 @media(max-width:1050px){body.wide #filePickerList{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:650px){body.wide #filePickerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}body.wide #optimizerToolbar{gap:0 5px}body.wide #optimizerToolbar button{font-size:13px;padding:11px 8px 13px;min-height:46px}body.wide #filePickerList .gallery-label{font-size:11px}body.wide #workspaceFiles,body.wide #workspaceSource,body.wide #workspaceText,body.wide #workspaceMedia{min-height:380px}body.wide input,body.wide textarea{font-size:16px}}
+
+/* One readable type scale across tabs, controls, hints and checks. */
+html:has(body.wide){background:#fff}
+body.wide{--optimizer-type:16px;--optimizer-weight:600;font-family:Arial,sans-serif;font-size:var(--optimizer-type);font-weight:var(--optimizer-weight);color:#25334d}
+body.wide #optimizerToolbar button{font-size:var(--optimizer-type);font-weight:var(--optimizer-weight)}
+body.wide :is(p,label,legend,input,select,textarea,button,summary,.note,.notice,.tags,.caption,small),
+body.wide :is(#portalStatus,#portalNote,#filePickerStatus,#filePickerCount,#filePickerPages,#mediaStatus,#mediaFacts,#mediaScope,#mediaChecks,#mediaRecommendations,#saveStatus,#assetPreviewStatus,#fileDetails),
+body.wide #sourcePanel .note,body.wide #result>.note,body.wide #sourcePanel button,body.wide #save{font-family:inherit;font-size:var(--optimizer-type);font-weight:var(--optimizer-weight);line-height:1.6}
+body.wide :is(p,.note,small){color:#53617a}
+body.wide :is(input,select,textarea)::placeholder{color:#68758a;opacity:1;font-weight:var(--optimizer-weight)}
+body.wide #optimizerToolbar #refreshFiles{align-self:center;min-height:42px;margin:6px 0 6px 8px;padding:9px 14px;border:1px solid #ced6e7;border-radius:9px;background:#edf1f8;color:#3f506c;line-height:1.4}
+body.wide #optimizerToolbar #refreshFiles:hover{background:#dfe7f6;border-color:#8fa3d6}
+body.wide #filePickerList .file-picker-info{font-size:var(--optimizer-type);color:#425573}
+body.wide #filePickerList .file-picker-info summary,
+body.wide #fileDetails summary,body.wide #workspaceSelectedPreview>summary,
+body.wide .draft summary{padding:10px 14px;border:1px solid #d3dced;border-radius:8px;background:#edf1fa;color:#3157cd;font-size:var(--optimizer-type);font-weight:var(--optimizer-weight);line-height:1.5;cursor:pointer}
+body.wide #filePickerList .file-picker-info summary:hover,
+body.wide #fileDetails summary:hover,body.wide #workspaceSelectedPreview>summary:hover,
+body.wide .draft summary:hover{background:#dfe7fb;border-color:#91a4db}
+body.wide #filePickerList .file-picker-info[open] summary{background:#dfe7fb}
+body.wide #filePickerList .file-picker-info :is(strong,small),body.wide #fileDetails .selected-file{font-size:var(--optimizer-type);font-weight:var(--optimizer-weight);line-height:1.6;margin:9px 0 0;overflow-wrap:anywhere}
+body.wide #filePickerList .gallery-label{font-size:14px;font-weight:var(--optimizer-weight);padding:7px 10px}
+body.wide #workspaceSearch{max-width:640px;margin-bottom:22px}
+body.wide .search-controls{display:flex;gap:10px;align-items:stretch}
+body.wide .search-controls input{min-width:0;flex:1}
+body.wide .search-controls button{flex:0 0 auto}
+body.wide #workspaceStatus{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;margin-bottom:18px}
+body.wide #workspaceStatus:has(#portalStatus:empty):has(button[hidden]){display:none}
+body.wide #workspaceStatus #portalStatus{margin:0;flex:1;min-width:200px}
+body.wide #workspaceStatus button{padding:8px 14px}
+body.wide #filePickerStatus{margin:0 0 18px}
+body.wide .magic-actions{max-width:1000px;margin:0 0 28px;padding:22px 24px;background:#f2f5fc;border:1px solid #d9e1f1;border-radius:12px}
+body.wide .magic-actions h2{margin:0 0 16px;font-size:20px;line-height:1.4}
+body.wide .magic-actions p{margin:14px 0 0;max-width:820px}
+body.wide .magic-actions button{min-height:48px;padding:11px 20px}
+body.wide #magicPanel{padding:0 0 22px;margin-bottom:26px}
+body.wide #magicSummary{white-space:pre-line}
+body.wide #magicReplaceNotice{margin-bottom:24px;max-width:1000px}
+body.wide #sourcePanel .field{margin-bottom:24px}
+body.wide #sourcePanel textarea{height:180px;min-height:160px}
+body.wide #sourcePanel :is(input,select,textarea){padding:12px 14px}
+body.wide #sourcePanel .field .note{margin:10px 0 0}
+body.wide .checks .pill{font-size:14px;font-weight:var(--optimizer-weight);padding:7px 11px}
+body.wide #mediaChecks,body.wide #mediaRecommendations{padding-left:24px}
+body.wide #mediaChecks li,body.wide #mediaRecommendations li{margin:12px 0}
+body.wide #workspaceMedia .media-body>p:empty{display:none}
+body.wide #workspaceTextEmpty{padding:16px 0}
+body.wide button:disabled{cursor:not-allowed}
+@media(max-width:650px){
+ body.wide #optimizerToolbar button{font-size:var(--optimizer-type);padding:11px 8px 13px}
+ body.wide #optimizerToolbar #refreshFiles{margin-left:0}
+ body.wide .magic-actions{padding:18px}
+ body.wide #sourcePanel .row{grid-template-columns:minmax(0,1fr);gap:0}
+ body.wide .search-controls{gap:8px}
+ body.wide .search-controls button{padding:10px 12px}
+}
+body.wide #workspaceMagicEvidence{max-width:1000px;margin:0 0 24px}
+body.wide #workspaceMagicEvidence:has(#magicPanel[hidden]){display:none}
+body.wide #workspaceMagicEvidence>summary{display:list-item;cursor:pointer;padding:11px 14px;background:#edf1fa;border:1px solid #d3dced;border-radius:8px;color:#3157cd}
+body.wide #workspaceMagicEvidence>summary:hover{background:#dfe7fb;border-color:#91a4db}
+body.wide #workspaceMagicEvidence #magicPanel{margin:0;padding:18px 0 0;border:0}
+body.wide #workspaceMagicEvidence #magicPanel>.actions{display:none}
+body.wide #exampleFiles{padding:0;margin:0;min-height:470px;background:transparent;border:0;border-radius:0}
+body.wide .example-gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 16px;align-items:start}
+body.wide .example-tile{min-width:0}
+body.wide .example-visual{position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;width:100%;aspect-ratio:3/4;border-radius:7px;background:#e7ebf3;overflow:hidden}
+body.wide .example-image{display:grid;place-items:center;width:100%;aspect-ratio:1;background:#3c5cce}
+body.wide .example-image span{width:55%;aspect-ratio:1;border-radius:50%;background:#fff}
+body.wide .example-video{background:#2a303b;color:#eff3fc}
+body.wide .example-play{font-size:48px;line-height:1}
+body.wide .example-label{position:absolute;bottom:10px;left:10px;max-width:calc(100% - 20px);background:#17233bde;color:#fff;border-radius:4px;padding:7px 10px;font-size:14px;line-height:1.35}
+body.wide .example-tile details{margin-top:10px}
+body.wide .example-tile summary{padding:10px 14px;border:1px solid #d3dced;border-radius:8px;background:#edf1fa;color:#3157cd;cursor:pointer}
+body.wide .example-tile summary:hover{background:#dfe7fb;border-color:#91a4db}
+@media(max-width:1050px){body.wide .example-gallery{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){body.wide .example-gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}body.wide #exampleFiles{min-height:380px}}

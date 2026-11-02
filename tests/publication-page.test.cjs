@@ -3,10 +3,11 @@ const source=fs.readFileSync('app/assets/publication-preview.js','utf8').replace
 class Element{constructor(tag='div'){this.tag=tag;this.children=[];this.events={};this.dataset={};this.value='';this.hidden=false;this.disabled=false;this.textContent='';this.classList={add(){}};}setAttribute(k,v){this[k]=v}removeAttribute(k){delete this[k]}pause(){this.paused=true}load(){this.loaded=true}showModal(){this.open=true}close(){this.open=false;this.events.close?.()}click(){this.clicked=true;return this.events.click?.()}focus(){this.focused=true}scrollIntoView(){this.scrolledIntoView=true}append(...els){this.children.push(...els)}replaceChildren(...els){this.children=els}addEventListener(k,f){this.events[k]=f}querySelectorAll(sel){const all=this.children.flatMap(c=>[c,...c.querySelectorAll('*')]);return all.filter(c=>sel==='*'||(sel==='input,textarea'&&['input','textarea'].includes(c.tag))||(sel==='textarea'&&c.tag==='textarea')||sel===c.tag||sel==='[data-field='+c.dataset.field+']')}querySelector(sel){return this.querySelectorAll(sel)[0]}}
 const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
-async function boot({portal=null,asset=null,files=[],filesRpc=null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[];let authChange;const win={addEventListener(){}};win.parent=win;
+async function boot({portal=null,asset=null,files=[],filesRpc=null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[];let authChange;const win={addEventListener(){}};win.parent=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token'}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_magic_v1'?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
- class Data{get(k){return values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
+ if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
+ class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
  await vm.runInNewContext('(async()=>{'+thumbnailSource+source+'})()',{createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),createClient:()=>client,document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(asset?'&asset='+asset:''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
  return {get,calls,mediaCalls,createdUrls,revokedUrls,checks,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT')};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
@@ -209,4 +210,76 @@ test('a completed device upload uses the selected local video and removes long p
  const media=p.get('assetPreviewMedia').children[0];assert.equal(media.tag,'video');assert.equal(media.controls,true);assert.equal(media.playsInline,true);assert.equal(p.createdUrls[0].blob,local);
  assert.equal(p.get('uploadStatus').textContent,'✓ Datei hochgeladen');assert.equal(p.get('uploadProgress').hidden,true);assert.equal(p.get('uploadKeepOpen').hidden,true);assert.equal(p.mediaCalls.length,0);
  p.signOut();assert.equal(media.paused,true);assert.equal(media.src,undefined);assert.equal(p.revokedUrls.length,1);
+});
+
+const instagramResult={...result,preview:{...result.preview,drafts:[{...result.preview.drafts[0],platform:'instagram'}]}};
+const automaticFiles=async a=>a.p_action==='list'?{ok:true,files:[photo]}:a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'};
+const automaticOptions={portal:'instagram',asset:photo.id,filesRpc:automaticFiles,formTracksDom:true,magicResponse:async()=>({ok:true,analysis:magicAnalysis}),fetchResponse:async()=>instagramResult};
+test('one Magic click prepares recognized content without asking for a caption or audience',async()=>{
+ const p=await boot(automaticOptions);p.get('language').value='de';
+ await p.get('magicSource').click();
+ assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);
+ assert.equal(p.calls.some(c=>c.url),false);
+ assert.match(p.get('status').textContent,/Inhalt ist übernommen/);
+ // Moving from generated source to generated caption must not ask to discard "own" edits.
+ await p.get('magicText').click();assert.equal(p.get('magicReplaceNotice').hidden,true);
+ assert.equal(p.calls.filter(c=>c.url?.endsWith('sma-publication-preview-v1')).length,1);
+});
+test('automatic caption uses exact recognized source and binding with the fixed relevant-reach goal',async()=>{
+ const p=await boot(automaticOptions);p.get('language').value='de';
+ await p.get('magicText').click();const req=JSON.parse(p.calls.find(c=>c.url).options.body);
+ assert.equal(req.source_text,magicAnalysis.result.source_text);assert.equal(req.audience,'Interessierte am gezeigten Inhalt');assert.match(req.goal,/relevante Reichweite/);
+ assert.deepEqual(req.platforms,['instagram']);assert.equal(req.media_kind,'image');assert.ok(!('can_publish' in req));
+ const bind=p.calls.find(c=>c.p_action==='assign');assert.equal(bind.p_input.asset_id,photo.id);assert.equal(bind.p_input.asset_revision,photo.revision);
+ assert.equal(p.get('result').hidden,false);assert.match(p.get('saveStatus').textContent,/zugeordnet/);assert.equal(p.get('magicText').disabled,false);
+});
+test('automatic run cannot be duplicated by rapid clicks on either Magic button',async()=>{
+ let release;const p=await boot({...automaticOptions,fetchResponse:()=>new Promise(r=>release=r)});
+ const first=p.get('magicText').click();await new Promise(r=>setImmediate(r));
+ assert.equal(p.get('magicText').disabled,true);assert.equal(p.get('magicSource').disabled,true);
+ await p.get('magicText').click();await p.get('magicSource').click();assert.equal(p.calls.filter(c=>c.url).length,1);
+ release(instagramResult);await first;assert.equal(p.get('magicText').disabled,false);
+});
+test('new captions use the simplified defaults even after loading legacy audience and goal settings',async()=>{
+ for(const language of ['de','en']){
+  const saved={...result,input:{source_text:'Ein gesichert beschriebenes Motiv für unseren Beitrag.',audience:'Alte spezielle Auswahl',goal:'Altes Kampagnenziel',language,media_kind:'video',platforms:['youtube']}};
+  const p=await boot({portal:'youtube',latest:saved});await p.run();
+  const body=JSON.parse(p.calls.find(c=>c.url).options.body);
+  assert.equal(body.source_text,saved.input.source_text);assert.equal(body.language,language);
+  assert.equal(body.audience,language==='en'?'People interested in the content shown':'Interessierte am gezeigten Inhalt');
+  assert.match(body.goal,language==='en'?/relevant reach/:/relevante Reichweite/);
+ }
+ const html=fs.readFileSync('app/publication-preview.html','utf8');
+ assert.doesNotMatch(html,/(?:id|name)="(?:audience|goal)"/);
+});
+test('Magic preserves unsaved customer changes until the explicit replacement action',async()=>{
+ const p=await boot(automaticOptions);p.get('source_text').value='Meine eigenen neuen Angaben bleiben erhalten.';p.get('previewForm').events.input();
+ await p.get('magicText').click();assert.equal(p.get('magicReplaceNotice').hidden,false);assert.equal(p.calls.some(c=>c.url),false);
+ p.get('cancelMagicReplace').click();assert.equal(p.get('source_text').value,'Meine eigenen neuen Angaben bleiben erhalten.');
+ await p.get('magicText').click();await p.get('confirmMagicReplace').click();assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);
+ assert.equal(p.calls.filter(c=>c.url).length,1);
+});
+test('video and unsupported photo never start a fake automatic recognition or caption',async()=>{
+ for(const file of [ownFile,{...photo,mime_type:'image/heic'}]){
+  const p=await boot({...automaticOptions,asset:file.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:{ok:true,status:'empty'}});
+  assert.equal(p.get('magicSource').disabled,true);assert.equal(p.get('magicText').disabled,true);
+  await p.get('magicText').click();assert.equal(p.calls.some(c=>c.url),false);assert.equal(p.get('source_text').value,'');
+  assert.match(p.get('magicTextHint').textContent,file.media_kind==='video'?/Bildfolge und Ton noch nicht verfügbar/:/JPG, PNG oder WebP/);
+ }
+});
+test('unclear recognition cannot become an automatic caption',async()=>{
+ const p=await boot({...automaticOptions,magicResponse:async()=>({ok:true,analysis:{...magicAnalysis,result:{...magicAnalysis.result,subject_type:'unclear'}}})});
+ await p.get('magicText').click();assert.equal(p.calls.some(c=>c.url),false);assert.equal(p.get('source_text').value,'');assert.match(p.get('status').textContent,/nicht sicher erkennbar/);
+});
+test('logout during recognition prevents later caption, assignment or content reappearance',async()=>{
+ let release;const p=await boot({...automaticOptions,magicResponse:async()=>({ok:true,analysis:{...magicAnalysis,status:'failed',result:null,error_code:'MAGIC_TIMEOUT'}}),fetchResponse:()=>new Promise(r=>release=r)});
+ const run=p.get('magicText').click();await new Promise(r=>setImmediate(r));p.signOut();release({ok:true,analysis:magicAnalysis});await run;
+ assert.equal(p.calls.filter(c=>c.url).length,1);assert.match(p.calls.find(c=>c.url).url,/magic-effect/);assert.equal(p.calls.some(c=>c.p_action==='assign'),false);
+ assert.equal(p.get('source_text').value,'');assert.equal(p.get('magicText').disabled,true);assert.equal(p.get('result').hidden,true);
+});
+test('missing or unknown recognition subject cannot feed automatic content',async()=>{
+ for(const subject_type of [null,'invented']){
+  const p=await boot({...automaticOptions,magicResponse:async()=>({ok:true,analysis:{...magicAnalysis,result:{...magicAnalysis.result,subject_type}}}),fetchResponse:async()=>({ok:true,analysis:{...magicAnalysis,result:{...magicAnalysis.result,subject_type}}})});
+  await p.get('magicText').click();assert.equal(p.calls.some(c=>c.url?.endsWith('sma-publication-preview-v1')),false);assert.equal(p.get('source_text').value,'');
+ }
 });
