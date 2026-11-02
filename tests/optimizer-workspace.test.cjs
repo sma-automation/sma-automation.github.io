@@ -19,7 +19,7 @@ function setup(){
  const el=(tag,id)=>{const node=new Element(tag);if(id)node.id=id;return node};
  const main=el('main'),body=el('body'),pickerBody=el('div'),searchLabel=el('label');
  body.append(main);
- const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','portalNote','result','resultFileActions','uploadPanel','portalStatus'];
+ const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles'];
  for(const id of ids)main.append(el('div',id));
  byId.get('filePicker').append(pickerBody);pickerBody.append(searchLabel,byId.get('fileSearch'),byId.get('fileSwitchNotice'));
  for(const id of ['pickerRefresh','chooseGeneralTemplate']){const parent=el('div');parent.append(byId.get(id));pickerBody.append(parent)}
@@ -35,7 +35,7 @@ function setup(){
 test('wide editor opens an inline gallery and keeps one copy of the existing native upload controls',()=>{
  const p=setup();assert.equal(p.get('workspaceFiles').hidden,false);assert.equal(p.get('workspaceMedia').hidden,true);assert.equal(p.get('workspaceText').hidden,true);
  assert.equal(p.pickerBody.parentElement,p.get('workspaceFiles'));assert.equal(p.get('filePicker').hidden,true);
- assert.deepEqual(p.get('optimizerToolbar').children.map(n=>n.id),['workspaceTab-files','deviceBrowse','browseFiles','refreshFiles','workspaceTab-media','workspaceTab-source','workspaceTab-text']);
+ assert.deepEqual(p.get('optimizerToolbar').children.map(n=>n.id),['workspaceTab-files','deviceBrowse','browseFiles','refreshFiles','workspaceTab-media','workspaceTab-examples','workspaceTab-source','workspaceTab-text']);
  assert.equal(p.get('assetPanel').hidden,true);assert.equal(p.get('resultFileActions').hidden,true);
 });
 test('section switches preserve form nodes, edits and selected media, and never generate or upload',()=>{
@@ -50,4 +50,14 @@ test('media view opens checks and pauses a video when switching away; clearing s
  const p=setup();p.workspace.selection({id:'own'});p.get('workspaceTab-media').click();assert.equal(p.get('mediaPanel').open,true);assert.equal(p.get('workspaceSelectedPreview').hidden,false);
  p.video.paused=false;p.get('workspaceTab-files').click();assert.equal(p.video.paused,true);
  p.workspace.selection(null);assert.equal(p.get('workspaceSelectedPreview').hidden,true);p.workspace.show('unknown');assert.equal(p.workspace.galleryVisible(),true);
+});
+test('example gallery stays separate from customer files and preserves the edited content',()=>{
+ const p=setup();p.workspace.selection({id:'own'});p.form.value='Eigene Angaben';
+ p.get('workspaceTab-examples').click();
+ assert.equal(p.get('exampleFiles').hidden,false);assert.equal(p.get('workspaceFiles').hidden,true);
+ assert.equal(p.get('workspaceStatus').hidden,true);assert.equal(p.workspace.galleryVisible(),false);
+ assert.equal(p.loads(),0);assert.equal(p.form.value,'Eigene Angaben');
+ p.get('workspaceTab-media').click();assert.equal(p.get('workspaceSelectedPreview').hidden,false);
+ p.get('workspaceTab-files').click();assert.equal(p.get('exampleFiles').hidden,true);
+ assert.equal(p.get('workspaceStatus').hidden,false);assert.equal(p.loads(),1);
 });
