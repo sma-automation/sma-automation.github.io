@@ -1,0 +1,6 @@
+# Publish only website content from this mixed source repository.
+# These exclusions affect GitHub Pages, not repository access or Git history.
+exclude:
+  - n8n
+  - supabase
+  - tests
