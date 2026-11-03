@@ -36,7 +36,8 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
  '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a></div></div>'+
  '<p class="sma-website-help">Diesen Link kannst du später als Shop-Button auf deiner Webseite einsetzen. Die externe Webseite ist dadurch noch nicht automatisch angebunden.</p></section>';
- page.append(root);
+ const placeholder=page.querySelector('.package-module-slot');
+ if(placeholder)placeholder.replaceWith(root);else page.append(root);
  const $=s=>root.querySelector(s),fields=$('fieldset'),status=$('.sma-website-status');
  const client=createWebsiteDraftClient({request,getOwnerId,uuid:()=>win.crypto.randomUUID()});
  let destroyed=false,loaded=false,busy=false,dirty=false;
@@ -44,7 +45,7 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.classList.toggle('sma-website-error',error);}
  function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
- function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED'].includes(error.code)){loaded=false;for(const input of root.querySelectorAll('input[type="text"]'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');}}
+ function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;for(const input of root.querySelectorAll('input[type="text"]'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');}}
  function show(state){
   if(destroyed)return;
   const draft=state.draft||{mode:'existing',website_url:'',desired_domain:''};
@@ -82,5 +83,5 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  const observer=new win.MutationObserver(()=>{if(page.classList.contains('active')&&!dirty&&!loaded)load();});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
  if(page.classList.contains('active'))load();
- return {destroy(){destroyed=true;observer.disconnect();root.remove();css.remove();}};
+ return {destroy(){destroyed=true;observer.disconnect();if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
 }

@@ -1,6 +1,6 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
-Stand: 4. November 2026. Arbeitsbranch `website-domain-preparation`, Ziel `website-v1`. **Prüfbarer Implementierungsentwurf, noch nicht live und noch nicht vollständig abgenommen.**
+Stand: 4. November 2026. Arbeitsbranch `website-domain-preparation`, Ziel `website-v1`. **Speicherung installiert und geprüft. Frontend in PR #58; noch nicht veröffentlicht, Browser-Endprüfung offen.**
 
 Der Nutzer hat die kostenfreie Vorbereitung vorgezogen, während Sightengine-Zahlung, Videoprüfung und echter Social-Media-Uploadtest offen bleiben. PR #57 bleibt davon getrennt und ungemergt. Es gibt keinen Auftrag zu Domainkauf, Hostingwechsel, Tarifänderung oder Veröffentlichung einer Kundenwebseite.
 
@@ -22,7 +22,7 @@ Eine öffentliche SMA-Shopadresse wird ausschließlich aus der aktuellen Kundenz
 | Auf das neue Modul begrenzte Gestaltung | `app/assets/website-domain.css` |
 | Private Speicherung und authentifizierter RPC | `supabase/sql/website-domain-preparation.sql` |
 
-Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ergänzt das vorhandene Modul; Navigation, bestehende Überschrift, Schrift und übrige Portalbereiche bleiben erhalten. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
+Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ersetzt ausschließlich den Platzhalter im vorhandenen Modul und stellt ihn beim Entfernen der Erweiterung wieder her; Navigation, bestehende Überschrift, Schrift und übrige Portalbereiche bleiben erhalten. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
 
 ## Zugriff und Speichern
 
@@ -34,19 +34,24 @@ Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapp
 - Adressen sind nur Eingaben. Der Server ruft sie nicht ab. HTTPS, gültige ASCII-Domainnamen, begrenzte Längen und fehlende Zugangsdaten/Ports/Suchparameter/Anker werden geprüft; lokale Namen und IP-Literale sind ausgeschlossen. Internationalisierte Domains benötigen zunächst ihre ASCII-Schreibweise.
 - Die Anzahl gespeicherter Vorbereitungen ist auf eine pro Kunde begrenzt. Es gibt keinen Scheduler, kostenpflichtigen Prüfdienst, Registraraufruf, DNS-Schreibzugriff, automatischen Seitenbau oder Social-Media-Aufruf.
 
-## Prüfstand und Fortsetzung
+## Prüfstand
 
-Die Arbeitsumgebung und Browsersteuerung sind während der Bestandsaufnahme ausgefallen. Deshalb wurde nichts in die Live-Datenbank eingespielt, kein n8n-Workflow geändert und kein Frontend veröffentlicht. Der zuvor angelegte lokale Worktree ist nicht als Sicherung dieser später über GitHub vorbereiteten Dateien anzusehen; maßgeblich ist der Remote-Branch.
+- `node --test tests/*.test.cjs`: **298 bestanden, 0 fehlgeschlagen** auf dem Website-Zweig (290 vorhandene + 8 neue Modellfälle). Die 314 Tests aus PR #57 gehören zu dessen separatem Publishing-Zweig und sind nicht Bestandteil dieses Zielbranchs.
+- `node tests/run-website-domain-sql.mjs`: lokale PGlite-Prüfreihe bestanden. Abgedeckt: Demo/Delta, inaktiver Zugang, falsches Paket, Eigentümerwechsel, doppelte Kundenbindung, direkte Rollenrechte, Replay, Konflikte und ungültige Eingaben.
+- Migration **`20261103234313_website_domain_preparation_v1`** über die Datenbank-Migrationsschnittstelle installiert. Die identische Definition ist unter `supabase/migrations/20261103234313_website_domain_preparation_v1.sql` eingecheckt.
+- Der installierte RPC wurde als Rolle `authenticated` mit synthetischen Kunden innerhalb einer zurückgerollten Transaktion geprüft: Speichern, identisches Wiederholen, erneutes Laden, neue Revision, Konflikte, Kontowechsel sowie Paket-/Zugangssperren bestanden. Danach **0 Testkunden und 0 gespeicherte Vorbereitungen** verblieben.
+- In der Live-Datenbank verhindert zusätzlich der eindeutige Index `sma_kunden_user_id_key` doppelte Nutzerzuordnungen. Der erste Live-Fixturelauf wurde beim absichtlichen Duplikat durch diesen Index abgebrochen und vollständig zurückgerollt. Der anschließende Live-Lauf ohne dieses künstliche Duplikat bestand. Die lokale Fixture ohne diesen Index prüft zusätzlich die defensive Ablehnung durch den RPC selbst.
+- Rollenprüfung live: kein anonymer RPC-Aufruf, kein direkter Tabellenzugriff für Kunden; öffentlicher Wrapper bleibt `SECURITY INVOKER`.
+- Security-Advisors: keine neue Warnung. Ein zusätzlicher Hinweis [RLS ohne Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) entspricht der beabsichtigten Sperre aller direkten Tabellenzugriffe. Die schon vorher bestehenden Hinweise/Warnungen anderer Tabellen, Funktionen und Auth-Einstellungen wurden nicht verändert.
+- Browserteilprüfung in einer isolierten Vorschau: Formular wird anstelle des Platzhalters eingebunden; leere vorhandene Webadresse erhält die richtige Pflichtfeldmeldung. Die Vorschau verwendet ausschließlich synthetische Daten. **Wiederholung nach verlorener Antwort, Kopieren, schmale Darstellung und die authentifizierte Live-Einbettung sind im Browser noch nicht abgenommen.** Die Browsersteuerung ist während der Prüfung mehrfach mit Timeout ausgefallen; auch ihr Neustart war nicht erreichbar. Ein angeklickter Speichertest wird ausdrücklich nicht als bestanden gezählt.
+- Frontend weiterhin unveröffentlicht; PR #58 bleibt Entwurf. Der Zielbranch, PR #57 und alle n8n-Originalworkflows wurden in diesem Schritt nicht geändert. Keine Tarif-, Registrar-, DNS-, Hosting- oder Social-Media-Aktion wurde ausgeführt.
 
-Bereits geprüft: acht reine JavaScript-Modellfälle in der verfügbaren V8-Laufzeit mit Assertion-Harness; zusätzlich Syntax der beiden Module und des ergänzten Dashboard-Scripts sowie ausgeglichene Formular-Tags. Abgedeckt sind ungültige Ziele, ausschließlich gültige SMA-Shoplinks, fremde Zustände, verlorene Speicherantworten, neue Revisionen, Kontoänderungen, Konflikte und parallele Speicheraufrufe. **Dies ersetzt weder den Node-Testlauf noch SQL- oder Browserprüfung.**
+## Fortsetzung
 
-Noch auszuführen, sobald die Arbeitsumgebung wieder verfügbar ist:
-
-1. Exakten Branch laden; vorhandene Node-Prüfreihen einschließlich `website-domain.test.cjs` ausführen.
-2. Mit der vorhandenen festgeschriebenen PGlite-Abhängigkeit die neue SQL-Prüfreihe ausführen. Sie prüft Demo/Delta, inaktiven Zugang, falsches Paket, Eigentümerwechsel, doppelte Kundenbindung, direkte Rollenrechte, Replay, Konflikte und ungültige Eingaben in einer isolierten Datenbank.
-3. Desktop-/Mobilansicht und Einbettung im bestehenden Dashboard prüfen; Ladefehler/erneutes Laden, Kopieren, Navigation und Abmeldung einbeziehen.
-4. Erst nach diesen Prüfungen die additive Definition als versionierte Migration installieren, Rollenrechte und Security-Advisors prüfen und den Zugang authentifiziert testen. Den Zielbranch unmittelbar vor einem Merge erneut prüfen.
-5. Erst dann die Dashboard-Erweiterung veröffentlichen und Speichern/erneutes Laden im echten Delta-Zugang abnehmen.
+1. PR #58 unverändert auf dem aktuellen Head aufnehmen. Die Datenbankmigration ist bereits installiert und muss nicht erneut angewendet werden.
+2. Sobald die Browsersteuerung wieder erreichbar ist, Desktop-/Mobilansicht und vollständigen Formularablauf mit synthetischen Daten prüfen: Speichern/Neuladen, verlorene Antwort ohne zweite Änderung, Ladefehler/erneutes Laden, Kopieren, Zugriffsentzug und Entfernen des Moduls beim Abmelden.
+3. Zielbranch und PR-Head vor dem Merge erneut vergleichen. Erst nach der ausstehenden Browserprüfung das Frontend nach `website-v1` übernehmen und den vorhandenen Deploymentweg verwenden.
+4. Authentifiziertes Laden im echten Delta-Dashboard prüfen. Einen echten Kundeneintrag nur mit zutreffenden Kundenangaben speichern; die erfolgreiche SQL-Fixture ist kein Nachweis für einen bereits erfolgten Live-UI-Speichervorgang.
 
 ```sh
 node --test tests/*.test.cjs
@@ -54,4 +59,4 @@ npm ci --prefix tests/sql-runtime --ignore-scripts
 node tests/run-website-domain-sql.mjs
 ```
 
-Ein späterer Schritt muss Inhaberschaft und konkrete Art der externen Anbindung nachweisen. Domainregistrierung, Kauf, Hosting, DNS-Änderungen und automatischer Datenabgleich sind nicht Bestandteil dieses Vorbereitungsentwurfs.
+Ein späterer Schritt muss Inhaberschaft und konkrete Art der externen Anbindung nachweisen. Domainregistrierung, Kauf, Hosting, DNS-Änderungen und automatischer Datenabgleich sind nicht Bestandteil dieser Vorbereitung. Sightengine bleibt `VIDEO_PLAN_REQUIRED`; ein echter Uploadtest benötigt weiterhin eine ausdrückliche Freigabe.
