@@ -6,7 +6,9 @@ const sha='a'.repeat(64),context={ok:true,analysis:{policy_version:VIDEO_MAGIC_P
 const meta={id:context.drive_file_id,mimeType:'video/mp4',size:'1000',version:'1',sha256Checksum:sha,trashed:false,parents:['own_upload'],capabilities:{canDownload:true},videoMediaMetadata:{durationMillis:'10000'}};
 const data={subject_type:'other',description:'Ein blaues Quadrat bewegt sich von links nach rechts.',observations:['Ein blaues Quadrat'],visible_text:[],uncertainties:[],spoken_summary:''};
 const response=x=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(x)}]}]});
-const manifest={schema:'sma-video-evidence-v2',sha256:sha,size_bytes:1000,duration_ms:10000,audio_status:'no_audio_stream',positions_ms:[0,9850],sampling:'representative_frames_not_full_moderation',frames:[0,9850].map((p,i)=>({name:`frame-00${i}.jpg`,position_ms:p,width:720,height:1280,size_bytes:100,sha256:'b'.repeat(64)})),'frames.jpg':{size_bytes:100,sha256:'c'.repeat(64)}};
+const manifest={schema:'sma-video-evidence-v3',sha256:sha,size_bytes:1000,duration_ms:10000,audio_status:'no_audio_stream',positions_ms:[0,9850],sampling:'representative_frames_not_full_moderation',frames:[0,9850].map((p,i)=>({name:`frame-00${i}.jpg`,position_ms:p,width:720,height:1280,size_bytes:100,sha256:'b'.repeat(64)})),'frames.jpg':{size_bytes:100,sha256:'c'.repeat(64)}};
+manifest.technical={...require('./video-technical-fixture.cjs'),width_px:manifest.width||720,height_px:manifest.height||1280};
+manifest.width=manifest.technical.width_px;manifest.height=manifest.technical.height_px;
 test('production video binding rejects changed folder, content, duration, metadata and wrong analysis policy',()=>{
  assert.equal(videoFile(meta,context,['own_upload','own_processing']).revision,context.asset_revision);
  for(const [m,c] of [[{...meta,parents:['other_customer']},context],[{...meta,version:'2'},context],[{...meta,videoMediaMetadata:{durationMillis:'9999'}},context],[meta,{...context,analysis:{policy_version:'photo'}}],[meta,{...context,size_bytes:24000001}],[meta,{...context,duration_ms:null}]])assert.throws(()=>videoFile(m,c,['own_upload','own_processing']));
