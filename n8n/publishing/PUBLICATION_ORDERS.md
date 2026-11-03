@@ -1,6 +1,6 @@
 # Dashboard-Auftrag und gebundene Freigabe
 
-Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Der aktuelle Auftrag ergänzt die getrennten Medienbestätigungen.
+Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Die getrennten Medienbestätigungen aus #53 sind veröffentlicht und im echten TikTok-Vorbereitungsdialog geprüft.
 
 Stand: 3. November 2026. Diese Erweiterung verbindet den angemeldeten Dashboard-Benutzer, seine konkrete Datei-/Textversion, das tatsächliche n8n-Zielkonto und seine ausdrückliche Freigabe mit der vorhandenen Publisher-Arbeitskopie. Der Ausführungsweg endet weiterhin bei einer protokollierten Prüfung: **kein Provider-Upload und kein Social-Media-Posting**.
 
@@ -76,3 +76,25 @@ Validierung: 286 Node-Tests bestanden. Die SQL-Prüfreihen verwenden jetzt zusä
 Quelle für die TikTok-Oberfläche, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/content-sharing-guidelines. Die dort verlinkten Bedingungen werden als offizielle Ziele angeboten; ihr Inhalt wird nicht als juristisch geprüft behauptet.
 
 Migration `publication_order_media_confirmations_20261103` ist angewendet. Beide SQL-Prüfreihen bestanden anschließend auch auf der produktiven PostgreSQL-17-Instanz mit ausschließlich synthetischen, zurückgerollten Datensätzen. Vor der Änderung stimmten alle fünf vorhandenen Auftragsfunktionen im Quelltext-Hash mit dem Repository überein. Der Sicherheitsberater meldet keine neue Warnung für diese Änderung; bestehende Hinweise bleiben separat offen.
+
+## Live-Abnahme der Medienbestätigungen – 3. November 2026
+
+PR #53 ist zusammengeführt; GitHub-Pages-Lauf `41677922971` war erfolgreich. Im angemeldeten Dashboard wurde mit dem bestehenden TikTok-Video ein separater Testauftrag bis `prepared` durchlaufen. Zielkonto, gespeicherter Beitrag, Sichtbarkeit „Nur ich“, deaktivierte Interaktionen und ausgeschaltete Werbung wurden korrekt angezeigt. Die drei Medienbestätigungen, die verlinkte TikTok-Musikbestätigung und die finale Zustimmung waren leer; „Veröffentlichung freigeben“ blieb deaktiviert. Die Ansicht wurde auch visuell geprüft. Es wurden keine Erklärungen oder Bedingungen im Namen des Nutzers bestätigt.
+
+Nach der Prüfung wurde ausschließlich dieser Testauftrag unter Prüfung von Eigentümer, `state=prepared`, fehlender Zustimmung, fehlender Lease und fehlendem Journaleintrag auf `cancelled` gesetzt. `approved_at` und `approval_review` blieben null. Keine finale Freigabe, kein Provider-Upload und kein Posting wurden ausgelöst. Der Branded-Content-Bestätigungszweig ist durch die automatischen Tests abgedeckt; dieser echte Vorbereitungsauftrag verwendete keine Werbung.
+
+### Dateiabgleich: erfolgreiche Wiederholungsprüfung, Ursache noch offen
+
+Die erste Live-Abnahme war bei der Aktualisierung des Dateikatalogs zweimal fehlgeschlagen. Nach ausdrücklicher Freigabe des Nutzers wurde eine isolierte, unveröffentlichte n8n-Diagnose einmal ausgeführt. Sie las ausschließlich die vorhandene Kunden-/Ordnerzuordnung, die Zugriffsmetadaten beider Drive-Ordner und die Dateimetadaten. Ergebnis: `ok:true`, zwei Dateien; keine Datei wurde verändert. Ausführungsdaten wurden nicht gespeichert, die flüchtige Ergebnisanzeige anschließend geleert. Die Diagnose besitzt keinen Upload-, Publish- oder Datenbank-Schreibknoten.
+
+Der Export des aktiven Katalogworkflows `Tta5irg2Z3DiCGy4` stimmte bei allen 18 Knotenparametern, Credential-Referenzen, Fehlerpfaden und Verbindungen mit der Repository-Vorlage überein. Der ursprüngliche Workflow blieb unverändert. Die bisherigen Datenbankaufrufe hatten HTTP 200 geliefert; das allein ist kein Nachweis eines erfolgreichen fachlichen Abgleichs.
+
+Der erneute echte Klick auf „Dateien aktualisieren“ war erfolgreich. Die Datenbank bestätigte Abschluss am **03.11.2026 um 18:26:52 MEZ**, zwei verfügbare Dateien und keine offene Lease. Danach gelang die oben beschriebene Auftragsvorbereitung. Eine konkrete Ursache der früheren Fehlschläge ist damit **nicht nachgewiesen**; es wurde keine vermeintliche Fehlerkorrektur oder Tarifänderung vorgenommen.
+
+### Verbleibende Grenzen
+
+- Sightengine meldet für die visuelle Videoprüfung weiterhin `VIDEO_PLAN_REQUIRED`.
+- Der allgemeine Medienhinweis `TIKTOK_CREATOR_LIMIT` bleibt im Auftragsdialog offen, obwohl der separate aktuelle Kontonachweis bereits vorliegt. Die Verknüpfung dieses Medienchecks mit frischen, zielgebundenen Creator-Optionen ist noch umzusetzen; der Blocker wurde nicht pauschal entfernt.
+- Vollständiger Inhalts-/Portaltextnachweis, übrige Portalprofile, Meta-Berechtigungen sowie Upload-Dispatcher und Provider-Ergebnisjournal bleiben offen.
+
+Die Abnahme bestätigt die Vorbereitung und die gesperrte Zustimmung. Sie ist keine Abnahme einer tatsächlichen Veröffentlichung. Für diesen Dokumentationsnachtrag wurde kein Anwendungscode geändert; die 286 bestandenen Node-Tests und beide SQL-Prüfreihen aus #53 bleiben der geprüfte Implementierungsstand.

@@ -1,6 +1,6 @@
 # Zielkonto und Portalberechtigungen
 
-Stand: 2026-11-03. **Anschlusskorrektur und Kontoprüfungen abgeschlossen (#46), Storno-Korrektur live abgenommen (#49), technische Videonachweise aus #50 veröffentlicht und mit dem ausgewählten echten Video erfolgreich geprüft. Dashboard v26 ist live.**
+Stand: 2026-11-03. **Anschlusskorrektur und Kontoprüfungen abgeschlossen (#46), Storno-Korrektur live abgenommen (#49), technische Videonachweise aus #50 veröffentlicht und mit dem ausgewählten echten Video erfolgreich geprüft. Die Medienbestätigungen aus #53 sind mit Dashboard v28 live und im TikTok-Auftrag geprüft; siehe [PUBLICATION_ORDERS.md](PUBLICATION_ORDERS.md#live-abnahme-der-medienbestätigungen--3-november-2026).**
 
 Der bereits genehmigte private OAuth-Import bleibt unverändert in derselben n8n-Instanz. App-Secrets und Provider-Token stehen nicht im Repository. Die Migrationen `publication_account_verification_v1` und `publication_order_account_evidence_v1` sind eingespielt; die zuvor dokumentierten SQL-Prüfreihen bestanden auf PostgreSQL 17 mit Rollback.
 
