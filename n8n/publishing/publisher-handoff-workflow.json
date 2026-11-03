@@ -1,0 +1,132 @@
+{
+  "name": "SMA – Gespeicherte Portaltexte – Übergabeprüfung V1",
+  "nodes": [
+    {
+      "id": "1fe57047-778f-4c16-b5b0-67d8b0c483ac",
+      "name": "Gespeicherten Stand prüfen",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "b4f20ef9-1ee1-4d4b-af03-f1dff6656df1",
+      "name": "Auswahl festhalten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        0
+      ],
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Internal read-only handoff. This is neither an approval nor an upload payload.\nconst HANDOFF_PLATFORMS = ['youtube', 'instagram', 'facebook', 'tiktok'];\nconst HANDOFF_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;\nconst HANDOFF_SHOP = /^https:\\/\\/sma-automation\\.com\\/app\\/shop\\.html\\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/;\nconst HANDOFF_FAILURES = ['ACCESS_INACTIVE', 'FILE_UNAVAILABLE', 'FILE_CHANGED', 'ASSIGNMENT_UNAVAILABLE', 'ASSIGNMENT_CHANGED'];\nconst HANDOFF_PENDING = ['DRIVE_RECHECK_REQUIRED', 'MEDIA_APPROVAL_REQUIRED', 'CONTENT_APPROVAL_REQUIRED', 'TARGET_ACCOUNT_REQUIRED', 'PUBLICATION_APPROVAL_REQUIRED', 'PUBLICATION_RESERVATION_REQUIRED'];\nconst handoffObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);\n\nfunction requireHandoffRequest(input) {\n  const keys = ['version', 'customer_id', 'drive_file_id', 'asset_id', 'asset_revision', 'platform', 'assignment_revision', 'preview_id', 'preview_revision', 'shop_url', 'media_kind'];\n  if (!handoffObject(input) || Object.keys(input).sort().join() !== keys.sort().join() || input.version !== 1 ||\n      !Number.isSafeInteger(input.customer_id) || input.customer_id < 1 ||\n      typeof input.drive_file_id !== 'string' || !/^[A-Za-z0-9_-]{10,200}$/.test(input.drive_file_id) ||\n      typeof input.asset_id !== 'string' || !HANDOFF_UUID.test(input.asset_id) ||\n      typeof input.preview_id !== 'string' || !HANDOFF_UUID.test(input.preview_id) ||\n      typeof input.asset_revision !== 'string' || !/^(?:sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}|version):\\d{1,30}$/.test(input.asset_revision) ||\n      !HANDOFF_PLATFORMS.includes(input.platform) || !['image', 'video'].includes(input.media_kind) ||\n      !Number.isSafeInteger(input.assignment_revision) || input.assignment_revision < 1 ||\n      !Number.isSafeInteger(input.preview_revision) || input.preview_revision < 1 ||\n      typeof input.shop_url !== 'string' || !HANDOFF_SHOP.test(input.shop_url) || input.shop_url.split('shop=')[1].length > 80) {\n    throw Error('INVALID_HANDOFF_INPUT');\n  }\n  return {...input};\n}\n\nfunction handoffRpcInput(input) {\n  const r = requireHandoffRequest(input);\n  return {p_customer_id:r.customer_id, p_drive_file_id:r.drive_file_id, p_asset_revision:r.asset_revision, p_platform:r.platform};\n}\n\nfunction handoffFailure(code) {\n  return {ok:false, stage:'handoff_preview', can_publish:false, can_upload:false, code};\n}\n\nfunction makeHandoff(response, input, now = Date.now()) {\n  const r = requireHandoffRequest(input);\n  if (!handoffObject(response) || response.ok !== true) {\n    return handoffFailure(HANDOFF_FAILURES.includes(response?.code) ? response.code : 'HANDOFF_UNAVAILABLE');\n  }\n  // Never select the newest text implicitly: the caller supplies the exact saved selection.\n  for (const key of ['asset_id', 'asset_revision', 'platform', 'assignment_revision', 'preview_id', 'preview_revision', 'shop_url', 'media_kind']) {\n    if (response[key] !== r[key]) return handoffFailure('HANDOFF_CHANGED');\n  }\n  if (response.can_publish !== false) return handoffFailure('HANDOFF_UNAVAILABLE');\n  const media = response.media_check;\n  const verifiedAt = typeof media?.verified_at === 'string' ? Date.parse(media.verified_at) : NaN;\n  if (!Number.isFinite(now) || !Number.isFinite(verifiedAt) || verifiedAt > now + 60000 || now - verifiedAt >= 15 * 60000) {\n    return handoffFailure('FILE_REFRESH_REQUIRED');\n  }\n  if (!handoffObject(media) || media.asset_id !== r.asset_id || media.asset_revision !== r.asset_revision ||\n      media.can_publish !== false || !['needs_review', 'needs_changes'].includes(media.status) ||\n      !Array.isArray(media.checks) || media.checks.length === 0 || media.checks.length > 100 ||\n      media.checks.some(c => !handoffObject(c) || typeof c.code !== 'string' || !/^[A-Z][A-Z0-9_]{0,79}$/.test(c.code) || !['pass', 'pending', 'fail'].includes(c.status))) {\n    return handoffFailure('MEDIA_CHECK_UNAVAILABLE');\n  }\n  const d = response.text;\n  const text = (s, max, min = 1) => typeof s === 'string' && s.length >= min && s.length <= max && !/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(s);\n  if (!handoffObject(d) || d.platform !== r.platform || !text(d.title, 80) || !text(d.body, 1200, 10) ||\n      !text(d.caption, 5000) || !Array.isArray(d.hashtags) || d.hashtags.length > 3 ||\n      d.hashtags.some(t => !text(t, 50) || !/^[\\p{L}\\p{N}_]+$/u.test(t)) ||\n      new Set(d.hashtags.map(t => t.toLocaleLowerCase('de'))).size !== d.hashtags.length ||\n      !Array.isArray(d.review_notes) || d.review_notes.length > 5 || d.review_notes.some(t => !text(t, 250))) {\n    return handoffFailure('SAVED_TEXT_INVALID');\n  }\n  // Preserve the stored caption byte for byte; do not regenerate, trim or append a second shop footer.\n  const captions = ['🛒 Zum Shop: ', '🛒 Visit our shop: '].map(footer =>\n    [d.body, d.hashtags.map(t => '#' + t).join(' '), footer + r.shop_url].filter(Boolean).join('\\n\\n'));\n  if (!captions.includes(d.caption) || d.caption.split(r.shop_url).length !== 2 ||\n      /(https?:|www\\.|<|>)/i.test(d.title + d.body) || Buffer.byteLength(d.caption, 'utf8') > 5000 ||\n      (r.platform === 'tiktok' && d.caption.length > 2200)) return handoffFailure('SAVED_TEXT_INVALID');\n  const blockers = [...HANDOFF_PENDING];\n  if (media.checks.some(c => c.status === 'fail') || media.status === 'needs_changes') blockers.push('MEDIA_CHANGES_REQUIRED');\n  if (d.review_notes.length) blockers.push('TEXT_REVIEW_REQUIRED');\n  return {\n    ok:true, version:1, stage:'handoff_preview', can_publish:false, can_upload:false,\n    binding:{...r},\n    draft:{platform:d.platform, title:d.title, body:d.body, caption:d.caption, hashtags:[...d.hashtags], review_notes:[...d.review_notes]},\n    checks:{saved_selection:'matched', catalog_verified_at:media.verified_at, media:media.checks.map(c => ({code:c.code, status:c.status}))},\n    blockers\n  };\n}\n\n\nif($input.all().length!==1)throw Error('INVALID_HANDOFF_INPUT');\nconst selection=requireHandoffRequest($input.first().json);return [{json:{selection,rpc:handoffRpcInput(selection)}}];"
+      }
+    },
+    {
+      "id": "1401aa31-9c5f-4451-95f1-3766065345bf",
+      "name": "Gespeicherte Zuordnung lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        560,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_assignment_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.rpc }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "5ad4e674-5b6d-4292-8014-6bde89695597",
+      "name": "Übergabe prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        0
+      ],
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Internal read-only handoff. This is neither an approval nor an upload payload.\nconst HANDOFF_PLATFORMS = ['youtube', 'instagram', 'facebook', 'tiktok'];\nconst HANDOFF_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;\nconst HANDOFF_SHOP = /^https:\\/\\/sma-automation\\.com\\/app\\/shop\\.html\\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/;\nconst HANDOFF_FAILURES = ['ACCESS_INACTIVE', 'FILE_UNAVAILABLE', 'FILE_CHANGED', 'ASSIGNMENT_UNAVAILABLE', 'ASSIGNMENT_CHANGED'];\nconst HANDOFF_PENDING = ['DRIVE_RECHECK_REQUIRED', 'MEDIA_APPROVAL_REQUIRED', 'CONTENT_APPROVAL_REQUIRED', 'TARGET_ACCOUNT_REQUIRED', 'PUBLICATION_APPROVAL_REQUIRED', 'PUBLICATION_RESERVATION_REQUIRED'];\nconst handoffObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);\n\nfunction requireHandoffRequest(input) {\n  const keys = ['version', 'customer_id', 'drive_file_id', 'asset_id', 'asset_revision', 'platform', 'assignment_revision', 'preview_id', 'preview_revision', 'shop_url', 'media_kind'];\n  if (!handoffObject(input) || Object.keys(input).sort().join() !== keys.sort().join() || input.version !== 1 ||\n      !Number.isSafeInteger(input.customer_id) || input.customer_id < 1 ||\n      typeof input.drive_file_id !== 'string' || !/^[A-Za-z0-9_-]{10,200}$/.test(input.drive_file_id) ||\n      typeof input.asset_id !== 'string' || !HANDOFF_UUID.test(input.asset_id) ||\n      typeof input.preview_id !== 'string' || !HANDOFF_UUID.test(input.preview_id) ||\n      typeof input.asset_revision !== 'string' || !/^(?:sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}|version):\\d{1,30}$/.test(input.asset_revision) ||\n      !HANDOFF_PLATFORMS.includes(input.platform) || !['image', 'video'].includes(input.media_kind) ||\n      !Number.isSafeInteger(input.assignment_revision) || input.assignment_revision < 1 ||\n      !Number.isSafeInteger(input.preview_revision) || input.preview_revision < 1 ||\n      typeof input.shop_url !== 'string' || !HANDOFF_SHOP.test(input.shop_url) || input.shop_url.split('shop=')[1].length > 80) {\n    throw Error('INVALID_HANDOFF_INPUT');\n  }\n  return {...input};\n}\n\nfunction handoffRpcInput(input) {\n  const r = requireHandoffRequest(input);\n  return {p_customer_id:r.customer_id, p_drive_file_id:r.drive_file_id, p_asset_revision:r.asset_revision, p_platform:r.platform};\n}\n\nfunction handoffFailure(code) {\n  return {ok:false, stage:'handoff_preview', can_publish:false, can_upload:false, code};\n}\n\nfunction makeHandoff(response, input, now = Date.now()) {\n  const r = requireHandoffRequest(input);\n  if (!handoffObject(response) || response.ok !== true) {\n    return handoffFailure(HANDOFF_FAILURES.includes(response?.code) ? response.code : 'HANDOFF_UNAVAILABLE');\n  }\n  // Never select the newest text implicitly: the caller supplies the exact saved selection.\n  for (const key of ['asset_id', 'asset_revision', 'platform', 'assignment_revision', 'preview_id', 'preview_revision', 'shop_url', 'media_kind']) {\n    if (response[key] !== r[key]) return handoffFailure('HANDOFF_CHANGED');\n  }\n  if (response.can_publish !== false) return handoffFailure('HANDOFF_UNAVAILABLE');\n  const media = response.media_check;\n  const verifiedAt = typeof media?.verified_at === 'string' ? Date.parse(media.verified_at) : NaN;\n  if (!Number.isFinite(now) || !Number.isFinite(verifiedAt) || verifiedAt > now + 60000 || now - verifiedAt >= 15 * 60000) {\n    return handoffFailure('FILE_REFRESH_REQUIRED');\n  }\n  if (!handoffObject(media) || media.asset_id !== r.asset_id || media.asset_revision !== r.asset_revision ||\n      media.can_publish !== false || !['needs_review', 'needs_changes'].includes(media.status) ||\n      !Array.isArray(media.checks) || media.checks.length === 0 || media.checks.length > 100 ||\n      media.checks.some(c => !handoffObject(c) || typeof c.code !== 'string' || !/^[A-Z][A-Z0-9_]{0,79}$/.test(c.code) || !['pass', 'pending', 'fail'].includes(c.status))) {\n    return handoffFailure('MEDIA_CHECK_UNAVAILABLE');\n  }\n  const d = response.text;\n  const text = (s, max, min = 1) => typeof s === 'string' && s.length >= min && s.length <= max && !/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(s);\n  if (!handoffObject(d) || d.platform !== r.platform || !text(d.title, 80) || !text(d.body, 1200, 10) ||\n      !text(d.caption, 5000) || !Array.isArray(d.hashtags) || d.hashtags.length > 3 ||\n      d.hashtags.some(t => !text(t, 50) || !/^[\\p{L}\\p{N}_]+$/u.test(t)) ||\n      new Set(d.hashtags.map(t => t.toLocaleLowerCase('de'))).size !== d.hashtags.length ||\n      !Array.isArray(d.review_notes) || d.review_notes.length > 5 || d.review_notes.some(t => !text(t, 250))) {\n    return handoffFailure('SAVED_TEXT_INVALID');\n  }\n  // Preserve the stored caption byte for byte; do not regenerate, trim or append a second shop footer.\n  const captions = ['🛒 Zum Shop: ', '🛒 Visit our shop: '].map(footer =>\n    [d.body, d.hashtags.map(t => '#' + t).join(' '), footer + r.shop_url].filter(Boolean).join('\\n\\n'));\n  if (!captions.includes(d.caption) || d.caption.split(r.shop_url).length !== 2 ||\n      /(https?:|www\\.|<|>)/i.test(d.title + d.body) || Buffer.byteLength(d.caption, 'utf8') > 5000 ||\n      (r.platform === 'tiktok' && d.caption.length > 2200)) return handoffFailure('SAVED_TEXT_INVALID');\n  const blockers = [...HANDOFF_PENDING];\n  if (media.checks.some(c => c.status === 'fail') || media.status === 'needs_changes') blockers.push('MEDIA_CHANGES_REQUIRED');\n  if (d.review_notes.length) blockers.push('TEXT_REVIEW_REQUIRED');\n  return {\n    ok:true, version:1, stage:'handoff_preview', can_publish:false, can_upload:false,\n    binding:{...r},\n    draft:{platform:d.platform, title:d.title, body:d.body, caption:d.caption, hashtags:[...d.hashtags], review_notes:[...d.review_notes]},\n    checks:{saved_selection:'matched', catalog_verified_at:media.verified_at, media:media.checks.map(c => ({code:c.code, status:c.status}))},\n    blockers\n  };\n}\n\n\nif($input.all().length!==1)throw Error('HANDOFF_UNAVAILABLE');\nreturn [{json:makeHandoff($input.first().json,$('Auswahl festhalten').first().json.selection)}];"
+      }
+    }
+  ],
+  "connections": {
+    "Gespeicherten Stand prüfen": {
+      "main": [
+        [
+          {
+            "node": "Auswahl festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auswahl festhalten": {
+      "main": [
+        [
+          {
+            "node": "Gespeicherte Zuordnung lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gespeicherte Zuordnung lesen": {
+      "main": [
+        [
+          {
+            "node": "Übergabe prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 60,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}
