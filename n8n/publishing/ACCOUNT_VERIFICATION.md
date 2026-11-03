@@ -76,6 +76,8 @@ PYTHONDONTWRITEBYTECODE=1 python n8n/publishing/build-publication-orders.py \
 
 ## Nächster Umsetzungsschritt
 
+Die Statusanzeige für administrativ stornierte Aufträge ergänzen: Ein erneuter Statusabruf nach der Testbereinigung zeigt derzeit die allgemeine Fehlermeldung, weil der Browserclient den terminalen Zustand `cancelled` noch nicht akzeptiert. Die Datenbankstornierung beider Testaufträge ist bestätigt; der offene Dialog wurde geschlossen. Diese Anzeige ist keine fehlgeschlagene Kontoprüfung oder Veröffentlichung.
+
 Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt. Eine endgültige Veröffentlichungsfreigabe bleibt eine bewusste Entscheidung des Nutzers.
 
 Die frühere Browserstörung war in dieser Fortsetzung ausreichend behoben, um beide Korrekturen und Provider-Tests auszuführen. Einzelne verzögerte Browseraktionen wurden anhand des tatsächlichen Seitenstands überprüft. Daraus folgt kein belegter Fehler in den PC-Einstellungen des Nutzers.
