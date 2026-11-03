@@ -4,7 +4,7 @@ do $$ declare f sma_private.publication_files_v1%rowtype; r jsonb; p text; kind 
  f.id:='fa330000-0000-4000-8000-000000000001';f.revision:='fixture:1';f.available:=false;
  f.media_kind:='video';f.mime_type:='video/mp4';f.size_bytes:=1000000;f.width_px:=1080;f.height_px:=1920;f.duration_ms:=12500;f.verified_at:=now();
  r:=sma_private.publication_media_precheck_v1(f,'instagram');
- assert r->>'rules_version'='2026-11-01.2';assert r->>'facts_source'='drive_metadata';
+ assert r->>'rules_version'='2026-11-03.1';assert r->>'facts_source'='drive_metadata';
  assert r->'recommendations' @> '[{"code":"INSTAGRAM_REEL_ASPECT","status":"matches"}]';
  assert r->'checks' @> '[{"code":"VIDEO_FRAMERATE_PENDING","status":"pending"},{"code":"VIDEO_CODEC_PENDING","status":"pending"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"}]';
  assert r->>'status'='needs_review' and r->'can_publish'='false';

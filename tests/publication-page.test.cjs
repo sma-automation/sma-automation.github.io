@@ -221,7 +221,7 @@ test('a completed device upload uses the selected local video and removes long p
 
 const instagramResult={...result,preview:{...result.preview,drafts:[{...result.preview.drafts[0],platform:'instagram'}]}};
 const supportedVideo={...ownFile,mime_type:'video/mp4',size_bytes:1000,duration_ms:10000,revision:'sha256:'+'a'.repeat(64)+':1'};
-const videoAnalysis={...magicAnalysis,asset_id:supportedVideo.id,asset_revision:supportedVideo.revision,policy_version:'magic-video-2026-11-02.1',result:{...magicAnalysis.result,policy_version:'magic-video-2026-11-02.1',description:'Ein blaues Quadrat bewegt sich von links nach rechts.',source_text:'Automatische Videoerkennung: Ein blaues Quadrat bewegt sich von links nach rechts. Das Video enthält keine Tonspur.',audio_status:'no_audio_stream',content_comparison:'model_checked_sampled_evidence',evidence:{source_sha256:'a'.repeat(64)}}};
+const videoAnalysis={...magicAnalysis,asset_id:supportedVideo.id,asset_revision:supportedVideo.revision,policy_version:'magic-video-2026-11-03.1',result:{...magicAnalysis.result,policy_version:'magic-video-2026-11-03.1',description:'Ein blaues Quadrat bewegt sich von links nach rechts.',source_text:'Automatische Videoerkennung: Ein blaues Quadrat bewegt sich von links nach rechts. Das Video enthält keine Tonspur.',audio_status:'no_audio_stream',content_comparison:'model_checked_sampled_evidence',evidence:{source_sha256:'a'.repeat(64)}}};
 const videoFiles=async a=>a.p_action==='list'?{ok:true,files:[supportedVideo]}:a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'};
 test('new video waits for explicit Magic click, then recognizes, generates and assigns to the exact video',async()=>{
  let started=false,reads=0;

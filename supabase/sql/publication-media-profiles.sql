@@ -1,7 +1,7 @@
 -- Apply AFTER publication-content-review.sql. Recommendations never grant approval.
 create or replace function sma_private.publication_media_precheck_v1(f sma_private.publication_files_v1,p_platform text)
 returns jsonb language plpgsql stable security invoker set search_path='' as $$
-declare checks jsonb:='[]'; state text; label text; review jsonb; outcome text; recommendations jsonb:='[]'; scope_notice text;
+declare checks jsonb:='[]'; state text; label text; review jsonb; outcome text; recommendations jsonb:='[]'; scope_notice text; technical jsonb; fps_ok boolean;
 begin
  if p_platform not in ('youtube','instagram','facebook','tiktok') or p_platform is null then return jsonb_build_object('can_publish',false,'status','unavailable'); end if;
  label:=case p_platform when 'youtube' then 'YouTube-Video' when 'tiktok' then 'TikTok-Video' when 'instagram' then case when f.media_kind='video' then 'Instagram-Reel' else 'Instagram-Bild' end else case when f.media_kind='video' then 'Facebook-Video' else 'Facebook-Bild' end end;
@@ -44,8 +44,15 @@ begin
  else
   checks:=checks||jsonb_build_array(jsonb_build_object('code','PORTAL_RULES_PENDING','status','pending','message','Die vollständigen Format- und Größenregeln für diesen Veröffentlichungsweg sind noch nicht geprüft.'));
  end if;
+ technical:=sma_private.publication_video_technical_v1(f);
  -- These requirements cannot be inferred from Drive dimensions or MIME metadata.
- if f.media_kind='video' and p_platform in ('tiktok','instagram') then
+ if f.media_kind='video' and p_platform='tiktok' and technical is not null then
+  fps_ok:=(technical->>'frame_rate_num')::numeric/(technical->>'frame_rate_den')::numeric between 23 and 60
+   and (technical->>'min_frame_interval_us')::numeric>=16665 and (technical->>'max_frame_interval_us')::numeric<=43480;
+  checks:=checks||jsonb_build_array(jsonb_build_object('code','VIDEO_FRAMERATE','status',case when (technical->>'decoded_frames')::integer<2 then 'pending' when fps_ok then 'pass' else 'fail' end,'message',case when (technical->>'decoded_frames')::integer<2 then 'Zu wenige decodierte Bilder für einen Bildratennachweis.' when fps_ok then 'Bildrate und Abstände aller decodierten Bilder liegen innerhalb der SMA-Prüfgrenzen für 23 bis 60 Bilder pro Sekunde.' else 'Bildrate oder Bildabstände liegen außerhalb der SMA-Prüfgrenzen für 23 bis 60 Bilder pro Sekunde.' end));
+  checks:=checks||jsonb_build_array(jsonb_build_object('code','VIDEO_CODEC','status',case when technical->>'video_codec' in ('h264','hevc','vp8','vp9') then 'pass' else 'fail' end,'message','Geprüfter Videocodec: '||(technical->>'video_codec')||'. Erlaubt sind H.264, H.265, VP8 und VP9.'));
+  checks:=checks||jsonb_build_array(jsonb_build_object('code','VIDEO_DIMENSIONS','status',case when (technical->>'width_px')::integer between 360 and 4096 and (technical->>'height_px')::integer between 360 and 4096 then 'pass' else 'fail' end,'message','Die decodierte Breite und Höhe müssen jeweils zwischen 360 und 4096 Pixeln liegen.'));
+ elsif f.media_kind='video' and p_platform in ('tiktok','instagram') then
   checks:=checks||jsonb_build_array(jsonb_build_object('code','VIDEO_FRAMERATE_PENDING','status','pending','message','Die Bildrate muss an der Videodatei geprüft werden: 23 bis 60 Bilder pro Sekunde.'));
   checks:=checks||jsonb_build_array(jsonb_build_object('code','VIDEO_CODEC_PENDING','status','pending','message',case when p_platform='tiktok' then 'Der Videocodec muss geprüft werden: H.264, H.265, VP8 oder VP9.' else 'Der Videocodec muss geprüft werden: H.264 oder HEVC.' end));
  end if;
@@ -59,7 +66,11 @@ begin
   checks:=checks||jsonb_build_array(jsonb_build_object('code','FACEBOOK_ROUTE_PENDING','status','pending','message','Der Facebook-Veröffentlichungsweg ist noch nicht festgelegt. Vorgaben für Reels dürfen nicht auf jeden Bild- oder Videobeitrag übertragen werden.'));
  end if;
  scope_notice:=case p_platform when 'youtube' then 'YouTube-Video: Größe und Länge werden vorgeprüft. Die Einordnung als Short und die Möglichkeiten des Zielkontos sind noch offen.' when 'tiktok' then 'TikTok-Video: Format, Größe und Auflösung werden vorgeprüft. Die erlaubte Länge wird zusätzlich vom Zielkonto bestimmt.' when 'instagram' then case when f.media_kind='video' then 'Instagram-Reel: Format, Länge und Breite werden vorgeprüft. Der konkrete Veröffentlichungsweg und sein Größenlimit müssen noch bestätigt werden.' else 'Instagram-Bild: Das Ausgabeprofil ist noch offen. Eine bestandene Bildprüfung bestätigt allein nicht die Eignung für Instagram.' end else 'Facebook: Das Ausgabeprofil ist noch offen. Zuerst muss der Veröffentlichungsweg für diesen Beitrag feststehen.' end;
+ if technical is not null then
+  checks:=checks||jsonb_build_array(jsonb_build_object('code','BINARY_INSPECTION','status','pass','message','Die hashgeprüfte Datei wurde vollständig ohne gemeldeten Decodierfehler gelesen; Codec, Bildzeiten und Tonstatus sind belegt. Dies ist keine Inhalts- oder Veröffentlichungsfreigabe.'));
+ else
  checks:=checks||jsonb_build_array(jsonb_build_object('code','BINARY_INSPECTION_PENDING','status','pending','message',case when f.media_kind='video' then 'Codec, Bildrate, Ton und die tatsächliche Abspielbarkeit sind noch nicht geprüft.' else 'Die tatsächliche Bilddatei, ihre Ausrichtung und der Farbraum sind noch nicht geprüft.' end));
+ end if;
  review:=sma_private.publication_review_summary_v1(f);outcome:=review->'result'->>'outcome';
  if review->>'status'='completed' then
   checks:=checks||jsonb_build_array(jsonb_build_object('code','VISUAL_REVIEW','status',case when outcome='clear' then 'pass' else 'pending' end,'message',case when outcome='clear' then 'Die visuelle Sicherheitsprüfung meldet unter den SMA-Prüfgrenzen keine Auffälligkeit. Dies ist keine Veröffentlichungsfreigabe.' else 'Die visuelle Sicherheitsprüfung meldet mögliche Auffälligkeiten. Bitte prüfe den Inhalt vor der Freigabe.' end));
@@ -69,7 +80,7 @@ begin
  checks:=checks||jsonb_build_array(jsonb_build_object('code','SEMANTIC_REVIEW_PENDING','status','pending','message','Gesprochener und eingeblendeter Text, Aussagen und die Übereinstimmung mit dem Portaltext sind noch nicht geprüft.'));
  checks:=checks||jsonb_build_array(jsonb_build_object('code','PUBLICATION_APPROVAL_PENDING','status','pending','message','Zielkonto, Rechte, Kennzeichnungen und endgültige Freigabe sind noch offen.'));
  state:=case when exists(select 1 from jsonb_array_elements(checks) q where q->>'status'='fail') then 'needs_changes' else 'needs_review' end;
- return jsonb_build_object('rules_version','2026-11-01.2','status',state,'can_publish',false,'profile',label,'scope_notice',scope_notice,'facts_source','drive_metadata','recommendations',recommendations,'asset_id',f.id,'asset_revision',f.revision,'verified_at',f.verified_at,'facts',jsonb_build_object('mime_type',f.mime_type,'size_bytes',f.size_bytes,'width_px',f.width_px,'height_px',f.height_px,'duration_ms',f.duration_ms),'checks',checks,'content_review',review);
+ return jsonb_build_object('rules_version','2026-11-03.1','status',state,'can_publish',false,'profile',label,'scope_notice',scope_notice,'facts_source','drive_metadata','technical',technical,'recommendations',recommendations,'asset_id',f.id,'asset_revision',f.revision,'verified_at',f.verified_at,'facts',jsonb_build_object('mime_type',f.mime_type,'size_bytes',f.size_bytes,'width_px',f.width_px,'height_px',f.height_px,'duration_ms',f.duration_ms),'checks',checks,'content_review',review);
 end $$;
 revoke all on function sma_private.publication_media_precheck_v1(sma_private.publication_files_v1,text) from public,anon,authenticated;
 grant execute on function sma_private.publication_media_precheck_v1(sma_private.publication_files_v1,text) to service_role;

@@ -329,7 +329,7 @@ function magicHint(file=selectedAsset){
  if(!/^sha256:[a-f0-9]{64}:\d+$/.test(file.revision||''))return messages.CHECKSUM_REQUIRED;
  return '';
 }
-function magicPolicy(file){return file.media_kind==='video'?'magic-video-2026-11-02.1':'magic-photo-2026-11-02.1';}
+function magicPolicy(file){return file.media_kind==='video'?'magic-video-2026-11-03.1':'magic-photo-2026-11-02.1';}
 function magicLabel(file=selectedAsset){return file?.media_kind==='video'?'Video':'Foto';}
 function syncMagicButton(){
  $('recognizePhoto').disabled=busy||!selectedAsset||!['image','video'].includes(selectedAsset.media_kind)||!!magicHint()||magicState?.status==='completed';

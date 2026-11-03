@@ -10,8 +10,10 @@ const context={media_kind:'video',mime_type:'video/mp4',size_bytes:bytes.length,
 const container='cntr_1234567890abcdef';
 const upload={id:'cfile_1234567890abcdef',container_id:container,path:'/mnt/data/generated-video.zip'};
 const jpg=Buffer.from('ffd8ffe000112233','hex');
-const manifest={schema:'sma-video-evidence-v2',sha256:sha,size_bytes:24,duration_ms:8000,width:640,height:360,positions_ms:[0,1000,2000,3000,4000,5000,6000,7000,7850],sampling:'representative_frames_not_full_moderation',audio_status:'no_audio_stream','frames.jpg':{size_bytes:jpg.length,sha256:crypto.createHash('sha256').update(jpg).digest('hex')}};
+const manifest={schema:'sma-video-evidence-v3',sha256:sha,size_bytes:24,duration_ms:8000,width:640,height:360,positions_ms:[0,1000,2000,3000,4000,5000,6000,7000,7850],sampling:'representative_frames_not_full_moderation',audio_status:'no_audio_stream','frames.jpg':{size_bytes:jpg.length,sha256:crypto.createHash('sha256').update(jpg).digest('hex')}};
 manifest.frames=manifest.positions_ms.map((position_ms,i)=>({name:`frame-${String(i).padStart(3,'0')}.jpg`,position_ms,width:640,height:360,...manifest['frames.jpg']}));
+manifest.technical={...require('./video-technical-fixture.cjs'),width_px:manifest.width||720,height_px:manifest.height||1280};
+manifest.width=manifest.technical.width_px;manifest.height=manifest.technical.height_px;
 test('Drive state before and after analysis must match the same downloadable revision',()=>{
  const f={...context,drive_file_id:'synthetic-file-id'};
  const m={id:f.drive_file_id,mimeType:f.mime_type,size:String(f.size_bytes),sha256Checksum:sha,version:'1',trashed:false,capabilities:{canDownload:true}};

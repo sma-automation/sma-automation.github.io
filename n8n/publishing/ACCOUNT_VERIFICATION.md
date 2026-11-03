@@ -84,6 +84,20 @@ PR #49 wurde mit Merge-Commit `56bcf76823dce5684c3c96f2b4c2e9e6235a64fa` bereitg
 
 Live-Abnahme am 3. November 2026: Ein eigener YouTube-Testauftrag wurde um 14:57 UTC vorbereitet, ohne angekreuzte Zustimmung oder Freigabe. Nur dieser Auftrag wurde nach Prüfung von `prepared`, `approved_at:null`, fehlender Lease und fehlendem Journaleintrag storniert. „Status erneut laden“ zeigte anschließend die Stornomeldung und ausschließlich „Schließen“; Zustimmung, Freigabe und Statusabfrage waren verschwunden. Der Dialog wurde geschlossen. Kein Upload und keine Veröffentlichung.
 
+## Technische Videonachweise – 3. November 2026
+
+PR #50 ergänzt vollständige FFmpeg-Decodierung, Codec, Pixelformat, Abmessungen, rationale Bildrate, Anzahl decodierter Frames, minimale/maximale Frame-Abstände und optionale Audio-/Bitratendaten. `sma-video-evidence-v3` bindet diese geschlossenen, typisierten Felder an die tatsächlich geladenen Videobytes und die Quellrevision. Fehlgeschlagene oder unvollständige Decodierung liefert keinen Nachweis. Fehlende Bitraten bleiben unbekannt.
+
+- n8n-Workflow `a1F5Ps0B3sXMh70S` wurde als Version `4e2287ac-751c-4cd9-a2fa-4f9d2a37f642` veröffentlicht. Der gespeicherte Export stimmt bei allen 52 Knotenparametern mit der generierten Vorlage überein (HTTP-GET-Standardwert normalisiert). Verbindungen, Knoten-IDs, Positionen, Credentials und private Ausführungseinstellungen entsprechen exakt dem vorherigen Export. Nur 20 Code-Felder wurden aktualisiert.
+- Isolierter, unveröffentlichter QA-Workflow `9XKreTHHGR3Agtwd`: alle 17 Schritte erfolgreich mit einem synthetischen 8-Sekunden-Video, H.264, 640 × 360, 12 fps, 96 Frames, AAC 16 kHz mono. Temporärer Container nachweislich entfernt; keine Kundenmedien verwendet. Nachweis: [video-technical-synthetic-20261103.json](validation/video-technical-synthetic-20261103.json). 12 fps sind ausdrücklich keine erfolgreiche TikTok-Bildratenprüfung.
+- Migration `publication_video_technical_evidence_20261103` ist auf Supabase eingespielt. Eine Transaktionssperre und Prüfung auf laufende Analyse-Leases schützen den Versionswechsel. Reihenfolge: `publication-video-technical.sql`, `publication-video-magic.sql`, `publication-media-profiles.sql`.
+- Neue Analysepolicy: `magic-video-2026-11-03.1`. Ergebnisse früherer Versionen bleiben erhalten, zählen jedoch nicht als technische Nachweise. Eigentümer, aktive Kundenzuordnung, Dateirevision, SHA-256 und Byteanzahl werden unabhängig in SQL geprüft.
+- TikTok verwendet die verifizierten Codec-, Abmessungs- und Bildratendaten. Die Frame-Abstände müssen ebenfalls im zulässigen Bereich liegen; ein passender Mittelwert allein genügt nicht. Vollständige Decodierung kann `BINARY_INSPECTION` erfüllen. Andere inhaltliche, kontoabhängige und finale Freigaben bleiben erforderlich.
+- 278 Node-Tests, drei echte FFmpeg-/Python-Tests und beide SQL-Prüfreihen bestanden lokal. Beide SQL-Prüfreihen bestanden zusätzlich auf der produktiven Datenbank mit ausschließlich synthetischen, zurückgerollten Daten. Fälle umfassen beschädigte MP4-Dateien, rationale Bildraten, variable Frame-Abstände, ungültige Nenner, fremde Eigentümer, alte Revisionen und falsche Byteanzahl.
+- Die Oberfläche ändert ausschließlich Analysepolicy und Cacheversion (Dashboard v26, Vorschau-JS v25). Schrift, CSS und Darstellung bleiben unverändert. Dashboard-Bereitstellung und Abnahme des ausgewählten echten Videos stehen zum Zeitpunkt dieses Eintrags noch aus.
+
+Die technische Decodierung ersetzt keine visuelle Sicherheitsprüfung. Der bestehende Sightengine-Zugang meldet für Video weiterhin `VIDEO_PLAN_REQUIRED`; es wurde kein kostenpflichtiger Plan eingerichtet. Die finale Veröffentlichungszustimmung wurde nicht erteilt, `can_publish` bleibt false.
+
 ## Nächster Umsetzungsschritt
 
 Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt. Eine endgültige Veröffentlichungsfreigabe bleibt eine bewusste Entscheidung des Nutzers.
