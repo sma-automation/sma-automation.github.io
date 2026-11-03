@@ -121,7 +121,7 @@ Die technische Decodierung ersetzt keine visuelle Sicherheitsprüfung. Der beste
 
 ## Nächster Umsetzungsschritt
 
-Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt. Eine endgültige Veröffentlichungsfreigabe bleibt eine bewusste Entscheidung des Nutzers.
+Die TikTok-Musik-/Werbebestätigungen sind seit #53 eingebunden und live geprüft. Auch der zuvor dauerhaft offene Creator-Mediencheck berücksichtigt nun den frischen, auftragsgebundenen Kontonachweis; [Umsetzung und Live-Abnahme](PUBLICATION_ORDERS.md#kontogebundener-tiktok-mediencheck--3-november-2026). Verbleibende Medien-/Inhaltsnachweise, Meta-Berechtigungen, Upload-Übergabe und Provider-Statusnachweise bleiben offen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt. Eine endgültige Veröffentlichungsfreigabe bleibt eine bewusste Entscheidung des Nutzers.
 
 Die frühere Browserstörung war in dieser Fortsetzung ausreichend behoben, um beide Korrekturen und Provider-Tests auszuführen. Einzelne verzögerte Browseraktionen wurden anhand des tatsächlichen Seitenstands überprüft. Daraus folgt kein belegter Fehler in den PC-Einstellungen des Nutzers.
 

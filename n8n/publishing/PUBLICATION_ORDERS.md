@@ -94,7 +94,25 @@ Der erneute echte Klick auf „Dateien aktualisieren“ war erfolgreich. Die Dat
 ### Verbleibende Grenzen
 
 - Sightengine meldet für die visuelle Videoprüfung weiterhin `VIDEO_PLAN_REQUIRED`.
-- Der allgemeine Medienhinweis `TIKTOK_CREATOR_LIMIT` bleibt im Auftragsdialog offen, obwohl der separate aktuelle Kontonachweis bereits vorliegt. Die Verknüpfung dieses Medienchecks mit frischen, zielgebundenen Creator-Optionen ist noch umzusetzen; der Blocker wurde nicht pauschal entfernt.
+- Bei dieser Abnahme blieb der allgemeine Medienhinweis `TIKTOK_CREATOR_LIMIT` trotz separatem Kontonachweis offen. Die anschließende Korrektur und ihre Grenzen sind im folgenden Abschnitt dokumentiert.
 - Vollständiger Inhalts-/Portaltextnachweis, übrige Portalprofile, Meta-Berechtigungen sowie Upload-Dispatcher und Provider-Ergebnisjournal bleiben offen.
 
 Die Abnahme bestätigt die Vorbereitung und die gesperrte Zustimmung. Sie ist keine Abnahme einer tatsächlichen Veröffentlichung. Für diesen Dokumentationsnachtrag wurde kein Anwendungscode geändert; die 286 bestandenen Node-Tests und beide SQL-Prüfreihen aus #53 bleiben der geprüfte Implementierungsstand.
+
+## Kontogebundener TikTok-Mediencheck – 3. November 2026
+
+`sma_private.publication_order_media_v1` verbindet jetzt ausschließlich im konkreten Auftrag den vorhandenen Mediencheck `TIKTOK_CREATOR_LIMIT` mit dem aktuellen Kontonachweis. Ziel-ID und Quellrevision, Berechtigungen, Sichtbarkeit, kontoseitig gesperrte Interaktionen und Werbeauswahl müssen die bestehende Kontovalidierung bestehen. Die gemeldete positive Videolänge darf die vom Creator-Endpunkt gelieferte Höchstdauer nicht überschreiten. Die separate technische Byteprüfung bleibt erforderlich.
+
+Fehlende, abgelaufene oder fremde Nachweise sowie unzulässige Optionen lassen den Check auf `pending`. Eine bekannte zu lange Dauer ergibt `fail`; exakt die erlaubte Höchstdauer ist zulässig. Fehlende oder ungültige Dauer wird nicht als bestanden behandelt. Die allgemeine Datei-/Portalprüfung bleibt ohne konkreten Auftrag weiterhin offen. Kein anderer Mediencheck, keine Empfehlung und kein Dateifakt wird entfernt oder umgedeutet.
+
+Die Auftragsansicht wertet den gespeicherten Nachweis bei jedem Abruf erneut aus. `finish_check` verwendet ausschließlich den neuen Kontonachweis der aktuellen Ausführung. Ein früher bestandener Vorbereitungsnachweis ersetzt keinen fehlenden Worker-Nachweis. Das Worker-Ergebnis speichert nur gültige Nachweise zum unveränderten Zielkonto; bei fehlgeschlagener Prüfung wird der vorherige Nachweis nicht weiter als aktuelles Ergebnis angezeigt. Zusätzliche Worker-Blocker, Inhalts-/Rechteprüfungen, exklusive Lease und Doppelveröffentlichungsschutz bleiben wirksam. `can_upload` und `can_publish` bleiben false.
+
+Migration `publication_order_tiktok_creator_evidence_20261103` ist angewendet. Vorher wurden die Quelltext-Hashes der bestehenden Auftragsansicht, Workerfunktion und Kontovalidierung mit dem Repository abgeglichen. Geändert wurden nur die neue private Hilfsfunktion sowie die Auftragsansicht und Workerfunktion. Keine neue öffentliche API, keine zusätzlichen Kundenrollenrechte, keine Änderungen an n8n, Credential-Referenzen, UI-Dateien, Schrift oder Layout.
+
+Validierung: 286 Node-Tests bestanden. Alle drei SQL-Prüfreihen (`publication-accounts`, `publication-orders`, `publication-order-creator`) bestanden lokal unter PGlite/PostgreSQL 18 sowie als zurückgerollte Kandidatenprüfung auf der produktiven PostgreSQL-17-Instanz. Die neue Creator-Prüfreihe bestand nach der Migration nochmals gegen die installierten Funktionen. Alle Fixtures sind synthetisch und vollständig zurückgerollt. Die neuen Fälle decken Ablauf/Fremdziel/Optionen, exakte Dauergrenze, fehlende Dauer, unveränderte übrige Medienchecks, frische Worker-Nachweise, fehlende Nachweise trotz früherem Erfolg, unzulässige Worker-Ziele, Lease-Replay und Rollenrechte ab. Keine neue Sicherheitsberater-Warnung.
+
+Live-Abnahme am 03.11.2026 um **18:43 MEZ**: Im angemeldeten TikTok-Dialog wurde ein neuer, nicht freigegebener Testauftrag bis `prepared` angelegt. Frischer Kontonachweis mit 3600 Sekunden Höchstdauer; `TIKTOK_CREATOR_LIMIT=pass`. Der bisherige falsche Kontohinweis erschien nicht mehr unter „Offene Medienprüfungen“; visuelle Sicherheitsprüfung und semantischer Inhalts-/Portaltextabgleich blieben sichtbar. Alle Bestätigungen blieben leer, die finale Freigabe war deaktiviert. Danach wurde ausschließlich dieser Testauftrag unter Eigentümer-/Status-/Lease-/Journalprüfung storniert. Keine echte Zustimmung, kein Provider-Upload, kein Posting und keine Tarifänderung. Der Worker-Abschluss wurde mit synthetischen SQL-Fällen geprüft, nicht durch eine echte Kundenfreigabe ausgelöst.
+
+Weiter offen: Sightengine `VIDEO_PLAN_REQUIRED`, vollständiger Inhalts-/Portaltextnachweis, weitere Portalprofile und Meta-Berechtigungen sowie Upload-Dispatcher und Provider-Ergebnisjournal.
+
+Primärquelle, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/content-posting-api-reference-query-creator-info.

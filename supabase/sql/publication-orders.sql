@@ -37,12 +37,37 @@ end $$;
 revoke all on function sma_private.publication_order_review_valid_v1(jsonb,text,jsonb) from public,anon,authenticated;
 grant execute on function sma_private.publication_order_review_valid_v1(jsonb,text,jsonb) to service_role;
 
+-- Only an order has a selected target, choices and current provider evidence.
+-- The generic file/portal precheck must remain pending without that context.
+create or replace function sma_private.publication_order_media_v1(j sma_private.publication_orders_v1,media jsonb,evidence jsonb)
+returns jsonb language plpgsql stable security invoker set search_path='' as $$
+declare checks jsonb; check_state text:='pending'; message text:='Erlaubte Videolänge, Sichtbarkeit und Interaktionen müssen am konkreten TikTok-Konto aktuell geprüft werden.'; duration_ms bigint; limit_ms bigint;
+begin
+ if j.binding->>'platform' is distinct from 'tiktok' or j.binding->>'media_kind' is distinct from 'video'
+ or media->>'asset_id' is distinct from j.binding->>'asset_id' or media->>'asset_revision' is distinct from j.binding->>'asset_revision'
+ or jsonb_typeof(media->'checks') is distinct from 'array' then return media;end if;
+ if j.target->>'platform'='tiktok' and sma_private.publication_account_valid_v1(evidence,j.target,j.choices) is true then
+  if jsonb_typeof(media#>'{facts,duration_ms}')='number' and (media#>>'{facts,duration_ms}')~'^[1-9][0-9]{0,12}$' then
+   duration_ms:=(media#>>'{facts,duration_ms}')::bigint;
+   limit_ms:=(evidence#>>'{policy,max_duration_sec}')::bigint*1000;
+   check_state:=case when duration_ms<=limit_ms then 'pass' else 'fail' end;
+   message:=case when check_state='pass' then 'Die gemeldete Videolänge sowie die gewählte Sichtbarkeit und Interaktionen passen zum aktuell geprüften TikTok-Zielkonto.' else 'Das Video überschreitet die für dieses TikTok-Zielkonto erlaubte Dauer.' end;
+  else message:='Die Kontooptionen sind geprüft. Für den Vergleich mit der erlaubten Videolänge fehlt eine gültige Dauer.';end if;
+ end if;
+ select jsonb_agg(case when x->>'code'='TIKTOK_CREATOR_LIMIT' then x||jsonb_build_object('status',check_state,'message',message) else x end order by position)
+ into checks from jsonb_array_elements(media->'checks') with ordinality as items(x,position);
+ return media||jsonb_build_object('checks',coalesce(checks,'[]'::jsonb),'can_publish',false,
+  'status',case when exists(select 1 from jsonb_array_elements(checks) x where x->>'status'='fail') then 'needs_changes' else 'needs_review' end);
+end $$;
+revoke all on function sma_private.publication_order_media_v1(sma_private.publication_orders_v1,jsonb,jsonb) from public,anon,authenticated;
+grant execute on function sma_private.publication_order_media_v1(sma_private.publication_orders_v1,jsonb,jsonb) to service_role;
+
 create or replace function sma_private.publication_order_view_v1(j sma_private.publication_orders_v1)
 returns jsonb language plpgsql stable set search_path='' as $$
 declare current_result jsonb;media jsonb;
 begin
  current_result:=sma_private.publication_order_current_v1(j);
- if current_result->'ok'='true'::jsonb then media:=current_result->'media_check';end if;
+ if current_result->'ok'='true'::jsonb then media:=sma_private.publication_order_media_v1(j,current_result->'media_check',j.account_check);end if;
  return jsonb_build_object('ok',true,'id',j.id,'state',j.state,'binding',j.binding - 'customer_id' - 'drive_file_id',
  'draft',j.draft,'choices',j.choices,'target',j.target - 'source_revision','approval_token',case when j.state='prepared' then j.approval_token else null end,
  'approval_policy','media-consent-2026-11-03.1','approval_review',j.approval_review,'media_check',media,
@@ -179,7 +204,9 @@ begin
   return jsonb_build_object('ok',true,'id',j.id,'lease_id',j.lease_id,'binding',j.binding,'choices',j.choices,'target',j.target,'n8n_kunde_id',c.n8n_kunde_id,'kunde_email',c.kunde_email);
  elsif p_action='finish_check' then
   if p_lease is null or j.lease_id is distinct from p_lease or j.state<>'checking' or j.lease_until<=now() then return jsonb_build_object('ok',false,'code','INVALID_LEASE');end if;
-  -- The database independently retains every unresolved media/content check.
+  -- Resolve only the account-specific check using this execution's evidence,
+  -- never the previous preparation's evidence. Retain every other media check.
+  r:=jsonb_set(r,'{media_check}',sma_private.publication_order_media_v1(j,r->'media_check',p_data->'account_check'));
   select coalesce(jsonb_agg(x->>'code'),'[]') into blocks from jsonb_array_elements(r->'media_check'->'checks') x where x->>'status'<>'pass' and x->>'code'<>'PUBLICATION_APPROVAL_PENDING';
   if jsonb_typeof(p_data->'blockers') is distinct from 'array' or jsonb_array_length(p_data->'blockers')>30 or exists(select 1 from jsonb_array_elements(p_data->'blockers') x where jsonb_typeof(x)<>'string' or (x#>>'{}')!~'^[A-Z][A-Z0-9_]{0,79}$') then return jsonb_build_object('ok',false,'code','INVALID_RESULT');end if;
   blocks:=blocks||(p_data->'blockers');
@@ -190,7 +217,9 @@ begin
   if not sma_private.publication_account_valid_v1(p_data->'account_check',j.target,j.choices) then blocks:=blocks||'"TARGET_PERMISSIONS_REQUIRED"'::jsonb;end if;
   if j.binding->>'platform'='tiktok' and sma_private.publication_account_valid_v1(p_data->'account_check',j.target,j.choices) and exists(select 1 from sma_private.publication_files_v1 where id=(j.binding->>'asset_id')::uuid and (duration_ms is null or duration_ms>(p_data->'account_check'->'policy'->>'max_duration_sec')::bigint*1000)) then blocks:=blocks||'"TARGET_DURATION_EXCEEDED"'::jsonb;end if;
   select coalesce(jsonb_agg(x order by x),'[]') into blocks from (select distinct value x from jsonb_array_elements(blocks)) s;
-  update sma_private.publication_orders_v1 set state=case when jsonb_array_length(blocks)>0 then 'blocked' else 'checked' end,blockers=blocks,lease_id=null,lease_until=null,updated_at=now() where id=j.id returning * into j;
+  update sma_private.publication_orders_v1 set state=case when jsonb_array_length(blocks)>0 then 'blocked' else 'checked' end,blockers=blocks,
+   account_check=case when p_data->'target'=j.target and sma_private.publication_account_valid_v1(p_data->'account_check',j.target,j.choices) is true then p_data->'account_check' else null end,
+   lease_id=null,lease_until=null,updated_at=now() where id=j.id returning * into j;
   return sma_private.publication_order_view_v1(j);
  end if;
  return jsonb_build_object('ok',false,'code','INVALID_ACTION');
