@@ -1,0 +1,27 @@
+/* Scoped to the existing Delta module. Typography inherits from the approved dashboard. */
+#smaWebsitePreparation{max-width:960px;margin-top:24px;padding:24px;border:1px solid #e4e7ed;border-radius:14px;background:#fff;color:inherit;font:inherit}
+#smaWebsitePreparation *{box-sizing:border-box}
+#smaWebsitePreparation [hidden]{display:none!important}
+#smaWebsitePreparation h2{margin:0 0 10px;font:inherit;font-size:20px;font-weight:600;line-height:1.4}
+#smaWebsitePreparation h3{margin:0 0 10px;font:inherit;font-size:17px;font-weight:600}
+#smaWebsitePreparation p{line-height:1.6}
+#smaWebsitePreparation .sma-website-intro{margin:0 0 20px}
+#smaWebsitePreparation .sma-website-fields{border:0;margin:0;padding:0;min-width:0}
+#smaWebsitePreparation .sma-website-options{display:flex;flex-wrap:wrap;gap:12px 24px;margin:0 0 20px}
+#smaWebsitePreparation .sma-website-options label{display:flex;gap:9px;align-items:center;cursor:pointer;font-weight:500}
+#smaWebsitePreparation input[type=radio]{width:18px;height:18px;margin:0;accent-color:#4065d8}
+#smaWebsitePreparation .sma-website-field{display:flex;flex-direction:column;gap:8px;margin:16px 0;font:inherit;font-weight:500}
+#smaWebsitePreparation input[type=text]{display:block;width:100%;max-width:100%;min-width:0;padding:12px 14px;border:1px solid #dfe3eb;border-radius:9px;background:#fff;color:inherit;font:inherit;font-weight:400}
+#smaWebsitePreparation input[readonly]{background:#f5f7fb}
+#smaWebsitePreparation .sma-website-help,#smaWebsitePreparation .sma-website-optional{font:inherit;font-size:13px;font-weight:400;color:#647084;line-height:1.6}
+#smaWebsitePreparation .sma-website-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+#smaWebsitePreparation button,#smaWebsitePreparation .sma-website-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;margin:0;padding:11px 15px;border:1px solid #ccd5ed;border-radius:9px;background:#f0f4ff;color:#3157cd;font:inherit;font-size:14px;font-weight:500;text-decoration:none;cursor:pointer}
+#smaWebsitePreparation .sma-website-primary{background:#4065d8;border-color:#4065d8;color:#fff}
+#smaWebsitePreparation :is(button,input,a):focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}
+#smaWebsitePreparation fieldset:disabled{opacity:.65}
+#smaWebsitePreparation button:disabled{cursor:wait}
+#smaWebsitePreparation .sma-website-status{min-height:24px;margin:16px 0 6px;font-size:14px}
+#smaWebsitePreparation .sma-website-error{color:#a52435}
+#smaWebsitePreparation .sma-website-link-section{margin-top:24px;padding-top:24px;border-top:1px solid #e4e7ed}
+#smaWebsitePreparation .sma-website-sr{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:650px){#smaWebsitePreparation{padding:18px;margin-top:18px}#smaWebsitePreparation .sma-website-options{flex-direction:column;gap:14px}#smaWebsitePreparation .sma-website-actions>*{width:100%}}
