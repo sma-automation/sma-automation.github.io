@@ -49,7 +49,7 @@ Vor Anschluss an die Publisher fehlen weiterhin: aktuelle Datei-/Byteprüfung, v
 
 ## n8n-Stand
 
-Separat gespeichert: `LxayneKkUusok0Q8`, **SMA – Gespeicherte Portaltexte – Übergabeprüfung V1**. Unveröffentlicht und mit keinem Publisher verbunden. Die exportierten Code-Parameter, Credential-Verweise, Verbindungen und Einstellungen wurden gegen die Repository-Definition abgeglichen. Erfolgreiche, fehlgeschlagene und manuelle Ausführungsdaten werden nicht gespeichert; Fortschrittsspeicherung ist aus, Laufzeit höchstens 60 Sekunden, Aufruf nur durch Workflows desselben Eigentümers, kein MCP-Zugriff.
+Separat gespeichert: `LxayneKkUusok0Q8`, **SMA – Gespeicherte Portaltexte – Übergabeprüfung V1**. Unveröffentlicht. Die spätere [Publisher-Arbeitskopie](PUBLISHER_INTEGRATION.md) ruft diesen Baustein für ihre Textvorbereitung auf; ein ausführbarer Uploadpfad ist weiterhin nicht angeschlossen. Die exportierten Code-Parameter, Credential-Verweise, Verbindungen und Einstellungen wurden gegen die Repository-Definition abgeglichen. Erfolgreiche, fehlgeschlagene und manuelle Ausführungsdaten werden nicht gespeichert; Fortschrittsspeicherung ist aus, Laufzeit höchstens 60 Sekunden, Aufruf nur durch Workflows desselben Eigentümers, kein MCP-Zugriff.
 
 ## Validierung
 
