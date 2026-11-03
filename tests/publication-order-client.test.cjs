@@ -31,3 +31,11 @@ test('duplicate response preserves existing order reference for status lookup',a
  const {client}=await setup(()=>({ok:true,json:async()=>({ok:false,code:'DUPLICATE_PUBLICATION',existing_order_id:id})}));
  await assert.rejects(client.prepare(binding,choices),error=>error.code==='DUPLICATE_PUBLICATION'&&error.existingId===id);
 });
+
+test('account preflight sends only the requested portal and rejects mismatched provider identity',async()=>{
+ const {client,requests}=await setup(body=>ok(body.input.id,{stage:'account',target:{id:'verified',platform:body.input.platform},account_check:{target_id:'verified'}}));
+ const account=await client.account('tiktok');assert.equal(account.target.id,'verified');
+ assert.deepEqual(Object.keys(requests[0].body.input).sort(),['id','platform']);assert.equal(requests[0].body.action,'account');
+ const bad=await setup(body=>ok(body.input.id,{stage:'account',target:{id:'verified',platform:'youtube'},account_check:{target_id:'foreign'}}));
+ await assert.rejects(bad.client.account('tiktok'));
+});

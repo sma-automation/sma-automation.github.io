@@ -35,7 +35,9 @@ reset role;
 set local role service_role;
 do $$declare r jsonb;t jsonb:=jsonb_build_object('platform','youtube','id','synthetic_channel','name','Synthetic channel','source_revision',repeat('a',64));begin
  r:=public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010');assert r->>'code'='FINAL_APPROVAL_REQUIRED';
- r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000010',null,jsonb_build_object('target',t));assert r->>'state'='prepared',r::text;
+ perform set_config('sma.order_account',jsonb_build_object('version',1,'platform','youtube','target_id',t->>'id','target_revision',t->>'source_revision','display_name','Verified synthetic channel','permissions','["youtube.upload"]'::jsonb,'policy','{}'::jsonb,'checked_at',now(),'expires_at',now()+interval '5 minutes')::text,true);
+ assert public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000010',null,jsonb_build_object('target',t))->>'code'='TARGET_PERMISSIONS_REQUIRED';
+ r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000010',null,jsonb_build_object('target',t,'account_check',current_setting('sma.order_account')::jsonb));assert r->>'state'='prepared',r::text;
  perform set_config('sma.order_approval',jsonb_build_object('id',r->>'id','approval_token',r->>'approval_token','confirm',true)::text,true);
  perform set_config('sma.order_target',t::text,true);
 end $$;
@@ -50,7 +52,7 @@ end $$;
 reset role;
 set local role service_role;
 do $$declare r jsonb;l uuid;begin
- r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000011',null,jsonb_build_object('target',current_setting('sma.order_target')::jsonb));
+ r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000011',null,jsonb_build_object('target',current_setting('sma.order_target')::jsonb,'account_check',current_setting('sma.order_account')::jsonb));
  perform set_config('sma.order_duplicate',jsonb_build_object('id',r->>'id','approval_token',r->>'approval_token','confirm',true)::text,true);
  r:=public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010');assert r->>'ok'='true',r::text;l:=(r->>'lease_id')::uuid;
  assert public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010')->>'code'='ORDER_RUNNING';
@@ -58,6 +60,9 @@ do $$declare r jsonb;l uuid;begin
  r:=public.sma_publication_order_worker_v1('finish_check','fa660000-0000-4000-8000-000000000010',l,jsonb_build_object('target',current_setting('sma.order_target')::jsonb,'drive_verified',true,'text_verified',true,'blockers','[]'::jsonb));
  assert r->>'state'='blocked',r::text;assert r->'blockers'?'BINARY_INSPECTION_PENDING';assert r->'blockers'?'TARGET_PERMISSIONS_REQUIRED';assert r->>'can_upload'='false';
  assert public.sma_publication_order_worker_v1('finish_check','fa660000-0000-4000-8000-000000000010',l,'{}')->>'code'='INVALID_LEASE';
+ r:=public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010');l:=(r->>'lease_id')::uuid;
+ r:=public.sma_publication_order_worker_v1('finish_check','fa660000-0000-4000-8000-000000000010',l,jsonb_build_object('target',current_setting('sma.order_target')::jsonb,'drive_verified',true,'text_verified',true,'blockers','[]'::jsonb,'account_check',current_setting('sma.order_account')::jsonb));
+ assert not(r->'blockers'?'TARGET_PERMISSIONS_REQUIRED');assert r->'blockers'?'BINARY_INSPECTION_PENDING';assert r->>'can_upload'='false';
 end $$;
 reset role;
 set local role authenticated;

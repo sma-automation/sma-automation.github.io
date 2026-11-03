@@ -1,5 +1,7 @@
 # Gespeicherte Portaltexte im Publisher vorbereiten
 
+Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Anschlusskorrektur veröffentlicht, echte YouTube-/TikTok-Kontoprüfungen erfolgreich; Dashboard v23 und dessen Abnahme stehen als nächster Schritt aus.
+
 Stand der Portaltext-Integration nach PR #43: 3. November 2026. Die separate n8n-Arbeitskopie **SMA – Kunden-Publishing – Portaltext-Anbindung V1**, ID `JZwPbzCpgIByxk94`, liest die ausgewählte gespeicherte Textversion über die [Übergabeprüfung](PUBLISHER_HANDOFF.md) und bereitet die passenden Textfelder für die vorhandenen Publisher vor. Diese Stufe ist noch keine produktive Verbindung zum Social-Media-Upload.
 
 **Fortsetzung:** Der [Dashboard-Auftrag mit Zielkonto, finaler Bestätigung und Doppelauftragsperre](PUBLICATION_ORDERS.md) bindet diese Vorbereitung inzwischen an eine separate Ausführungsprüfung. Dafür wird die unveränderte Arbeitskopie als interner Unterworkflow veröffentlicht; die 160 Bestands-Knoten bleiben deaktiviert. Die unten dokumentierten 250 Tests und der inaktive Abschlussexport beziehen sich auf den Stand von PR #43.
