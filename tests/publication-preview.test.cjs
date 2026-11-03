@@ -20,6 +20,18 @@ test('four drafts, one verified shop per caption, never publish-ready',()=>{
  assert.equal(p.can_publish,false);assert.equal(p.checks.media,'not_checked');assert.equal(p.drafts.length,4);
  for(const d of p.drafts){assert.equal(d.caption.split(ctx.shop_url).length-1,1);assert.match(d.caption,/#SMATest #Shop/);}
 });
+test('internal factual questions stay outside public captions in both languages',()=>{
+ for(const language of ['de','en']) {
+  const drafts=input.platforms.map(p=>({...draft(p),review_notes:['Unklare Modellbezeichnung vor einer konkreten Produktnennung prüfen.']}));
+  const preview=makePreview(response(drafts),{...ctx,input:{...input,language}});
+  for(const d of preview.drafts) {
+   assert.deepEqual(d.review_notes,drafts.find(x=>x.platform===d.platform).review_notes);
+   assert.ok(!d.caption.includes(d.review_notes[0]));
+   assert.equal(d.caption.split(ctx.shop_url).length-1,1);
+   assert.ok(d.caption.startsWith(d.body+'\n\n'));
+  }
+ }
+});
 test('refused, incomplete, malformed and missing platform output fail closed',()=>{
  for(const r of [{status:'incomplete'},response([draft('youtube')]),response([draft('youtube'),draft('youtube'),draft('facebook'),draft('tiktok')]),{status:'completed',output:[{type:'message',content:[{type:'refusal',refusal:'no'}]}]}]) assert.throws(()=>makePreview(r,ctx));
 });

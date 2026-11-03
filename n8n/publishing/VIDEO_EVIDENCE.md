@@ -56,3 +56,26 @@ Nach PR #39 wurde der technische Klickdurchlauf im angemeldeten Kundendashboard 
 Die anschließend freigegebene Oberfläche verwendet die Schrift des Dashboards und einen einzeiligen Zurück-Button „Veröffentlichung“. „Datei ändern“ entfällt im Inhaltseditor. „Ausgewählte Datei ansehen“ ersetzt den zusätzlichen Weiter-Button in der Galerie und öffnet eine eigene Ansicht mit Beitragsvorschau und Dateidetails. Die Ansicht verwendet das vorhandene autorisierte Medium, die aktuellen Editorwerte, den validierten Shop-Link und die dateigebundenen Prüfdaten. Sie veröffentlicht nichts. Der Wechsel und der Browser-Verlauf erhalten den Editor; Dateientfernung und Abmeldung räumen die Vorschau auf.
 
 Validierung vor Veröffentlichung: 234 automatisierte Tests erfolgreich; Desktop- und 360-Pixel-Browserprüfung der eigenen Vorschauseite erfolgreich. n8n-Workflows und Datenbankberechtigungen bleiben unverändert. Bei gespeicherten Videos wird weiterhin das autorisierte Vorschaubild angezeigt; lokal hochgeladene Videos können im bestehenden Medienplayer abgespielt werden.
+
+## Redaktionelle Portaltexte – 3. November 2026
+
+Der echte Videodurchlauf zeigte, dass der Textgenerator die Erkennungsbeschreibung wie einen Analysebericht umformulierte: lange Ablaufprotokolle, Formulierungen wie „laut Beschreibung“ und pauschale Hinweise auf fehlende Nachweise. Eine allgemeine Überschrift mit „verfügbarer Tonspur“ führte außerdem trotz des eindeutigen Status „keine Tonspur“ zu einem falschen Widerspruchshinweis.
+
+`prepare-preview.cjs` trennt jetzt öffentliche Beiträge von internen Inhaltsfragen. Die belegten sichtbaren Handlungen dürfen direkt beschrieben werden, ohne eine eigene Medienprüfung zu behaupten. Unklare Merkmale werden nicht als Fakten ausgegeben; sichtbare Werbeslogans begründen weder Produkteigenschaften noch Herstellerzuordnung. Die Kanalvorgaben verlangen kurze, natürliche Texte: YouTube und Facebook zwei bis vier Sätze, Instagram einen prägnanten Einstieg mit kurzen Absätzen, TikTok ein bis zwei kurze Sätze. Das sind redaktionelle Ziele, keine technischen Portallimits. Prüfhinweise beziehen sich auf tatsächlich betroffene Aussagen; die Unsicherheitenliste der Erkennung soll nicht pauschal wiederholt werden.
+
+Aktiver Textworkflow: `9dNstQ4E2uXpZ18Z`, veröffentlichte Version `90427058-63bb-4b06-b73e-ca55191ff61e` („Portaltexte in Alltagssprache – 03.11.2026“). Der erneute n8n-Export stimmt bei allen Nodes, Verbindungen, Einstellungen und leeren angehefteten Daten exakt mit `preview-workflow.json` überein. Nur die drei eingebetteten Kopien des Textkerns wurden geändert. Die Dashboard-Gestaltung, Videoanalyse, Datenbankrechte, Dateibindung, Wiederholungsprüfung und geprüfte Shop-Zuordnung bleiben erhalten. Rückkehr zur vorherigen Textlogik: n8n-Version `d038ba64-d805-4d96-a6b3-2171bf3fe87e`; keine Datenbankmigration nötig.
+
+Automatisierte Prüfung: **235 Node-Tests erfolgreich**, einschließlich einer Regression für die Trennung interner Inhaltsfragen von öffentlichen Captions in Deutsch und Englisch. Alle eingebetteten Code-Nodes lassen sich syntaktisch kompilieren. Promptvorgaben allein garantieren keine redaktionelle Qualität; der Kundendurchlauf ergänzt diese technischen Prüfungen. Alle Ergebnisse bleiben private Entwürfe mit `can_publish:false`.
+
+Im angemeldeten Kundendashboard wurde dieselbe bereits freigegebene Videoerkennung für alle vier Portale verwendet. Jeder Aufruf erzeugte einen neuen Entwurf und bestätigte die Speicherung sowie die Zuordnung zur ausgewählten Datei und zum jeweiligen Portal. Die endgültigen Texte enthalten weder das frühere Berichtsraster noch „laut Beschreibung“, technische Prüfprotokolle oder den falschen Tonspur-Widerspruch. Es wurden keine Sicherheits-, Wirksamkeits-, Marken- oder Zertifizierungsbehauptungen ergänzt; die internen Prüflisten waren für diese rein beschreibenden Entwürfe leer. Einzelne Formulierungen wie „Totale“ bleiben redaktionell verbesserbar; dies ist keine pauschale Abnahme sämtlicher künftig erzeugten Texte.
+
+| Portal | Titel/Einstieg, Zeichen | Beitragstext, Zeichen | Ergebnis |
+| --- | ---: | ---: | --- |
+| YouTube | 66 | 329 | Drei Sätze, zwei Absätze; gespeichert und dateigebunden |
+| TikTok | 34 | 241 | Zwei Sätze; gespeicherte Caption mit geprüftem Shop-Link |
+| Instagram | 57 | 380 | Drei kurze Absätze; gespeicherte Caption mit geprüftem Shop-Link |
+| Facebook | 60 | 341 | Drei zusammenhängende Sätze; gespeicherte Caption mit geprüftem Shop-Link |
+
+Zeichenzahlen entsprechen JavaScript-UTF-16-Einheiten, beim Beitrag ohne Hashtags und Shop-Fußzeile. Kundendatei-IDs, Dateinamen und vollständige Kundentexte werden nicht in dieses öffentliche Repository übernommen. Die Prüfung erzeugt keine Social-Media-Veröffentlichung und belegt keine Portalübertragung.
+
+Nach vollständigem Neuladen des Dashboards wurde die Videodatei erneut ausgewählt. „Zugeordneten Beitragstext geladen“ bestätigte die gespeicherte Zuordnung; der YouTube-Beitrag war zeichengetreu identisch mit dem neuen Entwurf. Die separate Beitragsvorschau zeigt diesen Text, das autorisierte Vorschaubild, die Hashtags und den richtigen Shop-Link gemeinsam.
