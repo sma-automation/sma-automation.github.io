@@ -19,8 +19,18 @@ test('final approval requires explicit confirmation and sends only bound token a
  const {client,requests}=await setup(body=>ok(body.input.id,{state:'blocked'}));
  const order={id,state:'prepared',target:{id:'target'},approval_token:'token'};
  for(const value of [false,undefined,'true'])assert.throws(()=>client.approve(order,value));
- assert.throws(()=>client.approve({...order,state:'approved'},true));assert.equal(requests.length,0);
+ for(const state of ['approved','cancelled'])assert.throws(()=>client.approve({...order,state},true));assert.equal(requests.length,0);
  await client.approve(order,true);assert.deepEqual(requests[0].body,{action:'approve',input:{id,approval_token:'token',confirm:true}});
+});
+test('cancelled status is readable but never becomes a new approval',async()=>{
+ const {client,requests}=await setup(body=>ok(body.input.id,{state:'cancelled',approval_token:null}));
+ const order=await client.get(id);assert.equal(order.state,'cancelled');
+ assert.deepEqual(requests[0].body,{action:'get',input:{id}});
+ assert.throws(()=>client.approve(order,true));assert.equal(requests.length,1);
+ for(const patch of [{id:'other'},{can_publish:true},{can_upload:true}]){
+  const p=await setup(body=>ok(body.input.id,{state:'cancelled',...patch}));
+  await assert.rejects(p.client.get(id));
+ }
 });
 test('client rejects another order or an unexpected publish grant',async()=>{
  for(const patch of [{id:'other'},{can_publish:true},{can_upload:true},{state:'published'}]){
