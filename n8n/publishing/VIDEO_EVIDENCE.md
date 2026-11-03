@@ -79,3 +79,7 @@ Im angemeldeten Kundendashboard wurde dieselbe bereits freigegebene Videoerkennu
 Zeichenzahlen entsprechen JavaScript-UTF-16-Einheiten, beim Beitrag ohne Hashtags und Shop-Fußzeile. Kundendatei-IDs, Dateinamen und vollständige Kundentexte werden nicht in dieses öffentliche Repository übernommen. Die Prüfung erzeugt keine Social-Media-Veröffentlichung und belegt keine Portalübertragung.
 
 Nach vollständigem Neuladen des Dashboards wurde die Videodatei erneut ausgewählt. „Zugeordneten Beitragstext geladen“ bestätigte die gespeicherte Zuordnung; der YouTube-Beitrag war zeichengetreu identisch mit dem neuen Entwurf. Die separate Beitragsvorschau zeigt diesen Text, das autorisierte Vorschaubild, die Hashtags und den richtigen Shop-Link gemeinsam.
+
+## Nächster Baustein: gespeicherte Texte an Publisher übergeben
+
+Die [getrennte Übergabeprüfung](PUBLISHER_HANDOFF.md) gleicht den ausgewählten Datei-/Textstand mit der gespeicherten Zuordnung ab und übernimmt Titel, Caption und Shop-Link unverändert. 244 Node-Tests bestehen; alle vier vorhandenen Kundenentwürfe wurden nach echter Katalogaktualisierung über den Live-RPC gelesen und durch den lokalen Prüfkern abgeglichen. Der isolierte n8n-Lesedurchlauf wurde zusätzlich für den gespeicherten YouTube-Entwurf bestätigt. Der genaue Umfang und die noch fehlende Anbindung an Publisher sowie Portal-Endabnahme sind dort dokumentiert. Die freigegebene Dashboard-Gestaltung und die bestehenden Publisher bleiben unverändert.
