@@ -16,7 +16,10 @@ source_group=parser.add_mutually_exclusive_group(required=True)
 source_group.add_argument('--fixture')
 source_group.add_argument('--synthetic-video', help='A generated test clip, containing no customer data')
 parser.add_argument('--output', required=True)
+parser.add_argument('--technical-only', action='store_true', help='Synthetic decode/evidence test without content models')
 args = parser.parse_args()
+if args.technical_only and not args.synthetic_video:
+    parser.error('--technical-only requires --synthetic-video')
 if args.synthetic_video:
     synthetic=Path(args.synthetic_video).read_bytes()
     fixture={'revision':'sha256:'+hashlib.sha256(synthetic).hexdigest()+':1',
@@ -107,5 +110,11 @@ edge('Transkript prüfen','Erkennung vorbereiten')
 edge('Ohne Tonspur fortsetzen','Erkennung vorbereiten')
 w={'name':'SMA – Synthetischer Videoanalyse-Test' if args.synthetic_video else 'SMA – Privater Videoanalyse-Test – manuell','nodes':nodes,'connections':connections,'pinData':{},'active':False,
    'settings':{'executionOrder':'v1','saveDataErrorExecution':'none','saveDataSuccessExecution':'none','saveManualExecutions':False,'saveExecutionProgress':False,'executionTimeout':600,'callerPolicy':'workflowsFromSameOwner','availableInMCP':False}}
+if args.technical_only:
+    end=next(i for i,n in enumerate(nodes) if n['name']=='Belegbindung prüfen')
+    nodes=nodes[:end+1]+[n for n in nodes if n['name'] in ['Arbeitsbereich entfernen','Prüfergebnis']]
+    nodes[-1]['parameters']['jsCode']=lib+"\ncontainerDeleted($input.first().json,$('Privaten Arbeitsbereich erstellen').first().json.id);return [{json:{ok:true,manifest:$('Belegbindung prüfen').first().json,temporary_container_deleted:true,can_publish:false,manual_probe_only:true}}];"
+    connections={a['name']:{'main':[[{'node':b['name'],'type':'main','index':0}]]} for a,b in zip(nodes,nodes[1:])}
+    w.update(name='SMA – Technische Videoprüfung – synthetischer Test',nodes=nodes,connections=connections)
 Path(args.output).write_text(json.dumps(w,ensure_ascii=False,indent=2)+'\n')
 print(len(nodes),'manual-only nodes generated')
