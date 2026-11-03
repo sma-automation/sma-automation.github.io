@@ -1,6 +1,6 @@
 # Zielkonto und Portalberechtigungen
 
-Stand: 2026-11-03. **Anschlusskorrektur veröffentlicht und echte YouTube-/TikTok-Kontoprüfungen erfolgreich abgeschlossen. PR #46 ist technisch prüfbereit; Dashboard v23 ist noch nicht ausgerollt.**
+Stand: 2026-11-03. **Anschlusskorrektur veröffentlicht, echte YouTube-/TikTok-Kontoprüfungen erfolgreich, PR #46 zusammengeführt und Dashboard v23 live abgenommen.**
 
 Der bereits genehmigte private OAuth-Import bleibt unverändert in derselben n8n-Instanz. App-Secrets und Provider-Token stehen nicht im Repository. Die Migrationen `publication_account_verification_v1` und `publication_order_account_evidence_v1` sind eingespielt; die zuvor dokumentierten SQL-Prüfreihen bestanden auf PostgreSQL 17 mit Rollback.
 
@@ -14,7 +14,7 @@ Der bereits genehmigte private OAuth-Import bleibt unverändert in derselben n8n
 
 Der IF-Ausdruck `YouTube oder TikTok?` liest jetzt das geprüfte `target.platform`. `Zielkonto und Ordner prüfen` leitet `drive_file_id` aus dem vertrauenswürdigen Auftragskontext ab; `Aktuellen Dateistand lesen` verwendet dieses flache Feld. Der bisherige Laufzeitfehler `Cannot access "binding" due to security concerns` ist damit im echten Kontoaufruf behoben. Keine n8n-Sicherheitsprüfung wurde abgeschaltet oder umgangen.
 
-Beim Exportabgleich wurden ausschließlich bekannte ausgelassene Standardwerte normalisiert: `keyName: id`, `source: database` und `mode: once`. Erfolgs-, Fehler-, manuelle und Fortschrittsdaten bleiben ungespeichert; der Timeout beträgt 150 Sekunden, Aufrufe sind auf denselben Eigentümer beschränkt, MCP bleibt aus. Geschützte Originalworkflows, Publisher-Arbeitskopie und freigegebene Dashboard-Oberfläche wurden in dieser Fortsetzung nicht verändert.
+Beim Exportabgleich wurden ausschließlich bekannte ausgelassene Standardwerte normalisiert: `keyName: id`, `source: database` und `mode: once`. Erfolgs-, Fehler-, manuelle und Fortschrittsdaten bleiben ungespeichert; der Timeout beträgt 150 Sekunden, Aufrufe sind auf denselben Eigentümer beschränkt, MCP bleibt aus. Geschützte Originalworkflows und Publisher-Arbeitskopie bleiben unverändert. Dashboard v23 ergänzt die Kontooptionen innerhalb der bestehenden freigegebenen Oberfläche.
 
 ## Echte Provider-Nachweise am 3. November 2026
 
@@ -31,12 +31,23 @@ TikTok lieferte für das geprüfte Konto die Sichtbarkeiten `FOLLOWER_OF_CREATOR
 
 Beide Antworten enthalten `can_upload:false` und `can_publish:false`. Es wurde kein Inhalt hochgeladen oder veröffentlicht, keine finale Freigabe erteilt und kein neuer Veröffentlichungsauftrag angelegt. Die 274 Node-Tests wurden erneut ausgeführt: alle bestanden.
 
+## Dashboard-Abnahme und Bereitstellung
+
+PR #46 wurde am 3. November 2026 mit Merge-Commit `d76021fa67751d4b823a05b22c3f83439ec85f9f` in `website-v1` zusammengeführt. [GitHub-Pages-Lauf 41651819816](https://github.com/sma-automation/sma-automation.github.io/actions/runs/41651819816) endete erfolgreich. Im angemeldeten Kundendashboard wurden beide Optimierungsseiten mit `v=23` tatsächlich geladen.
+
+| Portal | Dashboard-Abnahme |
+| --- | --- |
+| YouTube | Echtes Zielkonto geladen; Sichtbarkeit und Kennzeichnungen zunächst ohne Vorauswahl. Ein separater Testauftrag mit Privat, nicht speziell für Kinder und synthetische Inhalte wurde vorbereitet. Erneuter Kontonachweis: `2026-11-03T14:17:04.995Z`. |
+| TikTok | Nur Follower, Freunde und Nur ich angeboten; Duett und Stitch gemäß Creator-Antwort fest auf deaktiviert. Ein separater Testauftrag mit Nur ich, erlaubten Kommentaren und ohne Werbung wurde vorbereitet. Erneuter Kontonachweis: `2026-11-03T14:18:25.825Z`. |
+
+Beide Aufträge erreichten `prepared`; Supabase bestätigte die gewählten Optionen, aktuellen kontogebundenen Nachweise und `approved_at:null`. Die finale Zustimmungsbox blieb unangekreuzt und der Freigabeknopf deaktiviert. Anschließend wurden ausschließlich diese beiden Testaufträge unter Prüfung von Status, fehlender Zustimmung, fehlender Lease und fehlendem Journaleintrag auf `cancelled` gesetzt. Kein Upload, keine Veröffentlichung und kein Journaleintrag wurden ausgelöst. Die Testkennzeichnungen sind keine inhaltliche Freigabe des Videos. Gespeicherte Beitragstexte, geschützte Originalworkflows und das freigegebene Layout bleiben erhalten.
+
 ## Vertrag
 
 - `account` liest die eindeutige aktive Kundenzuordnung mit dem Dashboard-JWT. Kundennummer und Zielkonto werden nicht aus dem Browser übernommen. Der neue Unterworkflow erhält ausschließlich den serverseitigen Kontext.
 - YouTube: vorhandenen Zugang erneuern, genau einen authentifizierten Kanal mit `mine=true` laden, ID abgleichen und `youtube.upload` über Token-Introspection nachweisen. Ein Leserecht allein genügt nicht.
 - TikTok: vorhandenen Zugang erneuern; `open_id`, `user.info.basic`, `video.publish` und aktuelle Creator-Info prüfen. Sichtbarkeit, gesperrte Interaktionen und maximale Dauer kommen vom Portal.
-- Die vorbereitete Dashboard-Erweiterung lädt die Kontooptionen vor der Auswahl. Sichtbarkeit bleibt ohne Vorauswahl. Vom TikTok-Konto gesperrte Interaktionen können nicht aktiviert werden. Private Werbung für Dritte wird abgewiesen.
+- Die veröffentlichte Dashboard-Erweiterung lädt die Kontooptionen vor der Auswahl. Sichtbarkeit bleibt ohne Vorauswahl. Vom TikTok-Konto gesperrte Interaktionen können nicht aktiviert werden. Private Werbung für Dritte wird abgewiesen.
 - `prepare` prüft das Portal erneut und bindet den Nachweis an Ziel-ID und Quellrevision. `approve` akzeptiert nur höchstens fünf Minuten alte, noch gültige Nachweise. Der Ausführungsworkflow prüft das Konto nach dem exklusiven Auftrags-Claim nochmals.
 - Der Nachweis enthält nur ID, Anzeigename, Berechtigungen, erlaubte Optionen und Zeitstempel. Token, OAuth-App-Secrets und Kundentabellen verlassen den Unterworkflow nicht in der Antwort.
 - Die Datenbank prüft den Nachweis unabhängig auf erlaubte Felder, Zeit, Zielbindung und Optionen. Eine erfolgreiche Kontoprüfung entfernt ausschließlich `TARGET_PERMISSIONS_REQUIRED`; Medien-/Textblocker, die finale Zustimmung und das Doppelveröffentlichungsjournal bleiben maßgeblich. `can_upload` und `can_publish` bleiben **false**.
@@ -65,8 +76,7 @@ PYTHONDONTWRITEBYTECODE=1 python n8n/publishing/build-publication-orders.py \
 
 ## Nächster Umsetzungsschritt
 
-1. Dashboard v23 aus PR #46 ausrollen und Kontooptionen sowie die Auftragsvorbereitung im angemeldeten Kundendashboard prüfen. Die bestehende Oberfläche bleibt erhalten. Keine Veröffentlichungsfreigabe im Namen des Nutzers erteilen; etwaige neue Testaufträge anschließend stornieren.
-2. Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt.
+Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt. Eine endgültige Veröffentlichungsfreigabe bleibt eine bewusste Entscheidung des Nutzers.
 
 Die frühere Browserstörung war in dieser Fortsetzung ausreichend behoben, um beide Korrekturen und Provider-Tests auszuführen. Einzelne verzögerte Browseraktionen wurden anhand des tatsächlichen Seitenstands überprüft. Daraus folgt kein belegter Fehler in den PC-Einstellungen des Nutzers.
 
