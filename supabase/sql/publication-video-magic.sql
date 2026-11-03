@@ -6,10 +6,10 @@ declare r sma_private.publication_magic_results_v1%rowtype; c public.sma_kunden%
 begin
  select * into c from public.sma_kunden where id=f.customer_id and user_id=f.user_id and aktiv and (demo_delta_aktiv or zahlung_bestaetigt);
  if found and f.available then
-  select * into r from sma_private.publication_magic_results_v1 where asset_id=f.id and asset_revision=f.revision and policy_version='magic-video-2026-11-02.1' and user_id=f.user_id and customer_id=f.customer_id and n8n_kunde_id=c.n8n_kunde_id and kunde_email=c.kunde_email;
+  select * into r from sma_private.publication_magic_results_v1 where asset_id=f.id and asset_revision=f.revision and policy_version='magic-video-2026-11-03.1' and user_id=f.user_id and customer_id=f.customer_id and n8n_kunde_id=c.n8n_kunde_id and kunde_email=c.kunde_email;
   if found then s:=case when r.status='processing' and (r.lease_until is null or r.lease_until<=now()) then 'failed' else r.status end;end if;
  end if;
- return jsonb_build_object('asset_id',f.id,'asset_revision',f.revision,'policy_version','magic-video-2026-11-02.1','status',s,'can_publish',false,'result',case when s='completed' then r.result end,'finished_at',r.finished_at,'error_code',case when s='failed' then coalesce(r.error_code,'MAGIC_TIMEOUT') end);
+ return jsonb_build_object('asset_id',f.id,'asset_revision',f.revision,'policy_version','magic-video-2026-11-03.1','status',s,'can_publish',false,'result',case when s='completed' then r.result end,'finished_at',r.finished_at,'error_code',case when s='failed' then coalesce(r.error_code,'MAGIC_TIMEOUT') end);
 end $$;
 revoke all on function sma_private.publication_video_magic_summary_v1(sma_private.publication_files_v1) from public,anon,authenticated;
 grant execute on function sma_private.publication_video_magic_summary_v1(sma_private.publication_files_v1) to service_role;
@@ -42,7 +42,7 @@ begin
  if rate.last_started>now()-interval '30 seconds' or (rate.window_started>now()-interval '1 hour' and rate.attempts>=6) then return jsonb_build_object('ok',false,'code','MAGIC_RATE_LIMITED');end if;
  update sma_private.publication_magic_rate_v1 set attempts=case when window_started<=now()-interval '1 hour' then 1 else attempts+1 end,window_started=case when window_started<=now()-interval '1 hour' then now() else window_started end,last_started=now() where user_id=uid;
  insert into sma_private.publication_magic_results_v1(asset_id,asset_revision,policy_version,user_id,customer_id,n8n_kunde_id,kunde_email,status,lease_id,lease_until)
- values(f.id,f.revision,'magic-video-2026-11-02.1',uid,c.id,c.n8n_kunde_id,c.kunde_email,'processing',gen_random_uuid(),now()+interval '12 minutes')
+ values(f.id,f.revision,'magic-video-2026-11-03.1',uid,c.id,c.n8n_kunde_id,c.kunde_email,'processing',gen_random_uuid(),now()+interval '12 minutes')
  on conflict(asset_id,asset_revision,policy_version) do update set user_id=excluded.user_id,customer_id=excluded.customer_id,n8n_kunde_id=excluded.n8n_kunde_id,kunde_email=excluded.kunde_email,status='processing',result=null,error_code=null,lease_id=excluded.lease_id,lease_until=excluded.lease_until,started_at=now(),finished_at=null,content_sha256=null returning * into r;
  return jsonb_build_object('ok',true,'analysis',sma_private.publication_video_magic_summary_v1(f),'lease_id',r.lease_id,'user_id',uid,'customer_id',c.id,'n8n_kunde_id',c.n8n_kunde_id,'kunde_email',c.kunde_email,'asset_id',f.id,'asset_revision',f.revision,'drive_file_id',f.drive_file_id,'media_kind',f.media_kind,'mime_type',f.mime_type,'size_bytes',f.size_bytes,'duration_ms',f.duration_ms);
 end $$;
@@ -58,7 +58,7 @@ declare f sma_private.publication_files_v1%rowtype; r sma_private.publication_ma
  err text; field text; val jsonb; source_text text; count_limit integer; text_limit integer; e jsonb; position_ms bigint; previous_ms bigint:=-1;
 begin
  select * into f from sma_private.publication_files_v1 where id=p_asset_id for update;
- select * into r from sma_private.publication_magic_results_v1 where asset_id=p_asset_id and lease_id=p_lease_id and policy_version='magic-video-2026-11-02.1' for update;
+ select * into r from sma_private.publication_magic_results_v1 where asset_id=p_asset_id and lease_id=p_lease_id and policy_version='magic-video-2026-11-03.1' for update;
  if not found or p_lease_id is null or r.status<>'processing' or r.lease_until is null or r.lease_until<=now() then return jsonb_build_object('ok',false,'code','INVALID_LEASE');end if;
  select * into c from public.sma_kunden where id=r.customer_id and user_id=r.user_id;
  if not found or c.aktiv is not true or not(c.demo_delta_aktiv is true or c.zahlung_bestaetigt is true) or c.n8n_kunde_id is distinct from r.n8n_kunde_id or c.kunde_email is distinct from r.kunde_email then err:='ACCESS_INACTIVE';
@@ -98,7 +98,8 @@ begin
  or e->'source_size_bytes' is distinct from to_jsonb(f.size_bytes) or e->>'sampling' is distinct from 'representative_frames_not_full_moderation'
  or jsonb_typeof(e->'duration_ms') is distinct from 'number' or coalesce(e->>'duration_ms','')!~'^[0-9]{1,5}$'
  or jsonb_typeof(e->'positions_ms') is distinct from 'array' or jsonb_typeof(e->'frame_sha256') is distinct from 'array'
- or exists(select 1 from jsonb_object_keys(e) k where k not in ('source_sha256','source_size_bytes','duration_ms','positions_ms','frame_sha256','sampling'))
+ or exists(select 1 from jsonb_object_keys(e) k where k not in ('source_sha256','source_size_bytes','duration_ms','positions_ms','frame_sha256','sampling','technical'))
+ or not sma_private.publication_video_technical_valid_v1(e->'technical',p_result->>'audio_status')
  then return jsonb_build_object('ok',false,'code','INVALID_RESULT');end if;
  if (e->>'duration_ms')::bigint not between 1 and 60000 or abs((e->>'duration_ms')::bigint-f.duration_ms)>1000
  or jsonb_array_length(e->'positions_ms') not between 2 and 21 or jsonb_array_length(e->'positions_ms')<>jsonb_array_length(e->'frame_sha256')
