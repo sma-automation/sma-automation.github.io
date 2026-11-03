@@ -83,3 +83,7 @@ Nach vollständigem Neuladen des Dashboards wurde die Videodatei erneut ausgewä
 ## Nächster Baustein: gespeicherte Texte an Publisher übergeben
 
 Die [getrennte Übergabeprüfung](PUBLISHER_HANDOFF.md) gleicht den ausgewählten Datei-/Textstand mit der gespeicherten Zuordnung ab und übernimmt Titel, Caption und Shop-Link unverändert. 244 Node-Tests bestehen; alle vier vorhandenen Kundenentwürfe wurden nach echter Katalogaktualisierung über den Live-RPC gelesen und durch den lokalen Prüfkern abgeglichen. Der isolierte n8n-Lesedurchlauf wurde zusätzlich für den gespeicherten YouTube-Entwurf bestätigt. Der genaue Umfang und die noch fehlende Anbindung an Publisher sowie Portal-Endabnahme sind dort dokumentiert. Die freigegebene Dashboard-Gestaltung und die bestehenden Publisher bleiben unverändert.
+
+## Publisher-Arbeitskopie – 3. November 2026
+
+Die [Portaltext-Anbindung](PUBLISHER_INTEGRATION.md) ergänzt eine separate unveröffentlichte n8n-Arbeitskopie `JZwPbzCpgIByxk94`. Ihr neuer interner Weg lädt die gespeicherte Auswahl über die Übergabeprüfung und bildet Titel/Caption auf YouTube-, Instagram-, Facebook- und TikTok-Textfelder ab. Die Textparameter der vorhandenen Publisher-Nodes sind in der Kopie angepasst. Alle Upload-Nodes bleiben deaktiviert und ohne Verbindung zu diesem neuen Weg. 250 Node-Tests bestehen. Der genaue Live-Prüfstand und die noch fehlende Freigabe-/Ausführungsverbindung stehen in der Integrationsdokumentation; dies ist keine produktive Veröffentlichung aus dem Dashboard.
