@@ -2,6 +2,26 @@
 
 Stand 2026-11-01. **Aktiv: Bildprüfung. Videoanalyse ist serverseitig gesperrt (`VIDEO_PLAN_REQUIRED`), weil der echte Diensttest fehlenden Zugriff im kostenlosen Sightengine-Tarif meldet. Kein Tarif wurde geändert.** Ergänzt die technische Medienvorprüfung und die Datei-/Portaltextzuordnung. Kein Veröffentlichungsadapter und keine automatische Freigabe.
 
+## Tarif- und Aktivierungsprüfung – 03.11.2026
+
+Die öffentliche Preisliste wurde erneut gegen den vorbereiteten SMA-Prüfweg abgeglichen. Starter: 29 USD/Monat, 10.000 Operationen, Mehrverbrauch 0,002 USD/Operation; maximal 50 MB pro Video, eine gleichzeitige Videoprüfung, 0,5–2 Bilder/s. Free enthält keine Videoprüfung. Pro (99 USD/Monat) ist für den bestehenden visuellen Kurzvideo-Prüfweg nicht erforderlich; Audiomoderation ist dort eine zusätzliche Leistung. Kontospezifische Rechnungen und Zahlungsdaten gehören nicht in dieses Repository.
+
+Quellen: [Preise](https://sightengine.com/pricing), [Free-Grenzen](https://www.sightengine.com/faq/do-you-offer-a-free-trial), [Abrechnungseinheiten](https://sightengine.com/faq/what-is-an-operation), [synchroner Videoprüfweg](https://sightengine.com/docs/moderate-stored-video).
+
+**Verbrauchsschätzung:** Die sieben konfigurierten Modelle bilden nach der aktuellen Abrechnung vier Gruppen: Nudity; Violence/Gore/Weapon/Self-harm; Hate/Offensive; Restricted Content. Bei `interval=1` sind 30 Sekunden mit ungefähr 30 ausgewerteten Bildern daher etwa 120 Operationen. Das Kontingent reicht rechnerisch für rund 83 solche Prüfungen ohne sonstige Nutzung. Maßgeblich bleibt die tatsächlich gemeldete Operationszahl; Legacy-Abrechnung kann abweichen. Das vorhandene Dateiversionscache vermeidet eine zweite Sichtprüfung nur wegen eines anderen Zielportals.
+
+**Ein Tarifwechsel aktiviert SMA nicht automatisch.** Der bestätigte Codezustand sperrt Videos weiterhin an diesen Stellen:
+
+- `review-providers.cjs`: `providerCapability('sightengine','video')` ergibt `VIDEO_PLAN_REQUIRED`; sowohl Start als auch Abschluss prüfen die Verfügbarkeit. Der generierte Workflow enthält dieselbe Sperre.
+- `publication-content-review.sql`: `sma_publication_review_v1` weist Video-Aufträge vor einer kostenpflichtigen Reservierung ab.
+- `publication-preview.js`: Der bestehende Statusrenderer zeigt bei ungeprüften Videos den Tarifhinweis.
+
+Nach einer ausdrücklichen Tarif-/Prüffreigabe sind zuerst der tatsächliche Videozugang und die vollständige Antwort eines neutralen kurzen Prüfvideos zu bestätigen. Erst anschließend darf die passende serverseitige Freischaltung zusammen mit dem Statushinweis vorbereitet und geprüft werden. Modellmapping, Schwellenwert, Dateibindung und gespeicherte Bildprüfungen bleiben dabei erhalten; fachliche Policyänderungen benötigen eine neue Version. Der aktuelle Schutz begrenzt parallele Prüfungen nur pro Benutzer: Starter erfordert zusätzlich eine gemeinsame Begrenzung auf einen Videojob vor dem Mehrkundenbetrieb. Auch ein gegebenenfalls gewünschtes hartes Kostenlimit muss vor automatischer Mengennutzung durchgesetzt werden; der Anbieter berechnet Mehrverbrauch automatisch.
+
+Die vorhandene Prüfung verwendet direkte Multipart-Dateiübertragung an `video/check-sync.json`, keine gesonderte Upload API. SMA verlangt unter 50 MB und unter 60 Sekunden sowie vollständige Werte und zeitliche Stichprobenabdeckung. Ein visuelles Ergebnis ersetzt keine Ton-, Aussagen-, Text-, Rechte- oder Nutzerfreigabeprüfung. Die tatsächliche Social-Media-Übertragung bleibt separat ausdrücklich freigabepflichtig.
+
+Dieser Nachtrag ändert ausschließlich die Dokumentation. Keine Tarife, Zahlungen, Zugangsdaten, Datenbankfunktionen, Workflows oder Medienfreigaben wurden geändert; kein neuer Sightengine-Aufruf wurde ausgelöst. Die 314 bereits bestandenen Node-Tests bleiben der geprüfte Implementierungsstand.
+
 ## Ablauf und Grenzen
 
 `Dateiinhalt prüfen` im Medienbereich einer Portal-Kachel startet eine authentifizierte Prüfung. Die Datenbank reserviert die eigene aktuelle Datei. n8n löst die beiden Kundenordner anhand der überprüften Kontozuordnung auf und kontrolliert Drive-ID, Elternordner, Version, Prüfsumme, MIME, Größe, Dauer und Downloadberechtigung vor dem Download. Ein Range-Header begrenzt den angeforderten Download auf die bekannte Dateigröße. Die erhaltenen Bytes müssen exakt zu Größe und Prüfsumme passen. Ein einfacher Signatur-/Animationsfilter schützt vor offensichtlich falschen Bildformaten. Dies ersetzt keine vollständige Dekodierung.
