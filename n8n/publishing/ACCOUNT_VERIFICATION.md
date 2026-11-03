@@ -1,6 +1,6 @@
 # Zielkonto und Portalberechtigungen
 
-Stand: 2026-11-03. **Anschlusskorrektur veröffentlicht, echte YouTube-/TikTok-Kontoprüfungen erfolgreich, PR #46 zusammengeführt und Dashboard v23 live abgenommen.**
+Stand: 2026-11-03. **Anschlusskorrektur veröffentlicht, echte YouTube-/TikTok-Kontoprüfungen erfolgreich, PR #46 zusammengeführt, Kontoprüfungen im Dashboard v23 abgenommen und Storno-Korrektur aus PR #49 mit Dashboard v25 live geprüft.**
 
 Der bereits genehmigte private OAuth-Import bleibt unverändert in derselben n8n-Instanz. App-Secrets und Provider-Token stehen nicht im Repository. Die Migrationen `publication_account_verification_v1` und `publication_order_account_evidence_v1` sind eingespielt; die zuvor dokumentierten SQL-Prüfreihen bestanden auf PostgreSQL 17 mit Rollback.
 
@@ -79,6 +79,10 @@ PYTHONDONTWRITEBYTECODE=1 python n8n/publishing/build-publication-orders.py \
 Der Browserclient akzeptiert den terminalen Zustand `cancelled` und zeigt eine eindeutige Stornomeldung. Ein Statusabruf ersetzt auch eine zuvor bereits angekreuzte Vorschau: Zustimmung wird zurückgesetzt, Zustimmung und Freigabeknopf verschwinden, und eine erneute Statusabfrage wird nicht angeboten. Das Schließen und erneute Öffnen beginnt mit einer neuen Auftrags-ID. Ziel-/Dateibindung, Eigentümerprüfung und die gesperrten Upload-/Publish-Antworten bleiben maßgeblich.
 
 Regressionen prüfen den Übergang von einer bestätigungsbereiten Vorschau zur Stornierung, die gesperrte erneute Zustimmung, den Erhalt der Bindungsprüfungen und den neuen Auftrag nach Wiederöffnen. Die Änderung betrifft ausschließlich Zustandsbehandlung und Meldung; CSS und Layout werden nicht geändert.
+
+PR #49 wurde mit Merge-Commit `56bcf76823dce5684c3c96f2b4c2e9e6235a64fa` bereitgestellt. [Pages-Lauf 41658417267](https://github.com/sma-automation/sma-automation.github.io/actions/runs/41658417267) war erfolgreich; der Browser lud tatsächlich `v=25`. Alle 276 Node-Tests bestanden. Der CSS-Blob blieb unverändert (`5a985f88acc0e810869234d93afbc570441f7cf5`).
+
+Live-Abnahme am 3. November 2026: Ein eigener YouTube-Testauftrag wurde um 14:57 UTC vorbereitet, ohne angekreuzte Zustimmung oder Freigabe. Nur dieser Auftrag wurde nach Prüfung von `prepared`, `approved_at:null`, fehlender Lease und fehlendem Journaleintrag storniert. „Status erneut laden“ zeigte anschließend die Stornomeldung und ausschließlich „Schließen“; Zustimmung, Freigabe und Statusabfrage waren verschwunden. Der Dialog wurde geschlossen. Kein Upload und keine Veröffentlichung.
 
 ## Nächster Umsetzungsschritt
 
