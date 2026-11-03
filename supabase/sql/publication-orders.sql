@@ -7,6 +7,7 @@ create table if not exists sma_private.publication_orders_v1 (
  lease_id uuid, lease_until timestamptz, blockers jsonb not null default '[]',
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
+alter table sma_private.publication_orders_v1 add column if not exists account_check jsonb;
 create index if not exists publication_orders_owner_v1 on sma_private.publication_orders_v1(user_id,created_at desc);
 -- One approved order per file revision, portal and actual target, even if the text
 -- or client-generated request ID changes. A timeout never releases this key.
@@ -27,7 +28,7 @@ create or replace function sma_private.publication_order_view_v1(j sma_private.p
 returns jsonb language sql stable set search_path='' as $$
  select jsonb_build_object('ok',true,'id',j.id,'state',j.state,'binding',j.binding - 'customer_id' - 'drive_file_id',
  'draft',j.draft,'choices',j.choices,'target',j.target - 'source_revision','approval_token',case when j.state='prepared' then j.approval_token else null end,
- 'approved_at',j.approved_at,'blockers',j.blockers,'can_upload',false,'can_publish',false);
+ 'account_check',j.account_check - 'target_revision','approved_at',j.approved_at,'blockers',j.blockers,'can_upload',false,'can_publish',false);
 $$;
 revoke all on function sma_private.publication_order_view_v1(sma_private.publication_orders_v1) from public,anon,authenticated;
 grant execute on function sma_private.publication_order_view_v1(sma_private.publication_orders_v1) to service_role;
@@ -80,6 +81,7 @@ begin
   if p_input->'confirm' is distinct from 'true'::jsonb or p_input->>'approval_token' is distinct from j.approval_token::text then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
   if j.approved_at is not null then return sma_private.publication_order_view_v1(j);end if;
   if j.state<>'prepared' or j.target is null or j.created_at<now()-interval '30 minutes' then return jsonb_build_object('ok',false,'code','ORDER_NOT_PREPARED');end if;
+  if j.binding->>'platform' in ('youtube','tiktok') and not sma_private.publication_account_valid_v1(j.account_check,j.target,j.choices) then return jsonb_build_object('ok',false,'code','TARGET_OPTIONS_CHANGED');end if;
   r:=sma_private.publication_order_current_v1(j);if r->'ok' is distinct from 'true'::jsonb then return r;end if;
   insert into sma_private.publication_journal_v1(customer_id,asset_id,asset_revision,platform,target_id,order_id)
   values(c.id,(j.binding->>'asset_id')::uuid,j.binding->>'asset_revision',j.binding->>'platform',j.target->>'id',j.id) on conflict do nothing;
@@ -138,9 +140,10 @@ begin
    or coalesce(v_target->>'id','')!~'^[A-Za-z0-9_-]{3,200}$' or char_length(coalesce(v_target->>'name','')) not between 1 and 200
    or coalesce(v_target->>'source_revision','')!~'^[a-f0-9]{64}$'
    or exists(select 1 from jsonb_object_keys(v_target) k where k not in ('platform','id','name','source_revision')) then return jsonb_build_object('ok',false,'code','TARGET_ACCOUNT_REQUIRED');end if;
+  if j.binding->>'platform' in ('youtube','tiktok') and not sma_private.publication_account_valid_v1(p_data->'account_check',v_target,j.choices) then return jsonb_build_object('ok',false,'code','TARGET_PERMISSIONS_REQUIRED');end if;
   if j.state='prepared' and j.target=v_target then return sma_private.publication_order_view_v1(j);end if;
   if j.state<>'preparing' then return jsonb_build_object('ok',false,'code','ORDER_CHANGED');end if;
-  update sma_private.publication_orders_v1 set target=v_target,state='prepared',updated_at=now() where id=j.id returning * into j;
+  update sma_private.publication_orders_v1 set target=v_target,account_check=case when j.binding->>'platform' in ('youtube','tiktok') then p_data->'account_check' else null end,state='prepared',updated_at=now() where id=j.id returning * into j;
   return sma_private.publication_order_view_v1(j);
  elsif p_action='claim' then
   if j.approved_at is null then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
@@ -157,8 +160,8 @@ begin
   if p_data->'target' is distinct from j.target then blocks:=blocks||'"TARGET_ACCOUNT_CHANGED"'::jsonb;end if;
   if p_data->'drive_verified' is distinct from 'true'::jsonb then blocks:=blocks||'"DRIVE_RECHECK_REQUIRED"'::jsonb;end if;
   if p_data->'text_verified' is distinct from 'true'::jsonb then blocks:=blocks||'"SAVED_TEXT_INVALID"'::jsonb;end if;
-  -- Account ownership is verified in this slice; provider scopes are not.
-  blocks:=blocks||'"TARGET_PERMISSIONS_REQUIRED"'::jsonb;
+  if not sma_private.publication_account_valid_v1(p_data->'account_check',j.target,j.choices) then blocks:=blocks||'"TARGET_PERMISSIONS_REQUIRED"'::jsonb;end if;
+  if j.binding->>'platform'='tiktok' and sma_private.publication_account_valid_v1(p_data->'account_check',j.target,j.choices) and exists(select 1 from sma_private.publication_files_v1 where id=(j.binding->>'asset_id')::uuid and (duration_ms is null or duration_ms>(p_data->'account_check'->'policy'->>'max_duration_sec')::bigint*1000)) then blocks:=blocks||'"TARGET_DURATION_EXCEEDED"'::jsonb;end if;
   select coalesce(jsonb_agg(x order by x),'[]') into blocks from (select distinct value x from jsonb_array_elements(blocks)) s;
   update sma_private.publication_orders_v1 set state=case when jsonb_array_length(blocks)>0 then 'blocked' else 'checked' end,blockers=blocks,lease_id=null,lease_until=null,updated_at=now() where id=j.id returning * into j;
   return sma_private.publication_order_view_v1(j);

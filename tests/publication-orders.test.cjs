@@ -36,7 +36,10 @@ test('generated execution path only reaches customer read, Drive GET, saved publ
 });
 test('API verifies owner before any service call; no direct client selection reaches publisher',()=>{
  const w=JSON.parse(fs.readFileSync('n8n/publishing/publication-order-api-workflow.json'));const nodes=Object.fromEntries(w.nodes.map(n=>[n.name,n]));
- assert.equal(w.connections['Dashboard-Anfrage prüfen'].main[0][0].node,'Eigenen Auftrag bearbeiten');
+ assert.equal(w.connections['Dashboard-Anfrage prüfen'].main[0][0].node,'Kontooptionen angefordert?');
+ assert.equal(w.connections['Kontooptionen angefordert?'].main[1][0].node,'Eigenen Auftrag bearbeiten');
+ assert.equal(w.connections['Kontooptionen angefordert?'].main[0][0].node,'Eigenes Kontoziel lesen');
+ assert.equal(nodes['Eigenes Kontoziel lesen'].credentials,undefined);
  assert.equal(nodes['Eigenen Auftrag bearbeiten'].credentials,undefined);assert.match(nodes['Eigenen Auftrag bearbeiten'].parameters.headerParameters.parameters[1].value,/\.auth/);
  const code=nodes['Ausführungsauftrag auswählen'].parameters.jsCode;
  const out=vm.runInNewContext('(function(){'+code+'})()',{$json:{id,customer_id:666,target_id:'forged'}});assert.equal(JSON.stringify(out),JSON.stringify([{json:{id}}]));

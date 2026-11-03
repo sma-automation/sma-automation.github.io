@@ -1,6 +1,7 @@
 """Dashboard order API and an internal, fail-closed execution gate.
 
-The existing publisher working copy is called, never rewritten or activated.
+The existing publisher working copy is called with the bound selection.
+This builder does not modify that workflow.
 No provider write is reachable while the media/account approvals are incomplete.
 """
 import argparse,json,uuid
@@ -43,7 +44,7 @@ class Builder:
   w={'name':self.name,'nodes':self.nodes,'connections':self.edges,'settings':SETTINGS,'pinData':{},'active':False}
   self.path.write_text(json.dumps(w,ensure_ascii=False,indent=2)+'\n');return w
 
-def build_worker():
+def build_worker(account_id):
  w=Builder('SMA – Veröffentlichungsauftrag – Ausführung V1',ROOT/'n8n/publishing/publication-order-execution-workflow.json')
  w.node('Freigegebenen Auftrag ausführen','executeWorkflowTrigger',{'inputSource':'passthrough'},0,v=1.1)
  w.code('Auftrags-ID prüfen',CORE+"\nconst r=$input.first().json;if($input.all().length!==1||Object.keys(r).join()!=='id'||!ORDER_UUID.test(r.id))throw Error('INVALID_INPUT');return [{json:r}];",240,onError='continueErrorOutput')
@@ -55,7 +56,7 @@ def build_worker():
  w.code('Dateistand bestätigen',CORE+"\nreturn [{json:orderDrive($input.first().json,$('Auftrag exklusiv übernehmen').first().json,$('Zielkonto und Ordner prüfen').first().json.folders)}];",1680,onError='continueErrorOutput')
  w.code('Gebundenen Portaltext auswählen',"return [{json:$('Auftrag exklusiv übernehmen').first().json.binding}];",1920)
  w.node('Publisher-Arbeitskopie aufrufen','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':'JZwPbzCpgIByxk94','mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},2160,v=1.3,onError='continueErrorOutput')
- w.code('Ausführungsfreigabe prüfen',CORE+"\nreturn [{json:orderCheck($input.first().json,$('Auftrag exklusiv übernehmen').first().json,$('Zielkonto und Ordner prüfen').first().json,$('Dateistand bestätigen').first().json)}];",2400,onError='continueErrorOutput')
+ w.code('Ausführungsfreigabe prüfen',CORE+"\nreturn [{json:orderCheck($input.first().json,$('Auftrag exklusiv übernehmen').first().json,$('Zielkonto und Ordner prüfen').first().json,$('Dateistand bestätigen').first().json,$('Portalberechtigung bestätigt').first().json)}];",2400,onError='continueErrorOutput')
  w.rpc('Prüfstand protokollieren','={{ $json }}',2640)
  w.code('Prüffehler protokollieren',CORE+"\nconst c=$('Auftrag exklusiv übernehmen').first().json;return [{json:{p_action:'finish_check',p_id:c.id,p_lease:c.lease_id,p_data:{target:null,drive_verified:false,text_verified:false,blockers:[orderFailure($input.first().json).code]}}}];",2160,300)
  w.code('Auftragsfehler bereinigen',CORE+"\nreturn [{json:orderFailure($input.first().json)}];",2880,300)
@@ -63,10 +64,16 @@ def build_worker():
  w.edge('Auftrag freigegeben?','Auftragsfehler bereinigen',1)
  for name in ['Auftrags-ID prüfen','Auftrag exklusiv übernehmen','Prüfstand protokollieren']:w.edge(name,'Auftragsfehler bereinigen',1)
  for name in ['Aktuelles Zielkonto laden','Zielkonto und Ordner prüfen','Aktuellen Dateistand lesen','Dateistand bestätigen','Publisher-Arbeitskopie aufrufen','Ausführungsfreigabe prüfen']:w.edge(name,'Prüffehler protokollieren',1)
+ w.code('Kontoprüfung auswählen',"return [{json:$('Auftrag exklusiv übernehmen').first().json}];",1320,-500)
+ w.node('Portalberechtigung rückprüfen','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':account_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},1560,-500,1.3,onError='continueErrorOutput')
+ w.code('Portalberechtigung bestätigt',CORE+"\nconst r=$input.first().json;if(r.ok!==true)throw Error(orderFailure(r).code);return [{json:r}];",1800,-500,onError='continueErrorOutput')
+ w.edges['Zielkonto und Ordner prüfen']['main'][0]=[]
+ w.edge('Zielkonto und Ordner prüfen','Kontoprüfung auswählen');w.edge('Kontoprüfung auswählen','Portalberechtigung rückprüfen');w.edge('Portalberechtigung rückprüfen','Portalberechtigung bestätigt');w.edge('Portalberechtigung bestätigt','Aktuellen Dateistand lesen')
+ for name in ['Portalberechtigung rückprüfen','Portalberechtigung bestätigt']:w.edge(name,'Prüffehler protokollieren',1)
  w.edge('Prüffehler protokollieren','Prüfstand protokollieren')
  return w.write()
 
-def build_api(worker_id):
+def build_api(worker_id,account_id):
  w=Builder('SMA – Dashboard – Veröffentlichungsauftrag V1',ROOT/'n8n/publishing/publication-order-api-workflow.json')
  w.node('Dashboard-Auftrag','webhook',{'httpMethod':'POST','path':'sma-publication-order-v1','responseMode':'responseNode','options':{'allowedOrigins':'https://sma-automation.com'}},0,v=2.1)
  w.code('Dashboard-Anfrage prüfen',CORE+"\nreturn [{json:orderRequest($input.first().json)}];",240,onError='continueErrorOutput')
@@ -81,7 +88,7 @@ def build_api(worker_id):
  w.code('Ausführungsauftrag auswählen',"return [{json:{id:$json.id}}];",1200,300)
  w.node('Auftragsprüfung ausführen','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':worker_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},1440,300,1.3,onError='continueErrorOutput')
  w.code('Sichere Auftragsfehlermeldung',CORE+"\nreturn [{json:orderFailure($input.first().json)}];",1920,600)
- w.code('Auftragsantwort prüfen',"const r=$input.first().json;if(r.ok===true&&r.can_upload===false&&r.can_publish===false&&r.id&&r.state)return [{json:r}];const codes=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','ORDER_CHANGED','REQUEST_CONFLICT','DUPLICATE_PUBLICATION','ORDER_NOT_PREPARED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','ORDER_RATE_LIMITED','ASSIGNMENT_UNAVAILABLE','ASSIGNMENT_CHANGED','INVALID_CHOICES'];return [{json:{ok:false,can_upload:false,can_publish:false,code:codes.includes(r.code)?r.code:'ORDER_UNAVAILABLE',...(r.code==='DUPLICATE_PUBLICATION'?{existing_order_id:r.existing_order_id}:{})}}];",2160,200)
+ w.code('Auftragsantwort prüfen',"const r=$input.first().json;if(r.ok===true&&r.stage==='account'&&r.can_upload===false&&r.can_publish===false)return [{json:r}];if(r.ok===true&&r.can_upload===false&&r.can_publish===false&&r.id&&r.state)return [{json:r}];const codes=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','ORDER_CHANGED','REQUEST_CONFLICT','DUPLICATE_PUBLICATION','ORDER_NOT_PREPARED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','ORDER_RATE_LIMITED','ASSIGNMENT_UNAVAILABLE','ASSIGNMENT_CHANGED','INVALID_CHOICES','TARGET_CONFIGURATION_REQUIRED','TARGET_PERMISSIONS_REQUIRED','TARGET_RECONNECT_REQUIRED','TARGET_CHECK_RUNNING','TARGET_CHECK_UNAVAILABLE','TARGET_REFRESH_UNCERTAIN','TARGET_TOKEN_SAVE_FAILED','TARGET_OPTIONS_CHANGED','TARGET_RATE_LIMITED'];return [{json:{ok:false,can_upload:false,can_publish:false,code:codes.includes(r.code)?r.code:'ORDER_UNAVAILABLE',...(r.code==='DUPLICATE_PUBLICATION'?{existing_order_id:r.existing_order_id}:{})}}];",2160,200)
  w.node('Dashboard-Antwort','respondToWebhook',{'respondWith':'json','responseBody':'={{ $json }}','options':{'responseCode':200,'responseHeaders':{'entries':[{'name':'Cache-Control','value':'no-store'},{'name':'Access-Control-Allow-Origin','value':'https://sma-automation.com'},{'name':'Vary','value':'Origin'}]}}},2400,200,1.5)
  for a,b in zip(w.nodes[:9],w.nodes[1:9]):w.edge(a['name'],b['name'])
  w.edge('Zielkonto zuordnen?','Freigegebenen Auftrag prüfen?',1)
@@ -92,9 +99,27 @@ def build_api(worker_id):
  w.edge('Ausführungsauftrag auswählen','Auftragsprüfung ausführen')
  w.edge('Auftragsprüfung ausführen','Auftragsantwort prüfen')
  for name in ['Dashboard-Anfrage prüfen','Eigenen Auftrag bearbeiten','Auftragsbindung lesen','Kundenzielkonto laden','Kundenzielkonto prüfen','Zielkonto festhalten','Auftragsprüfung ausführen']:w.edge(name,'Sichere Auftragsfehlermeldung',1)
+ # Preparation repeats the provider read and binds only safe evidence.
+ w.code('Kontoprüfung zum Auftrag auswählen',"return [{json:$('Auftragsbindung lesen').first().json}];",1680,-500)
+ w.node('Auftragskonto rückprüfen','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':account_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},1920,-500,1.3,onError='continueErrorOutput')
+ w.code('Auftragskonto bestätigt',CORE+"\nconst r=$input.first().json;if(r.ok!==true)throw Error(orderFailure(r).code);return [{json:r}];",2160,-500,onError='continueErrorOutput')
+ w.edges['Kundenzielkonto prüfen']['main'][0]=[]
+ w.edge('Kundenzielkonto prüfen','Kontoprüfung zum Auftrag auswählen');w.edge('Kontoprüfung zum Auftrag auswählen','Auftragskonto rückprüfen');w.edge('Auftragskonto rückprüfen','Auftragskonto bestätigt');w.edge('Auftragskonto bestätigt','Zielkonto festhalten')
+ # Before choices, derive the owner's context using their JWT. This branch never
+ # exposes customer-table or token fields in the dashboard response.
+ w.condition('Kontooptionen angefordert?',"={{ $json.action === 'account' }}",360,-1000)
+ w.rpc('Eigenes Kontoziel lesen',"={{ {p_platform:$('Dashboard-Anfrage prüfen').first().json.input.platform} }}",600,-1000,user=True)
+ w.nodes[-1]['parameters']['url']=BASE+'sma_publication_account_context_v1'
+ w.code('Eigenes Kontoziel bestätigt',CORE+"\nconst r=$input.first().json;if(r.ok!==true)throw Error(orderFailure(r).code);return [{json:r}];",840,-1000,onError='continueErrorOutput')
+ w.node('Aktuelle Kontooptionen laden','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':account_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},1080,-1000,1.3,onError='continueErrorOutput')
+ w.code('Kontooptionen zurückgeben',CORE+"\nconst r=$input.first().json;if(r.ok!==true||!r.account_check)throw Error(orderFailure(r).code);const {source_revision,...target}=r.target;const {target_revision,...account_check}=r.account_check;return [{json:{ok:true,stage:'account',id:$('Dashboard-Anfrage prüfen').first().json.input.id,target,account_check,can_upload:false,can_publish:false}}];",1320,-1000,onError='continueErrorOutput')
+ w.edges['Dashboard-Anfrage prüfen']['main'][0]=[]
+ w.edge('Dashboard-Anfrage prüfen','Kontooptionen angefordert?');w.edge('Kontooptionen angefordert?','Eigenes Kontoziel lesen');w.edge('Kontooptionen angefordert?','Eigenen Auftrag bearbeiten',1)
+ w.edge('Eigenes Kontoziel lesen','Eigenes Kontoziel bestätigt');w.edge('Eigenes Kontoziel bestätigt','Aktuelle Kontooptionen laden');w.edge('Aktuelle Kontooptionen laden','Kontooptionen zurückgeben');w.edge('Kontooptionen zurückgeben','Auftragsantwort prüfen')
+ for name in ['Auftragskonto rückprüfen','Auftragskonto bestätigt','Eigenes Kontoziel lesen','Eigenes Kontoziel bestätigt','Aktuelle Kontooptionen laden','Kontooptionen zurückgeben']:w.edge(name,'Sichere Auftragsfehlermeldung',1)
  w.edge('Sichere Auftragsfehlermeldung','Auftragsantwort prüfen');w.edge('Auftragsantwort prüfen','Dashboard-Antwort')
  return w.write()
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);args=p.parse_args()
- print('worker',len(build_worker()['nodes']),'API',len(build_api(args.worker_id)['nodes']))
+ p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);p.add_argument('--account-id',required=True);args=p.parse_args()
+ print('worker',len(build_worker(args.account_id)['nodes']),'API',len(build_api(args.worker_id,args.account_id)['nodes']))

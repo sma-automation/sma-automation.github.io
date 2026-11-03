@@ -1,5 +1,7 @@
 # Dashboard-Auftrag und gebundene Freigabe
 
+Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – neuer, noch nicht produktiv angeschlossener Prüfpfad; privater Import wartet auf Freigabe.
+
 Stand: 3. November 2026. Diese Erweiterung verbindet den angemeldeten Dashboard-Benutzer, seine konkrete Datei-/Textversion, das tatsächliche n8n-Zielkonto und seine ausdrückliche Freigabe mit der vorhandenen Publisher-Arbeitskopie. Der Ausführungsweg endet weiterhin bei einer protokollierten Prüfung: **kein Provider-Upload und kein Social-Media-Posting**.
 
 ## Komponenten

@@ -4,8 +4,9 @@ const ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f
 function orderRequest(item) {
   const auth=item?.headers?.authorization, body=item?.body;
   if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');
-  if(!body||!['prepare','approve','get'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||
+  if(!body||!['prepare','approve','get','account'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||
     Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');
+  if(body.action==='account'&&(!['youtube','tiktok'].includes(body.input.platform)||Object.keys(body.input).some(k=>!['id','platform'].includes(k))))throw Error('INVALID_INPUT');
   return {auth,action:body.action,input:body.input};
 }
 // Source rows never leave this node. Only the selected non-secret identity does.
@@ -32,7 +33,7 @@ function orderDrive(metadata,context,folders) {
     metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');
   return {drive_verified:true};
 }
-function orderCheck(prepared,context,target,drive) {
+function orderCheck(prepared,context,target,drive,account) {
   if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');
   const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());
   const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;
@@ -42,11 +43,11 @@ function orderCheck(prepared,context,target,drive) {
   // No client/provider failure is converted into a positive permission decision.
   if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');
   return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,
-    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,blockers}};
+    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,account_check:account?.account_check||null,blockers}};
 }
 function orderFailure(error) {
-  const message=String(error?.message||error?.error?.message||error?.code||'');
-  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED'];
+  const message=String(typeof error?.error==='string'?error.error:error?.message||error?.error?.message||error?.code||'');
+  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','TARGET_CONFIGURATION_REQUIRED','TARGET_PERMISSIONS_REQUIRED','TARGET_RECONNECT_REQUIRED','TARGET_CHECK_RUNNING','TARGET_CHECK_UNAVAILABLE','TARGET_REFRESH_UNCERTAIN','TARGET_TOKEN_SAVE_FAILED','TARGET_OPTIONS_CHANGED','TARGET_RATE_LIMITED'];
   return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};
 }
 module.exports={orderRequest,orderTarget,orderDrive,orderCheck,orderFailure};
