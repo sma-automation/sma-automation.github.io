@@ -115,4 +115,6 @@ Live-Abnahme am 03.11.2026 um **18:43 MEZ**: Im angemeldeten TikTok-Dialog wurde
 
 Weiter offen: Sightengine `VIDEO_PLAN_REQUIRED`, vollständiger Inhalts-/Portaltextnachweis, weitere Portalprofile und Meta-Berechtigungen sowie Upload-Dispatcher und Provider-Ergebnisjournal.
 
+Anschließend wurde der [gemeinsame Dateiabruf für YouTube und TikTok](DUAL_CHANNEL_REHEARSAL.md) mit echten Drive-Bytes und den beiden gespeicherten Kanaltexten erfolgreich geprüft. Der separate Lesetest erstellt keine Freigabe und führt keinen Provider-Upload aus.
+
 Primärquelle, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/content-posting-api-reference-query-creator-info.
