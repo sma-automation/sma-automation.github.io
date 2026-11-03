@@ -1,6 +1,6 @@
 # Dashboard-Auftrag und gebundene Freigabe
 
-Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – privater Import erfolgt, Datenbank und n8n-Anbindung ausgerollt; getestete Anschlusskorrektur wartet wegen Browser-Timeout noch auf Einspielung.
+Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Der aktuelle Auftrag ergänzt die getrennten Medienbestätigungen.
 
 Stand: 3. November 2026. Diese Erweiterung verbindet den angemeldeten Dashboard-Benutzer, seine konkrete Datei-/Textversion, das tatsächliche n8n-Zielkonto und seine ausdrückliche Freigabe mit der vorhandenen Publisher-Arbeitskopie. Der Ausführungsweg endet weiterhin bei einer protokollierten Prüfung: **kein Provider-Upload und kein Social-Media-Posting**.
 
@@ -55,3 +55,24 @@ Die beiden JSON-Dateien enthalten nur Workflowcode, öffentliche Projektangaben 
 Der Live-Test im angemeldeten Dashboard hat den vorhandenen YouTube-Entwurf samt realem Zielkonto erfolgreich als `prepared` gebunden. `approved_at` blieb leer. Ein direkter Übernahmeversuch dieses noch nicht freigegebenen Auftrags wurde mit `FINAL_APPROVAL_REQUIRED` abgewiesen. Es wurde keine Zustimmung im Namen des Kunden erteilt. Der vollständige Workerweg nach einer echten Kundenfreigabe wurde in diesem Schritt nicht live ausgeführt; seine einzelnen Regeln und Fehlerpfade sind durch die Node-/SQL-Tests abgedeckt. Anonyme Anfragen an den aktiven Webhook liefern eine gesperrte, bereinigte Fehlerantwort.
 
 Weiterhin erforderlich vor einem tatsächlichen Posting: vollständige Byte-/Medien-/Inhaltsprüfung, aktuelle Providerberechtigungen und kontospezifische Vorgaben (einschließlich TikTok-Creator-Optionen), sowie ein einzelner kontrollierter Upload-Dispatcher mit Provider-Belegen und Behandlung unklarer Übertragungsergebnisse. Das vorhandene Journal reserviert Aufträge, es ist noch kein vollständiges Provider-Ergebnisjournal. Die alten Publisher-Knoten dürfen deshalb nicht pauschal eingeschaltet werden. Serverumbau bleibt außerhalb dieses Schritts.
+
+
+## Medienbestätigungen und TikTok-Hinweise – 3. November 2026
+
+Die allgemeine Zustimmungsbox allein genügt für neue Freigaben nicht mehr. Der bestehende Dialog verlangt zusätzlich drei nicht vorausgewählte Bestätigungen: vollständige Datei samt Ton/Einblendungen und gespeichertem Beitrag geprüft, erforderliche Medien-/Personenrechte vorhanden sowie Musik-/Tonrechte vorhanden oder entsprechende Inhalte nicht enthalten. Das sind **Erklärungen des Benutzers**, keine automatische Sicherheits- oder Rechteprüfung.
+
+Für TikTok kommt immer die verlinkte Music Usage Confirmation hinzu. Bei Werbung für Dritte muss zusätzlich die Branded Content Policy ausdrücklich bestätigt werden. Die Werbungsauswahl startet ausgeschaltet; nach Aktivierung sind eigene Marke, Dritte oder beide möglich. Die daraus folgende Kennzeichnung wird angezeigt. Werbung für Dritte und „Nur ich“ werden wechselseitig gesperrt. Kommentare, Duett und Stitch starten als nicht angekreuzte „erlauben“-Checkboxen; vom Konto deaktivierte Funktionen bleiben gesperrt. Die API erhält weiterhin die bisherigen booleschen `disable_*`- und `brand_*`-Felder.
+
+`approve.input.review` enthält ausschließlich `policy_version: media-consent-2026-11-03.1` und fünf streng typisierte Bestätigungen. Die Datenbank prüft das vollständige geschlossene Schema gegen das gespeicherte Portal und die Werbeauswahl. Fehlende, falsche, fremde oder alte Bestätigungen liefern `FINAL_APPROVAL_REQUIRED`, einen bereits vom veröffentlichten n8n-API-Workflow erlaubten Fehlercode. Erneute identische Anfragen bleiben idempotent. Frühere Freigaben ohne diese Bestätigungen werden weder ergänzt noch als neue Bestätigung behandelt; der Worker übernimmt sie nicht.
+
+`approval_review` wird atomar mit `approved_at` gespeichert. Benutzer, Datei-/Textrevision, Zielkonto und Portaloptionen sind bereits unveränderliche Bestandteile derselben Auftragszeile. Der Browser kann weder Eigentümer noch Zeitstempel vorgeben. Die Kundenrollen erhalten keine direkten Tabellenrechte; die neue private Validierungsfunktion ist nicht direkt durch Kunden aufrufbar.
+
+Die Auftragsantwort enthält jetzt die aktuelle gebundene Medienprüfung. Der Dialog zeigt offene automatische Prüfungen bereits vor der finalen Zustimmung. Bei geändertem oder nicht mehr verfügbarem Dateistand zeigt er den konkreten Fehler und sperrt den Knopf. Jede neue Antwort bzw. jedes Wiederöffnen setzt die Bestätigungen zurück.
+
+**Unverändert offen:** Sightengine-Videozugriff (`VIDEO_PLAN_REQUIRED`), automatischer vollständiger Inhalts-/Portaltextnachweis, Meta-Berechtigungen, abschließende Portalprofile sowie Upload-Dispatcher und Provider-Ergebnisjournal. Keine Bestätigung entfernt einen dieser automatischen Blocker; `can_upload` und `can_publish` bleiben false. Es wird kein kostenpflichtiger Plan aktiviert. Kein n8n-Workflowcode, keine Credential-Referenz, kein geschütztes Original und kein gespeicherter Kundenbeitrag wird geändert.
+
+Validierung: 286 Node-Tests bestanden. Die SQL-Prüfreihen verwenden jetzt zusätzlich die vollständigen aktuellen Inhalts-/Video-/Medienprofile. Beide lokalen SQL-Reihen bestanden unter PGlite 0.5.14 / PostgreSQL 18.6 mit Rollback. Neue Fälle prüfen fehlende/falsche/alte Erklärungen, Musik-/Werbevarianten, unveränderte Medienblocker, identische Wiederholung, alte Freigaben, Kontosperren, Terminalzustände und Rollenrechte. Oberfläche: ausschließlich die benötigten Felder innerhalb des bestehenden Dialogs; dessen CSS sowie die freigegebene Schrift- und Layoutdatei bleiben bytegleich. Cacheversionen: Dashboard v28, Vorschau-JS v27, Auftragsmodul v5.
+
+Quelle für die TikTok-Oberfläche, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/content-sharing-guidelines. Die dort verlinkten Bedingungen werden als offizielle Ziele angeboten; ihr Inhalt wird nicht als juristisch geprüft behauptet.
+
+Migration `publication_order_media_confirmations_20261103` ist angewendet. Beide SQL-Prüfreihen bestanden anschließend auch auf der produktiven PostgreSQL-17-Instanz mit ausschließlich synthetischen, zurückgerollten Datensätzen. Vor der Änderung stimmten alle fünf vorhandenen Auftragsfunktionen im Quelltext-Hash mit dem Repository überein. Der Sicherheitsberater meldet keine neue Warnung für diese Änderung; bestehende Hinweise bleiben separat offen.

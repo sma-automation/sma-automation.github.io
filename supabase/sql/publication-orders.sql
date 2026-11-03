@@ -8,6 +8,9 @@ create table if not exists sma_private.publication_orders_v1 (
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 alter table sma_private.publication_orders_v1 add column if not exists account_check jsonb;
+-- User declarations, never machine evidence. The row already binds these to
+-- the immutable owner, file/text revision, target, choices and approved_at.
+alter table sma_private.publication_orders_v1 add column if not exists approval_review jsonb;
 create index if not exists publication_orders_owner_v1 on sma_private.publication_orders_v1(user_id,created_at desc);
 -- One approved order per file revision, portal and actual target, even if the text
 -- or client-generated request ID changes. A timeout never releases this key.
@@ -24,11 +27,28 @@ revoke all on sma_private.publication_orders_v1,sma_private.publication_journal_
 grant select,insert,update on sma_private.publication_orders_v1 to service_role;
 grant select,insert on sma_private.publication_journal_v1 to service_role;
 
+create or replace function sma_private.publication_order_review_valid_v1(v jsonb,p_platform text,ch jsonb)
+returns boolean language plpgsql immutable set search_path='' as $$
+begin
+ if p_platform is null or p_platform not in ('youtube','tiktok','instagram','facebook') or jsonb_typeof(v) is distinct from 'object' then return false;end if;
+ return v=jsonb_build_object('policy_version','media-consent-2026-11-03.1','content_checked',true,'media_rights',true,'music_rights',true,
+  'tiktok_music_terms',p_platform='tiktok','tiktok_branded_terms',p_platform='tiktok' and ch->'brand_content_toggle'='true'::jsonb);
+end $$;
+revoke all on function sma_private.publication_order_review_valid_v1(jsonb,text,jsonb) from public,anon,authenticated;
+grant execute on function sma_private.publication_order_review_valid_v1(jsonb,text,jsonb) to service_role;
+
 create or replace function sma_private.publication_order_view_v1(j sma_private.publication_orders_v1)
-returns jsonb language sql stable set search_path='' as $$
- select jsonb_build_object('ok',true,'id',j.id,'state',j.state,'binding',j.binding - 'customer_id' - 'drive_file_id',
+returns jsonb language plpgsql stable set search_path='' as $$
+declare current_result jsonb;media jsonb;
+begin
+ current_result:=sma_private.publication_order_current_v1(j);
+ if current_result->'ok'='true'::jsonb then media:=current_result->'media_check';end if;
+ return jsonb_build_object('ok',true,'id',j.id,'state',j.state,'binding',j.binding - 'customer_id' - 'drive_file_id',
  'draft',j.draft,'choices',j.choices,'target',j.target - 'source_revision','approval_token',case when j.state='prepared' then j.approval_token else null end,
+ 'approval_policy','media-consent-2026-11-03.1','approval_review',j.approval_review,'media_check',media,
+ 'check_error',case when current_result->'ok' is distinct from 'true'::jsonb then current_result->>'code' end,
  'account_check',j.account_check - 'target_revision','approved_at',j.approved_at,'blockers',j.blockers,'can_upload',false,'can_publish',false);
+end;
 $$;
 revoke all on function sma_private.publication_order_view_v1(sma_private.publication_orders_v1) from public,anon,authenticated;
 grant execute on function sma_private.publication_order_view_v1(sma_private.publication_orders_v1) to service_role;
@@ -63,7 +83,8 @@ begin
  if uid is null then return jsonb_build_object('ok',false,'code','AUTH_REQUIRED');end if;
  if p_action is null or p_action not in ('prepare','get','approve') or jsonb_typeof(p_input) is distinct from 'object' or octet_length(p_input::text)>8000
  or coalesce(p_input->>'id','')!~'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$' then return jsonb_build_object('ok',false,'code','INVALID_INPUT');end if;
- if exists(select 1 from jsonb_object_keys(p_input) k where k not in ('id','asset_id','asset_revision','platform','assignment_revision','preview_id','preview_revision','choices','approval_token','confirm')) then return jsonb_build_object('ok',false,'code','INVALID_INPUT');end if;
+ if exists(select 1 from jsonb_object_keys(p_input) k where k not in ('id','asset_id','asset_revision','platform','assignment_revision','preview_id','preview_revision','choices','approval_token','confirm','review')) then return jsonb_build_object('ok',false,'code','INVALID_INPUT');end if;
+ if p_action<>'approve' and p_input?'review' then return jsonb_build_object('ok',false,'code','INVALID_INPUT');end if;
  if (select count(*) from public.sma_kunden where user_id=uid)<>1 then return jsonb_build_object('ok',false,'code','ACCOUNT_UNAVAILABLE');end if;
  select * into c from public.sma_kunden where user_id=uid for share;
  if c.aktiv is not true or not(c.demo_delta_aktiv is true or c.zahlung_bestaetigt is true) then return jsonb_build_object('ok',false,'code','ACCESS_INACTIVE');end if;
@@ -79,7 +100,11 @@ begin
  if p_action='approve' then
   if j.id is null then return jsonb_build_object('ok',false,'code','ORDER_UNAVAILABLE');end if;
   if p_input->'confirm' is distinct from 'true'::jsonb or p_input->>'approval_token' is distinct from j.approval_token::text then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
-  if j.approved_at is not null then return sma_private.publication_order_view_v1(j);end if;
+  if sma_private.publication_order_review_valid_v1(p_input->'review',j.binding->>'platform',j.choices) is not true then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
+  if j.approved_at is not null then
+   if j.approval_review is distinct from p_input->'review' then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
+   return sma_private.publication_order_view_v1(j);
+  end if;
   if j.state<>'prepared' or j.target is null or j.created_at<now()-interval '30 minutes' then return jsonb_build_object('ok',false,'code','ORDER_NOT_PREPARED');end if;
   if j.binding->>'platform' in ('youtube','tiktok') and not sma_private.publication_account_valid_v1(j.account_check,j.target,j.choices) then return jsonb_build_object('ok',false,'code','TARGET_OPTIONS_CHANGED');end if;
   r:=sma_private.publication_order_current_v1(j);if r->'ok' is distinct from 'true'::jsonb then return r;end if;
@@ -87,7 +112,7 @@ begin
   values(c.id,(j.binding->>'asset_id')::uuid,j.binding->>'asset_revision',j.binding->>'platform',j.target->>'id',j.id) on conflict do nothing;
   select order_id into other_id from sma_private.publication_journal_v1 where customer_id=c.id and asset_id=(j.binding->>'asset_id')::uuid and asset_revision=j.binding->>'asset_revision' and platform=j.binding->>'platform' and target_id=j.target->>'id';
   if other_id is distinct from j.id then return jsonb_build_object('ok',false,'code','DUPLICATE_PUBLICATION','existing_order_id',other_id);end if;
-  update sma_private.publication_orders_v1 set approved_at=now(),state='approved',updated_at=now() where id=j.id returning * into j;
+  update sma_private.publication_orders_v1 set approved_at=now(),approval_review=p_input->'review',state='approved',updated_at=now() where id=j.id returning * into j;
   return sma_private.publication_order_view_v1(j);
  end if;
  if coalesce(p_input->>'asset_id','')!~'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' or coalesce(p_input->>'platform','') not in ('youtube','instagram','facebook','tiktok') then return jsonb_build_object('ok',false,'code','INVALID_INPUT');end if;
@@ -147,6 +172,7 @@ begin
   return sma_private.publication_order_view_v1(j);
  elsif p_action='claim' then
   if j.approved_at is null then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
+  if sma_private.publication_order_review_valid_v1(j.approval_review,j.binding->>'platform',j.choices) is not true then return jsonb_build_object('ok',false,'code','FINAL_APPROVAL_REQUIRED');end if;
   if j.state='checking' and j.lease_until>now() then return jsonb_build_object('ok',false,'code','ORDER_RUNNING');end if;
   if j.state not in ('approved','blocked','checking') then return jsonb_build_object('ok',false,'code','ORDER_NOT_READY');end if;
   update sma_private.publication_orders_v1 set state='checking',lease_id=gen_random_uuid(),lease_until=now()+interval '3 minutes',updated_at=now() where id=j.id returning * into j;
@@ -157,6 +183,7 @@ begin
   select coalesce(jsonb_agg(x->>'code'),'[]') into blocks from jsonb_array_elements(r->'media_check'->'checks') x where x->>'status'<>'pass' and x->>'code'<>'PUBLICATION_APPROVAL_PENDING';
   if jsonb_typeof(p_data->'blockers') is distinct from 'array' or jsonb_array_length(p_data->'blockers')>30 or exists(select 1 from jsonb_array_elements(p_data->'blockers') x where jsonb_typeof(x)<>'string' or (x#>>'{}')!~'^[A-Z][A-Z0-9_]{0,79}$') then return jsonb_build_object('ok',false,'code','INVALID_RESULT');end if;
   blocks:=blocks||(p_data->'blockers');
+  if sma_private.publication_order_review_valid_v1(j.approval_review,j.binding->>'platform',j.choices) is not true then blocks:=blocks||'"MEDIA_CONFIRMATION_REQUIRED"'::jsonb;end if;
   if p_data->'target' is distinct from j.target then blocks:=blocks||'"TARGET_ACCOUNT_CHANGED"'::jsonb;end if;
   if p_data->'drive_verified' is distinct from 'true'::jsonb then blocks:=blocks||'"DRIVE_RECHECK_REQUIRED"'::jsonb;end if;
   if p_data->'text_verified' is distinct from 'true'::jsonb then blocks:=blocks||'"SAVED_TEXT_INVALID"'::jsonb;end if;

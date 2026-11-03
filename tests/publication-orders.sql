@@ -12,6 +12,20 @@ values('fa660000-0000-4000-8000-000000000002','fa660000-0000-4000-8000-000000000
 jsonb_build_object('can_publish',false,'drafts',jsonb_build_array(jsonb_build_object('platform','youtube','title','Synthetischer Test','body','Das blaue Quadrat bewegt sich im Testbild.','caption',E'Das blaue Quadrat bewegt sich im Testbild.\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=synthetic-order','hashtags','[]'::jsonb,'review_notes','[]'::jsonb))));
 insert into sma_private.publication_assignments_v1(asset_id,platform,preview_id,preview_revision,asset_revision,draft)
 select 'fa660000-0000-4000-8000-000000000001','youtube',id,revision,'version:1',preview->'drafts'->0 from sma_private.publication_previews_v1 where id='fa660000-0000-4000-8000-000000000002';
+-- Closed declaration schema: customer statements cannot become machine evidence.
+do $$declare v jsonb:=jsonb_build_object('policy_version','media-consent-2026-11-03.1','content_checked',true,'media_rights',true,'music_rights',true,'tiktok_music_terms',false,'tiktok_branded_terms',false);p text;bad jsonb;begin
+ foreach p in array array['youtube','instagram','facebook'] loop
+  assert sma_private.publication_order_review_valid_v1(v,p,'{}');
+ end loop;
+ for bad in select value from jsonb_array_elements(jsonb_build_array(null,'{}'::jsonb,v-'media_rights',v||'{"music_rights":"true"}',v||'{"policy_version":"old"}',v||'{"can_publish":true}',v||'{"content_checked":false}')) loop
+  assert sma_private.publication_order_review_valid_v1(bad,'youtube','{}') is not true;
+ end loop;
+ assert not sma_private.publication_order_review_valid_v1(v,'tiktok','{"brand_content_toggle":false}');
+ v:=v||'{"tiktok_music_terms":true}';
+ assert sma_private.publication_order_review_valid_v1(v,'tiktok','{"brand_content_toggle":false,"brand_organic_toggle":true}');
+ assert not sma_private.publication_order_review_valid_v1(v,'tiktok','{"brand_content_toggle":true}');
+ assert sma_private.publication_order_review_valid_v1(v||'{"tiktok_branded_terms":true}','tiktok','{"brand_content_toggle":true}');
+end $$;
 select set_config('sma.order_input','{"id":"fa660000-0000-4000-8000-000000000010","asset_id":"fa660000-0000-4000-8000-000000000001","asset_revision":"version:1","platform":"youtube","assignment_revision":1,"preview_id":"fa660000-0000-4000-8000-000000000002","preview_revision":1,"choices":{"visibility":"private","made_for_kids":false,"contains_synthetic_media":false}}',true);
 set local role authenticated;
 select set_config('request.jwt.claim.sub','',true);
@@ -37,15 +51,18 @@ do $$declare r jsonb;t jsonb:=jsonb_build_object('platform','youtube','id','synt
  r:=public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010');assert r->>'code'='FINAL_APPROVAL_REQUIRED';
  perform set_config('sma.order_account',jsonb_build_object('version',1,'platform','youtube','target_id',t->>'id','target_revision',t->>'source_revision','display_name','Verified synthetic channel','permissions','["youtube.upload"]'::jsonb,'policy','{}'::jsonb,'checked_at',now(),'expires_at',now()+interval '5 minutes')::text,true);
  assert public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000010',null,jsonb_build_object('target',t))->>'code'='TARGET_PERMISSIONS_REQUIRED';
- r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000010',null,jsonb_build_object('target',t,'account_check',current_setting('sma.order_account')::jsonb));assert r->>'state'='prepared',r::text;
- perform set_config('sma.order_approval',jsonb_build_object('id',r->>'id','approval_token',r->>'approval_token','confirm',true)::text,true);
+ r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000010',null,jsonb_build_object('target',t,'account_check',current_setting('sma.order_account')::jsonb));assert r->>'state'='prepared',r::text;assert r->'approval_review'='null'::jsonb;assert r->'media_check'->>'can_publish'='false';assert jsonb_array_length(r->'media_check'->'checks')>0;
+ perform set_config('sma.order_approval',jsonb_build_object('id',r->>'id','approval_token',r->>'approval_token','confirm',true,'review',jsonb_build_object('policy_version','media-consent-2026-11-03.1','content_checked',true,'media_rights',true,'music_rights',true,'tiktok_music_terms',false,'tiktok_branded_terms',false))::text,true);
  perform set_config('sma.order_target',t::text,true);
 end $$;
 reset role;
 set local role authenticated;
 do $$declare r jsonb;begin
  r:=public.sma_publication_order_v1('approve',current_setting('sma.order_approval')::jsonb||'{"confirm":"true"}');assert r->>'code'='FINAL_APPROVAL_REQUIRED';
- r:=public.sma_publication_order_v1('approve',current_setting('sma.order_approval')::jsonb);assert r->>'state'='approved',r::text;assert r->>'can_upload'='false';
+ assert public.sma_publication_order_v1('approve',current_setting('sma.order_approval')::jsonb-'review')->>'code'='FINAL_APPROVAL_REQUIRED';
+ assert public.sma_publication_order_v1('approve',jsonb_set(current_setting('sma.order_approval')::jsonb,'{review,media_rights}','false'))->>'code'='FINAL_APPROVAL_REQUIRED';
+ assert public.sma_publication_order_v1('approve',jsonb_set(current_setting('sma.order_approval')::jsonb,'{review,content_checked}','"true"'))->>'code'='FINAL_APPROVAL_REQUIRED';
+ r:=public.sma_publication_order_v1('approve',current_setting('sma.order_approval')::jsonb);assert r->'approval_review'=current_setting('sma.order_approval')::jsonb->'review';assert r->>'state'='approved',r::text;assert r->>'can_upload'='false';
  assert public.sma_publication_order_v1('approve',current_setting('sma.order_approval')::jsonb)->>'state'='approved';
  r:=public.sma_publication_order_v1('prepare',current_setting('sma.order_input')::jsonb||'{"id":"fa660000-0000-4000-8000-000000000011"}');assert r->>'state'='preparing';
 end $$;
@@ -53,7 +70,7 @@ reset role;
 set local role service_role;
 do $$declare r jsonb;l uuid;begin
  r:=public.sma_publication_order_worker_v1('bind_target','fa660000-0000-4000-8000-000000000011',null,jsonb_build_object('target',current_setting('sma.order_target')::jsonb,'account_check',current_setting('sma.order_account')::jsonb));
- perform set_config('sma.order_duplicate',jsonb_build_object('id',r->>'id','approval_token',r->>'approval_token','confirm',true)::text,true);
+ perform set_config('sma.order_duplicate',jsonb_build_object('id',r->>'id','approval_token',r->>'approval_token','confirm',true,'review',jsonb_build_object('policy_version','media-consent-2026-11-03.1','content_checked',true,'media_rights',true,'music_rights',true,'tiktok_music_terms',false,'tiktok_branded_terms',false))::text,true);
  r:=public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010');assert r->>'ok'='true',r::text;l:=(r->>'lease_id')::uuid;
  assert public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010')->>'code'='ORDER_RUNNING';
  assert public.sma_publication_order_worker_v1('finish_check','fa660000-0000-4000-8000-000000000010',gen_random_uuid(),'{}')->>'code'='INVALID_LEASE';
@@ -72,6 +89,10 @@ do $$declare r jsonb;begin
 end $$;
 select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000092',true);
 do $$begin assert public.sma_publication_order_v1('get','{"id":"fa660000-0000-4000-8000-000000000010"}')->>'code'='ORDER_UNAVAILABLE';end $$;
+reset role;
+update sma_private.publication_orders_v1 set approval_review=null where id='fa660000-0000-4000-8000-000000000010';
+set local role service_role;
+do $$begin assert public.sma_publication_order_worker_v1('claim','fa660000-0000-4000-8000-000000000010')->>'code'='FINAL_APPROVAL_REQUIRED';end $$;
 reset role;
 update sma_private.publication_files_v1 set revision='version:2' where id='fa660000-0000-4000-8000-000000000001';
 set local role service_role;

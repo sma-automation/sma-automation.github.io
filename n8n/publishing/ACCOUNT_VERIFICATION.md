@@ -134,3 +134,8 @@ Die frühere Browserstörung war in dieser Fortsetzung ausreichend behoben, um b
 - https://developers.tiktok.com/docs/en/tiktok-api-v2-get-user-info
 - https://developers.tiktok.com/docs/en/content-posting-api-reference-query-creator-info
 - https://developers.tiktok.com/docs/en/content-sharing-guidelines
+
+
+## Fortsetzung: gebundene Medienbestätigungen
+
+Die neue Auftragsänderung ist in [PUBLICATION_ORDERS.md](PUBLICATION_ORDERS.md#medienbestätigungen-und-tiktok-hinweise--3-november-2026) dokumentiert. Sie ergänzt ausdrückliche Erklärungen zu Inhalt, Medienrechten und Musik sowie TikTok-Musik-/Werbehinweise. Automatische Medienblocker einschließlich Sightengine bleiben bestehen. Die vier Portalgalerien aus PR #52 sowie Schrift und CSS bleiben unverändert. Es wurden weder ein Tarifwechsel noch eine Social-Media-Veröffentlichung freigegeben.

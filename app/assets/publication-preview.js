@@ -2,7 +2,7 @@ let supabase;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=5';
-import {installOrderReview} from './publication-order.mjs?v=4';
+import {installOrderReview} from './publication-order.mjs?v=5';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
