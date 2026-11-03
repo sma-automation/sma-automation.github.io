@@ -1,6 +1,6 @@
 # Zielkonto und Portalberechtigungen
 
-Stand: 2026-11-03. **Anschlusskorrektur veröffentlicht, echte YouTube-/TikTok-Kontoprüfungen erfolgreich, PR #46 zusammengeführt, Kontoprüfungen im Dashboard v23 abgenommen und Storno-Korrektur aus PR #49 mit Dashboard v25 live geprüft.**
+Stand: 2026-11-03. **Anschlusskorrektur und Kontoprüfungen abgeschlossen (#46), Storno-Korrektur live abgenommen (#49), technische Videonachweise aus #50 veröffentlicht und mit dem ausgewählten echten Video erfolgreich geprüft. Dashboard v26 ist live.**
 
 Der bereits genehmigte private OAuth-Import bleibt unverändert in derselben n8n-Instanz. App-Secrets und Provider-Token stehen nicht im Repository. Die Migrationen `publication_account_verification_v1` und `publication_order_account_evidence_v1` sind eingespielt; die zuvor dokumentierten SQL-Prüfreihen bestanden auf PostgreSQL 17 mit Rollback.
 
@@ -94,7 +94,28 @@ PR #50 ergänzt vollständige FFmpeg-Decodierung, Codec, Pixelformat, Abmessunge
 - Neue Analysepolicy: `magic-video-2026-11-03.1`. Ergebnisse früherer Versionen bleiben erhalten, zählen jedoch nicht als technische Nachweise. Eigentümer, aktive Kundenzuordnung, Dateirevision, SHA-256 und Byteanzahl werden unabhängig in SQL geprüft.
 - TikTok verwendet die verifizierten Codec-, Abmessungs- und Bildratendaten. Die Frame-Abstände müssen ebenfalls im zulässigen Bereich liegen; ein passender Mittelwert allein genügt nicht. Vollständige Decodierung kann `BINARY_INSPECTION` erfüllen. Andere inhaltliche, kontoabhängige und finale Freigaben bleiben erforderlich.
 - 278 Node-Tests, drei echte FFmpeg-/Python-Tests und beide SQL-Prüfreihen bestanden lokal. Beide SQL-Prüfreihen bestanden zusätzlich auf der produktiven Datenbank mit ausschließlich synthetischen, zurückgerollten Daten. Fälle umfassen beschädigte MP4-Dateien, rationale Bildraten, variable Frame-Abstände, ungültige Nenner, fremde Eigentümer, alte Revisionen und falsche Byteanzahl.
-- Die Oberfläche ändert ausschließlich Analysepolicy und Cacheversion (Dashboard v26, Vorschau-JS v25). Schrift, CSS und Darstellung bleiben unverändert. Dashboard-Bereitstellung und Abnahme des ausgewählten echten Videos stehen zum Zeitpunkt dieses Eintrags noch aus.
+- Die Oberfläche ändert ausschließlich Analysepolicy und Cacheversion (Dashboard v26, Vorschau-JS v25). Schrift, CSS und Darstellung bleiben unverändert. PR #50 ist mit Merge-Commit `156f2f6455f67c458ad62a9d8e6f3b330eb9d9ab` zusammengeführt; [Pages-Lauf 41667532087](https://github.com/sma-automation/sma-automation.github.io/actions/runs/41667532087) war erfolgreich. Das Dashboard lud tatsächlich `v=26`; der CSS-Blob bleibt `5a985f88acc0e810869234d93afbc570441f7cf5`.
+
+### Echte Video-Abnahme
+
+Die separate Erkennung wurde im angemeldeten Dashboard-Kontext für die bereits ausgewählte MP4-Datei gestartet; keine automatische Texterstellung und keine Übernahme in gespeicherte Beiträge. Abschluss am 3. November 2026 um 15:51:46 UTC, Policy `magic-video-2026-11-03.1`, Status `completed`, Lease vollständig freigegeben.
+
+| Nachweis | Ergebnis |
+| --- | --- |
+| Bytes / Format | 1.347.227 Byte; H.264 / yuv420p |
+| Decodierte Abmessungen | 720 × 1280 Pixel |
+| Bildrate | 24/1 fps; 241 vollständig decodierte Frames |
+| Frame-Abstände | 41.666–41.667 Mikrosekunden |
+| Videobitrate | 1.070.396 Bit/s |
+| Audio | Keine Tonspur; sämtliche Audiofelder korrekt null |
+| TikTok-Technik | `VIDEO_FRAMERATE`, `VIDEO_CODEC`, `VIDEO_DIMENSIONS`, `BINARY_INSPECTION` jeweils `pass` |
+| Gesamtergebnis | `needs_review`, `can_publish:false` |
+
+Die Live-Anzeige unter „Vorschau für TikTok → Dateidetails“ zeigte die vier neuen technischen Nachweise als „Geprüft“; die offenen Inhalts-/Freigabepunkte und der Sightengine-Tarifhinweis blieben sichtbar. Auch die berichtigte H.264-Empfehlung wurde im Dashboard verifiziert.
+
+Der Prüfsummenvergleich sämtlicher gespeicherten Vorschauen vor und nach dem Lauf war identisch. Die tatsächliche Quelldatei wurde aus dem zugeordneten Drive-Kundenordner geladen; die Drive-Anbindung ist für diesen geprüften Pfad funktionsfähig. Es wurde kein Veröffentlichungsauftrag vorbereitet, kein Inhalt an YouTube/TikTok hochgeladen und keine finale Zustimmung erteilt.
+
+Der alte MP4-Empfehlungstext behauptete nach erfolgreicher Codecprüfung weiterhin, der Codec müsse noch geprüft werden. Er nennt jetzt ausschließlich die H.264-Empfehlung. Diese Textkorrektur ist mit Migration `publication_video_recommendation_wording_20261103` live; die Medienprofil-Prüfreihe bestand danach erneut. Keine CSS-, Layout- oder Schriftänderung.
 
 Die technische Decodierung ersetzt keine visuelle Sicherheitsprüfung. Der bestehende Sightengine-Zugang meldet für Video weiterhin `VIDEO_PLAN_REQUIRED`; es wurde kein kostenpflichtiger Plan eingerichtet. Die finale Veröffentlichungszustimmung wurde nicht erteilt, `can_publish` bleibt false.
 
