@@ -1,6 +1,6 @@
 'use strict';
 const {checkedDriveRevision,evidenceManifest}=require('./video-evidence.cjs');
-const VIDEO_MAGIC_POLICY='magic-video-2026-11-02.1';
+const VIDEO_MAGIC_POLICY='magic-video-2026-11-03.1';
 const VIDEO_SUBJECTS=['product','food','place','service_scene','document','other','unclear'];
 const VIDEO_BAD_TEXT=/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u202a-\u202e\u2066-\u2069]/u;
 function videoFile(meta,context,folders) {
@@ -47,7 +47,7 @@ function videoMagicResult(response,evidence,context) {
     (evidence.audio_status==='no_audio_stream')!==(m.audio_status==='no_audio_stream')||
     (evidence.audio_status==='transcribed'?(!t.trim()||!r.spoken_summary):(t!==''||r.spoken_summary!=='')))throw Error('TRANSCRIPT_INVALID');
   return {policy_version:VIDEO_MAGIC_POLICY,...r,transcript:t,audio_status:evidence.audio_status,
-    evidence:{source_sha256:m.sha256,source_size_bytes:m.size_bytes,duration_ms:m.duration_ms,positions_ms:m.positions_ms,frame_sha256:m.frames.map(f=>f.sha256),sampling:m.sampling},
+    evidence:{source_sha256:m.sha256,source_size_bytes:m.size_bytes,duration_ms:m.duration_ms,positions_ms:m.positions_ms,frame_sha256:m.frames.map(f=>f.sha256),sampling:m.sampling,technical:m.technical},
     content_comparison:'model_checked_sampled_evidence',requires_confirmation:true,can_publish:false};
 }
 module.exports={VIDEO_MAGIC_POLICY,videoFile,videoTranscript,videoRecognitionRequest,videoRecognitionResult,videoMagicResult};
