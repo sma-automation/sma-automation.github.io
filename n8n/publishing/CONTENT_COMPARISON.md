@@ -51,3 +51,21 @@ Die beiden Abschlussexporte wurden gegen die Generatoren geprüft: gleiche Nodep
 Validierung: **301 Node-Tests bestanden**. Vergleichs-, Konto-, Auftrags- und Creator-SQL-Prüfreihen bestanden lokal unter PGlite/PostgreSQL 18; Vergleichs-, Auftrags- und Creator-Fälle zusätzlich auf der produktiven PostgreSQL-17-Instanz mit synthetischen, zurückgerollten Fixtures. Rollenrechte, geänderte Belege/Texte, falsche Leases, Wiederholungen, exakte Zitate und unveränderte Medienblocker sind abgedeckt. Keine neue Sicherheitsberater-Warnung. Für die absichtlich service-interne Tabelle entsteht derselbe INFO-Hinweis „RLS Enabled No Policy“ wie bei den übrigen privaten Servicetabellen; Kundenrollen besitzen keine Tabellen- oder Funktionsrechte. [Hinweisbeschreibung](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
 
 Sightengine bleibt bei `VIDEO_PLAN_REQUIRED`. Vollständige visuelle Sicherheitsprüfung, ausdrückliche Nutzerfreigabe, automatische asynchrone Vergleichsansteuerung und tatsächlicher Providerbetrieb bleiben offen. Meta und Serverumbau bleiben außerhalb dieses Schritts. Zur vorbereiteten Upload-/Ergebnisauswertung: [PROVIDER_RESULTS.md](PROVIDER_RESULTS.md).
+
+## Automatische Auftragsansteuerung – Fortsetzung PR #57
+
+Die additive Migration `publication_comparison_delivery_v1` ist installiert. Neue YouTube-/TikTok-Videoaufträge legen ihre Abgleichaufgabe in derselben Transaktion an. Der vorhandene Vergleichscache bleibt maßgeblich. Eine Queue-Lease verhindert parallele Zustellung; verlorene Starts vor dem Modellaufruf sind bis zu dreimal zustellbar. Die vorhandene Vergleichsreservierung verhindert einen zweiten kostenpflichtigen Modellversuch für denselben Fingerabdruck. Ein neuer Belegfingerabdruck erhält einen eigenen Abgleich; alte Ergebnisse oder Leases werden nicht übernommen. Stornierte Aufträge werden nicht verarbeitet.
+
+`comparison-delivery-workflow.json` ist als private Kopie **`ZFO9NSh5nHSn3ues`** importiert. Die vorbereitete API-Vorlage stößt sie nach erfolgreichen Auftragsantworten ohne Warten an. Auch ein erneutes `get` kann einen verlorenen Start zustellen. Fehler beim Start verändern die ursprüngliche Dashboard-Antwort nicht. Es wird kein zusätzlicher Zeittrigger eingerichtet.
+
+**Noch nicht live angeschlossen:** Die automatische Freigabeprüfung hat das Speichern der Einstellungen „keine Ausführungsdaten speichern“ und 270 Sekunden Zeitlimit angehalten. Die neue Kopie bleibt unveröffentlicht; die aktive API ist unverändert. Vor dem Anschluss die Kopie nochmals mit dem aktuellen Generator abgleichen (einschließlich des korrigierten If-Ausdrucks ohne `.binding` im n8n-Parameter), Einstellungen bestätigen und exportieren, anschließend Vergleichsunterworkflow und Delivery-Workflow veröffentlichen und die API-Vorlage übernehmen. Keine der Vorlagen besitzt einen Social-Media-Schreibpfad.
+
+Die Queue-Prüfung bestand lokal sowie gegen PostgreSQL 17 mit synthetischen Rollback-Fixtures: atomare Auftragseinfügung, exklusive Lease, verlorener Start, falsche/späte Lease, Cacheabschluss, geänderte Belege und Stornierung. 313 Node-Tests bestanden. Kein zusätzlicher echter Modelllauf und kein neuer Kundenauftrag wurden ausgelöst. [Dauerhafte Provider-Ergebnisse und verbleibende Anschlussarbeiten](PROVIDER_RESULTS.md).
+
+```sh
+python3 n8n/publishing/build-comparison-delivery.py
+python3 n8n/publishing/build-publication-orders.py \
+  --worker-id zLlhr1I1vKm2AiiU --account-id LR2Qng41OIYuVHAR \
+  --comparison-delivery-id ZFO9NSh5nHSn3ues
+node tests/run-publication-delivery-sql.mjs
+```

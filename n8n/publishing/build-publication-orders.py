@@ -73,7 +73,7 @@ def build_worker(account_id):
  w.edge('Prüffehler protokollieren','Prüfstand protokollieren')
  return w.write()
 
-def build_api(worker_id,account_id):
+def build_api(worker_id,account_id,comparison_delivery_id=None):
  w=Builder('SMA – Dashboard – Veröffentlichungsauftrag V1',ROOT/'n8n/publishing/publication-order-api-workflow.json')
  w.node('Dashboard-Auftrag','webhook',{'httpMethod':'POST','path':'sma-publication-order-v1','responseMode':'responseNode','options':{'allowedOrigins':'https://sma-automation.com'}},0,v=2.1)
  w.code('Dashboard-Anfrage prüfen',CORE+"\nreturn [{json:orderRequest($input.first().json)}];",240,onError='continueErrorOutput')
@@ -118,8 +118,23 @@ def build_api(worker_id,account_id):
  w.edge('Eigenes Kontoziel lesen','Eigenes Kontoziel bestätigt');w.edge('Eigenes Kontoziel bestätigt','Aktuelle Kontooptionen laden');w.edge('Aktuelle Kontooptionen laden','Kontooptionen zurückgeben');w.edge('Kontooptionen zurückgeben','Auftragsantwort prüfen')
  for name in ['Auftragskonto rückprüfen','Auftragskonto bestätigt','Eigenes Kontoziel lesen','Eigenes Kontoziel bestätigt','Aktuelle Kontooptionen laden','Kontooptionen zurückgeben']:w.edge(name,'Sichere Auftragsfehlermeldung',1)
  w.edge('Sichere Auftragsfehlermeldung','Auftragsantwort prüfen');w.edge('Auftragsantwort prüfen','Dashboard-Antwort')
+ if comparison_delivery_id:
+  # The durable outbox is inserted by the order transaction. Every successful
+  # order read can redeliver a lost kickoff; model calls remain fingerprint-bound.
+  w.condition('Auftragsabgleich anstoßen?',"={{ $json.ok === true && !!$json.id && ['preparing','prepared','approved','blocked','checked'].includes($json.state) }}",2400,200)
+  w.code('Auftragsantwort merken','return $input.all();',2640,0)
+  w.node('Inhaltsabgleich im Hintergrund','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':comparison_delivery_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':False}},2880,0,1.3,onError='continueErrorOutput')
+  w.code('Unveränderte Auftragsantwort',"return $('Auftragsantwort merken').all();",3120,0)
+  w.edges['Auftragsantwort prüfen']['main'][0]=[]
+  w.edge('Auftragsantwort prüfen','Auftragsabgleich anstoßen?')
+  w.edge('Auftragsabgleich anstoßen?','Auftragsantwort merken')
+  w.edge('Auftragsabgleich anstoßen?','Dashboard-Antwort',1)
+  w.edge('Auftragsantwort merken','Inhaltsabgleich im Hintergrund')
+  w.edge('Inhaltsabgleich im Hintergrund','Unveränderte Auftragsantwort')
+  w.edge('Inhaltsabgleich im Hintergrund','Unveränderte Auftragsantwort',1)
+  w.edge('Unveränderte Auftragsantwort','Dashboard-Antwort')
  return w.write()
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);p.add_argument('--account-id',required=True);args=p.parse_args()
- print('worker',len(build_worker(args.account_id)['nodes']),'API',len(build_api(args.worker_id,args.account_id)['nodes']))
+ p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);p.add_argument('--account-id',required=True);p.add_argument('--comparison-delivery-id');args=p.parse_args()
+ print('worker',len(build_worker(args.account_id)['nodes']),'API',len(build_api(args.worker_id,args.account_id,args.comparison_delivery_id)['nodes']))

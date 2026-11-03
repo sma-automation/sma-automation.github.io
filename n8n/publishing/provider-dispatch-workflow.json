@@ -1,0 +1,1179 @@
+{
+  "name": "SMA – Auftrag – Provider-Ergebnis V1",
+  "nodes": [
+    {
+      "id": "376784be-8a52-44ec-8476-00308198215e",
+      "name": "Providerauftrag fortsetzen",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "acf16e3d-2ff3-4c80-b11f-9deacd11cc3d",
+      "name": "Providerauftrags-ID prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const r=$input.first().json;if($input.all().length!==1||Object.keys(r).join()!=='id'||! /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(r.id||''))throw Error('INVALID_INPUT');return [{json:r}];"
+      },
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "id": "57cf730c-e179-40ea-ad30-a0f733c05d17",
+      "name": "Providerauftrag lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_provider_v1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'context',p_id:$json.id} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "position": [
+        480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "0fb00984-3d9d-4586-b587-25ba15761ce1",
+      "name": "Providerbindung bestätigen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "if($json.ok!==true)throw Error('PROVIDER_CONTEXT_UNAVAILABLE');return $input.all();"
+      },
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "id": "825bf0f5-dddc-4885-8071-d9d3d911f4ae",
+      "name": "Providerkonto rückprüfen",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "LR2Qng41OIYuVHAR",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "position": [
+        960,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "16bb14bb-67b4-4e1f-9c2d-e94cc68047a9",
+      "name": "Aktuelle Providerverbindung lesen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('Providerauftrag lesen').first().json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $('Providerauftrag lesen').first().json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "position": [
+        1200,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1e47e39a-44a0-4c9b-8bc9-a0b886f7c47b",
+      "name": "Providerverbindung bestätigen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\nconst orderCrypto = require('crypto');\nconst ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;\nfunction orderRequest(item) {\n  const auth=item?.headers?.authorization, body=item?.body;\n  if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');\n  if(!body||!['prepare','approve','get','account'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||\n    Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');\n  if(body.action==='account'&&(!['youtube','tiktok'].includes(body.input.platform)||Object.keys(body.input).some(k=>!['id','platform'].includes(k))))throw Error('INVALID_INPUT');\n  return {auth,action:body.action,input:body.input};\n}\n// Source rows never leave this node. Only the selected non-secret identity does.\nfunction orderTarget(rows,context) {\n  if(context?.ok!==true||!context.binding||!context.n8n_kunde_id||!context.kunde_email)throw Error('ORDER_UNAVAILABLE');\n  const matches=rows.filter(r=>r?.kunde_id), k=matches.length===1?matches[0]:null;\n  if(!k||k.kunde_id!==context.n8n_kunde_id||String(k.kunde_email||'').trim().toLowerCase()!==context.kunde_email.trim().toLowerCase()||\n    k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const p=context.binding.platform;\n  const fields={youtube:['youtube_channel_id','youtube_channel_title'],instagram:['instagram_user_id','instagram_username'],\n    facebook:['facebook_page_id','facebook_page_name'],tiktok:['tiktok_open_id','tiktok_display_name']}[p];\n  if(!fields)throw Error('TARGET_ACCOUNT_REQUIRED');\n  const id=k[fields[0]],name=String(k[fields[1]]||id||'');\n  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{3,200}$/.test(id)||name.length<1||name.length>200||/[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(name))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const target={platform:p,id,name,source_revision:orderCrypto.createHash('sha256').update(JSON.stringify([k.id,k.kunde_id,k.kunde_email,p,id,name])).digest('hex')};\n  if(context.target&&JSON.stringify(Object.entries(context.target).sort())!==JSON.stringify(Object.entries(target).sort()))throw Error('TARGET_ACCOUNT_CHANGED');\n  return {target};\n}\nfunction orderDrive(metadata,context,folders) {\n  const b=context?.binding;\n  if(!b||metadata?.id!==b.drive_file_id||metadata.trashed!==false||!Array.isArray(metadata.parents)||!metadata.parents.some(x=>folders.includes(x)))throw Error('FILE_CHANGED');\n  const hash=/^[a-f0-9]{64}$/.test(metadata.sha256Checksum||'')?'sha256:'+metadata.sha256Checksum:/^[a-f0-9]{32}$/.test(metadata.md5Checksum||'')?'md5:'+metadata.md5Checksum:'version';\n  if(!/^\\d{1,30}$/.test(metadata.version||'')||hash+':'+metadata.version!==b.asset_revision||\n    metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');\n  return {drive_verified:true};\n}\nfunction orderCheck(prepared,context,target,drive,account) {\n  if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');\n  const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());\n  const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;\n  const blockers=[];\n  if(!textVerified)blockers.push('SAVED_TEXT_INVALID');\n  // Final consent and duplicate reservation are authoritative database facts.\n  // No client/provider failure is converted into a positive permission decision.\n  if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');\n  return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,\n    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,account_check:account?.account_check||null,blockers}};\n}\nfunction orderFailure(error) {\n  const message=String(typeof error?.error==='string'?error.error:error?.message||error?.error?.message||error?.code||'');\n  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','TARGET_CONFIGURATION_REQUIRED','TARGET_PERMISSIONS_REQUIRED','TARGET_RECONNECT_REQUIRED','TARGET_CHECK_RUNNING','TARGET_CHECK_UNAVAILABLE','TARGET_REFRESH_UNCERTAIN','TARGET_TOKEN_SAVE_FAILED','TARGET_OPTIONS_CHANGED','TARGET_RATE_LIMITED'];\n  return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};\n}\n\n'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nconst c=$('Providerauftrag lesen').first().json,a=$('Providerkonto rückprüfen').first().json,rows=$input.all().map(x=>x.json);\nif(a.ok!==true)throw Error('TARGET_PERMISSIONS_REQUIRED');\nconst t=orderTarget(rows,c),folders=verifiedFolders(rows,c).folders;\nconst row=rows.length===1?rows[0]:null,token=row?.[c.binding.platform+'_access_token'];\nif(!row||typeof token!=='string'||token.length<10||/[\\r\\n]/.test(token))throw Error('TARGET_RECONNECT_REQUIRED');\nreturn [{json:{...c,...t,account_check:a.account_check,folders,token,drive_file_id:c.binding.drive_file_id}}];\n"
+      },
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "id": "56121f01-b4be-4a95-8075-a3226cc4890f",
+      "name": "Datei für Übertragung prüfen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "67ddcbdc-e230-4887-b72e-9fe7097afeaa",
+              "leftValue": "={{ $json.requires_file === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "id": "0164dfdd-dda2-4100-950d-927d378b93c5",
+      "name": "Provider-Dateistand lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Providerverbindung bestätigen').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,parents,trashed,version,size,sha256Checksum,md5Checksum,capabilities(canDownload)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "position": [
+        1920,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7429b050-5ca1-4dd7-b095-5bc35b2fdf4e",
+      "name": "Provider-Videodatei lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Providerverbindung bestätigen').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "alt",
+              "value": "media"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "position": [
+        2400,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "8db6fc8f-7894-4f9d-b41f-802ce79c3918",
+      "name": "Provider-Dateistand rückprüfen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Providerverbindung bestätigen').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,parents,trashed,version,size,sha256Checksum,md5Checksum,capabilities(canDownload)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "position": [
+        2880,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "abd58382-cb30-4e38-b83f-f01fb091b521",
+      "name": "Provider-Dateistand bestätigen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\nconst orderCrypto = require('crypto');\nconst ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;\nfunction orderRequest(item) {\n  const auth=item?.headers?.authorization, body=item?.body;\n  if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');\n  if(!body||!['prepare','approve','get','account'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||\n    Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');\n  if(body.action==='account'&&(!['youtube','tiktok'].includes(body.input.platform)||Object.keys(body.input).some(k=>!['id','platform'].includes(k))))throw Error('INVALID_INPUT');\n  return {auth,action:body.action,input:body.input};\n}\n// Source rows never leave this node. Only the selected non-secret identity does.\nfunction orderTarget(rows,context) {\n  if(context?.ok!==true||!context.binding||!context.n8n_kunde_id||!context.kunde_email)throw Error('ORDER_UNAVAILABLE');\n  const matches=rows.filter(r=>r?.kunde_id), k=matches.length===1?matches[0]:null;\n  if(!k||k.kunde_id!==context.n8n_kunde_id||String(k.kunde_email||'').trim().toLowerCase()!==context.kunde_email.trim().toLowerCase()||\n    k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const p=context.binding.platform;\n  const fields={youtube:['youtube_channel_id','youtube_channel_title'],instagram:['instagram_user_id','instagram_username'],\n    facebook:['facebook_page_id','facebook_page_name'],tiktok:['tiktok_open_id','tiktok_display_name']}[p];\n  if(!fields)throw Error('TARGET_ACCOUNT_REQUIRED');\n  const id=k[fields[0]],name=String(k[fields[1]]||id||'');\n  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{3,200}$/.test(id)||name.length<1||name.length>200||/[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(name))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const target={platform:p,id,name,source_revision:orderCrypto.createHash('sha256').update(JSON.stringify([k.id,k.kunde_id,k.kunde_email,p,id,name])).digest('hex')};\n  if(context.target&&JSON.stringify(Object.entries(context.target).sort())!==JSON.stringify(Object.entries(target).sort()))throw Error('TARGET_ACCOUNT_CHANGED');\n  return {target};\n}\nfunction orderDrive(metadata,context,folders) {\n  const b=context?.binding;\n  if(!b||metadata?.id!==b.drive_file_id||metadata.trashed!==false||!Array.isArray(metadata.parents)||!metadata.parents.some(x=>folders.includes(x)))throw Error('FILE_CHANGED');\n  const hash=/^[a-f0-9]{64}$/.test(metadata.sha256Checksum||'')?'sha256:'+metadata.sha256Checksum:/^[a-f0-9]{32}$/.test(metadata.md5Checksum||'')?'md5:'+metadata.md5Checksum:'version';\n  if(!/^\\d{1,30}$/.test(metadata.version||'')||hash+':'+metadata.version!==b.asset_revision||\n    metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');\n  return {drive_verified:true};\n}\nfunction orderCheck(prepared,context,target,drive,account) {\n  if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');\n  const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());\n  const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;\n  const blockers=[];\n  if(!textVerified)blockers.push('SAVED_TEXT_INVALID');\n  // Final consent and duplicate reservation are authoritative database facts.\n  // No client/provider failure is converted into a positive permission decision.\n  if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');\n  return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,\n    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,account_check:account?.account_check||null,blockers}};\n}\nfunction orderFailure(error) {\n  const message=String(typeof error?.error==='string'?error.error:error?.message||error?.error?.message||error?.code||'');\n  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','TARGET_CONFIGURATION_REQUIRED','TARGET_PERMISSIONS_REQUIRED','TARGET_RECONNECT_REQUIRED','TARGET_CHECK_RUNNING','TARGET_CHECK_UNAVAILABLE','TARGET_REFRESH_UNCERTAIN','TARGET_TOKEN_SAVE_FAILED','TARGET_OPTIONS_CHANGED','TARGET_RATE_LIMITED'];\n  return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};\n}\n\nconst c=$('Providerverbindung bestätigen').first().json;orderDrive($json,c,c.folders);if($json.mimeType!=='video/mp4'||! /^[1-9][0-9]{0,7}$/.test(String($json.size))||Number($json.size)>24000000)throw Error('FILE_CHANGED');return [{json:{size_bytes:Number($json.size)}}];"
+      },
+      "position": [
+        2160,
+        0
+      ]
+    },
+    {
+      "id": "dfafc9b9-cd89-4db7-968c-04a935cd8816",
+      "name": "Provider-Dateiprüfsumme bestätigen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\n// Pure provider response interpretation. No HTTP client, credentials, dispatcher,\n// automatic upload retries or claim of durable delivery/idempotency.\nconst providerObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);\nconst providerId=(s,max=200)=>typeof s==='string'&&s.length>0&&s.length<=max&&/^[A-Za-z0-9_.~:-]+$/.test(s);\nfunction providerContext(c){\n if(!providerObject(c)||!['youtube','tiktok'].includes(c.platform)||!providerId(c.target_id)||!providerId(c.provider_id, c.platform==='tiktok'?64:11)||\n  (c.platform==='youtube'&&!/^[A-Za-z0-9_-]{11}$/.test(c.provider_id))||\n  !Number.isSafeInteger(c.size_bytes)||c.size_bytes<=0||\n  !['direct_post','inbox','youtube_video'].includes(c.route)||\n  (c.platform==='youtube'?c.route!=='youtube_video':c.route==='youtube_video')||\n  !['private','unlisted','public','SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)||\n  (c.platform==='youtube'?!['private','unlisted','public'].includes(c.visibility):!['SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)))throw Error('PROVIDER_CONTEXT_INVALID');\n return c;\n}\nfunction providerResult(c,state,extra={}){\n return {platform:c.platform,target_id:c.target_id,provider_id:c.provider_id,route:c.route,expected_visibility:c.visibility,state,upload_retry_allowed:false,can_upload:false,can_publish:false,...extra};\n}\nfunction youtubeResult(http,c){\n providerContext(c);if(c.platform!=='youtube')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||!providerObject(http.body)||!Array.isArray(http.body.items)||http.body.items.length!==1)return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const v=http.body.items[0],s=v?.status,p=v?.processingDetails;\n if(v?.id!==c.provider_id||v?.snippet?.channelId!==c.target_id)return providerResult(c,'unknown',{code:'PROVIDER_BINDING_MISMATCH'});\n if(['deleted','failed','rejected'].includes(s?.uploadStatus)||p?.processingStatus==='failed')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(!['uploaded','processed'].includes(s?.uploadStatus)||!['processing','succeeded','terminated'].includes(p?.processingStatus))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(!['public','private','unlisted'].includes(s.privacyStatus)||s.privacyStatus!==c.visibility||s.publishAt)return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n if(s.uploadStatus!=='processed'||p.processingStatus==='processing')return providerResult(c,'processing');\n if(p.processingStatus!=='succeeded')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // A private/unlisted upload is complete without claiming public availability.\n return providerResult(c,'complete',{visibility:s.privacyStatus,publicly_available:s.privacyStatus==='public',url:'https://www.youtube.com/watch?v='+v.id});\n}\nfunction tiktokResult(http,c){\n providerContext(c);if(c.platform!=='tiktok')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||http.body?.error?.code!=='ok'||!providerObject(http.body.data))return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const d=http.body.data;\n // The fetch endpoint does not echo the publish_id or account. Its trusted\n // request context must come from the persisted attempt, never the response.\n if(d.uploaded_bytes!==undefined&&(!Number.isSafeInteger(d.uploaded_bytes)||d.uploaded_bytes<0||d.uploaded_bytes>c.size_bytes))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(d.status==='FAILED')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(d.status==='PROCESSING_UPLOAD')return providerResult(c,'processing');\n if(d.status==='SEND_TO_USER_INBOX')return c.route==='inbox'?providerResult(c,'awaiting_user'):providerResult(c,'unknown',{code:'PROVIDER_ROUTE_MISMATCH'});\n if(d.status!=='PUBLISH_COMPLETE')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // TikTok's documented misspelling is deliberate. Int64 IDs must remain\n // strings; unsafe JS numbers are not silently rounded into another post ID.\n const raw=d.publicaly_available_post_id;\n if(raw!==undefined&&(!Array.isArray(raw)||raw.length>20))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n const ids=(raw||[]).map(x=>typeof x==='string'?x:Number.isSafeInteger(x)?String(x):null);\n if(ids.some(x=>!x||!/^[1-9][0-9]{0,19}$/.test(x))||new Set(ids).size!==ids.length)return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(ids.length&&c.visibility!=='PUBLIC_TO_EVERYONE')return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n return providerResult(c,'complete',{publicly_available:ids.length>0?true:c.visibility==='PUBLIC_TO_EVERYONE'?null:false,public_post_ids:ids});\n}\nfunction youtubeTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode===308){\n  const range=http.headers?.range??http.headers?.Range;\n  if(range===undefined)return {state:'uploading',received_bytes:0,upload_retry_allowed:false};\n  const m=typeof range==='string'&&/^bytes=0-(\\d+)$/.exec(range),n=m?Number(m[1])+1:NaN;\n  if(!Number.isSafeInteger(n)||n<1||n>=size)return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n  return {state:'uploading',received_bytes:n,upload_retry_allowed:false};\n }\n if([200,201].includes(http?.statusCode)&&/^[A-Za-z0-9_-]{11}$/.test(http.body?.id||''))return {state:'processing',provider_id:http.body.id,upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction tiktokTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n // A 201 only completes transfer; the authenticated status endpoint is still required.\n if(http?.statusCode===201)return {state:'processing',upload_retry_allowed:false};\n if(http?.statusCode===206)return {state:'uploading',upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction mergeProviderObservation(previous,next){\n if(!providerObject(previous)||!providerObject(next)||['platform','target_id','provider_id','route','expected_visibility'].some(k=>!previous[k]||previous[k]!==next[k]))throw Error('PROVIDER_BINDING_MISMATCH');\n const terminal=['complete','failed'];\n // Moderation can expose public TikTok IDs only on a later completed poll.\n // Accumulate confirmed IDs without losing them to a delayed empty response.\n if(previous.state==='complete'&&next.state==='complete'&&previous.platform==='tiktok'){\n  const ids=[...new Set([...(previous.public_post_ids||[]),...(next.public_post_ids||[])])];\n  return {...previous,...next,public_post_ids:ids,publicly_available:ids.length>0?true:next.publicly_available};\n }\n if(terminal.includes(previous.state))return {...previous};\n // A transient polling error cannot erase confirmed receipt; it still never\n // authorizes another upload. Caller persists attempt+sequence atomically.\n if(next.state==='unknown'&&previous.state!=='unknown')return {...previous,last_check:'unavailable'};\n return {...next};\n}\n\n'use strict';\n// Inert request construction. No fetch, credentials, upload session or approval.\nfunction providerUploadPlan(prepared,choices,file){\n const p=prepared?.binding?.platform;\n if(prepared?.ok!==true||prepared.stage!=='publisher_preparation'||prepared.can_upload!==false||prepared.can_publish!==false||!Array.isArray(prepared.blockers)||!prepared.blockers.length||!['youtube','tiktok'].includes(p)||prepared.binding.media_kind!=='video')throw Error('PUBLISHER_NOT_READY');\n if(!choices||typeof choices!=='object'||Array.isArray(choices)||!file||file.mime_type!=='video/mp4'||!Number.isSafeInteger(file.size_bytes)||file.size_bytes<1||file.size_bytes>24000000||!/^sha256:[a-f0-9]{64}:\\d+$/.test(file.asset_revision||'')||file.asset_revision!==prepared.binding.asset_revision)throw Error('FILE_CHANGED');\n if(typeof prepared.draft?.title!=='string'||!prepared.draft.title||typeof prepared.draft?.caption!=='string'||!prepared.draft.caption)throw Error('SAVED_TEXT_INVALID');\n const wanted=p==='youtube'?['visibility','made_for_kids','contains_synthetic_media']:['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle'];\n if(Object.keys(choices).sort().join()!==wanted.sort().join()||wanted.filter(k=>k!=='visibility').some(k=>typeof choices[k]!=='boolean'))throw Error('INVALID_CHOICES');\n let request;\n if(p==='youtube'){\n  if(!['private','unlisted','public'].includes(choices.visibility)||prepared.adapter_fields?.snippet?.title!==prepared.draft?.title||prepared.adapter_fields?.snippet?.description!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',headers:{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':file.mime_type,'X-Upload-Content-Length':String(file.size_bytes)},body:{snippet:{title:prepared.draft.title,description:prepared.draft.caption,categoryId:'22'},status:{privacyStatus:choices.visibility,selfDeclaredMadeForKids:choices.made_for_kids,containsSyntheticMedia:choices.contains_synthetic_media}}};\n }else{\n  if(!['SELF_ONLY','PUBLIC_TO_EVERYONE','MUTUAL_FOLLOW_FRIENDS','FOLLOWER_OF_CREATOR'].includes(choices.visibility)||choices.brand_content_toggle&&choices.visibility==='SELF_ONLY'||prepared.adapter_fields?.post_info?.title!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/video/init/',body:{post_info:{title:prepared.draft.caption,privacy_level:choices.visibility,disable_comment:choices.disable_comment,disable_duet:choices.disable_duet,disable_stitch:choices.disable_stitch,brand_content_toggle:choices.brand_content_toggle,brand_organic_toggle:choices.brand_organic_toggle},source_info:{source:'FILE_UPLOAD',video_size:file.size_bytes,chunk_size:file.size_bytes,total_chunk_count:1}}};\n }\n return {stage:'provider_request_preview',platform:p,dispatch_enabled:false,can_upload:false,can_publish:false,blockers:[...prepared.blockers,'PROVIDER_DISPATCH_DISABLED'],request};\n}\n\n'use strict';\n// One journalled request at a time. Never re-init/retry inside HTTP handling.\nconst transportCrypto=require('crypto');\nfunction providerSession(platform,raw){\n if(typeof raw!=='string'||raw.length>4000||/[\\s\\\\#]/.test(raw))throw Error('PROVIDER_SESSION_INVALID');\n let u;try{u=new URL(raw);}catch{throw Error('PROVIDER_SESSION_INVALID');}\n const keys=[...u.searchParams.keys()];\n if(u.protocol!=='https:'||u.username||u.password||u.port||new Set(keys).size!==keys.length)throw Error('PROVIDER_SESSION_INVALID');\n if(platform==='youtube'){\n  if(u.hostname!=='www.googleapis.com'||u.pathname!=='/upload/youtube/v3/videos'||u.searchParams.get('uploadType')!=='resumable'||!u.searchParams.get('upload_id')||keys.some(k=>!['part','uploadType','upload_id','alt'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else if(platform==='tiktok'){\n  if(!['open-upload.tiktokapis.com','upload.us.tiktokapis.com'].includes(u.hostname)||!['/video/','/upload/'].includes(u.pathname)||!u.searchParams.get('upload_id')||!u.searchParams.get('upload_token')||keys.some(k=>!['upload_id','upload_token'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else throw Error('PROVIDER_SESSION_INVALID');\n return raw;\n}\nfunction providerHttp(raw){\n if(!raw||!Number.isInteger(raw.statusCode))return {statusCode:0,body:{},headers:{}};\n let b=raw.body;\n if(typeof b==='string'){\n  if(b.length>65536)throw Error('PROVIDER_RESPONSE_INVALID');\n  // Preserve int64 IDs before JSON.parse can round them. Strings are untouched.\n  const safe=b.replace(/\"(?:\\\\.|[^\"\\\\])*\"|(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)/g,(all,num)=>num&&/^-?\\d+$/.test(num)&&!Number.isSafeInteger(Number(num))?JSON.stringify(num):all);\n  try{b=safe.trim()?JSON.parse(safe):{};}catch{b={};}\n }\n return {statusCode:raw.statusCode,body:b,headers:raw.headers||{}};\n}\nfunction providerBytes(bytes,c){\n if(!Buffer.isBuffer(bytes)||bytes.length!==c.size_bytes||bytes.length<12||bytes.toString('ascii',4,8)!=='ftyp'||!/^sha256:[a-f0-9]{64}:\\d+$/.test(c.binding?.asset_revision||'')||transportCrypto.createHash('sha256').update(bytes).digest('hex')!==c.binding.asset_revision.split(':')[1])throw Error('FILE_CHANGED');\n return bytes;\n}\nfunction providerRequest(i,token,now=Date.now()){\n if(i?.ok!==true||!/^[a-f0-9-]{36}$/.test(i.lease_id||'')||!Number.isInteger(i.sequence)||i.sequence<1||!['init','upload','probe','status'].includes(i.operation)||!['youtube','tiktok'].includes(i.platform)||!Number.isSafeInteger(i.size_bytes)||i.size_bytes<1||i.size_bytes>24000000||typeof token!=='string'||token.length<10||/[\\r\\n]/.test(token))throw Error('PROVIDER_INTENT_REQUIRED');\n const p=i.platform,auth={Authorization:'Bearer '+token},json={'Content-Type':'application/json; charset=UTF-8'};\n if(i.operation==='init'){\n  const b=i.binding,d=i.draft;\n  if(b?.platform!==p||typeof d?.title!=='string'||typeof d?.caption!=='string')throw Error('SAVED_TEXT_INVALID');\n  // Reuse the exact saved-text/choice validator; the preview's blockers are not\n  // used as authorization. The database has already issued this request lease.\n  const prepared={ok:true,stage:'publisher_preparation',binding:b,draft:d,can_upload:false,can_publish:false,blockers:['PROVIDER_DISPATCH_DISABLED'],adapter_fields:p==='youtube'?{snippet:{title:d.title,description:d.caption}}:{post_info:{title:d.caption}}};\n  const plan=providerUploadPlan(prepared,i.choices,{asset_revision:b.asset_revision,size_bytes:i.size_bytes,mime_type:'video/mp4'}).request;\n  return {...plan,headers:{...json,...plan.headers,...auth},body_type:'json'};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};providerContext(c);\n  return p==='youtube'?{method:'GET',url:'https://www.googleapis.com/youtube/v3/videos?part=snippet,status,processingDetails&id='+encodeURIComponent(i.provider_id),headers:auth,body_type:'none'}:{method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/status/fetch/',headers:{...auth,...json},body:{publish_id:i.provider_id},body_type:'json'};\n }\n const url=providerSession(p,i.session_url);\n if(!Number.isFinite(Date.parse(i.session_expires_at))||Date.parse(i.session_expires_at)<=now)throw Error('PROVIDER_SESSION_EXPIRED');\n if(i.operation==='probe'){\n  if(p!=='youtube')throw Error('PROVIDER_INTENT_REQUIRED');\n  return {method:'PUT',url,headers:{...auth,'Content-Length':'0','Content-Range':'bytes */'+i.size_bytes},body_type:'none'};\n }\n const start=i.received_bytes;\n if(!Number.isSafeInteger(start)||start<0||start>=i.size_bytes||p==='tiktok'&&start!==0)throw Error('PROVIDER_RECONCILIATION_REQUIRED');\n return {method:'PUT',url,headers:{...(p==='youtube'?auth:{}),'Content-Type':'video/mp4','Content-Length':String(i.size_bytes-start),'Content-Range':`bytes ${start}-${i.size_bytes-1}/${i.size_bytes}`},body_type:'binary',offset:start};\n}\nfunction providerObservation(raw,i,now=Date.now()){\n const h=providerHttp(raw),p=i.platform;\n if(i.operation==='init'){\n  if(h.statusCode!==200||(p==='tiktok'&&h.body?.error?.code!=='ok'))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  const session=p==='youtube'?(h.headers.location||h.headers.Location):h.body?.data?.upload_url;\n  const pid=p==='tiktok'?h.body?.data?.publish_id:null;\n  if(p==='tiktok'&&!(typeof pid==='string'&&/^[A-Za-z0-9_.~:-]{1,64}$/.test(pid)))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  try{providerSession(p,session);}catch{return {state:'uncertain',code:'PROVIDER_SESSION_INVALID',...(pid?{provider_id:pid}:{})};}\n  // TikTok validity is one hour. YouTube has no guaranteed fixed lifetime:\n  // conservative local deadline, and an expired server session never re-inits.\n  return {state:'session_ready',session_url:session,session_expires_at:new Date(now+(p==='tiktok'?55:60)*60000).toISOString(),...(pid?{provider_id:pid}:{})};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};\n  const r=p==='youtube'?youtubeResult(h,c):tiktokResult(h,c);\n  if(r.state==='unknown')return {state:'uncertain',code:r.code};\n  return {state:r.state,observation:r};\n }\n const r=p==='youtube'?youtubeTransfer(h,i.size_bytes):tiktokTransfer(h,i.size_bytes);\n if(r.state==='unknown')return {state:'uncertain',code:r.code};\n return {state:r.state,...(r.provider_id?{provider_id:r.provider_id}:{}),...(Number.isSafeInteger(r.received_bytes)?{received_bytes:r.received_bytes}:{})};\n}\nconst c=$('Providerverbindung bestätigen').first().json,bytes=await this.helpers.getBinaryDataBuffer(0,'data');providerBytes(bytes,{binding:c.binding,size_bytes:$('Provider-Dateistand bestätigen').first().json.size_bytes});return [{json:{size_bytes:bytes.length},binary:$input.first().binary}];"
+      },
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "id": "cfedee85-e23c-4769-9389-f5bb25194e4e",
+      "name": "Provider-Prüfnachweise verbinden",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\nconst orderCrypto = require('crypto');\nconst ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;\nfunction orderRequest(item) {\n  const auth=item?.headers?.authorization, body=item?.body;\n  if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');\n  if(!body||!['prepare','approve','get','account'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||\n    Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');\n  if(body.action==='account'&&(!['youtube','tiktok'].includes(body.input.platform)||Object.keys(body.input).some(k=>!['id','platform'].includes(k))))throw Error('INVALID_INPUT');\n  return {auth,action:body.action,input:body.input};\n}\n// Source rows never leave this node. Only the selected non-secret identity does.\nfunction orderTarget(rows,context) {\n  if(context?.ok!==true||!context.binding||!context.n8n_kunde_id||!context.kunde_email)throw Error('ORDER_UNAVAILABLE');\n  const matches=rows.filter(r=>r?.kunde_id), k=matches.length===1?matches[0]:null;\n  if(!k||k.kunde_id!==context.n8n_kunde_id||String(k.kunde_email||'').trim().toLowerCase()!==context.kunde_email.trim().toLowerCase()||\n    k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const p=context.binding.platform;\n  const fields={youtube:['youtube_channel_id','youtube_channel_title'],instagram:['instagram_user_id','instagram_username'],\n    facebook:['facebook_page_id','facebook_page_name'],tiktok:['tiktok_open_id','tiktok_display_name']}[p];\n  if(!fields)throw Error('TARGET_ACCOUNT_REQUIRED');\n  const id=k[fields[0]],name=String(k[fields[1]]||id||'');\n  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{3,200}$/.test(id)||name.length<1||name.length>200||/[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(name))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const target={platform:p,id,name,source_revision:orderCrypto.createHash('sha256').update(JSON.stringify([k.id,k.kunde_id,k.kunde_email,p,id,name])).digest('hex')};\n  if(context.target&&JSON.stringify(Object.entries(context.target).sort())!==JSON.stringify(Object.entries(target).sort()))throw Error('TARGET_ACCOUNT_CHANGED');\n  return {target};\n}\nfunction orderDrive(metadata,context,folders) {\n  const b=context?.binding;\n  if(!b||metadata?.id!==b.drive_file_id||metadata.trashed!==false||!Array.isArray(metadata.parents)||!metadata.parents.some(x=>folders.includes(x)))throw Error('FILE_CHANGED');\n  const hash=/^[a-f0-9]{64}$/.test(metadata.sha256Checksum||'')?'sha256:'+metadata.sha256Checksum:/^[a-f0-9]{32}$/.test(metadata.md5Checksum||'')?'md5:'+metadata.md5Checksum:'version';\n  if(!/^\\d{1,30}$/.test(metadata.version||'')||hash+':'+metadata.version!==b.asset_revision||\n    metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');\n  return {drive_verified:true};\n}\nfunction orderCheck(prepared,context,target,drive,account) {\n  if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');\n  const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());\n  const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;\n  const blockers=[];\n  if(!textVerified)blockers.push('SAVED_TEXT_INVALID');\n  // Final consent and duplicate reservation are authoritative database facts.\n  // No client/provider failure is converted into a positive permission decision.\n  if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');\n  return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,\n    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,account_check:account?.account_check||null,blockers}};\n}\nfunction orderFailure(error) {\n  const message=String(typeof error?.error==='string'?error.error:error?.message||error?.error?.message||error?.code||'');\n  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','TARGET_CONFIGURATION_REQUIRED','TARGET_PERMISSIONS_REQUIRED','TARGET_RECONNECT_REQUIRED','TARGET_CHECK_RUNNING','TARGET_CHECK_UNAVAILABLE','TARGET_REFRESH_UNCERTAIN','TARGET_TOKEN_SAVE_FAILED','TARGET_OPTIONS_CHANGED','TARGET_RATE_LIMITED'];\n  return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};\n}\n\nconst c=$('Providerverbindung bestätigen').first().json;orderDrive($json,c,c.folders);if(Number($json.size)!==$('Provider-Dateiprüfsumme bestätigen').first().json.size_bytes)throw Error('FILE_CHANGED');return [{json:{target:c.target,account_check:c.account_check,drive_verified:true,text_verified:true,size_bytes:Number($json.size)}}];"
+      },
+      "position": [
+        3120,
+        0
+      ]
+    },
+    {
+      "id": "dad7abf9-d59e-428c-a852-b622029647f6",
+      "name": "Providerstatus ohne Datei lesen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const c=$('Providerverbindung bestätigen').first().json;return [{json:{target:c.target,account_check:c.account_check,drive_verified:false,text_verified:false}}];"
+      },
+      "position": [
+        1920,
+        300
+      ]
+    },
+    {
+      "id": "36dcf97d-d4e5-494d-b468-903c76f65b3e",
+      "name": "Provideranfrage atomar reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_provider_v1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'begin',p_id:$('Providerauftrag lesen').first().json.id,p_data:$json} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "position": [
+        3360,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "eab09df8-2c2d-4428-9541-6775a3801717",
+      "name": "Provideranfrage reserviert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1e3ec387-777c-4aca-bd97-93e98c7cb21b",
+              "leftValue": "={{ $json.ok === true && !!$json.lease_id && !!$json.operation }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        3600,
+        0
+      ]
+    },
+    {
+      "id": "d30ad863-6da4-42a5-88aa-b5e28ef25e67",
+      "name": "Provideranfrage erstellen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\n// Pure provider response interpretation. No HTTP client, credentials, dispatcher,\n// automatic upload retries or claim of durable delivery/idempotency.\nconst providerObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);\nconst providerId=(s,max=200)=>typeof s==='string'&&s.length>0&&s.length<=max&&/^[A-Za-z0-9_.~:-]+$/.test(s);\nfunction providerContext(c){\n if(!providerObject(c)||!['youtube','tiktok'].includes(c.platform)||!providerId(c.target_id)||!providerId(c.provider_id, c.platform==='tiktok'?64:11)||\n  (c.platform==='youtube'&&!/^[A-Za-z0-9_-]{11}$/.test(c.provider_id))||\n  !Number.isSafeInteger(c.size_bytes)||c.size_bytes<=0||\n  !['direct_post','inbox','youtube_video'].includes(c.route)||\n  (c.platform==='youtube'?c.route!=='youtube_video':c.route==='youtube_video')||\n  !['private','unlisted','public','SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)||\n  (c.platform==='youtube'?!['private','unlisted','public'].includes(c.visibility):!['SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)))throw Error('PROVIDER_CONTEXT_INVALID');\n return c;\n}\nfunction providerResult(c,state,extra={}){\n return {platform:c.platform,target_id:c.target_id,provider_id:c.provider_id,route:c.route,expected_visibility:c.visibility,state,upload_retry_allowed:false,can_upload:false,can_publish:false,...extra};\n}\nfunction youtubeResult(http,c){\n providerContext(c);if(c.platform!=='youtube')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||!providerObject(http.body)||!Array.isArray(http.body.items)||http.body.items.length!==1)return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const v=http.body.items[0],s=v?.status,p=v?.processingDetails;\n if(v?.id!==c.provider_id||v?.snippet?.channelId!==c.target_id)return providerResult(c,'unknown',{code:'PROVIDER_BINDING_MISMATCH'});\n if(['deleted','failed','rejected'].includes(s?.uploadStatus)||p?.processingStatus==='failed')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(!['uploaded','processed'].includes(s?.uploadStatus)||!['processing','succeeded','terminated'].includes(p?.processingStatus))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(!['public','private','unlisted'].includes(s.privacyStatus)||s.privacyStatus!==c.visibility||s.publishAt)return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n if(s.uploadStatus!=='processed'||p.processingStatus==='processing')return providerResult(c,'processing');\n if(p.processingStatus!=='succeeded')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // A private/unlisted upload is complete without claiming public availability.\n return providerResult(c,'complete',{visibility:s.privacyStatus,publicly_available:s.privacyStatus==='public',url:'https://www.youtube.com/watch?v='+v.id});\n}\nfunction tiktokResult(http,c){\n providerContext(c);if(c.platform!=='tiktok')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||http.body?.error?.code!=='ok'||!providerObject(http.body.data))return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const d=http.body.data;\n // The fetch endpoint does not echo the publish_id or account. Its trusted\n // request context must come from the persisted attempt, never the response.\n if(d.uploaded_bytes!==undefined&&(!Number.isSafeInteger(d.uploaded_bytes)||d.uploaded_bytes<0||d.uploaded_bytes>c.size_bytes))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(d.status==='FAILED')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(d.status==='PROCESSING_UPLOAD')return providerResult(c,'processing');\n if(d.status==='SEND_TO_USER_INBOX')return c.route==='inbox'?providerResult(c,'awaiting_user'):providerResult(c,'unknown',{code:'PROVIDER_ROUTE_MISMATCH'});\n if(d.status!=='PUBLISH_COMPLETE')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // TikTok's documented misspelling is deliberate. Int64 IDs must remain\n // strings; unsafe JS numbers are not silently rounded into another post ID.\n const raw=d.publicaly_available_post_id;\n if(raw!==undefined&&(!Array.isArray(raw)||raw.length>20))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n const ids=(raw||[]).map(x=>typeof x==='string'?x:Number.isSafeInteger(x)?String(x):null);\n if(ids.some(x=>!x||!/^[1-9][0-9]{0,19}$/.test(x))||new Set(ids).size!==ids.length)return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(ids.length&&c.visibility!=='PUBLIC_TO_EVERYONE')return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n return providerResult(c,'complete',{publicly_available:ids.length>0?true:c.visibility==='PUBLIC_TO_EVERYONE'?null:false,public_post_ids:ids});\n}\nfunction youtubeTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode===308){\n  const range=http.headers?.range??http.headers?.Range;\n  if(range===undefined)return {state:'uploading',received_bytes:0,upload_retry_allowed:false};\n  const m=typeof range==='string'&&/^bytes=0-(\\d+)$/.exec(range),n=m?Number(m[1])+1:NaN;\n  if(!Number.isSafeInteger(n)||n<1||n>=size)return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n  return {state:'uploading',received_bytes:n,upload_retry_allowed:false};\n }\n if([200,201].includes(http?.statusCode)&&/^[A-Za-z0-9_-]{11}$/.test(http.body?.id||''))return {state:'processing',provider_id:http.body.id,upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction tiktokTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n // A 201 only completes transfer; the authenticated status endpoint is still required.\n if(http?.statusCode===201)return {state:'processing',upload_retry_allowed:false};\n if(http?.statusCode===206)return {state:'uploading',upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction mergeProviderObservation(previous,next){\n if(!providerObject(previous)||!providerObject(next)||['platform','target_id','provider_id','route','expected_visibility'].some(k=>!previous[k]||previous[k]!==next[k]))throw Error('PROVIDER_BINDING_MISMATCH');\n const terminal=['complete','failed'];\n // Moderation can expose public TikTok IDs only on a later completed poll.\n // Accumulate confirmed IDs without losing them to a delayed empty response.\n if(previous.state==='complete'&&next.state==='complete'&&previous.platform==='tiktok'){\n  const ids=[...new Set([...(previous.public_post_ids||[]),...(next.public_post_ids||[])])];\n  return {...previous,...next,public_post_ids:ids,publicly_available:ids.length>0?true:next.publicly_available};\n }\n if(terminal.includes(previous.state))return {...previous};\n // A transient polling error cannot erase confirmed receipt; it still never\n // authorizes another upload. Caller persists attempt+sequence atomically.\n if(next.state==='unknown'&&previous.state!=='unknown')return {...previous,last_check:'unavailable'};\n return {...next};\n}\n\n'use strict';\n// Inert request construction. No fetch, credentials, upload session or approval.\nfunction providerUploadPlan(prepared,choices,file){\n const p=prepared?.binding?.platform;\n if(prepared?.ok!==true||prepared.stage!=='publisher_preparation'||prepared.can_upload!==false||prepared.can_publish!==false||!Array.isArray(prepared.blockers)||!prepared.blockers.length||!['youtube','tiktok'].includes(p)||prepared.binding.media_kind!=='video')throw Error('PUBLISHER_NOT_READY');\n if(!choices||typeof choices!=='object'||Array.isArray(choices)||!file||file.mime_type!=='video/mp4'||!Number.isSafeInteger(file.size_bytes)||file.size_bytes<1||file.size_bytes>24000000||!/^sha256:[a-f0-9]{64}:\\d+$/.test(file.asset_revision||'')||file.asset_revision!==prepared.binding.asset_revision)throw Error('FILE_CHANGED');\n if(typeof prepared.draft?.title!=='string'||!prepared.draft.title||typeof prepared.draft?.caption!=='string'||!prepared.draft.caption)throw Error('SAVED_TEXT_INVALID');\n const wanted=p==='youtube'?['visibility','made_for_kids','contains_synthetic_media']:['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle'];\n if(Object.keys(choices).sort().join()!==wanted.sort().join()||wanted.filter(k=>k!=='visibility').some(k=>typeof choices[k]!=='boolean'))throw Error('INVALID_CHOICES');\n let request;\n if(p==='youtube'){\n  if(!['private','unlisted','public'].includes(choices.visibility)||prepared.adapter_fields?.snippet?.title!==prepared.draft?.title||prepared.adapter_fields?.snippet?.description!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',headers:{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':file.mime_type,'X-Upload-Content-Length':String(file.size_bytes)},body:{snippet:{title:prepared.draft.title,description:prepared.draft.caption,categoryId:'22'},status:{privacyStatus:choices.visibility,selfDeclaredMadeForKids:choices.made_for_kids,containsSyntheticMedia:choices.contains_synthetic_media}}};\n }else{\n  if(!['SELF_ONLY','PUBLIC_TO_EVERYONE','MUTUAL_FOLLOW_FRIENDS','FOLLOWER_OF_CREATOR'].includes(choices.visibility)||choices.brand_content_toggle&&choices.visibility==='SELF_ONLY'||prepared.adapter_fields?.post_info?.title!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/video/init/',body:{post_info:{title:prepared.draft.caption,privacy_level:choices.visibility,disable_comment:choices.disable_comment,disable_duet:choices.disable_duet,disable_stitch:choices.disable_stitch,brand_content_toggle:choices.brand_content_toggle,brand_organic_toggle:choices.brand_organic_toggle},source_info:{source:'FILE_UPLOAD',video_size:file.size_bytes,chunk_size:file.size_bytes,total_chunk_count:1}}};\n }\n return {stage:'provider_request_preview',platform:p,dispatch_enabled:false,can_upload:false,can_publish:false,blockers:[...prepared.blockers,'PROVIDER_DISPATCH_DISABLED'],request};\n}\n\n'use strict';\n// One journalled request at a time. Never re-init/retry inside HTTP handling.\nconst transportCrypto=require('crypto');\nfunction providerSession(platform,raw){\n if(typeof raw!=='string'||raw.length>4000||/[\\s\\\\#]/.test(raw))throw Error('PROVIDER_SESSION_INVALID');\n let u;try{u=new URL(raw);}catch{throw Error('PROVIDER_SESSION_INVALID');}\n const keys=[...u.searchParams.keys()];\n if(u.protocol!=='https:'||u.username||u.password||u.port||new Set(keys).size!==keys.length)throw Error('PROVIDER_SESSION_INVALID');\n if(platform==='youtube'){\n  if(u.hostname!=='www.googleapis.com'||u.pathname!=='/upload/youtube/v3/videos'||u.searchParams.get('uploadType')!=='resumable'||!u.searchParams.get('upload_id')||keys.some(k=>!['part','uploadType','upload_id','alt'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else if(platform==='tiktok'){\n  if(!['open-upload.tiktokapis.com','upload.us.tiktokapis.com'].includes(u.hostname)||!['/video/','/upload/'].includes(u.pathname)||!u.searchParams.get('upload_id')||!u.searchParams.get('upload_token')||keys.some(k=>!['upload_id','upload_token'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else throw Error('PROVIDER_SESSION_INVALID');\n return raw;\n}\nfunction providerHttp(raw){\n if(!raw||!Number.isInteger(raw.statusCode))return {statusCode:0,body:{},headers:{}};\n let b=raw.body;\n if(typeof b==='string'){\n  if(b.length>65536)throw Error('PROVIDER_RESPONSE_INVALID');\n  // Preserve int64 IDs before JSON.parse can round them. Strings are untouched.\n  const safe=b.replace(/\"(?:\\\\.|[^\"\\\\])*\"|(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)/g,(all,num)=>num&&/^-?\\d+$/.test(num)&&!Number.isSafeInteger(Number(num))?JSON.stringify(num):all);\n  try{b=safe.trim()?JSON.parse(safe):{};}catch{b={};}\n }\n return {statusCode:raw.statusCode,body:b,headers:raw.headers||{}};\n}\nfunction providerBytes(bytes,c){\n if(!Buffer.isBuffer(bytes)||bytes.length!==c.size_bytes||bytes.length<12||bytes.toString('ascii',4,8)!=='ftyp'||!/^sha256:[a-f0-9]{64}:\\d+$/.test(c.binding?.asset_revision||'')||transportCrypto.createHash('sha256').update(bytes).digest('hex')!==c.binding.asset_revision.split(':')[1])throw Error('FILE_CHANGED');\n return bytes;\n}\nfunction providerRequest(i,token,now=Date.now()){\n if(i?.ok!==true||!/^[a-f0-9-]{36}$/.test(i.lease_id||'')||!Number.isInteger(i.sequence)||i.sequence<1||!['init','upload','probe','status'].includes(i.operation)||!['youtube','tiktok'].includes(i.platform)||!Number.isSafeInteger(i.size_bytes)||i.size_bytes<1||i.size_bytes>24000000||typeof token!=='string'||token.length<10||/[\\r\\n]/.test(token))throw Error('PROVIDER_INTENT_REQUIRED');\n const p=i.platform,auth={Authorization:'Bearer '+token},json={'Content-Type':'application/json; charset=UTF-8'};\n if(i.operation==='init'){\n  const b=i.binding,d=i.draft;\n  if(b?.platform!==p||typeof d?.title!=='string'||typeof d?.caption!=='string')throw Error('SAVED_TEXT_INVALID');\n  // Reuse the exact saved-text/choice validator; the preview's blockers are not\n  // used as authorization. The database has already issued this request lease.\n  const prepared={ok:true,stage:'publisher_preparation',binding:b,draft:d,can_upload:false,can_publish:false,blockers:['PROVIDER_DISPATCH_DISABLED'],adapter_fields:p==='youtube'?{snippet:{title:d.title,description:d.caption}}:{post_info:{title:d.caption}}};\n  const plan=providerUploadPlan(prepared,i.choices,{asset_revision:b.asset_revision,size_bytes:i.size_bytes,mime_type:'video/mp4'}).request;\n  return {...plan,headers:{...json,...plan.headers,...auth},body_type:'json'};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};providerContext(c);\n  return p==='youtube'?{method:'GET',url:'https://www.googleapis.com/youtube/v3/videos?part=snippet,status,processingDetails&id='+encodeURIComponent(i.provider_id),headers:auth,body_type:'none'}:{method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/status/fetch/',headers:{...auth,...json},body:{publish_id:i.provider_id},body_type:'json'};\n }\n const url=providerSession(p,i.session_url);\n if(!Number.isFinite(Date.parse(i.session_expires_at))||Date.parse(i.session_expires_at)<=now)throw Error('PROVIDER_SESSION_EXPIRED');\n if(i.operation==='probe'){\n  if(p!=='youtube')throw Error('PROVIDER_INTENT_REQUIRED');\n  return {method:'PUT',url,headers:{...auth,'Content-Length':'0','Content-Range':'bytes */'+i.size_bytes},body_type:'none'};\n }\n const start=i.received_bytes;\n if(!Number.isSafeInteger(start)||start<0||start>=i.size_bytes||p==='tiktok'&&start!==0)throw Error('PROVIDER_RECONCILIATION_REQUIRED');\n return {method:'PUT',url,headers:{...(p==='youtube'?auth:{}),'Content-Type':'video/mp4','Content-Length':String(i.size_bytes-start),'Content-Range':`bytes ${start}-${i.size_bytes-1}/${i.size_bytes}`},body_type:'binary',offset:start};\n}\nfunction providerObservation(raw,i,now=Date.now()){\n const h=providerHttp(raw),p=i.platform;\n if(i.operation==='init'){\n  if(h.statusCode!==200||(p==='tiktok'&&h.body?.error?.code!=='ok'))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  const session=p==='youtube'?(h.headers.location||h.headers.Location):h.body?.data?.upload_url;\n  const pid=p==='tiktok'?h.body?.data?.publish_id:null;\n  if(p==='tiktok'&&!(typeof pid==='string'&&/^[A-Za-z0-9_.~:-]{1,64}$/.test(pid)))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  try{providerSession(p,session);}catch{return {state:'uncertain',code:'PROVIDER_SESSION_INVALID',...(pid?{provider_id:pid}:{})};}\n  // TikTok validity is one hour. YouTube has no guaranteed fixed lifetime:\n  // conservative local deadline, and an expired server session never re-inits.\n  return {state:'session_ready',session_url:session,session_expires_at:new Date(now+(p==='tiktok'?55:60)*60000).toISOString(),...(pid?{provider_id:pid}:{})};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};\n  const r=p==='youtube'?youtubeResult(h,c):tiktokResult(h,c);\n  if(r.state==='unknown')return {state:'uncertain',code:r.code};\n  return {state:r.state,observation:r};\n }\n const r=p==='youtube'?youtubeTransfer(h,i.size_bytes):tiktokTransfer(h,i.size_bytes);\n if(r.state==='unknown')return {state:'uncertain',code:r.code};\n return {state:r.state,...(r.provider_id?{provider_id:r.provider_id}:{}),...(Number.isSafeInteger(r.received_bytes)?{received_bytes:r.received_bytes}:{})};\n}\nconst i=$('Provideranfrage atomar reservieren').first().json,c=$('Providerverbindung bestätigen').first().json;return [{json:{request:providerRequest(i,c.token)}}];"
+      },
+      "position": [
+        3840,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d590e617-9480-4582-89ef-0f17e2323cc9",
+      "name": "Provider-Dateirest auswählen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\n// Pure provider response interpretation. No HTTP client, credentials, dispatcher,\n// automatic upload retries or claim of durable delivery/idempotency.\nconst providerObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);\nconst providerId=(s,max=200)=>typeof s==='string'&&s.length>0&&s.length<=max&&/^[A-Za-z0-9_.~:-]+$/.test(s);\nfunction providerContext(c){\n if(!providerObject(c)||!['youtube','tiktok'].includes(c.platform)||!providerId(c.target_id)||!providerId(c.provider_id, c.platform==='tiktok'?64:11)||\n  (c.platform==='youtube'&&!/^[A-Za-z0-9_-]{11}$/.test(c.provider_id))||\n  !Number.isSafeInteger(c.size_bytes)||c.size_bytes<=0||\n  !['direct_post','inbox','youtube_video'].includes(c.route)||\n  (c.platform==='youtube'?c.route!=='youtube_video':c.route==='youtube_video')||\n  !['private','unlisted','public','SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)||\n  (c.platform==='youtube'?!['private','unlisted','public'].includes(c.visibility):!['SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)))throw Error('PROVIDER_CONTEXT_INVALID');\n return c;\n}\nfunction providerResult(c,state,extra={}){\n return {platform:c.platform,target_id:c.target_id,provider_id:c.provider_id,route:c.route,expected_visibility:c.visibility,state,upload_retry_allowed:false,can_upload:false,can_publish:false,...extra};\n}\nfunction youtubeResult(http,c){\n providerContext(c);if(c.platform!=='youtube')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||!providerObject(http.body)||!Array.isArray(http.body.items)||http.body.items.length!==1)return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const v=http.body.items[0],s=v?.status,p=v?.processingDetails;\n if(v?.id!==c.provider_id||v?.snippet?.channelId!==c.target_id)return providerResult(c,'unknown',{code:'PROVIDER_BINDING_MISMATCH'});\n if(['deleted','failed','rejected'].includes(s?.uploadStatus)||p?.processingStatus==='failed')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(!['uploaded','processed'].includes(s?.uploadStatus)||!['processing','succeeded','terminated'].includes(p?.processingStatus))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(!['public','private','unlisted'].includes(s.privacyStatus)||s.privacyStatus!==c.visibility||s.publishAt)return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n if(s.uploadStatus!=='processed'||p.processingStatus==='processing')return providerResult(c,'processing');\n if(p.processingStatus!=='succeeded')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // A private/unlisted upload is complete without claiming public availability.\n return providerResult(c,'complete',{visibility:s.privacyStatus,publicly_available:s.privacyStatus==='public',url:'https://www.youtube.com/watch?v='+v.id});\n}\nfunction tiktokResult(http,c){\n providerContext(c);if(c.platform!=='tiktok')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||http.body?.error?.code!=='ok'||!providerObject(http.body.data))return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const d=http.body.data;\n // The fetch endpoint does not echo the publish_id or account. Its trusted\n // request context must come from the persisted attempt, never the response.\n if(d.uploaded_bytes!==undefined&&(!Number.isSafeInteger(d.uploaded_bytes)||d.uploaded_bytes<0||d.uploaded_bytes>c.size_bytes))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(d.status==='FAILED')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(d.status==='PROCESSING_UPLOAD')return providerResult(c,'processing');\n if(d.status==='SEND_TO_USER_INBOX')return c.route==='inbox'?providerResult(c,'awaiting_user'):providerResult(c,'unknown',{code:'PROVIDER_ROUTE_MISMATCH'});\n if(d.status!=='PUBLISH_COMPLETE')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // TikTok's documented misspelling is deliberate. Int64 IDs must remain\n // strings; unsafe JS numbers are not silently rounded into another post ID.\n const raw=d.publicaly_available_post_id;\n if(raw!==undefined&&(!Array.isArray(raw)||raw.length>20))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n const ids=(raw||[]).map(x=>typeof x==='string'?x:Number.isSafeInteger(x)?String(x):null);\n if(ids.some(x=>!x||!/^[1-9][0-9]{0,19}$/.test(x))||new Set(ids).size!==ids.length)return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(ids.length&&c.visibility!=='PUBLIC_TO_EVERYONE')return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n return providerResult(c,'complete',{publicly_available:ids.length>0?true:c.visibility==='PUBLIC_TO_EVERYONE'?null:false,public_post_ids:ids});\n}\nfunction youtubeTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode===308){\n  const range=http.headers?.range??http.headers?.Range;\n  if(range===undefined)return {state:'uploading',received_bytes:0,upload_retry_allowed:false};\n  const m=typeof range==='string'&&/^bytes=0-(\\d+)$/.exec(range),n=m?Number(m[1])+1:NaN;\n  if(!Number.isSafeInteger(n)||n<1||n>=size)return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n  return {state:'uploading',received_bytes:n,upload_retry_allowed:false};\n }\n if([200,201].includes(http?.statusCode)&&/^[A-Za-z0-9_-]{11}$/.test(http.body?.id||''))return {state:'processing',provider_id:http.body.id,upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction tiktokTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n // A 201 only completes transfer; the authenticated status endpoint is still required.\n if(http?.statusCode===201)return {state:'processing',upload_retry_allowed:false};\n if(http?.statusCode===206)return {state:'uploading',upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction mergeProviderObservation(previous,next){\n if(!providerObject(previous)||!providerObject(next)||['platform','target_id','provider_id','route','expected_visibility'].some(k=>!previous[k]||previous[k]!==next[k]))throw Error('PROVIDER_BINDING_MISMATCH');\n const terminal=['complete','failed'];\n // Moderation can expose public TikTok IDs only on a later completed poll.\n // Accumulate confirmed IDs without losing them to a delayed empty response.\n if(previous.state==='complete'&&next.state==='complete'&&previous.platform==='tiktok'){\n  const ids=[...new Set([...(previous.public_post_ids||[]),...(next.public_post_ids||[])])];\n  return {...previous,...next,public_post_ids:ids,publicly_available:ids.length>0?true:next.publicly_available};\n }\n if(terminal.includes(previous.state))return {...previous};\n // A transient polling error cannot erase confirmed receipt; it still never\n // authorizes another upload. Caller persists attempt+sequence atomically.\n if(next.state==='unknown'&&previous.state!=='unknown')return {...previous,last_check:'unavailable'};\n return {...next};\n}\n\n'use strict';\n// Inert request construction. No fetch, credentials, upload session or approval.\nfunction providerUploadPlan(prepared,choices,file){\n const p=prepared?.binding?.platform;\n if(prepared?.ok!==true||prepared.stage!=='publisher_preparation'||prepared.can_upload!==false||prepared.can_publish!==false||!Array.isArray(prepared.blockers)||!prepared.blockers.length||!['youtube','tiktok'].includes(p)||prepared.binding.media_kind!=='video')throw Error('PUBLISHER_NOT_READY');\n if(!choices||typeof choices!=='object'||Array.isArray(choices)||!file||file.mime_type!=='video/mp4'||!Number.isSafeInteger(file.size_bytes)||file.size_bytes<1||file.size_bytes>24000000||!/^sha256:[a-f0-9]{64}:\\d+$/.test(file.asset_revision||'')||file.asset_revision!==prepared.binding.asset_revision)throw Error('FILE_CHANGED');\n if(typeof prepared.draft?.title!=='string'||!prepared.draft.title||typeof prepared.draft?.caption!=='string'||!prepared.draft.caption)throw Error('SAVED_TEXT_INVALID');\n const wanted=p==='youtube'?['visibility','made_for_kids','contains_synthetic_media']:['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle'];\n if(Object.keys(choices).sort().join()!==wanted.sort().join()||wanted.filter(k=>k!=='visibility').some(k=>typeof choices[k]!=='boolean'))throw Error('INVALID_CHOICES');\n let request;\n if(p==='youtube'){\n  if(!['private','unlisted','public'].includes(choices.visibility)||prepared.adapter_fields?.snippet?.title!==prepared.draft?.title||prepared.adapter_fields?.snippet?.description!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',headers:{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':file.mime_type,'X-Upload-Content-Length':String(file.size_bytes)},body:{snippet:{title:prepared.draft.title,description:prepared.draft.caption,categoryId:'22'},status:{privacyStatus:choices.visibility,selfDeclaredMadeForKids:choices.made_for_kids,containsSyntheticMedia:choices.contains_synthetic_media}}};\n }else{\n  if(!['SELF_ONLY','PUBLIC_TO_EVERYONE','MUTUAL_FOLLOW_FRIENDS','FOLLOWER_OF_CREATOR'].includes(choices.visibility)||choices.brand_content_toggle&&choices.visibility==='SELF_ONLY'||prepared.adapter_fields?.post_info?.title!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/video/init/',body:{post_info:{title:prepared.draft.caption,privacy_level:choices.visibility,disable_comment:choices.disable_comment,disable_duet:choices.disable_duet,disable_stitch:choices.disable_stitch,brand_content_toggle:choices.brand_content_toggle,brand_organic_toggle:choices.brand_organic_toggle},source_info:{source:'FILE_UPLOAD',video_size:file.size_bytes,chunk_size:file.size_bytes,total_chunk_count:1}}};\n }\n return {stage:'provider_request_preview',platform:p,dispatch_enabled:false,can_upload:false,can_publish:false,blockers:[...prepared.blockers,'PROVIDER_DISPATCH_DISABLED'],request};\n}\n\n'use strict';\n// One journalled request at a time. Never re-init/retry inside HTTP handling.\nconst transportCrypto=require('crypto');\nfunction providerSession(platform,raw){\n if(typeof raw!=='string'||raw.length>4000||/[\\s\\\\#]/.test(raw))throw Error('PROVIDER_SESSION_INVALID');\n let u;try{u=new URL(raw);}catch{throw Error('PROVIDER_SESSION_INVALID');}\n const keys=[...u.searchParams.keys()];\n if(u.protocol!=='https:'||u.username||u.password||u.port||new Set(keys).size!==keys.length)throw Error('PROVIDER_SESSION_INVALID');\n if(platform==='youtube'){\n  if(u.hostname!=='www.googleapis.com'||u.pathname!=='/upload/youtube/v3/videos'||u.searchParams.get('uploadType')!=='resumable'||!u.searchParams.get('upload_id')||keys.some(k=>!['part','uploadType','upload_id','alt'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else if(platform==='tiktok'){\n  if(!['open-upload.tiktokapis.com','upload.us.tiktokapis.com'].includes(u.hostname)||!['/video/','/upload/'].includes(u.pathname)||!u.searchParams.get('upload_id')||!u.searchParams.get('upload_token')||keys.some(k=>!['upload_id','upload_token'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else throw Error('PROVIDER_SESSION_INVALID');\n return raw;\n}\nfunction providerHttp(raw){\n if(!raw||!Number.isInteger(raw.statusCode))return {statusCode:0,body:{},headers:{}};\n let b=raw.body;\n if(typeof b==='string'){\n  if(b.length>65536)throw Error('PROVIDER_RESPONSE_INVALID');\n  // Preserve int64 IDs before JSON.parse can round them. Strings are untouched.\n  const safe=b.replace(/\"(?:\\\\.|[^\"\\\\])*\"|(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)/g,(all,num)=>num&&/^-?\\d+$/.test(num)&&!Number.isSafeInteger(Number(num))?JSON.stringify(num):all);\n  try{b=safe.trim()?JSON.parse(safe):{};}catch{b={};}\n }\n return {statusCode:raw.statusCode,body:b,headers:raw.headers||{}};\n}\nfunction providerBytes(bytes,c){\n if(!Buffer.isBuffer(bytes)||bytes.length!==c.size_bytes||bytes.length<12||bytes.toString('ascii',4,8)!=='ftyp'||!/^sha256:[a-f0-9]{64}:\\d+$/.test(c.binding?.asset_revision||'')||transportCrypto.createHash('sha256').update(bytes).digest('hex')!==c.binding.asset_revision.split(':')[1])throw Error('FILE_CHANGED');\n return bytes;\n}\nfunction providerRequest(i,token,now=Date.now()){\n if(i?.ok!==true||!/^[a-f0-9-]{36}$/.test(i.lease_id||'')||!Number.isInteger(i.sequence)||i.sequence<1||!['init','upload','probe','status'].includes(i.operation)||!['youtube','tiktok'].includes(i.platform)||!Number.isSafeInteger(i.size_bytes)||i.size_bytes<1||i.size_bytes>24000000||typeof token!=='string'||token.length<10||/[\\r\\n]/.test(token))throw Error('PROVIDER_INTENT_REQUIRED');\n const p=i.platform,auth={Authorization:'Bearer '+token},json={'Content-Type':'application/json; charset=UTF-8'};\n if(i.operation==='init'){\n  const b=i.binding,d=i.draft;\n  if(b?.platform!==p||typeof d?.title!=='string'||typeof d?.caption!=='string')throw Error('SAVED_TEXT_INVALID');\n  // Reuse the exact saved-text/choice validator; the preview's blockers are not\n  // used as authorization. The database has already issued this request lease.\n  const prepared={ok:true,stage:'publisher_preparation',binding:b,draft:d,can_upload:false,can_publish:false,blockers:['PROVIDER_DISPATCH_DISABLED'],adapter_fields:p==='youtube'?{snippet:{title:d.title,description:d.caption}}:{post_info:{title:d.caption}}};\n  const plan=providerUploadPlan(prepared,i.choices,{asset_revision:b.asset_revision,size_bytes:i.size_bytes,mime_type:'video/mp4'}).request;\n  return {...plan,headers:{...json,...plan.headers,...auth},body_type:'json'};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};providerContext(c);\n  return p==='youtube'?{method:'GET',url:'https://www.googleapis.com/youtube/v3/videos?part=snippet,status,processingDetails&id='+encodeURIComponent(i.provider_id),headers:auth,body_type:'none'}:{method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/status/fetch/',headers:{...auth,...json},body:{publish_id:i.provider_id},body_type:'json'};\n }\n const url=providerSession(p,i.session_url);\n if(!Number.isFinite(Date.parse(i.session_expires_at))||Date.parse(i.session_expires_at)<=now)throw Error('PROVIDER_SESSION_EXPIRED');\n if(i.operation==='probe'){\n  if(p!=='youtube')throw Error('PROVIDER_INTENT_REQUIRED');\n  return {method:'PUT',url,headers:{...auth,'Content-Length':'0','Content-Range':'bytes */'+i.size_bytes},body_type:'none'};\n }\n const start=i.received_bytes;\n if(!Number.isSafeInteger(start)||start<0||start>=i.size_bytes||p==='tiktok'&&start!==0)throw Error('PROVIDER_RECONCILIATION_REQUIRED');\n return {method:'PUT',url,headers:{...(p==='youtube'?auth:{}),'Content-Type':'video/mp4','Content-Length':String(i.size_bytes-start),'Content-Range':`bytes ${start}-${i.size_bytes-1}/${i.size_bytes}`},body_type:'binary',offset:start};\n}\nfunction providerObservation(raw,i,now=Date.now()){\n const h=providerHttp(raw),p=i.platform;\n if(i.operation==='init'){\n  if(h.statusCode!==200||(p==='tiktok'&&h.body?.error?.code!=='ok'))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  const session=p==='youtube'?(h.headers.location||h.headers.Location):h.body?.data?.upload_url;\n  const pid=p==='tiktok'?h.body?.data?.publish_id:null;\n  if(p==='tiktok'&&!(typeof pid==='string'&&/^[A-Za-z0-9_.~:-]{1,64}$/.test(pid)))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  try{providerSession(p,session);}catch{return {state:'uncertain',code:'PROVIDER_SESSION_INVALID',...(pid?{provider_id:pid}:{})};}\n  // TikTok validity is one hour. YouTube has no guaranteed fixed lifetime:\n  // conservative local deadline, and an expired server session never re-inits.\n  return {state:'session_ready',session_url:session,session_expires_at:new Date(now+(p==='tiktok'?55:60)*60000).toISOString(),...(pid?{provider_id:pid}:{})};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};\n  const r=p==='youtube'?youtubeResult(h,c):tiktokResult(h,c);\n  if(r.state==='unknown')return {state:'uncertain',code:r.code};\n  return {state:r.state,observation:r};\n }\n const r=p==='youtube'?youtubeTransfer(h,i.size_bytes):tiktokTransfer(h,i.size_bytes);\n if(r.state==='unknown')return {state:'uncertain',code:r.code};\n return {state:r.state,...(r.provider_id?{provider_id:r.provider_id}:{}),...(Number.isSafeInteger(r.received_bytes)?{received_bytes:r.received_bytes}:{})};\n}\nconst i=$('Provideranfrage atomar reservieren').first().json;\nconst source=$('Provider-Dateiprüfsumme bestätigen').first();\nif(!source.binary?.data)throw Error('FILE_CHANGED');\nconst full=await this.helpers.getBinaryDataBuffer(0,'data');providerBytes(full,i);\nconst request=$('Provideranfrage erstellen').first().json.request;\nreturn [{json:{request},binary:{data:await this.helpers.prepareBinaryData(full.subarray(request.offset),'video.mp4','video/mp4')}}];\n"
+      },
+      "position": [
+        4320,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d4388d18-a43a-404f-9222-c118b9c0bd63",
+      "name": "Geprüfte Providerdatei übernehmen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return [{json:$json,binary:$('Provider-Dateiprüfsumme bestätigen').first().binary}];"
+      },
+      "position": [
+        4080,
+        -300
+      ]
+    },
+    {
+      "id": "b8ea48a7-fbce-46d0-b30d-146946b95432",
+      "name": "Providerdatei übertragen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c4043c71-a315-4b10-87ae-8665d470af87",
+              "leftValue": "={{ $json.request.body_type === 'binary' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        4080,
+        0
+      ]
+    },
+    {
+      "id": "dbfb5a5e-60a3-43f2-b809-7bee48e02b78",
+      "name": "Provider-JSON senden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "12a41d48-f086-4a7a-894d-f92af86d6fb8",
+              "leftValue": "={{ $json.request.body_type === 'json' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        4320,
+        300
+      ]
+    },
+    {
+      "id": "ca6656b3-4792-4953-9c93-f32a05038984",
+      "name": "Provider-Dateitransfer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "={{ $json.request.method }}",
+        "url": "={{ $json.request.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ $json.request.headers }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data"
+      },
+      "position": [
+        4560,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "67479583-fd24-4110-9ee2-5f5b65d03b43",
+      "name": "Provider-JSON-Anfrage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "={{ $json.request.method }}",
+        "url": "={{ $json.request.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ $json.request.headers }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.request.body }}"
+      },
+      "position": [
+        4560,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ad40802e-1e10-4b8a-832d-1850b19aaeb9",
+      "name": "Provider-Statusanfrage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "={{ $json.request.method }}",
+        "url": "={{ $json.request.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ $json.request.headers }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendBody": false
+      },
+      "position": [
+        4560,
+        600
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "cf4323e3-462a-4f6c-826f-8b9bd87f672c",
+      "name": "Providerantwort auswerten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\n// Pure provider response interpretation. No HTTP client, credentials, dispatcher,\n// automatic upload retries or claim of durable delivery/idempotency.\nconst providerObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);\nconst providerId=(s,max=200)=>typeof s==='string'&&s.length>0&&s.length<=max&&/^[A-Za-z0-9_.~:-]+$/.test(s);\nfunction providerContext(c){\n if(!providerObject(c)||!['youtube','tiktok'].includes(c.platform)||!providerId(c.target_id)||!providerId(c.provider_id, c.platform==='tiktok'?64:11)||\n  (c.platform==='youtube'&&!/^[A-Za-z0-9_-]{11}$/.test(c.provider_id))||\n  !Number.isSafeInteger(c.size_bytes)||c.size_bytes<=0||\n  !['direct_post','inbox','youtube_video'].includes(c.route)||\n  (c.platform==='youtube'?c.route!=='youtube_video':c.route==='youtube_video')||\n  !['private','unlisted','public','SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)||\n  (c.platform==='youtube'?!['private','unlisted','public'].includes(c.visibility):!['SELF_ONLY','FOLLOWER_OF_CREATOR','MUTUAL_FOLLOW_FRIENDS','PUBLIC_TO_EVERYONE'].includes(c.visibility)))throw Error('PROVIDER_CONTEXT_INVALID');\n return c;\n}\nfunction providerResult(c,state,extra={}){\n return {platform:c.platform,target_id:c.target_id,provider_id:c.provider_id,route:c.route,expected_visibility:c.visibility,state,upload_retry_allowed:false,can_upload:false,can_publish:false,...extra};\n}\nfunction youtubeResult(http,c){\n providerContext(c);if(c.platform!=='youtube')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||!providerObject(http.body)||!Array.isArray(http.body.items)||http.body.items.length!==1)return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const v=http.body.items[0],s=v?.status,p=v?.processingDetails;\n if(v?.id!==c.provider_id||v?.snippet?.channelId!==c.target_id)return providerResult(c,'unknown',{code:'PROVIDER_BINDING_MISMATCH'});\n if(['deleted','failed','rejected'].includes(s?.uploadStatus)||p?.processingStatus==='failed')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(!['uploaded','processed'].includes(s?.uploadStatus)||!['processing','succeeded','terminated'].includes(p?.processingStatus))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(!['public','private','unlisted'].includes(s.privacyStatus)||s.privacyStatus!==c.visibility||s.publishAt)return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n if(s.uploadStatus!=='processed'||p.processingStatus==='processing')return providerResult(c,'processing');\n if(p.processingStatus!=='succeeded')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // A private/unlisted upload is complete without claiming public availability.\n return providerResult(c,'complete',{visibility:s.privacyStatus,publicly_available:s.privacyStatus==='public',url:'https://www.youtube.com/watch?v='+v.id});\n}\nfunction tiktokResult(http,c){\n providerContext(c);if(c.platform!=='tiktok')throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode!==200||http.body?.error?.code!=='ok'||!providerObject(http.body.data))return providerResult(c,'unknown',{code:'STATUS_UNAVAILABLE'});\n const d=http.body.data;\n // The fetch endpoint does not echo the publish_id or account. Its trusted\n // request context must come from the persisted attempt, never the response.\n if(d.uploaded_bytes!==undefined&&(!Number.isSafeInteger(d.uploaded_bytes)||d.uploaded_bytes<0||d.uploaded_bytes>c.size_bytes))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(d.status==='FAILED')return providerResult(c,'failed',{code:'PROVIDER_REJECTED'});\n if(d.status==='PROCESSING_UPLOAD')return providerResult(c,'processing');\n if(d.status==='SEND_TO_USER_INBOX')return c.route==='inbox'?providerResult(c,'awaiting_user'):providerResult(c,'unknown',{code:'PROVIDER_ROUTE_MISMATCH'});\n if(d.status!=='PUBLISH_COMPLETE')return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n // TikTok's documented misspelling is deliberate. Int64 IDs must remain\n // strings; unsafe JS numbers are not silently rounded into another post ID.\n const raw=d.publicaly_available_post_id;\n if(raw!==undefined&&(!Array.isArray(raw)||raw.length>20))return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n const ids=(raw||[]).map(x=>typeof x==='string'?x:Number.isSafeInteger(x)?String(x):null);\n if(ids.some(x=>!x||!/^[1-9][0-9]{0,19}$/.test(x))||new Set(ids).size!==ids.length)return providerResult(c,'unknown',{code:'STATUS_INCOMPLETE'});\n if(ids.length&&c.visibility!=='PUBLIC_TO_EVERYONE')return providerResult(c,'needs_review',{code:'VISIBILITY_MISMATCH'});\n return providerResult(c,'complete',{publicly_available:ids.length>0?true:c.visibility==='PUBLIC_TO_EVERYONE'?null:false,public_post_ids:ids});\n}\nfunction youtubeTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n if(http?.statusCode===308){\n  const range=http.headers?.range??http.headers?.Range;\n  if(range===undefined)return {state:'uploading',received_bytes:0,upload_retry_allowed:false};\n  const m=typeof range==='string'&&/^bytes=0-(\\d+)$/.exec(range),n=m?Number(m[1])+1:NaN;\n  if(!Number.isSafeInteger(n)||n<1||n>=size)return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n  return {state:'uploading',received_bytes:n,upload_retry_allowed:false};\n }\n if([200,201].includes(http?.statusCode)&&/^[A-Za-z0-9_-]{11}$/.test(http.body?.id||''))return {state:'processing',provider_id:http.body.id,upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction tiktokTransfer(http,size){\n if(!Number.isSafeInteger(size)||size<=0)throw Error('PROVIDER_CONTEXT_INVALID');\n // A 201 only completes transfer; the authenticated status endpoint is still required.\n if(http?.statusCode===201)return {state:'processing',upload_retry_allowed:false};\n if(http?.statusCode===206)return {state:'uploading',upload_retry_allowed:false};\n return {state:'unknown',code:'TRANSFER_UNCERTAIN',upload_retry_allowed:false};\n}\nfunction mergeProviderObservation(previous,next){\n if(!providerObject(previous)||!providerObject(next)||['platform','target_id','provider_id','route','expected_visibility'].some(k=>!previous[k]||previous[k]!==next[k]))throw Error('PROVIDER_BINDING_MISMATCH');\n const terminal=['complete','failed'];\n // Moderation can expose public TikTok IDs only on a later completed poll.\n // Accumulate confirmed IDs without losing them to a delayed empty response.\n if(previous.state==='complete'&&next.state==='complete'&&previous.platform==='tiktok'){\n  const ids=[...new Set([...(previous.public_post_ids||[]),...(next.public_post_ids||[])])];\n  return {...previous,...next,public_post_ids:ids,publicly_available:ids.length>0?true:next.publicly_available};\n }\n if(terminal.includes(previous.state))return {...previous};\n // A transient polling error cannot erase confirmed receipt; it still never\n // authorizes another upload. Caller persists attempt+sequence atomically.\n if(next.state==='unknown'&&previous.state!=='unknown')return {...previous,last_check:'unavailable'};\n return {...next};\n}\n\n'use strict';\n// Inert request construction. No fetch, credentials, upload session or approval.\nfunction providerUploadPlan(prepared,choices,file){\n const p=prepared?.binding?.platform;\n if(prepared?.ok!==true||prepared.stage!=='publisher_preparation'||prepared.can_upload!==false||prepared.can_publish!==false||!Array.isArray(prepared.blockers)||!prepared.blockers.length||!['youtube','tiktok'].includes(p)||prepared.binding.media_kind!=='video')throw Error('PUBLISHER_NOT_READY');\n if(!choices||typeof choices!=='object'||Array.isArray(choices)||!file||file.mime_type!=='video/mp4'||!Number.isSafeInteger(file.size_bytes)||file.size_bytes<1||file.size_bytes>24000000||!/^sha256:[a-f0-9]{64}:\\d+$/.test(file.asset_revision||'')||file.asset_revision!==prepared.binding.asset_revision)throw Error('FILE_CHANGED');\n if(typeof prepared.draft?.title!=='string'||!prepared.draft.title||typeof prepared.draft?.caption!=='string'||!prepared.draft.caption)throw Error('SAVED_TEXT_INVALID');\n const wanted=p==='youtube'?['visibility','made_for_kids','contains_synthetic_media']:['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle'];\n if(Object.keys(choices).sort().join()!==wanted.sort().join()||wanted.filter(k=>k!=='visibility').some(k=>typeof choices[k]!=='boolean'))throw Error('INVALID_CHOICES');\n let request;\n if(p==='youtube'){\n  if(!['private','unlisted','public'].includes(choices.visibility)||prepared.adapter_fields?.snippet?.title!==prepared.draft?.title||prepared.adapter_fields?.snippet?.description!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',headers:{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':file.mime_type,'X-Upload-Content-Length':String(file.size_bytes)},body:{snippet:{title:prepared.draft.title,description:prepared.draft.caption,categoryId:'22'},status:{privacyStatus:choices.visibility,selfDeclaredMadeForKids:choices.made_for_kids,containsSyntheticMedia:choices.contains_synthetic_media}}};\n }else{\n  if(!['SELF_ONLY','PUBLIC_TO_EVERYONE','MUTUAL_FOLLOW_FRIENDS','FOLLOWER_OF_CREATOR'].includes(choices.visibility)||choices.brand_content_toggle&&choices.visibility==='SELF_ONLY'||prepared.adapter_fields?.post_info?.title!==prepared.draft?.caption)throw Error('INVALID_CHOICES');\n  request={method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/video/init/',body:{post_info:{title:prepared.draft.caption,privacy_level:choices.visibility,disable_comment:choices.disable_comment,disable_duet:choices.disable_duet,disable_stitch:choices.disable_stitch,brand_content_toggle:choices.brand_content_toggle,brand_organic_toggle:choices.brand_organic_toggle},source_info:{source:'FILE_UPLOAD',video_size:file.size_bytes,chunk_size:file.size_bytes,total_chunk_count:1}}};\n }\n return {stage:'provider_request_preview',platform:p,dispatch_enabled:false,can_upload:false,can_publish:false,blockers:[...prepared.blockers,'PROVIDER_DISPATCH_DISABLED'],request};\n}\n\n'use strict';\n// One journalled request at a time. Never re-init/retry inside HTTP handling.\nconst transportCrypto=require('crypto');\nfunction providerSession(platform,raw){\n if(typeof raw!=='string'||raw.length>4000||/[\\s\\\\#]/.test(raw))throw Error('PROVIDER_SESSION_INVALID');\n let u;try{u=new URL(raw);}catch{throw Error('PROVIDER_SESSION_INVALID');}\n const keys=[...u.searchParams.keys()];\n if(u.protocol!=='https:'||u.username||u.password||u.port||new Set(keys).size!==keys.length)throw Error('PROVIDER_SESSION_INVALID');\n if(platform==='youtube'){\n  if(u.hostname!=='www.googleapis.com'||u.pathname!=='/upload/youtube/v3/videos'||u.searchParams.get('uploadType')!=='resumable'||!u.searchParams.get('upload_id')||keys.some(k=>!['part','uploadType','upload_id','alt'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else if(platform==='tiktok'){\n  if(!['open-upload.tiktokapis.com','upload.us.tiktokapis.com'].includes(u.hostname)||!['/video/','/upload/'].includes(u.pathname)||!u.searchParams.get('upload_id')||!u.searchParams.get('upload_token')||keys.some(k=>!['upload_id','upload_token'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');\n }else throw Error('PROVIDER_SESSION_INVALID');\n return raw;\n}\nfunction providerHttp(raw){\n if(!raw||!Number.isInteger(raw.statusCode))return {statusCode:0,body:{},headers:{}};\n let b=raw.body;\n if(typeof b==='string'){\n  if(b.length>65536)throw Error('PROVIDER_RESPONSE_INVALID');\n  // Preserve int64 IDs before JSON.parse can round them. Strings are untouched.\n  const safe=b.replace(/\"(?:\\\\.|[^\"\\\\])*\"|(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)/g,(all,num)=>num&&/^-?\\d+$/.test(num)&&!Number.isSafeInteger(Number(num))?JSON.stringify(num):all);\n  try{b=safe.trim()?JSON.parse(safe):{};}catch{b={};}\n }\n return {statusCode:raw.statusCode,body:b,headers:raw.headers||{}};\n}\nfunction providerBytes(bytes,c){\n if(!Buffer.isBuffer(bytes)||bytes.length!==c.size_bytes||bytes.length<12||bytes.toString('ascii',4,8)!=='ftyp'||!/^sha256:[a-f0-9]{64}:\\d+$/.test(c.binding?.asset_revision||'')||transportCrypto.createHash('sha256').update(bytes).digest('hex')!==c.binding.asset_revision.split(':')[1])throw Error('FILE_CHANGED');\n return bytes;\n}\nfunction providerRequest(i,token,now=Date.now()){\n if(i?.ok!==true||!/^[a-f0-9-]{36}$/.test(i.lease_id||'')||!Number.isInteger(i.sequence)||i.sequence<1||!['init','upload','probe','status'].includes(i.operation)||!['youtube','tiktok'].includes(i.platform)||!Number.isSafeInteger(i.size_bytes)||i.size_bytes<1||i.size_bytes>24000000||typeof token!=='string'||token.length<10||/[\\r\\n]/.test(token))throw Error('PROVIDER_INTENT_REQUIRED');\n const p=i.platform,auth={Authorization:'Bearer '+token},json={'Content-Type':'application/json; charset=UTF-8'};\n if(i.operation==='init'){\n  const b=i.binding,d=i.draft;\n  if(b?.platform!==p||typeof d?.title!=='string'||typeof d?.caption!=='string')throw Error('SAVED_TEXT_INVALID');\n  // Reuse the exact saved-text/choice validator; the preview's blockers are not\n  // used as authorization. The database has already issued this request lease.\n  const prepared={ok:true,stage:'publisher_preparation',binding:b,draft:d,can_upload:false,can_publish:false,blockers:['PROVIDER_DISPATCH_DISABLED'],adapter_fields:p==='youtube'?{snippet:{title:d.title,description:d.caption}}:{post_info:{title:d.caption}}};\n  const plan=providerUploadPlan(prepared,i.choices,{asset_revision:b.asset_revision,size_bytes:i.size_bytes,mime_type:'video/mp4'}).request;\n  return {...plan,headers:{...json,...plan.headers,...auth},body_type:'json'};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};providerContext(c);\n  return p==='youtube'?{method:'GET',url:'https://www.googleapis.com/youtube/v3/videos?part=snippet,status,processingDetails&id='+encodeURIComponent(i.provider_id),headers:auth,body_type:'none'}:{method:'POST',url:'https://open.tiktokapis.com/v2/post/publish/status/fetch/',headers:{...auth,...json},body:{publish_id:i.provider_id},body_type:'json'};\n }\n const url=providerSession(p,i.session_url);\n if(!Number.isFinite(Date.parse(i.session_expires_at))||Date.parse(i.session_expires_at)<=now)throw Error('PROVIDER_SESSION_EXPIRED');\n if(i.operation==='probe'){\n  if(p!=='youtube')throw Error('PROVIDER_INTENT_REQUIRED');\n  return {method:'PUT',url,headers:{...auth,'Content-Length':'0','Content-Range':'bytes */'+i.size_bytes},body_type:'none'};\n }\n const start=i.received_bytes;\n if(!Number.isSafeInteger(start)||start<0||start>=i.size_bytes||p==='tiktok'&&start!==0)throw Error('PROVIDER_RECONCILIATION_REQUIRED');\n return {method:'PUT',url,headers:{...(p==='youtube'?auth:{}),'Content-Type':'video/mp4','Content-Length':String(i.size_bytes-start),'Content-Range':`bytes ${start}-${i.size_bytes-1}/${i.size_bytes}`},body_type:'binary',offset:start};\n}\nfunction providerObservation(raw,i,now=Date.now()){\n const h=providerHttp(raw),p=i.platform;\n if(i.operation==='init'){\n  if(h.statusCode!==200||(p==='tiktok'&&h.body?.error?.code!=='ok'))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  const session=p==='youtube'?(h.headers.location||h.headers.Location):h.body?.data?.upload_url;\n  const pid=p==='tiktok'?h.body?.data?.publish_id:null;\n  if(p==='tiktok'&&!(typeof pid==='string'&&/^[A-Za-z0-9_.~:-]{1,64}$/.test(pid)))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};\n  try{providerSession(p,session);}catch{return {state:'uncertain',code:'PROVIDER_SESSION_INVALID',...(pid?{provider_id:pid}:{})};}\n  // TikTok validity is one hour. YouTube has no guaranteed fixed lifetime:\n  // conservative local deadline, and an expired server session never re-inits.\n  return {state:'session_ready',session_url:session,session_expires_at:new Date(now+(p==='tiktok'?55:60)*60000).toISOString(),...(pid?{provider_id:pid}:{})};\n }\n if(i.operation==='status'){\n  const c={...i,route:p==='youtube'?'youtube_video':'direct_post'};\n  const r=p==='youtube'?youtubeResult(h,c):tiktokResult(h,c);\n  if(r.state==='unknown')return {state:'uncertain',code:r.code};\n  return {state:r.state,observation:r};\n }\n const r=p==='youtube'?youtubeTransfer(h,i.size_bytes):tiktokTransfer(h,i.size_bytes);\n if(r.state==='unknown')return {state:'uncertain',code:r.code};\n return {state:r.state,...(r.provider_id?{provider_id:r.provider_id}:{}),...(Number.isSafeInteger(r.received_bytes)?{received_bytes:r.received_bytes}:{})};\n}\nreturn [{json:providerObservation($json,$('Provideranfrage atomar reservieren').first().json)}];"
+      },
+      "position": [
+        4800,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4f1203f8-ac72-4e46-8af4-38c3aeee1e7a",
+      "name": "Unklare Providerantwort",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return [{json:{state:'uncertain',code:'PROVIDER_RESPONSE_UNCERTAIN'}}];"
+      },
+      "position": [
+        4800,
+        600
+      ]
+    },
+    {
+      "id": "c90eff45-290c-49cd-b60a-603136128254",
+      "name": "Providerergebnis speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_provider_v1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'finish',p_id:$('Provideranfrage atomar reservieren').first().json.id,p_lease:$('Provideranfrage atomar reservieren').first().json.lease_id,p_data:$json} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "position": [
+        5040,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "e8872f91-57c2-475b-878e-4ddfcc9ff570",
+      "name": "Providerstatus sicher zurückgeben",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const r=$json;return [{json:{ok:r.ok===true,state:['session_ready','uploading','processing','complete','failed','uncertain','needs_review'].includes(r.state)?r.state:'blocked',can_upload:false,can_publish:false}}];"
+      },
+      "position": [
+        5280,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Providerauftrag fortsetzen": {
+      "main": [
+        [
+          {
+            "node": "Providerauftrags-ID prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerauftrags-ID prüfen": {
+      "main": [
+        [
+          {
+            "node": "Providerauftrag lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerauftrag lesen": {
+      "main": [
+        [
+          {
+            "node": "Providerbindung bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerbindung bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Providerkonto rückprüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerkonto rückprüfen": {
+      "main": [
+        [
+          {
+            "node": "Aktuelle Providerverbindung lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktuelle Providerverbindung lesen": {
+      "main": [
+        [
+          {
+            "node": "Providerverbindung bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerverbindung bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Datei für Übertragung prüfen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei für Übertragung prüfen?": {
+      "main": [
+        [
+          {
+            "node": "Provider-Dateistand lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus ohne Datei lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Dateistand lesen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Dateistand bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Dateistand bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Videodatei lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Videodatei lesen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Dateiprüfsumme bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Dateiprüfsumme bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Dateistand rückprüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Dateistand rückprüfen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Prüfnachweise verbinden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Prüfnachweise verbinden": {
+      "main": [
+        [
+          {
+            "node": "Provideranfrage atomar reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provideranfrage atomar reservieren": {
+      "main": [
+        [
+          {
+            "node": "Provideranfrage reserviert?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provideranfrage reserviert?": {
+      "main": [
+        [
+          {
+            "node": "Provideranfrage erstellen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provideranfrage erstellen": {
+      "main": [
+        [
+          {
+            "node": "Providerdatei übertragen?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unklare Providerantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerdatei übertragen?": {
+      "main": [
+        [
+          {
+            "node": "Geprüfte Providerdatei übernehmen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Provider-JSON senden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geprüfte Providerdatei übernehmen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Dateirest auswählen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Dateirest auswählen": {
+      "main": [
+        [
+          {
+            "node": "Provider-Dateitransfer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unklare Providerantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Dateitransfer": {
+      "main": [
+        [
+          {
+            "node": "Providerantwort auswerten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unklare Providerantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerantwort auswerten": {
+      "main": [
+        [
+          {
+            "node": "Providerergebnis speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unklare Providerantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerergebnis speichern": {
+      "main": [
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Providerstatus sicher zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Providerstatus ohne Datei lesen": {
+      "main": [
+        [
+          {
+            "node": "Provideranfrage atomar reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-JSON senden?": {
+      "main": [
+        [
+          {
+            "node": "Provider-JSON-Anfrage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Provider-Statusanfrage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-JSON-Anfrage": {
+      "main": [
+        [
+          {
+            "node": "Providerantwort auswerten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unklare Providerantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider-Statusanfrage": {
+      "main": [
+        [
+          {
+            "node": "Providerantwort auswerten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unklare Providerantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unklare Providerantwort": {
+      "main": [
+        [
+          {
+            "node": "Providerergebnis speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 600,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "pinData": {},
+  "active": false
+}

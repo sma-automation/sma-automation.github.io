@@ -1,44 +1,62 @@
-# Vorbereitung der Upload- und Provider-Ergebnisse
+# Dauerhafte Provider-Ergebnisse und sichere Wiederaufnahme
 
-Stand 3. November 2026. Zwei reine JavaScript-Module ergänzen die bestehende Veröffentlichungsvorbereitung für YouTube und TikTok. Sie senden keine Anfrage und besitzen weder Credentials noch einen aktivierten Dispatcher. Kein Social-Media-Upload und kein Posting wurde ausgeführt.
+Stand 3. November 2026, Fortsetzung von PR #57. **Datenbankjournal installiert; Dispatcher und API-Anschluss sind als geprüfte Vorlagen vorbereitet, noch nicht live verbunden. Kein Social-Media-Upload, kein Posting und keine Upload-Testfreigabe.**
 
-## Exakter gespeicherter Inhalt
+## Installiert und nachgewiesen
 
-`provider-upload-plan.cjs` erstellt aus der bestehenden gesperrten Publisher-Vorbereitung eine überprüfbare Anfragebeschreibung. Datei-/Textbindung und Adapterfelder müssen übereinstimmen. Unterstützt sind MP4-Dateien bis zur bisherigen internen Grenze von 24.000.000 Bytes. Alle Sichtbarkeits-, Kinder-/KI-, Interaktions- und Werbeoptionen müssen explizit übergeben werden; fehlende Optionen erhalten keine stillen Standardwerte.
+`publication_provider_attempt_journal_v1` installiert drei private Tabellen und den ausschließlich serviceberechtigten RPC `sma_publication_provider_v1`. Pro freigegebenem Auftrag existiert höchstens ein Versuch. Die vorhandene Veröffentlichungsreservierung bindet zusätzlich Kunde, Datei, Revision, Plattform und Zielkonto. Ein Fingerabdruck bindet Eigentümer, gespeicherten Text, Optionen, Zielkonto und die konkrete Zustimmung.
 
-YouTube erhält den gespeicherten Titel und die unveränderte Caption in `snippet.title` beziehungsweise `snippet.description`; TikTok die vollständige gespeicherte Caption in `post_info.title`. Die Beschreibung enthält die Metadaten für einen YouTube-Resumable-Upload beziehungsweise TikTok-Direct-Post mit `FILE_UPLOAD`. Der kleine bestehende Dateipfad verwendet bei TikTok einen Chunk. Kein tatsächlicher Upload-Session-Endpunkt wird aufgerufen. Das Ergebnis behält alle bestehenden Blocker und ergänzt `PROVIDER_DISPATCH_DISABLED`.
+Vor jeder Provider-Anfrage werden Sequenz und Anfrage-UUID atomar gespeichert. Nur diese Anfrage darf ihr Ergebnis schreiben. Abgelaufene Leases erlauben keine zweite Initialisierung. Ein verspäteter Response darf noch dieselbe unersetzte Anfrage abschließen; nach einer neueren Übernahme wird er abgewiesen. Die Übergänge speichern ausschließlich normalisierte Ergebnisse, keine rohen Fehlermeldungen oder Tokens. Die sensible Upload-Session-URL bleibt in der privaten Versuchstabelle und wird aus dem Ereignisjournal entfernt.
 
-## Providerantworten auswerten
+`publication_provider_permissions_v1` ist ein zusätzlicher, auf den Auftrag und dessen Fingerabdruck begrenzter Freigabeschalter. Er ist leer. Weder Kundenrollen noch die service_role können dort Freigaben schreiben. Diese technische Sperre darf erst nach ausdrücklicher Freigabe eines konkreten Uploadtests administrativ gesetzt werden. Sie ersetzt keine Kundenbestätigung oder Medienprüfung.
 
-`provider-results.cjs` trennt Dateitransfer, Verarbeitung und nachgewiesenes Providerergebnis:
+## Verhalten bei Unterbrechungen
 
-| Antwort | Interpretation |
+| Vorliegender Stand | Nächster erlaubter Schritt |
 | --- | --- |
-| YouTube 308 mit gültigem empfangenem Bytebereich | Transfer noch offen |
-| YouTube 200/201 mit Video-ID nach Transfer | Providerverarbeitung ausstehend |
-| YouTube Statusabfrage | Video-ID, Kanal-ID, Verarbeitung, Uploadstatus und gewählte Sichtbarkeit müssen passen |
-| TikTok Transfer 201 | Nur Dateitransfer beendet |
-| TikTok `PROCESSING_UPLOAD` | Verarbeitung läuft |
-| TikTok `SEND_TO_USER_INBOX` | Nutzeraktion erforderlich; nur beim Inbox-Weg gültig |
-| TikTok `PUBLISH_COMPLETE` | Providerabschluss; öffentliche Post-ID kann noch fehlen |
-| Fehler, fehlende Felder, unbekannte Statuswerte | Unklar oder fehlgeschlagen; keine automatische Uploadwiederholung |
+| Initialisierung gesendet, Antwort unbekannt, keine Session/Provider-ID | Manuell klären; kein erneutes Init |
+| YouTube-Dateitransfer unklar | Leere Status-PUT zur gespeicherten Session |
+| YouTube bestätigt Teilmenge | Nach erneuter Freigabe-/Dateiprüfung exakt ab dem bestätigten Byte fortsetzen |
+| YouTube liefert Video-ID | Authentifizierte Abfrage von Video-, Kanal-, Verarbeitungs- und Sichtbarkeitsstatus |
+| TikTok liefert Publish-ID, Transfer unklar | Authentifizierte Statusabfrage desselben Vorgangs; kein blindes Wiederholen des Chunks |
+| Session abgelaufen | Stoppen und klären; kein automatischer neuer Upload |
+| Privat/nicht gelistet fertig | Abgeschlossen, ohne öffentlichen Erfolg zu behaupten |
+| TikTok öffentlich fertig, öffentliche ID fehlt | Öffentliche Verfügbarkeit unbekannt; späterer Status kann IDs ergänzen |
 
-Privat beziehungsweise nicht gelistet ist kein öffentlicher Erfolg. Bei öffentlich angefragtem TikTok-Post ohne öffentliche ID bleibt die öffentliche Verfügbarkeit unbekannt (`null`). Die dokumentierte Schreibweise `publicaly_available_post_id` wird absichtlich verwendet. Große TikTok-IDs bleiben genaue Strings; unsichere JavaScript-Zahlen werden verworfen. Spätere öffentliche IDs können ein bereits abgeschlossenes Ergebnis ergänzen, ohne durch verspätete leere Antworten wieder verloren zu gehen. Die Zusammenführung bindet Portal, Zielkonto, Provider-ID, Route und gewählte Sichtbarkeit.
+Bei TikTok werden bestätigte öffentliche IDs vereinigt. Eine spätere leere Antwort löscht sie nicht. Int64-IDs werden vor dem JSON-Parsing als exakte Strings erhalten. Abgeschlossene Ergebnisse werden nicht durch verspätete Zwischenstände überschrieben. Kontoprüfung und mindestens zehn Sekunden Abstand begrenzen Statusaufrufe. Es gibt keinen automatischen Polling- oder Upload-Retry-Loop.
 
-Die TikTok-Statusantwort enthält weder die angefragte Publish-ID noch die Zielkonto-ID. Diese Bindung muss der künftige Aufrufer aus seinem dauerhaft gespeicherten Versuch und der tatsächlich authentifizierten Anfrage gewährleisten. Die reinen Funktionen beweisen diese Anfrageherkunft nicht selbst. Ebenso ersetzt ihre Zusammenführung keine atomare Datenbanksequenzierung oder dauerhafte Wiederanlaufsicherung.
+## Vorbereiteter n8n-Anschluss
 
-## Offen bis zum vollständigen Betrieb
+`provider-dispatch-workflow.json` hat 29 Nodes und ausschließlich einen internen Execute-Workflow-Einstieg. Ein Aufruf bearbeitet maximal eine journalgebundene Provider-Anfrage. Vor Schreibanfragen werden die bestehenden Konto-/Ordnerzuordnungen, aktuellen Drive-Metadaten, vollständigen Bytes mit SHA-256, unveränderten gespeicherten Texte, Medienchecks, Nutzerbestätigungen und der zusätzliche Testschalter geprüft. Das Konto wird über den bestehenden internen Workflow `LR2Qng41OIYuVHAR` geprüft; Zugangsdaten bleiben flüchtig in n8n.
 
-- Dauerhaftes Provider-Versuchsjournal mit atomarer Reservierung, Anfragesequenz und sicherer Wiederaufnahme nach unsicherem Netzwerkresultat.
-- Anbindung der echten Upload-/Statusnodes an die aktuelle Auftrags-, Konto-, Datei-, Medien- und ausdrückliche Nutzerfreigabe.
-- Sichere Validierung von Upload-Session-URLs und Behandlung von Ablauf/Refresh; kein erneuter Init-Aufruf nach unklarem Ergebnis.
-- Kontrollierter echter Uploadtest nach ausdrücklicher Freigabe. Die vorliegenden Providerfälle sind synthetische Tests, keine Live-Uploadabnahme.
+Die Vorlage enthält getrennte HTTP-Nodes für Metadaten, Dateitransfer und Status. Redirects und automatische HTTP-Wiederholungen sind aus. Upload-Session-URLs sind auf dokumentierte HTTPS-Hosts/Pfade begrenzt; unbekannte Hosts werden abgewiesen. TikTok-Upload-URLs erhalten keinen Konto-Bearer. YouTube-Teilübertragung verwendet nur die geprüften restlichen Bytes. `provider-upload-plan.cjs` erhält Titel und Caption unverändert.
 
-Die geschützten Originalworkflows und die bestehende Publisher-Arbeitskopie bleiben unverändert. Keine Provider-Nodes sind durch diese Module erreichbar. Der [reale Inhaltsabgleich](CONTENT_COMPARISON.md) und die Medienfreigaben bleiben davon unabhängig.
+Der Dispatcher wurde **noch nicht in n8n importiert oder mit dem Auftragsworker verbunden**. Seine Tests sind lokale synthetische Tests sowie SQL-Tests, keine echten Provider-Aufrufe. Die neue Vergleichs-Arbeitskopie ist bereits importiert; das Speichern ihrer Datenschutzeinstellungen und des Zeitlimits wurde durch die automatische Freigabeprüfung angehalten. Die bestehende aktive API und der bestehende Ausführungsworker wurden deshalb nicht ersetzt. Nach Bestätigung sind zuerst die privaten Einstellungen, dann die Exporte/Verbindungen zu prüfen. Ein Einbau allein darf keine Testfreigabe erzeugen.
+
+## Validierung
+
+- 313 Node-Tests bestanden, einschließlich Workflow-Kanten, fehlender Freigaben, Session-URL-Grenzen, exakter Texte, Binärrest und Int64-IDs.
+- Vergleichs-/Auftrags-/Creator-/Provider-SQL lokal mit PGlite 0.5.14/PostgreSQL 18 bestanden.
+- Vergleich mit Delivery-Queue und Provider-Journal zusätzlich auf der produktiven PostgreSQL-17-Instanz geprüft: ausschließlich synthetische Fixtures, vollständig zurückgerollt. Medien-Stubs im isolierten Provider-Zustandsautomatentest existieren nur innerhalb der Testtransaktion; die Originalfunktions-Hashes sind danach unverändert.
+- Nach Abschluss: 0 freigegebene Aufträge, 0 Veröffentlichungsreservierungen, 0 Provider-Testfreigaben, 0 Versuche, 0 Providerereignisse, 0 Vergleichs-Queueeinträge.
+- Keine neue Sicherheitsberater-Warnung. Vier erwartete INFO-Hinweise für private Servicetabellen mit RLS und ohne Kundenpolicies; Kundenrollen haben keine direkten Rechte. [Hinweisbeschreibung](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+```sh
+python3 n8n/publishing/build-provider-dispatch.py
+node --test tests/*.test.cjs
+node tests/run-publication-delivery-sql.mjs
+```
+
+## Medienblocker und verbleibende Abnahme
+
+Sightengine wird weiterhin mit `VIDEO_PLAN_REQUIRED` abgewiesen. Der lokale Adapter hält Videomoderation bewusst gesperrt, nachdem der vorherige echte Diensttest fehlenden Planzugriff gemeldet hatte. Die aktuelle offizielle FAQ bestätigt: Videomoderation gehört nicht zum kostenlosen Plan. In dieser Sitzung wurde kein neuer kostenpflichtiger Diensttest und kein Tarifwechsel ausgelöst. Einzelne Vorschaubilder oder eine Nutzerbestätigung werden nicht als vollständige Video-Sicherheitsprüfung umgedeutet.
+
+Die noch offenen Text-Rückfragen, die vollständige Medienprüfung, das sichere Speichern/Veröffentlichen der neuen n8n-Verbindungen und anschließend ein ausdrücklich freigegebener echter Uploadtest sind separate verbleibende Schritte. Meta, geschützte Originalworkflows, Oberfläche, Schrift und Serverumbau bleiben unverändert. Webseite und Domain wurden nicht begonnen.
 
 Primärquellen, am 03.11.2026 geprüft:
 
-- https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol
-- https://developers.google.com/youtube/v3/docs/videos
-- https://developers.tiktok.com/doc/content-posting-api-reference-get-video-status
-- https://developers.tiktok.com/doc/content-posting-api-media-transfer-guide
+- [YouTube: Resumable Uploads](https://developers.google.com/youtube/data/guides/using_resumable_upload_protocol)
+- [TikTok: Direct Post](https://developers.tiktok.com/docs/en/content-posting-api-reference-direct-post)
+- [TikTok: Media Transfer](https://developers.tiktok.com/docs/en/content-posting-api-media-transfer-guide)
+- [TikTok: Statusabfrage](https://developers.tiktok.com/docs/en/content-posting-api-reference-get-video-status)
+- [Sightengine: Grenzen des kostenlosen Plans](https://www.sightengine.com/faq/do-you-offer-a-free-trial)

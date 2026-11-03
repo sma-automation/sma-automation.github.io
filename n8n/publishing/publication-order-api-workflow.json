@@ -564,6 +564,89 @@
         -1000
       ],
       "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7c57c30d-d134-4c45-a94c-2a784520031c",
+      "name": "Auftragsabgleich anstoßen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c12ea839-8a28-4292-ad58-99838264235f",
+              "leftValue": "={{ $json.ok === true && !!$json.id && ['preparing','prepared','approved','blocked','checked'].includes($json.state) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        2400,
+        200
+      ]
+    },
+    {
+      "id": "94a54eae-9e51-4f6f-839d-e01abfd77443",
+      "name": "Auftragsantwort merken",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "id": "1f808bb2-688d-4729-b09c-eb63d9a6b8cb",
+      "name": "Inhaltsabgleich im Hintergrund",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "ZFO9NSh5nHSn3ues",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "position": [
+        2880,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "29eda7b1-e0eb-408d-ab0e-66dddab2b041",
+      "name": "Unveränderte Auftragsantwort",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $('Auftragsantwort merken').all();"
+      },
+      "position": [
+        3120,
+        0
+      ]
     }
   ],
   "connections": {
@@ -918,6 +1001,64 @@
       ]
     },
     "Auftragsantwort prüfen": {
+      "main": [
+        [
+          {
+            "node": "Auftragsabgleich anstoßen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftragsabgleich anstoßen?": {
+      "main": [
+        [
+          {
+            "node": "Auftragsantwort merken",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dashboard-Antwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftragsantwort merken": {
+      "main": [
+        [
+          {
+            "node": "Inhaltsabgleich im Hintergrund",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inhaltsabgleich im Hintergrund": {
+      "main": [
+        [
+          {
+            "node": "Unveränderte Auftragsantwort",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unveränderte Auftragsantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unveränderte Auftragsantwort": {
       "main": [
         [
           {

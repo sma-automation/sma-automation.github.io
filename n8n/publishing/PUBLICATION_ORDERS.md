@@ -122,3 +122,9 @@ Primärquelle, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/con
 ## Gespeicherter Portaltextabgleich – 3. November 2026
 
 Die Auftrags-Medienansicht ergänzt jetzt einen revisionsgebundenen `PORTAL_TEXT_COMPARISON` aus dem privaten Vergleichscache. Die bestehenden offenen Prüfungen bleiben vollständig erhalten. Der echte YouTube-/TikTok-Abgleich lieferte konkrete Rückfragen; Texte und Nutzerfreigaben wurden nicht verändert. [Implementierung, Live-Nachweise und Grenzen](CONTENT_COMPARISON.md). Die automatische Ansteuerung des neuen Unterworkflows ist noch offen. [Upload-/Provider-Module](PROVIDER_RESULTS.md) sind ausschließlich offline getestet und haben keinen Dispatcher oder dauerhaften Ergebnisjournalpfad.
+
+## Dauerhafte Vergleichsaufgabe und Provider-Journal – Fortsetzung PR #57
+
+Die Datenbank enthält jetzt die transaktionale Vergleichs-Queue sowie das atomare Provider-Versuchs-/Ereignisjournal mit separater expliziter Testfreigabe. Die geprüfte API-Vorlage startet den Vergleich asynchron. Die aktive API und der Ausführungsworker bleiben vorerst unverändert: Das Speichern der notwendigen Einstellungen der neuen privaten n8n-Kopie wurde durch die automatische Freigabeprüfung angehalten. Der vorbereitete Provider-Dispatcher ist noch nicht importiert oder verbunden. Daher ist die Veröffentlichungsstrecke noch nicht als live fertig abgenommen.
+
+Details und genaue Fortsetzung: [Inhaltsabgleich](CONTENT_COMPARISON.md#automatische-auftragsansteuerung--fortsetzung-pr-57), [Providerjournal und Wiederaufnahme](PROVIDER_RESULTS.md). 313 Node-Tests sowie lokale und produktive synthetische SQL-Rollbackprüfungen bestanden. Weiterhin 0 freigegebene Aufträge, Provider-Testfreigaben und Provider-Versuche. Oberfläche, Schrift und alle geschützten Originalworkflows unverändert; kein Upload, Posting oder Tarifwechsel.
