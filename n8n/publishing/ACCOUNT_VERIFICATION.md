@@ -74,9 +74,13 @@ PYTHONDONTWRITEBYTECODE=1 python n8n/publishing/build-publication-orders.py \
 
 274 Node-Tests bestanden. Die beiden SQL-Prüfreihen `publication-accounts.sql` und `publication-orders.sql` bestanden in PGlite 0.5.14 / PostgreSQL 18.6. Sie verwenden die echten Publikations-SQL-Definitionen, eine minimale Auth-/Kunden-Testtabelle und zurückgerollte synthetische Datensätze. Geprüft werden Eigentümerrechte, parallele Claims, unsichere Refresh-Ergebnisse, verlorene/alte Leases, Ratenbegrenzung, fehlende/veraltete Nachweise, TikTok-Optionen, doppelte Freigaben sowie weiterbestehende Medienblocker. Beide Prüfreihen bestanden zusätzlich auf der produktiven Supabase-Instanz mit PostgreSQL 17 und Rollback. Die echten Provider-Kontodurchläufe sind zusätzlich wie oben dokumentiert erfolgreich abgeschlossen. PGlite prüft die SQL-Sperrübergänge sequenziell, nicht mit mehreren gleichzeitig laufenden Datenbankverbindungen.
 
-## Nächster Umsetzungsschritt
+## Stornierte Aufträge
 
-Die Statusanzeige für administrativ stornierte Aufträge ergänzen: Ein erneuter Statusabruf nach der Testbereinigung zeigt derzeit die allgemeine Fehlermeldung, weil der Browserclient den terminalen Zustand `cancelled` noch nicht akzeptiert. Die Datenbankstornierung beider Testaufträge ist bestätigt; der offene Dialog wurde geschlossen. Diese Anzeige ist keine fehlgeschlagene Kontoprüfung oder Veröffentlichung.
+Der Browserclient akzeptiert den terminalen Zustand `cancelled` und zeigt eine eindeutige Stornomeldung. Ein Statusabruf ersetzt auch eine zuvor bereits angekreuzte Vorschau: Zustimmung wird zurückgesetzt, Zustimmung und Freigabeknopf verschwinden, und eine erneute Statusabfrage wird nicht angeboten. Das Schließen und erneute Öffnen beginnt mit einer neuen Auftrags-ID. Ziel-/Dateibindung, Eigentümerprüfung und die gesperrten Upload-/Publish-Antworten bleiben maßgeblich.
+
+Regressionen prüfen den Übergang von einer bestätigungsbereiten Vorschau zur Stornierung, die gesperrte erneute Zustimmung, den Erhalt der Bindungsprüfungen und den neuen Auftrag nach Wiederöffnen. Die Änderung betrifft ausschließlich Zustandsbehandlung und Meldung; CSS und Layout werden nicht geändert.
+
+## Nächster Umsetzungsschritt
 
 Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt. Eine endgültige Veröffentlichungsfreigabe bleibt eine bewusste Entscheidung des Nutzers.
 
