@@ -1,6 +1,8 @@
 # Gespeicherte Portaltexte im Publisher vorbereiten
 
-Stand: 3. November 2026. Die separate n8n-Arbeitskopie **SMA – Kunden-Publishing – Portaltext-Anbindung V1**, ID `JZwPbzCpgIByxk94`, liest die ausgewählte gespeicherte Textversion über die [Übergabeprüfung](PUBLISHER_HANDOFF.md) und bereitet die passenden Textfelder für die vorhandenen Publisher vor. Sie bleibt unveröffentlicht. Diese Stufe ist noch keine produktive Verbindung vom Dashboard zum Social-Media-Upload.
+Stand der Portaltext-Integration nach PR #43: 3. November 2026. Die separate n8n-Arbeitskopie **SMA – Kunden-Publishing – Portaltext-Anbindung V1**, ID `JZwPbzCpgIByxk94`, liest die ausgewählte gespeicherte Textversion über die [Übergabeprüfung](PUBLISHER_HANDOFF.md) und bereitet die passenden Textfelder für die vorhandenen Publisher vor. Diese Stufe ist noch keine produktive Verbindung zum Social-Media-Upload.
+
+**Fortsetzung:** Der [Dashboard-Auftrag mit Zielkonto, finaler Bestätigung und Doppelauftragsperre](PUBLICATION_ORDERS.md) bindet diese Vorbereitung inzwischen an eine separate Ausführungsprüfung. Dafür wird die unveränderte Arbeitskopie als interner Unterworkflow veröffentlicht; die 160 Bestands-Knoten bleiben deaktiviert. Die unten dokumentierten 250 Tests und der inaktive Abschlussexport beziehen sich auf den Stand von PR #43.
 
 ## Ablauf und bestehende Workflows
 
