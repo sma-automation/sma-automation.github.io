@@ -15,7 +15,7 @@ try {
   await db.exec(await readFile(new URL('../supabase/sql/'+file+'.sql',import.meta.url),'utf8'));
  }
  console.log((await db.query('select version() as version')).rows[0].version);
- for(const file of ['publication-accounts','publication-orders']) {
+ for(const file of ['publication-accounts','publication-orders','publication-order-creator']) {
   const sql=await readFile(new URL('./'+file+'.sql',import.meta.url),'utf8');let result;
   for(const statement of sql.split(/(?<=;)\n(?=(?:do \$\$|set local role|select set_config|reset role|rollback;|select '))/)){
    try{result=await db.exec(statement);}catch(e){console.error(file+': '+statement.slice(0,700));throw e;}
