@@ -1,5 +1,5 @@
 // Reuse the live forms and their handlers; only the workspace arrangement changes.
-export function createOptimizerWorkspace(doc, portalName, onGallery) {
+export function createOptimizerWorkspace(doc, portalName, onGallery, options = {}) {
   const $ = id => doc.getElementById(id);
   const main = doc.querySelector('main');
   const make = (tag, id, label) => {
@@ -21,10 +21,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
   files.setAttribute('aria-label', 'Bild- und Videogalerie');
   const source = make('div', 'workspaceSource');
   const text = make('div', 'workspaceText');
-  const panels = { files, source };
+  const preview = make('section', 'workspacePreview');
+  preview.setAttribute('aria-label', 'Datei- und Beitragsvorschau');
+  const panels = { files, source, preview };
   main.append(toolbar, files, source);
   const buttons = {};
   let active = 'files';
+  let selectedFile = null;
   for (const [key, label] of [['files', 'Datei'], ['source', 'Inhalt und Ziel']]) {
     buttons[key] = button('workspaceTab-' + key, label, () => show(key));
     buttons[key].setAttribute('aria-controls', panels[key].id);
@@ -47,20 +50,88 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
   const search = make('details', 'workspaceSearch');
   search.append(make('summary', null, 'Datei suchen'), doc.querySelector('label[for="fileSearch"]'), $('fileSearch'));
   pickerBody.prepend(search, $('fileSwitchNotice'));
-  const selectedPreview = make('details', 'workspaceSelectedPreview');
-  selectedPreview.hidden = true;
-  selectedPreview.append(make('summary', null, 'Ausgewählte Datei ansehen'), $('assetPreview'), $('fileDetails'), $('mediaPanel'));
-  files.append(selectedPreview);
-  const next = button('workspaceContinue', 'Inhalt und Ziel →', () => show('source'));
-  next.disabled = true;
-  files.append(next);
+  const viewFile = button('workspaceViewFile', 'Ausgewählte Datei ansehen', () => show('preview'));
+  viewFile.setAttribute('aria-controls', preview.id);
+  viewFile.disabled = true;
+  files.append(viewFile);
+
+  const previewBack = button('workspacePreviewBack', '← Datei', () => {
+    show('files'); viewFile.focus();
+  });
+  const previewHeading = make('h1', 'workspacePreviewHeading', 'Vorschau für ' + portalName);
+  const previewName = make('p', 'workspacePreviewName');
+  const previewTabs = make('nav', 'workspacePreviewTabs');
+  previewTabs.setAttribute('aria-label', 'Dateivorschau');
+  const postView = make('div', 'workspacePostView');
+  const detailView = make('div', 'workspaceDetailView');
+  const postTab = button('workspacePostTab', 'Beitragsvorschau', () => previewTab('post'));
+  const detailTab = button('workspaceDetailTab', 'Dateidetails', () => previewTab('details'));
+  postTab.setAttribute('aria-controls', postView.id); detailTab.setAttribute('aria-controls', detailView.id);
+  previewTabs.append(postTab, detailTab);
+  preview.append(previewBack, previewHeading, previewName, previewTabs, postView, detailView);
+  const post = make('article', 'workspacePost');
+  post.setAttribute('aria-label', 'Darstellung des Beitrags');
+  post.dataset.portal = portalName.toLowerCase();
+  const profile = make('div', 'workspacePostProfile');
+  profile.append(make('span', 'workspacePostAvatar', '◎'), make('strong', null, portalName === 'YouTube' ? 'Dein Kanal' : 'Dein Profil'), make('span', null, portalName));
+  const postBody = make('div', 'workspacePostBody');
+  const postTitle = make('h2', 'workspacePostTitle');
+  const postCaption = make('p', 'workspacePostCaption');
+  const postTags = make('p', 'workspacePostTags');
+  const postShop = make('a', 'workspacePostShop');
+  postShop.target = '_blank'; postShop.rel = 'noopener noreferrer';
+  postBody.append(postTitle, postCaption, postTags, postShop);
+  post.append(profile, $('assetPreview'), postBody);
+  postView.append(post, make('p', 'workspacePreviewNotice', 'Gestaltungsvorschau · Die endgültige Darstellung kann je nach Portal und Gerät abweichen.'));
+  const facts = make('dl', 'workspacePreviewFacts');
+  const sourceDescription = make('p', 'workspacePreviewSource');
+  const reviewNotes = make('ul', 'workspacePreviewNotes');
+  detailView.append($('fileDetails'), facts, make('h2', null, 'Inhalt der Datei'), sourceDescription, reviewNotes, $('mediaPanel'));
+
+  function previewTab(key) {
+    postView.hidden = key !== 'post'; detailView.hidden = key !== 'details';
+    postTab.setAttribute('aria-pressed', String(key === 'post')); detailTab.setAttribute('aria-pressed', String(key === 'details'));
+    if (key !== 'post') for (const video of preview.querySelectorAll('video')) video.pause();
+  }
+  function refreshPreview() {
+    const data = options.getPreview?.() || {};
+    const draft = data.draft || {};
+    const file = selectedFile || {};
+    const info = data.facts || {};
+    post.dataset.mediaKind = file.media_kind || '';
+    previewName.textContent = file.name || '';
+    postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
+    postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
+    postTags.textContent = (draft.hashtags || []).map(tag => '#' + tag).join(' ');
+    postTags.hidden = !postTags.textContent;
+    const shop = typeof draft.shop_url === 'string' && /^https:\/\/sma-automation\.com\/app\/shop\.html\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.shop_url) ? draft.shop_url : '';
+    postShop.hidden = !shop; postShop.textContent = shop ? (data.language === 'en' ? 'Visit our shop: ' : 'Zum Shop: ') + shop : '';
+    if (shop) postShop.href = shop; else postShop.removeAttribute('href');
+    sourceDescription.textContent = data.source || 'Noch keine Inhaltsbeschreibung vorhanden.';
+    facts.replaceChildren();
+    const number = value => Number.isFinite(value) && value >= 0;
+    const values = [
+      ['Dateiart', info.mime_type || file.mime_type || (file.media_kind === 'video' ? 'Video' : 'Bild')],
+      ['Dateigröße', number(info.size_bytes) ? (info.size_bytes / 1000000).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' MB' : 'Noch nicht ermittelt'],
+      ['Abmessungen', info.width_px && info.height_px ? info.width_px + ' × ' + info.height_px + ' Pixel' : 'Noch nicht ermittelt'],
+      ['Dauer', file.media_kind !== 'video' ? 'Nicht zutreffend' : number(info.duration_ms) ? (info.duration_ms / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' Sekunden' : 'Noch nicht ermittelt'],
+      ['Portal', portalName], ['Sprache', data.language === 'en' ? 'Englisch' : 'Deutsch'],
+      ['Entwurf', data.draftStatus || 'Noch kein Beitragstext vorbereitet'],
+      ['Shop-Link', shop || 'Noch kein Shop-Link zugeordnet'],
+    ];
+    for (const [label, value] of values) facts.append(make('dt', null, label), make('dd', null, value));
+    reviewNotes.replaceChildren();
+    for (const note of draft.review_notes || []) reviewNotes.append(make('li', null, note));
+    reviewNotes.hidden = !reviewNotes.children.length;
+    $('fileDetails').open = true;
+  }
 
   const selectedRow = make('div', 'workspaceSelectedFile');
   const selectedName = make('strong', 'workspaceSelectedName', 'Noch keine Datei ausgewählt');
   const selectedKind = make('span', 'workspaceSelectedKind');
   const selectedLabel = make('div');
   selectedLabel.append(selectedName, selectedKind);
-  selectedRow.append(selectedLabel, button('workspaceChangeFile', 'Datei ändern', () => show('files')));
+  selectedRow.append(selectedLabel);
   const editor = make('div', 'workspaceEditor');
   source.append(selectedRow, editor);
   $('magicActionsSource').hidden = true;
@@ -104,30 +175,45 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
   $('exampleFiles').hidden = true;
   const statusRow = make('div', 'workspaceStatus');
   statusRow.append($('portalStatus'));
-  main.append(toolbar, $('uploadPanel'), statusRow, $('magicReplaceNotice'), files, source);
+  main.append(toolbar, $('uploadPanel'), statusRow, $('magicReplaceNotice'), files, source, preview);
 
   function show(key) {
     if (key === 'text') key = 'source';
     if (key === 'folder') { key = 'files'; search.open = true; }
     if (!Object.hasOwn(panels, key)) return;
+    if (key === 'preview' && !selectedFile) return;
     const changed = active !== key;
     active = key;
     for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== key;
     for (const [name, tab] of Object.entries(buttons)) tab.setAttribute('aria-pressed', String(name === key));
-    for (const video of files.querySelectorAll('video')) if (key !== 'files') video.pause();
+    for (const video of main.querySelectorAll('video')) video.pause();
+    toolbar.hidden = key === 'preview';
+    statusRow.hidden = key === 'preview';
     empty.hidden = !$('result').hidden;
+    if (key === 'preview') { refreshPreview(); previewTab('post'); previewBack.focus(); }
     if (changed && key === 'files') onGallery();
+    if (changed) options.onView?.(key);
   }
   show('files');
   return {
     show,
     galleryVisible: () => active === 'files',
-    textAvailable(value) { empty.hidden = value; },
+    refreshPreview() { if (active === 'preview') refreshPreview(); },
+    textAvailable(value) { empty.hidden = value; if (!value) clearPreview(); else if (active === 'preview') refreshPreview(); },
     selection(file) {
-      selectedPreview.hidden = !file; selectedPreview.open = false;
+      selectedFile = file; clearPreview();
       selectedName.textContent = file?.name || 'Noch keine Datei ausgewählt';
       selectedKind.textContent = file ? (file.media_kind === 'video' ? 'Video' : 'Bild') + ' · ' + portalName : '';
-      next.disabled = !file;
+      viewFile.disabled = !file;
+      if (active === 'preview') {
+        if (file) refreshPreview();
+        else show('files');
+      }
     },
   };
+
+  function clearPreview() {
+    for (const node of [postTitle, postCaption, postTags, postShop, sourceDescription, previewName]) node.textContent = '';
+    postShop.removeAttribute('href'); facts.replaceChildren(); reviewNotes.replaceChildren();
+  }
 }

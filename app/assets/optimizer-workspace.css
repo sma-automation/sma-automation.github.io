@@ -179,6 +179,55 @@ body.wide #workspaceSource #result>.actions{justify-content:flex-end;margin-top:
 body.wide #workspaceSource #save{background:#edf1f8;color:#3157cd;padding:10px 14px;font-size:14px;font-weight:500}
 body.wide #workspaceSource #saveStatus{font-size:12px}
 body.wide #workspaceStatus #portalStatus{font-size:13px;font-weight:400;line-height:1.5}
+
+/* Approved dashboard type and separate publication-preview page. */
+body.wide{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+body.wide :is(h1,h2,h3,button,input,select,textarea){font-family:inherit}
+body.wide #workspaceViewFile,body.wide #workspacePreviewBack{display:flex;align-items:center;gap:10px;width:auto;max-width:100%;min-height:48px;padding:12px 17px;border:0;border-radius:9px;background:#4065d8;color:#fff;font-size:14px;font-weight:500;line-height:1.5}
+body.wide #workspaceViewFile{margin:22px 0 0 auto}
+body.wide #workspaceViewFile::after{content:'◉';font-size:18px}
+body.wide #workspacePreview{border:0;border-radius:0;padding:0;margin:0;background:transparent;--optimizer-type:14px;--optimizer-weight:400;font-size:14px;font-weight:400}
+body.wide #workspacePreviewBack{margin:0 0 20px;white-space:nowrap}
+body.wide #workspacePreviewHeading{font-size:23px;font-weight:500;line-height:1.3;margin:0}
+body.wide #workspacePreviewName{font-size:12px;color:#627087;margin:5px 0 20px;overflow-wrap:anywhere}
+body.wide #workspacePreviewTabs{display:flex;gap:24px;border-bottom:1px solid #e0e5ef;margin-bottom:22px}
+body.wide #workspacePreviewTabs button{background:transparent;color:#627087;border-radius:0;border:0;border-bottom:3px solid transparent;padding:10px 0 12px;font-size:14px;font-weight:500}
+body.wide #workspacePreviewTabs button[aria-pressed=true]{border-bottom-color:#4065d8;color:#3157cd}
+body.wide #workspacePost{max-width:620px;margin:0 auto;background:#fff;border:1px solid #e0e5ef;border-radius:12px;overflow:hidden}
+body.wide #workspacePostProfile{display:flex;align-items:center;gap:10px;padding:15px 18px}
+body.wide #workspacePostAvatar{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#eef2ff;color:#4065d8;font-size:22px;flex:none}
+body.wide #workspacePostProfile strong{font-weight:500}
+body.wide #workspacePostProfile>span:last-child{margin-left:auto;color:#627087;font-size:12px}
+body.wide #workspacePost #assetPreview{margin:0;max-width:none;width:100%;min-height:0;border:0;border-radius:0;padding:0;background:#10131a;display:block}
+body.wide #workspacePost #assetPreviewMedia{aspect-ratio:16/9;background:#10131a;position:relative;overflow:hidden}
+body.wide #workspacePost #assetPreviewMedia :is(img,video){position:absolute;inset:0;display:block;width:100%;height:100%;max-height:none;border-radius:0;object-fit:contain}
+body.wide #workspacePost #assetPreviewKind{display:none}
+body.wide #workspacePost #assetPreviewStatus{color:#e2e7f1;margin:0;padding:12px;font-size:13px}
+body.wide #workspacePost #assetPreviewStatus:empty{display:none}
+body.wide #workspacePost #retryAssetPreview{margin:0 12px 12px;font-size:13px}
+body.wide #workspacePostBody{padding:18px;overflow-wrap:anywhere}
+body.wide #workspacePostBody h2{font-size:18px;font-weight:500;line-height:1.4;margin:0 0 12px}
+body.wide #workspacePostBody p{white-space:pre-wrap;margin:0 0 12px;font-size:14px;font-weight:400;color:#25334d}
+body.wide #workspacePostBody #workspacePostTags,body.wide #workspacePostShop{color:#3157cd}
+body.wide #workspacePost[data-portal=instagram]{max-width:460px}
+body.wide #workspacePost[data-portal=tiktok]{max-width:340px}
+body.wide #workspacePost[data-portal=instagram] #assetPreviewMedia{aspect-ratio:4/5}
+body.wide #workspacePost[data-portal=instagram][data-media-kind=video] #assetPreviewMedia,body.wide #workspacePost[data-portal=tiktok] #assetPreviewMedia{aspect-ratio:9/16}
+body.wide #workspacePost[data-portal=facebook] #assetPreviewMedia{aspect-ratio:1}
+body.wide #workspacePreviewNotice{max-width:620px;margin:14px auto 0;color:#627087;font-size:12px}
+body.wide #workspaceDetailView{padding:22px;border:1px solid #e0e5ef;border-radius:12px;background:#fff}
+body.wide #workspacePreview #fileDetails{margin:0 0 8px}
+body.wide #workspacePreview #fileDetails summary{display:none}
+body.wide #workspacePreview #selectedFileName{margin:0;font-size:14px;font-weight:500;overflow-wrap:anywhere}
+body.wide #workspacePreviewFacts{margin:0;display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,2fr)}
+body.wide #workspacePreviewFacts :is(dt,dd){padding:12px 0;border-bottom:1px solid #e0e5ef;margin:0;overflow-wrap:anywhere}
+body.wide #workspacePreviewFacts dt{color:#627087;padding-right:16px}
+body.wide #workspaceDetailView h2{font-size:16px;font-weight:500;margin:24px 0 10px}
+body.wide #workspacePreviewSource{white-space:pre-wrap;overflow-wrap:anywhere}
+body.wide #workspacePreviewNotes{padding-left:22px}
+body.wide #workspacePreview #mediaSummary{display:list-item;margin-top:20px;padding:12px 0;cursor:pointer}
+body.wide #workspacePreview #mediaPanel{max-width:none}
+@media(max-width:650px){body.wide #workspaceDetailView{padding:16px}body.wide #workspacePreviewFacts{grid-template-columns:minmax(90px,1fr) minmax(0,1.5fr)}}
 @media(max-width:650px){
  body.wide #workspaceEditor{padding:16px}
  body.wide #workspaceSelectedName{max-width:100%}
