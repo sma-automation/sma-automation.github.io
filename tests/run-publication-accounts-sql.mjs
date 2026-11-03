@@ -11,7 +11,7 @@ try {
   grant select on public.sma_kunden to service_role;`);
  // Real publication definitions; only the external Auth/customer table is a
  // minimal fixture. This is not a hosted n8n/provider integration test.
- for(const file of ['publication-preview','publication-files','publication-media-precheck','publication-accounts','publication-orders']) {
+ for(const file of ['publication-preview','publication-files','publication-media-precheck','publication-content-review','publication-magic-effect','publication-video-technical','publication-video-magic','publication-media-profiles','publication-accounts','publication-orders']) {
   await db.exec(await readFile(new URL('../supabase/sql/'+file+'.sql',import.meta.url),'utf8'));
  }
  console.log((await db.query('select version() as version')).rows[0].version);
