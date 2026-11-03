@@ -384,3 +384,15 @@ test('logout while refreshing blocks caption generation and cannot restore custo
  const run=p.run();await new Promise(resolve=>setImmediate(resolve));p.signOut();release({ok:true});await run;
  assert.equal(p.calls.some(c=>isCaption(c.url)||c.p_action==='assign'),false);assert.equal(p.calls.filter(c=>c.p_action==='list').length,1);assert.equal(p.get('source_text').value,'');assert.equal(p.get('result').hidden,true);assert.equal(p.get('inputFields').disabled,true);assert.match(p.get('status').textContent,/melde dich/);
 });
+
+test('relocated language control stays locked during generation and after logout',async()=>{
+ let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});
+ const pending=p.run();await new Promise(r=>setImmediate(r));assert.equal(p.get('language').disabled,true);
+ release(result);await pending;assert.equal(p.get('language').disabled,false);
+ p.signOut();assert.equal(p.get('language').disabled,true);
+});
+test('language changes preserve unsaved customer choices before a Magic replacement',async()=>{
+ const p=await boot(automaticOptions);p.get('language').value='en';p.get('language').events.change();
+ await p.get('magicText').click();assert.equal(p.get('magicReplaceNotice').hidden,false);assert.equal(p.calls.some(c=>c.url),false);
+ p.get('cancelMagicReplace').click();assert.equal(p.get('language').value,'en');
+});

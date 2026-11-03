@@ -1,4 +1,4 @@
-// Move the existing controls without recreating forms or losing their state.
+// Reuse the live forms and their handlers; only the workspace arrangement changes.
 export function createOptimizerWorkspace(doc, portalName, onGallery) {
   const $ = id => doc.getElementById(id);
   const main = doc.querySelector('main');
@@ -8,99 +8,126 @@ export function createOptimizerWorkspace(doc, portalName, onGallery) {
     if (label) node.textContent = label;
     return node;
   };
+  const button = (id, label, action) => {
+    const node = make('button', id, label);
+    node.type = 'button';
+    node.addEventListener('click', action);
+    return node;
+  };
   doc.body.classList.add('wide');
   const toolbar = make('nav', 'optimizerToolbar');
   toolbar.setAttribute('aria-label', 'Optimierung');
   const files = make('section', 'workspaceFiles');
   files.setAttribute('aria-label', 'Bild- und Videogalerie');
-  const media = make('section', 'workspaceMedia');
-  media.setAttribute('aria-label', 'Medienprüfung');
   const source = make('div', 'workspaceSource');
   const text = make('div', 'workspaceText');
-  const examples = $('exampleFiles');
-  const panels = { files, folder: files, media, examples, source, text };
-  // Keep moved controls connected so getElementById and their existing handlers still work.
-  main.append(toolbar, files, media, examples, source, text);
+  const panels = { files, source };
+  main.append(toolbar, files, source);
   const buttons = {};
   let active = 'files';
-  function tab(key, label) {
-    const button = make('button', 'workspaceTab-' + key, label);
-    button.type = 'button';
-    button.setAttribute('aria-controls', panels[key].id);
-    button.setAttribute('aria-pressed', 'false');
-    button.addEventListener('click', () => show(key));
-    buttons[key] = button;
-    return button;
+  for (const [key, label] of [['files', 'Datei'], ['source', 'Inhalt und Ziel']]) {
+    buttons[key] = button('workspaceTab-' + key, label, () => show(key));
+    buttons[key].setAttribute('aria-controls', panels[key].id);
+    buttons[key].setAttribute('aria-pressed', 'false');
+    toolbar.append(buttons[key]);
   }
-  toolbar.append(tab('files', 'Datei für dieses Portal'), $('deviceBrowse'), $('browseFiles'), $('refreshFiles'),
-    tab('media', 'Medienprüfung'), tab('examples', 'Vorschau-Beispieldateien'), tab('source', 'Inhalt und Ziel'), tab('text', 'Text für ' + portalName));
-  $('refreshFiles').classList.add('toolbar-action');
-  buttons.folder = $('browseFiles');
-  buttons.folder.removeAttribute('aria-haspopup');
-  buttons.folder.setAttribute('aria-controls', files.id);
 
-  // The customer folder becomes the page's gallery; the narrow dialog is unused here.
+  const galleryHeader = make('div', 'workspaceGalleryHeader');
+  const galleryActions = make('div', 'workspaceGalleryActions');
+  $('deviceBrowse').textContent = 'Datei hinzufügen';
+  galleryActions.append($('deviceBrowse'), $('refreshFiles'));
+  galleryHeader.append(make('h2', null, 'Deine Dateien'), galleryActions);
   const pickerBody = $('filePicker').querySelector('.file-picker-body');
-  files.append(pickerBody);
+  files.append(galleryHeader, pickerBody);
   $('filePicker').hidden = true;
   $('filePickerHelp').hidden = true;
   $('pickerRefresh').parentElement.hidden = true;
   $('chooseGeneralTemplate').parentElement.hidden = true;
-  const search = make('div', 'workspaceSearch');
-  const searchControls = make('div'); searchControls.className = 'search-controls';
-  const searchButton = make('button', 'workspaceSearchButton', 'Suchen');
-  searchButton.type = 'button'; searchButton.className = 'secondary';
-  searchButton.addEventListener('click', () => { onGallery(); $('fileSearch').focus(); });
-  searchControls.append($('fileSearch'), searchButton);
-  search.append(doc.querySelector('label[for="fileSearch"]'), searchControls);
+  // Retain search and the legacy picker entry point without another toolbar tab.
+  const search = make('details', 'workspaceSearch');
+  search.append(make('summary', null, 'Datei suchen'), doc.querySelector('label[for="fileSearch"]'), $('fileSearch'));
   pickerBody.prepend(search, $('fileSwitchNotice'));
   const selectedPreview = make('details', 'workspaceSelectedPreview');
   selectedPreview.hidden = true;
-  selectedPreview.append(make('summary', null, 'Ausgewählte Datei ansehen'), $('assetPreview'), $('fileDetails'));
-  media.append(selectedPreview, $('mediaPanel'));
+  selectedPreview.append(make('summary', null, 'Ausgewählte Datei ansehen'), $('assetPreview'), $('fileDetails'), $('mediaPanel'));
+  files.append(selectedPreview);
+  const next = button('workspaceContinue', 'Inhalt und Ziel →', () => show('source'));
+  next.disabled = true;
+  files.append(next);
+
+  const selectedRow = make('div', 'workspaceSelectedFile');
+  const selectedName = make('strong', 'workspaceSelectedName', 'Noch keine Datei ausgewählt');
+  const selectedKind = make('span', 'workspaceSelectedKind');
+  const selectedLabel = make('div');
+  selectedLabel.append(selectedName, selectedKind);
+  selectedRow.append(selectedLabel, button('workspaceChangeFile', 'Datei ändern', () => show('files')));
+  const editor = make('div', 'workspaceEditor');
+  source.append(selectedRow, editor);
+  $('magicActionsSource').hidden = true;
+  $('magicActionsText').hidden = false;
+  $('sourceSummary').textContent = 'Inhalt ansehen oder eigene Angaben ergänzen';
+  $('sourcePanel').open = false;
+  $('generate').textContent = 'Text aus eigenen Angaben erstellen';
+  $('generate').classList.add('secondary');
+  $('loadLatest').textContent = 'Gespeicherten Entwurf laden';
   const evidence = make('details', 'workspaceMagicEvidence');
   evidence.append(make('summary', null, 'Erkennung ansehen'), $('magicPanel'));
-  source.append($('magicActionsSource'), evidence, $('sourcePanel'));
-  $('magicActionsSource').hidden = false;
-  $('magicActionsText').hidden = false;
+  $('sourcePanel').append(evidence);
+
+  const textHeader = make('div', 'workspaceTextHeader');
+  const language = $('language').parentElement;
+  // The original language control remains form-associated after moving outside it.
+  $('language').setAttribute('form', 'previewForm');
+  textHeader.append($('resultHeading'), language);
   const empty = make('div', 'workspaceTextEmpty');
-  empty.append(make('p', null, 'Noch kein Beitragstext vorbereitet.'));
-  const start = make('button', null, 'Inhalt und Ziel öffnen');
-  start.type = 'button'; start.className = 'secondary';
-  start.addEventListener('click', () => show('source'));
-  empty.append(start);
-  text.append($('magicActionsText'), $('portalNote'), empty, $('result'));
-  const statusRow = make('div', 'workspaceStatus');
-  statusRow.append($('portalStatus'));
-  const viewText = make('button', 'workspaceViewText', 'Text ansehen');
-  viewText.type = 'button'; viewText.className = 'secondary';
-  viewText.addEventListener('click', () => show('text'));
-  viewText.hidden = true; statusRow.append(viewText);
+  for (const [tag, id, label, placeholder] of [
+    ['input', 'workspaceEmptyTitle', 'Titel / Einstieg', 'Dein Titel wird hier vorbereitet.'],
+    ['textarea', 'workspaceEmptyBody', 'Beitragstext', 'Dein Text mit passenden Hashtags und Shop-Link erscheint hier.'],
+  ]) {
+    const field = make('div'); field.className = 'field';
+    const fieldLabel = make('label', null, label); fieldLabel.htmlFor = id;
+    const control = make(tag, id); control.placeholder = placeholder; control.disabled = true;
+    field.append(fieldLabel, control); empty.append(field);
+  }
+  empty.append(make('p', null, 'Noch kein Text vorbereitet.'));
+  const resultDetails = make('details', 'workspaceResultDetails');
+  resultDetails.append(make('summary', null, 'Prüfdetails und Shop-Link'));
+  // Keep pending checks accessible; collapsing them never changes publish approval.
+  const resultNotes = [...$('result').querySelectorAll(':scope > .checks, :scope > .note, :scope > .notice')];
+  resultDetails.append($('portalNote'), ...resultNotes);
+  $('result').append(resultDetails);
+  $('save').textContent = 'Entwurf speichern';
+  text.append(textHeader, empty, $('result'));
+  editor.append($('magicActionsText'), $('sourcePanel'), text);
   $('assetPanel').hidden = true;
   $('resultFileActions').hidden = true;
-  main.append(toolbar, $('uploadPanel'), statusRow, $('magicReplaceNotice'), files, media, examples, source, text);
+  $('exampleFiles').hidden = true;
+  const statusRow = make('div', 'workspaceStatus');
+  statusRow.append($('portalStatus'));
+  main.append(toolbar, $('uploadPanel'), statusRow, $('magicReplaceNotice'), files, source);
 
   function show(key) {
+    if (key === 'text') key = 'source';
+    if (key === 'folder') { key = 'files'; search.open = true; }
     if (!Object.hasOwn(panels, key)) return;
     const changed = active !== key;
     active = key;
-    for (const panel of new Set(Object.values(panels))) panel.hidden = panel !== panels[key];
-    for (const [name, button] of Object.entries(buttons)) button.setAttribute('aria-pressed', String(name === key));
-    search.hidden = key !== 'folder';
-    files.classList.toggle('folder-view', key === 'folder');
-    if (key === 'source') $('sourcePanel').open = true;
-    if (key === 'media') $('mediaPanel').open = true;
-    for (const video of media.querySelectorAll('video')) if (key !== 'media') video.pause();
+    for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== key;
+    for (const [name, tab] of Object.entries(buttons)) tab.setAttribute('aria-pressed', String(name === key));
+    for (const video of files.querySelectorAll('video')) if (key !== 'files') video.pause();
     empty.hidden = !$('result').hidden;
-    viewText.hidden = $('result').hidden || key === 'text';
-    statusRow.hidden = key === 'examples';
-    if (changed && (key === 'files' || key === 'folder')) onGallery();
+    if (changed && key === 'files') onGallery();
   }
   show('files');
   return {
     show,
-    galleryVisible: () => active === 'files' || active === 'folder',
-    textAvailable(value) { empty.hidden = value; viewText.hidden = !value || active === 'text'; },
-    selection(file) { selectedPreview.hidden = !file; selectedPreview.open = false; },
+    galleryVisible: () => active === 'files',
+    textAvailable(value) { empty.hidden = value; },
+    selection(file) {
+      selectedPreview.hidden = !file; selectedPreview.open = false;
+      selectedName.textContent = file?.name || 'Noch keine Datei ausgewählt';
+      selectedKind.textContent = file ? (file.media_kind === 'video' ? 'Video' : 'Bild') + ' · ' + portalName : '';
+      next.disabled = !file;
+    },
   };
 }

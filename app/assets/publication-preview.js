@@ -2,7 +2,7 @@ import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=3';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -35,7 +35,7 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;syncReviewButton();syncMagicButton();for(const id of ['deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;syncReviewButton();syncMagicButton();for(const id of ['deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
 async function rpc(action,input={},id=null){const {data,error}=await supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 // Read controlled fields directly: FormData omits the disabled fields during a Magic run.
@@ -106,7 +106,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){resetMagic();current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=true;$('source_text').value='';}
+function clearDraft(){resetMagic();current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -342,7 +342,7 @@ function showMagic(r,file){
   if(file.media_kind==='video')$('magicSummary').textContent+='\n'+({no_audio_stream:'Dieses Video hat keine Tonspur.',no_speech_recognized:'In der Tonspur wurde keine Sprache erkannt.',transcribed:'Gesprochene Inhalte wurden transkribiert und berücksichtigt.'})[v.audio_status];
   const unclear=v.subject_type==='unclear';$('applyMagic').hidden=unclear;
   $('magicStatus').textContent=unclear?'Das Motiv ist nicht sicher erkennbar. Bitte beschreibe es selbst oder verwende ein deutlicheres Foto.':magicLabel(file)+' erkannt. Prüfe die Beschreibung und die lesbaren Aufschriften.';
-  if(!unclear&&!sourceDirty&&!$('source_text').value.trim()){$('source_text').value=v.source_text;$('sourcePanel').open=true;$('magicStatus').textContent=magicLabel(file)+' erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
+  if(!unclear&&!sourceDirty&&!$('source_text').value.trim()){$('source_text').value=v.source_text;if(!workspace)$('sourcePanel').open=true;$('magicStatus').textContent=magicLabel(file)+' erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
  }
  syncMagicButton();return true;
 }
@@ -397,9 +397,9 @@ function syncMagicActions(){
  const hint=magicActionHint();
  for(const id of ['magicSource','magicText'])$(id).disabled=busy||!!hint;
  $('magicSource').textContent=automaticMode==='source'?'✨ Inhalt wird vorbereitet …':'✨ Magic Effect';
- $('magicText').textContent=automaticMode==='text'?'✨ Text wird vorbereitet …':'✨ Magic Effect · Text erstellen';
+ $('magicText').textContent=automaticMode==='text'?'✨ Text wird vorbereitet …':workspace?'✨ Magic Effect':'✨ Magic Effect · Text erstellen';
  $('magicSourceHint').textContent=hint||(selectedAsset?.media_kind==='video'?'Analysiert dein Video mit Bildfolge, lesbaren Aufschriften und vorhandener Sprache und trägt die Beschreibung ein.':'Erkennt dein Foto und trägt die Beschreibung automatisch ein.');
- $('magicTextHint').textContent=hint||'Erkennt deine Datei, übernimmt den Inhalt und erstellt einen passenden Text für '+(names[selectedPortal]||'die gewählten Portale')+' mit Hashtags und Shop-Link. Du kannst den fertigen Entwurf anschließend prüfen und bearbeiten.';
+ $('magicTextHint').textContent=hint||(workspace?'Inhalt erkennen und passenden Beitragstext vorbereiten.':'Erkennt deine Datei, übernimmt den Inhalt und erstellt einen passenden Text für '+(names[selectedPortal]||'die gewählten Portale')+' mit Hashtags und Shop-Link. Du kannst den fertigen Entwurf anschließend prüfen und bearbeiten.');
 }
 async function runMagicAction(mode,replace=false){
  if(busy||signedOut||!['source','text'].includes(mode))return;
@@ -418,7 +418,7 @@ async function runMagicAction(mode,replace=false){
   if(magicState?.status!=='completed')throw Error($('magicStatus').textContent||'Die Erkennung ist noch nicht abgeschlossen. Bitte versuche es erneut.');
   if(magicState.result.subject_type==='unclear')throw Error('Das Motiv ist nicht sicher erkennbar. Bitte ergänze den Inhalt selbst oder wähle ein deutlicheres Foto.');
   $('source_text').value=magicState.result.source_text;
-  sourceDirty=true;automaticInputSignature=JSON.stringify(sourceInput());$('sourcePanel').open=true;
+  sourceDirty=true;automaticInputSignature=JSON.stringify(sourceInput());if(!workspace)$('sourcePanel').open=true;
   if(mode==='text')await generatePreview({withinAutomatic:true});
   else{workspace?.show('source');status('Der erkannte Inhalt ist übernommen. Du kannst die Angaben bearbeiten oder unter „Text für '+(names[selectedPortal]||'das Portal')+'“ automatisch den Beitragstext erstellen.');}
  }catch(e){if(!signedOut)status(e.message,true);}
@@ -437,6 +437,7 @@ $('refreshFiles').addEventListener('click',refreshFiles);
 $('pickerRefresh').addEventListener('click',refreshFiles);
 $('previewForm').addEventListener('input',()=>{sourceDirty=true;attempt=null;});
 $('media_kind').addEventListener('change',syncMedia);
+$('language').addEventListener('change',()=>{sourceDirty=true;attempt=null;});
 $('loadLatest').addEventListener('click',async()=>{if(!busy){await loadLatest();if(current)workspace?.show('text');}});
 async function generatePreview({withinAutomatic=false}={}){
  if(signedOut||(busy&&!withinAutomatic))return false;const input=sourceInput();if(!input.platforms.length){status(messages.INVALID_INPUT,true);return;}
