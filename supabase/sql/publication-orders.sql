@@ -45,7 +45,7 @@ declare checks jsonb; check_state text:='pending'; message text:='Erlaubte Video
 begin
  if j.binding->>'platform' is distinct from 'tiktok' or j.binding->>'media_kind' is distinct from 'video'
  or media->>'asset_id' is distinct from j.binding->>'asset_id' or media->>'asset_revision' is distinct from j.binding->>'asset_revision'
- or jsonb_typeof(media->'checks') is distinct from 'array' then return media;end if;
+ or jsonb_typeof(media->'checks') is distinct from 'array' then return sma_private.publication_comparison_media_v1(j.binding,j.draft,media);end if;
  if j.target->>'platform'='tiktok' and sma_private.publication_account_valid_v1(evidence,j.target,j.choices) is true then
   if jsonb_typeof(media#>'{facts,duration_ms}')='number' and (media#>>'{facts,duration_ms}')~'^[1-9][0-9]{0,12}$' then
    duration_ms:=(media#>>'{facts,duration_ms}')::bigint;
@@ -56,8 +56,8 @@ begin
  end if;
  select jsonb_agg(case when x->>'code'='TIKTOK_CREATOR_LIMIT' then x||jsonb_build_object('status',check_state,'message',message) else x end order by position)
  into checks from jsonb_array_elements(media->'checks') with ordinality as items(x,position);
- return media||jsonb_build_object('checks',coalesce(checks,'[]'::jsonb),'can_publish',false,
-  'status',case when exists(select 1 from jsonb_array_elements(checks) x where x->>'status'='fail') then 'needs_changes' else 'needs_review' end);
+ return sma_private.publication_comparison_media_v1(j.binding,j.draft,media||jsonb_build_object('checks',coalesce(checks,'[]'::jsonb),'can_publish',false,
+  'status',case when exists(select 1 from jsonb_array_elements(checks) x where x->>'status'='fail') then 'needs_changes' else 'needs_review' end));
 end $$;
 revoke all on function sma_private.publication_order_media_v1(sma_private.publication_orders_v1,jsonb,jsonb) from public,anon,authenticated;
 grant execute on function sma_private.publication_order_media_v1(sma_private.publication_orders_v1,jsonb,jsonb) to service_role;

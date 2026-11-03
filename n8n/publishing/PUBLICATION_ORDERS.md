@@ -118,3 +118,7 @@ Weiter offen: Sightengine `VIDEO_PLAN_REQUIRED`, vollständiger Inhalts-/Portalt
 Anschließend wurde der [gemeinsame Dateiabruf für YouTube und TikTok](DUAL_CHANNEL_REHEARSAL.md) mit echten Drive-Bytes und den beiden gespeicherten Kanaltexten erfolgreich geprüft. Der separate Lesetest erstellt keine Freigabe und führt keinen Provider-Upload aus.
 
 Primärquelle, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/content-posting-api-reference-query-creator-info.
+
+## Gespeicherter Portaltextabgleich – 3. November 2026
+
+Die Auftrags-Medienansicht ergänzt jetzt einen revisionsgebundenen `PORTAL_TEXT_COMPARISON` aus dem privaten Vergleichscache. Die bestehenden offenen Prüfungen bleiben vollständig erhalten. Der echte YouTube-/TikTok-Abgleich lieferte konkrete Rückfragen; Texte und Nutzerfreigaben wurden nicht verändert. [Implementierung, Live-Nachweise und Grenzen](CONTENT_COMPARISON.md). Die automatische Ansteuerung des neuen Unterworkflows ist noch offen. [Upload-/Provider-Module](PROVIDER_RESULTS.md) sind ausschließlich offline getestet und haben keinen Dispatcher oder dauerhaften Ergebnisjournalpfad.
