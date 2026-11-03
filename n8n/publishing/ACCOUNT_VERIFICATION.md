@@ -1,16 +1,35 @@
 # Zielkonto und Portalberechtigungen
 
-Stand: 2026-11-03. **Privater Import freigegeben und erfolgt; Datenbank und n8n-Anbindung ausgerollt. Live-Anschlusskorrektur und Provider-Nachweis noch offen. PR #46 bleibt Entwurf, Dashboard v23 ist nicht ausgerollt.**
+Stand: 2026-11-03. **Anschlusskorrektur veröffentlicht und echte YouTube-/TikTok-Kontoprüfungen erfolgreich abgeschlossen. PR #46 ist technisch prüfbereit; Dashboard v23 ist noch nicht ausgerollt.**
 
-Der Nutzer hat die Übernahme der bestehenden YouTube-/TikTok-OAuth-App-Konfiguration in dieselbe n8n-Instanz ausdrücklich freigegeben. Die private Fassung von `LR2Qng41OIYuVHAR` wurde importiert und veröffentlicht. Alle 35 Knotenparameter einschließlich der App-Werte und die Verbindungen wurden per Export gegen die private Vorlage geprüft; keine Secrets stehen im Repository. n8n lässt Standardwerte wie `keyName: id` im Export weg.
+Der bereits genehmigte private OAuth-Import bleibt unverändert in derselben n8n-Instanz. App-Secrets und Provider-Token stehen nicht im Repository. Die Migrationen `publication_account_verification_v1` und `publication_order_account_evidence_v1` sind eingespielt; die zuvor dokumentierten SQL-Prüfreihen bestanden auf PostgreSQL 17 mit Rollback.
 
-Die Migrationen `publication_account_verification_v1` und `publication_order_account_evidence_v1` sind eingespielt. Beide SQL-Prüfreihen bestanden auf der produktiven PostgreSQL-17-Instanz mit Rollback. Die Security-Advisors wurden geprüft: Für die neuen Tabellen gilt absichtlich RLS ohne Nutzer-Policy, Zugriffe erfolgen nur über die eingeschränkten Funktionen. Vorhandene projektweite Hinweise zu älteren Funktionen und Passwortschutz bleiben außerhalb dieser Änderung.
+## Verifizierter Live-Stand
 
-`zLlhr1I1vKm2AiiU` wurde mit 17 Knoten, `RdtCqCWRi7P4W7B0` mit 23 Knoten veröffentlicht. Der API-Export stimmt nach Normalisierung der n8n-Standardwerte mit der Vorlage überein. Alle drei Workflows speichern keine Erfolgs-, Fehler-, manuellen oder Fortschrittsdaten, haben 150 Sekunden Timeout und erlauben Aufrufe nur durch denselben Eigentümer; MCP bleibt aus. Die geschützten Originale und die Publisher-Arbeitskopie wurden nicht verändert.
+| Workflow | Stand | Exportabgleich |
+| --- | --- | --- |
+| Konto `LR2Qng41OIYuVHAR` | Veröffentlicht, Version `773f8ae0-2cc7-4353-ac76-12434112cf5d` | Alle 35 Knotenparameter und Verbindungen stimmen mit der privaten Vorlage überein. |
+| Ausführung `zLlhr1I1vKm2AiiU` | Veröffentlicht, Version `bb2e7a4b-ea64-4c7f-80e9-010345d4286a` | Alle 17 Knotenparameter und Verbindungen stimmen mit der Repository-Vorlage überein. |
+| API `RdtCqCWRi7P4W7B0` | Bereits veröffentlicht, 23 Knoten | In dieser Fortsetzung unverändert; vorheriger Exportabgleich bleibt bestehen. |
 
-Der echte YouTube-Vorbereitungstest scheitert **vor der Token-Erneuerung**: n8n blockiert im IF-Ausdruck den Zugriff auf `binding` mit `Cannot access "binding" due to security concerns`. Der isolierte, unveröffentlichte QA-Workflow `9o3GxmGI6jdhgjzG` bestätigte denselben Fehler beim Unterworkflow-Aufruf. Die Kontosperrentabelle blieb leer, es wurde kein Provider-Token erneuert. Der Testauftrag `0e00b17c-1d06-4cfe-bee2-72e2c9d5bd8d` wurde ohne Freigabe und ohne Journaleintrag auf `cancelled` gesetzt.
+Der IF-Ausdruck `YouTube oder TikTok?` liest jetzt das geprüfte `target.platform`. `Zielkonto und Ordner prüfen` leitet `drive_file_id` aus dem vertrauenswürdigen Auftragskontext ab; `Aktuellen Dateistand lesen` verwendet dieses flache Feld. Der bisherige Laufzeitfehler `Cannot access "binding" due to security concerns` ist damit im echten Kontoaufruf behoben. Keine n8n-Sicherheitsprüfung wurde abgeschaltet oder umgangen.
 
-Die Korrektur ist im Repository und in den generierten Vorlagen fertig: Der IF-Ausdruck liest das zuvor geprüfte `target.platform`; die Dateiabfrage verwendet eine im Code-Knoten aus dem vertrauenswürdigen Kontext abgeleitete `drive_file_id`. Es wird keine n8n-Sicherheitsprüfung umgangen oder abgeschaltet. 274 Node-Tests bestehen einschließlich einer Regression gegen den reservierten Feldzugriff in n8n-Parameterausdrücken. **Diese beiden Knotenänderungen sind noch nicht in n8n eingespielt.** Die Browsersteuerung reagierte anschließend mehrfach mit einem Transport-Timeout von 300 Sekunden, auch auf Dokumentations- und Reset-Aufrufe. Das belegt keinen Ausfall der n8n-Instanz.
+Beim Exportabgleich wurden ausschließlich bekannte ausgelassene Standardwerte normalisiert: `keyName: id`, `source: database` und `mode: once`. Erfolgs-, Fehler-, manuelle und Fortschrittsdaten bleiben ungespeichert; der Timeout beträgt 150 Sekunden, Aufrufe sind auf denselben Eigentümer beschränkt, MCP bleibt aus. Geschützte Originalworkflows, Publisher-Arbeitskopie und freigegebene Dashboard-Oberfläche wurden in dieser Fortsetzung nicht verändert.
+
+## Echte Provider-Nachweise am 3. November 2026
+
+Der unveröffentlichte, isolierte QA-Workflow `9o3GxmGI6jdhgjzG` las die bestehende aktive Kundenzuordnung frisch aus Supabase und übergab nur diesen serverseitigen Kontext an den Kontoworkflow. Der frühere stornierte Auftrag wurde nicht erneut verwendet. Die QA-Einstellungen wurden vor dem Lauf kontrolliert: keine Speicherung von Ausführungsdaten. Nach den beiden Läufen wurden die flüchtigen Anzeigen geleert und der QA-Workflow archiviert.
+
+| Portal | Unterausführung | Prüfergebnis |
+| --- | --- | --- |
+| YouTube | `4028`, Nachweis `2026-11-03T13:57:40.815Z` | `ok:true`; authentifizierte Kanal-ID stimmt; `youtube.upload` durch Introspection bestätigt. |
+| TikTok | `4030`, Nachweis `2026-11-03T13:59:10.154Z` | `ok:true`; `open_id` stimmt; `video.publish` und `user.info.basic` bestätigt; aktuelle Creator-Optionen gelesen. |
+
+Beide erfolgreichen Ergebnisse setzen im veröffentlichten Workflow die erfolgreiche Tokenantwort, das bedingte Speichern, das unabhängige Rücklesen und den abgeschlossenen Sperrübergang voraus. Nach jedem Lauf wurde die Datenbank geprüft: Beide Kontosperren stehen auf `idle`, ohne Lease, mit jeweils einem Versuch. Es gab keinen unklaren Refresh und keine automatische Wiederholung.
+
+TikTok lieferte für das geprüfte Konto die Sichtbarkeiten `FOLLOWER_OF_CREATOR`, `MUTUAL_FOLLOW_FRIENDS` und `SELF_ONLY`; Kommentare waren erlaubt, Duett und Stitch deaktiviert, die maximale Videodauer betrug 3600 Sekunden. Das sind kontospezifische Momentaufnahmen und keine allgemeine TikTok-Freigabe. Die Nachweise gelten jeweils höchstens fünf Minuten und werden beim nächsten Vorgang erneut erhoben.
+
+Beide Antworten enthalten `can_upload:false` und `can_publish:false`. Es wurde kein Inhalt hochgeladen oder veröffentlicht, keine finale Freigabe erteilt und kein neuer Veröffentlichungsauftrag angelegt. Die 274 Node-Tests wurden erneut ausgeführt: alle bestanden.
 
 ## Vertrag
 
@@ -42,16 +61,14 @@ PYTHONDONTWRITEBYTECODE=1 python n8n/publishing/build-publication-orders.py \
   --worker-id zLlhr1I1vKm2AiiU --account-id LR2Qng41OIYuVHAR
 ```
 
-274 Node-Tests bestanden. Die beiden SQL-Prüfreihen `publication-accounts.sql` und `publication-orders.sql` bestanden in PGlite 0.5.14 / PostgreSQL 18.6. Sie verwenden die echten Publikations-SQL-Definitionen, eine minimale Auth-/Kunden-Testtabelle und zurückgerollte synthetische Datensätze. Geprüft werden Eigentümerrechte, parallele Claims, unsichere Refresh-Ergebnisse, verlorene/alte Leases, Ratenbegrenzung, fehlende/veraltete Nachweise, TikTok-Optionen, doppelte Freigaben sowie weiterbestehende Medienblocker. Beide Prüfreihen bestanden zusätzlich auf der produktiven Supabase-Instanz mit PostgreSQL 17 und Rollback. Die echten Provider-Durchläufe stehen noch aus. PGlite prüft die SQL-Sperrübergänge sequenziell, nicht mit mehreren gleichzeitig laufenden Datenbankverbindungen.
+274 Node-Tests bestanden. Die beiden SQL-Prüfreihen `publication-accounts.sql` und `publication-orders.sql` bestanden in PGlite 0.5.14 / PostgreSQL 18.6. Sie verwenden die echten Publikations-SQL-Definitionen, eine minimale Auth-/Kunden-Testtabelle und zurückgerollte synthetische Datensätze. Geprüft werden Eigentümerrechte, parallele Claims, unsichere Refresh-Ergebnisse, verlorene/alte Leases, Ratenbegrenzung, fehlende/veraltete Nachweise, TikTok-Optionen, doppelte Freigaben sowie weiterbestehende Medienblocker. Beide Prüfreihen bestanden zusätzlich auf der produktiven Supabase-Instanz mit PostgreSQL 17 und Rollback. Die echten Provider-Kontodurchläufe sind zusätzlich wie oben dokumentiert erfolgreich abgeschlossen. PGlite prüft die SQL-Sperrübergänge sequenziell, nicht mit mehreren gleichzeitig laufenden Datenbankverbindungen.
 
-## Fortsetzung nach Wiederherstellung der Browsersteuerung
+## Nächster Umsetzungsschritt
 
-Die Freigabe des privaten Imports liegt bereits vor; nicht erneut einholen.
+1. Dashboard v23 aus PR #46 ausrollen und Kontooptionen sowie die Auftragsvorbereitung im angemeldeten Kundendashboard prüfen. Die bestehende Oberfläche bleibt erhalten. Keine Veröffentlichungsfreigabe im Namen des Nutzers erteilen; etwaige neue Testaufträge anschließend stornieren.
+2. Verbleibende Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Die Kontovorlage besitzt keinen Upload- oder Publish-Endpunkt.
 
-1. Im Kontoworkflow `LR2Qng41OIYuVHAR` die aktuelle private Vorlage importieren oder ausschließlich den Ausdruck von `YouTube oder TikTok?` auf die aktuelle Vorlage ändern; veröffentlichen. Der private Generator übernimmt unverändert dieselben bestehenden App-Parameter. Im Ausführungsworkflow `zLlhr1I1vKm2AiiU` die beiden korrigierten Knoten `Zielkonto und Ordner prüfen` / `Aktuellen Dateistand lesen` einspielen, Export vergleichen und veröffentlichen. Die API-Vorlage ist unverändert.
-2. Den inzwischen stornierten Testauftrag nicht weiterverwenden. Einen neuen Testauftrag über das Dashboard vorbereiten oder im isolierten QA-Ablauf einen serverseitigen Kontokontext für das bestehende eigene Konto lesen. Provider-Ergebnis, bedingtes Speichern und Rücklesen der Token, Portalidentität und aktuelle Berechtigungen prüfen. Bei unklarem Refresh keine automatische Wiederholung. Danach QA-Workflow archivieren.
-3. PR #46 erst nach erfolgreichem Anschluss abschließen und Dashboard v23 ausrollen. YouTube-/TikTok-Kontooptionen und Auftragsvorbereitung mit den bestehenden Verbindungen prüfen, ohne eine Veröffentlichungsfreigabe im Namen des Nutzers zu erteilen. Testaufträge anschließend stornieren.
-4. Die verbleibenden Mediennachweise, Meta-Berechtigungen, TikTok-Freigabehinweise einschließlich Musik-/Werbekennzeichnung, Upload-Übergabe und Provider-Statusnachweise fertigstellen. Diese Vorlage besitzt keinen Upload- oder Publish-Endpunkt.
+Die frühere Browserstörung war in dieser Fortsetzung ausreichend behoben, um beide Korrekturen und Provider-Tests auszuführen. Einzelne verzögerte Browseraktionen wurden anhand des tatsächlichen Seitenstands überprüft. Daraus folgt kein belegter Fehler in den PC-Einstellungen des Nutzers.
 
 ## Primärquellen
 
