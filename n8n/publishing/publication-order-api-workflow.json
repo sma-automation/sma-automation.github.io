@@ -1,0 +1,633 @@
+{
+  "name": "SMA – Dashboard – Veröffentlichungsauftrag V1",
+  "nodes": [
+    {
+      "id": "cce5791d-043c-4c7e-88f1-925bd33d654d",
+      "name": "Dashboard-Auftrag",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-publication-order-v1",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://sma-automation.com"
+        }
+      },
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "8f298b99-d52d-4716-b848-44613175050e"
+    },
+    {
+      "id": "58f9ef8f-bf5f-42dd-ab56-c93be96aba11",
+      "name": "Dashboard-Anfrage prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\nconst orderCrypto = require('crypto');\nconst ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;\nfunction orderRequest(item) {\n  const auth=item?.headers?.authorization, body=item?.body;\n  if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');\n  if(!body||!['prepare','approve','get'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||\n    Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');\n  return {auth,action:body.action,input:body.input};\n}\n// Source rows never leave this node. Only the selected non-secret identity does.\nfunction orderTarget(rows,context) {\n  if(context?.ok!==true||!context.binding||!context.n8n_kunde_id||!context.kunde_email)throw Error('ORDER_UNAVAILABLE');\n  const matches=rows.filter(r=>r?.kunde_id), k=matches.length===1?matches[0]:null;\n  if(!k||k.kunde_id!==context.n8n_kunde_id||String(k.kunde_email||'').trim().toLowerCase()!==context.kunde_email.trim().toLowerCase()||\n    k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const p=context.binding.platform;\n  const fields={youtube:['youtube_channel_id','youtube_channel_title'],instagram:['instagram_user_id','instagram_username'],\n    facebook:['facebook_page_id','facebook_page_name'],tiktok:['tiktok_open_id','tiktok_display_name']}[p];\n  if(!fields)throw Error('TARGET_ACCOUNT_REQUIRED');\n  const id=k[fields[0]],name=String(k[fields[1]]||id||'');\n  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{3,200}$/.test(id)||name.length<1||name.length>200||/[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(name))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const target={platform:p,id,name,source_revision:orderCrypto.createHash('sha256').update(JSON.stringify([k.id,k.kunde_id,k.kunde_email,p,id,name])).digest('hex')};\n  if(context.target&&JSON.stringify(Object.entries(context.target).sort())!==JSON.stringify(Object.entries(target).sort()))throw Error('TARGET_ACCOUNT_CHANGED');\n  return {target};\n}\nfunction orderDrive(metadata,context,folders) {\n  const b=context?.binding;\n  if(!b||metadata?.id!==b.drive_file_id||metadata.trashed!==false||!Array.isArray(metadata.parents)||!metadata.parents.some(x=>folders.includes(x)))throw Error('FILE_CHANGED');\n  const hash=/^[a-f0-9]{64}$/.test(metadata.sha256Checksum||'')?'sha256:'+metadata.sha256Checksum:/^[a-f0-9]{32}$/.test(metadata.md5Checksum||'')?'md5:'+metadata.md5Checksum:'version';\n  if(!/^\\d{1,30}$/.test(metadata.version||'')||hash+':'+metadata.version!==b.asset_revision||\n    metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');\n  return {drive_verified:true};\n}\nfunction orderCheck(prepared,context,target,drive) {\n  if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');\n  const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());\n  const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;\n  const blockers=[];\n  if(!textVerified)blockers.push('SAVED_TEXT_INVALID');\n  // Final consent and duplicate reservation are authoritative database facts.\n  // No client/provider failure is converted into a positive permission decision.\n  if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');\n  return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,\n    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,blockers}};\n}\nfunction orderFailure(error) {\n  const message=String(error?.message||error?.error?.message||error?.code||'');\n  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED'];\n  return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};\n}\n\nreturn [{json:orderRequest($input.first().json)}];"
+      },
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "c5c9a837-ecea-458b-9cff-4da009c4f643",
+      "name": "Eigenen Auftrag bearbeiten",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_order_v1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:$json.action,p_input:$json.input} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Dashboard-Anfrage prüfen').first().json.auth }}"
+            }
+          ]
+        }
+      },
+      "position": [
+        480,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "e644f9fb-b10b-462a-a385-0b15e794db5d",
+      "name": "Zielkonto zuordnen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8c142255-1e93-4f80-aa67-812597aef9bf",
+              "leftValue": "={{ $json.ok === true && $json.state === 'preparing' && $('Dashboard-Anfrage prüfen').first().json.action === 'prepare' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "id": "2b5bfea7-e91d-40bd-b16a-42add7ef03a7",
+      "name": "Auftragsbindung lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_order_worker_v1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'context',p_id:$json.id} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "position": [
+        960,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ffc199b0-4ca6-4201-878a-7911e9b09a81",
+      "name": "Auftragsbindung vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "237d34e3-bb46-4fc2-9450-cb5e079e81b3",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "id": "0402156a-e9ac-4db4-bad2-70d8a21464e4",
+      "name": "Kundenzielkonto laden",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('Auftragsbindung lesen').first().json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $('Auftragsbindung lesen').first().json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "position": [
+        1440,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "3e05e628-a96a-4000-977c-a17457967ac3",
+      "name": "Kundenzielkonto prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\nconst orderCrypto = require('crypto');\nconst ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;\nfunction orderRequest(item) {\n  const auth=item?.headers?.authorization, body=item?.body;\n  if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');\n  if(!body||!['prepare','approve','get'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||\n    Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');\n  return {auth,action:body.action,input:body.input};\n}\n// Source rows never leave this node. Only the selected non-secret identity does.\nfunction orderTarget(rows,context) {\n  if(context?.ok!==true||!context.binding||!context.n8n_kunde_id||!context.kunde_email)throw Error('ORDER_UNAVAILABLE');\n  const matches=rows.filter(r=>r?.kunde_id), k=matches.length===1?matches[0]:null;\n  if(!k||k.kunde_id!==context.n8n_kunde_id||String(k.kunde_email||'').trim().toLowerCase()!==context.kunde_email.trim().toLowerCase()||\n    k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const p=context.binding.platform;\n  const fields={youtube:['youtube_channel_id','youtube_channel_title'],instagram:['instagram_user_id','instagram_username'],\n    facebook:['facebook_page_id','facebook_page_name'],tiktok:['tiktok_open_id','tiktok_display_name']}[p];\n  if(!fields)throw Error('TARGET_ACCOUNT_REQUIRED');\n  const id=k[fields[0]],name=String(k[fields[1]]||id||'');\n  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{3,200}$/.test(id)||name.length<1||name.length>200||/[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(name))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const target={platform:p,id,name,source_revision:orderCrypto.createHash('sha256').update(JSON.stringify([k.id,k.kunde_id,k.kunde_email,p,id,name])).digest('hex')};\n  if(context.target&&JSON.stringify(Object.entries(context.target).sort())!==JSON.stringify(Object.entries(target).sort()))throw Error('TARGET_ACCOUNT_CHANGED');\n  return {target};\n}\nfunction orderDrive(metadata,context,folders) {\n  const b=context?.binding;\n  if(!b||metadata?.id!==b.drive_file_id||metadata.trashed!==false||!Array.isArray(metadata.parents)||!metadata.parents.some(x=>folders.includes(x)))throw Error('FILE_CHANGED');\n  const hash=/^[a-f0-9]{64}$/.test(metadata.sha256Checksum||'')?'sha256:'+metadata.sha256Checksum:/^[a-f0-9]{32}$/.test(metadata.md5Checksum||'')?'md5:'+metadata.md5Checksum:'version';\n  if(!/^\\d{1,30}$/.test(metadata.version||'')||hash+':'+metadata.version!==b.asset_revision||\n    metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');\n  return {drive_verified:true};\n}\nfunction orderCheck(prepared,context,target,drive) {\n  if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');\n  const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());\n  const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;\n  const blockers=[];\n  if(!textVerified)blockers.push('SAVED_TEXT_INVALID');\n  // Final consent and duplicate reservation are authoritative database facts.\n  // No client/provider failure is converted into a positive permission decision.\n  if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');\n  return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,\n    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,blockers}};\n}\nfunction orderFailure(error) {\n  const message=String(error?.message||error?.error?.message||error?.code||'');\n  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED'];\n  return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};\n}\n\nreturn [{json:orderTarget($input.all().map(i=>i.json),$('Auftragsbindung lesen').first().json)}];"
+      },
+      "position": [
+        1680,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "82ce8bfe-14fc-46fa-ba19-a28f78bcca3e",
+      "name": "Zielkonto festhalten",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_order_worker_v1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'bind_target',p_id:$('Auftragsbindung lesen').first().json.id,p_data:$json} }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "position": [
+        1920,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "fefabc94-ec19-4f9b-867f-8c23ba89ed16",
+      "name": "Freigegebenen Auftrag prüfen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9a7f4539-6deb-4eac-a25f-a90743408467",
+              "leftValue": "={{ $json.ok === true && ['approved','blocked'].includes($json.state) && $('Dashboard-Anfrage prüfen').first().json.action === 'approve' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        960,
+        300
+      ]
+    },
+    {
+      "id": "092b8234-b039-44f5-a6f1-54f9c354a8d9",
+      "name": "Ausführungsauftrag auswählen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return [{json:{id:$json.id}}];"
+      },
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "id": "fd371f71-4666-48f6-b67b-687d8a7946ed",
+      "name": "Auftragsprüfung ausführen",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "zLlhr1I1vKm2AiiU",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "position": [
+        1440,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "46cb8092-58c7-4ec3-948b-ad6073dcbb5f",
+      "name": "Sichere Auftragsfehlermeldung",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "'use strict';\nconst orderCrypto = require('crypto');\nconst ORDER_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;\nfunction orderRequest(item) {\n  const auth=item?.headers?.authorization, body=item?.body;\n  if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))throw Error('AUTH_REQUIRED');\n  if(!body||!['prepare','approve','get'].includes(body.action)||!body.input||!ORDER_UUID.test(body.input.id||'')||\n    Object.keys(body).some(k=>!['action','input'].includes(k))||JSON.stringify(body).length>8000)throw Error('INVALID_INPUT');\n  return {auth,action:body.action,input:body.input};\n}\n// Source rows never leave this node. Only the selected non-secret identity does.\nfunction orderTarget(rows,context) {\n  if(context?.ok!==true||!context.binding||!context.n8n_kunde_id||!context.kunde_email)throw Error('ORDER_UNAVAILABLE');\n  const matches=rows.filter(r=>r?.kunde_id), k=matches.length===1?matches[0]:null;\n  if(!k||k.kunde_id!==context.n8n_kunde_id||String(k.kunde_email||'').trim().toLowerCase()!==context.kunde_email.trim().toLowerCase()||\n    k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const p=context.binding.platform;\n  const fields={youtube:['youtube_channel_id','youtube_channel_title'],instagram:['instagram_user_id','instagram_username'],\n    facebook:['facebook_page_id','facebook_page_name'],tiktok:['tiktok_open_id','tiktok_display_name']}[p];\n  if(!fields)throw Error('TARGET_ACCOUNT_REQUIRED');\n  const id=k[fields[0]],name=String(k[fields[1]]||id||'');\n  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{3,200}$/.test(id)||name.length<1||name.length>200||/[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(name))throw Error('TARGET_ACCOUNT_REQUIRED');\n  const target={platform:p,id,name,source_revision:orderCrypto.createHash('sha256').update(JSON.stringify([k.id,k.kunde_id,k.kunde_email,p,id,name])).digest('hex')};\n  if(context.target&&JSON.stringify(Object.entries(context.target).sort())!==JSON.stringify(Object.entries(target).sort()))throw Error('TARGET_ACCOUNT_CHANGED');\n  return {target};\n}\nfunction orderDrive(metadata,context,folders) {\n  const b=context?.binding;\n  if(!b||metadata?.id!==b.drive_file_id||metadata.trashed!==false||!Array.isArray(metadata.parents)||!metadata.parents.some(x=>folders.includes(x)))throw Error('FILE_CHANGED');\n  const hash=/^[a-f0-9]{64}$/.test(metadata.sha256Checksum||'')?'sha256:'+metadata.sha256Checksum:/^[a-f0-9]{32}$/.test(metadata.md5Checksum||'')?'md5:'+metadata.md5Checksum:'version';\n  if(!/^\\d{1,30}$/.test(metadata.version||'')||hash+':'+metadata.version!==b.asset_revision||\n    metadata.mimeType?.split('/')[0]!==b.media_kind||metadata.capabilities?.canDownload!==true)throw Error('FILE_CHANGED');\n  return {drive_verified:true};\n}\nfunction orderCheck(prepared,context,target,drive) {\n  if(!context?.lease_id||!ORDER_UUID.test(context.id||''))throw Error('INVALID_LEASE');\n  const same=prepared?.binding&&JSON.stringify(Object.entries(prepared.binding).sort())===JSON.stringify(Object.entries(context.binding).sort());\n  const textVerified=prepared?.ok===true&&prepared.stage==='publisher_preparation'&&prepared.can_upload===false&&prepared.can_publish===false&&same;\n  const blockers=[];\n  if(!textVerified)blockers.push('SAVED_TEXT_INVALID');\n  // Final consent and duplicate reservation are authoritative database facts.\n  // No client/provider failure is converted into a positive permission decision.\n  if(textVerified&&prepared.draft.review_notes.length)blockers.push('TEXT_REVIEW_REQUIRED');\n  return {p_action:'finish_check',p_id:context.id,p_lease:context.lease_id,\n    p_data:{target:target?.target||null,drive_verified:drive?.drive_verified===true,text_verified:textVerified,blockers}};\n}\nfunction orderFailure(error) {\n  const message=String(error?.message||error?.error?.message||error?.code||'');\n  const known=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED'];\n  return {ok:false,can_upload:false,can_publish:false,code:known.find(x=>message===x||message.startsWith(x+' ['))||'ORDER_UNAVAILABLE'};\n}\n\nreturn [{json:orderFailure($input.first().json)}];"
+      },
+      "position": [
+        1920,
+        600
+      ]
+    },
+    {
+      "id": "457e0b92-ab9d-4d41-8534-265411594dab",
+      "name": "Auftragsantwort prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const r=$input.first().json;if(r.ok===true&&r.can_upload===false&&r.can_publish===false&&r.id&&r.state)return [{json:r}];const codes=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','ORDER_CHANGED','REQUEST_CONFLICT','DUPLICATE_PUBLICATION','ORDER_NOT_PREPARED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','ORDER_RATE_LIMITED','ASSIGNMENT_UNAVAILABLE','ASSIGNMENT_CHANGED','INVALID_CHOICES'];return [{json:{ok:false,can_upload:false,can_publish:false,code:codes.includes(r.code)?r.code:'ORDER_UNAVAILABLE',...(r.code==='DUPLICATE_PUBLICATION'?{existing_order_id:r.existing_order_id}:{})}}];"
+      },
+      "position": [
+        2160,
+        200
+      ]
+    },
+    {
+      "id": "41d2e705-c37c-4d54-a7c9-003e4cedd58c",
+      "name": "Dashboard-Antwort",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://sma-automation.com"
+              },
+              {
+                "name": "Vary",
+                "value": "Origin"
+              }
+            ]
+          }
+        }
+      },
+      "position": [
+        2400,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Dashboard-Auftrag": {
+      "main": [
+        [
+          {
+            "node": "Dashboard-Anfrage prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dashboard-Anfrage prüfen": {
+      "main": [
+        [
+          {
+            "node": "Eigenen Auftrag bearbeiten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eigenen Auftrag bearbeiten": {
+      "main": [
+        [
+          {
+            "node": "Zielkonto zuordnen?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zielkonto zuordnen?": {
+      "main": [
+        [
+          {
+            "node": "Auftragsbindung lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Freigegebenen Auftrag prüfen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftragsbindung lesen": {
+      "main": [
+        [
+          {
+            "node": "Auftragsbindung vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftragsbindung vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Kundenzielkonto laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auftragsantwort prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenzielkonto laden": {
+      "main": [
+        [
+          {
+            "node": "Kundenzielkonto prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenzielkonto prüfen": {
+      "main": [
+        [
+          {
+            "node": "Zielkonto festhalten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zielkonto festhalten": {
+      "main": [
+        [
+          {
+            "node": "Auftragsantwort prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigegebenen Auftrag prüfen?": {
+      "main": [
+        [
+          {
+            "node": "Ausführungsauftrag auswählen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auftragsantwort prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ausführungsauftrag auswählen": {
+      "main": [
+        [
+          {
+            "node": "Auftragsprüfung ausführen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftragsprüfung ausführen": {
+      "main": [
+        [
+          {
+            "node": "Auftragsantwort prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sichere Auftragsfehlermeldung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sichere Auftragsfehlermeldung": {
+      "main": [
+        [
+          {
+            "node": "Auftragsantwort prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftragsantwort prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dashboard-Antwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 150,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "pinData": {},
+  "active": false
+}

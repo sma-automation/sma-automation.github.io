@@ -1,0 +1,100 @@
+"""Dashboard order API and an internal, fail-closed execution gate.
+
+The existing publisher working copy is called, never rewritten or activated.
+No provider write is reachable while the media/account approvals are incomplete.
+"""
+import argparse,json,uuid
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[2]
+CORE=(ROOT/'n8n/publishing/publisher-order.cjs').read_text().split('module.exports=')[0]
+FOLDERS=(ROOT/'n8n/publishing/file-catalog.cjs').read_text().split('module.exports=')[0]
+SECRET={'httpHeaderAuth':{'id':'FZk3cg0UNdbolH4q','name':'SMA Supabase Secret'}}
+DRIVE={'googleDriveOAuth2Api':{'id':'VcVRAhAAnk2YcHNE','name':'Google Drive account 3'}}
+BASE='https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/'
+OPTS={'redirect':{'redirect':{'followRedirects':False}},'timeout':25000}
+SETTINGS={'executionOrder':'v1','saveDataErrorExecution':'none','saveDataSuccessExecution':'none','saveManualExecutions':False,'saveExecutionProgress':False,'executionTimeout':150,'callerPolicy':'workflowsFromSameOwner','availableInMCP':False}
+
+class Builder:
+ def __init__(self,name,path):
+  self.path=path;self.nodes=[];self.edges={};self.name=name
+  self.old={n['name']:n for n in json.loads(path.read_text()).get('nodes',[])} if path.exists() else {}
+ def node(self,name,kind,params,x,y=0,v=1,**extra):
+  old=self.old.get(name,{})
+  if kind=='webhook':extra['webhookId']=old.get('webhookId',str(uuid.uuid4()))
+  if 'conditions' in params and old.get('parameters',{}).get('conditions'):
+   params['conditions']['conditions'][0]['id']=old['parameters']['conditions']['conditions'][0]['id']
+  self.nodes.append({'id':old.get('id',str(uuid.uuid4())),'name':name,'type':'n8n-nodes-base.'+kind,'typeVersion':v,'parameters':params,'position':[x,y],**extra})
+ def code(self,name,code,x,y=0,**extra):self.node(name,'code',{'jsCode':code},x,y,2,**extra)
+ def edge(self,a,b,port=0):
+  m=self.edges.setdefault(a,{'main':[]})['main']
+  while len(m)<=port:m.append([])
+  m[port].append({'node':b,'type':'main','index':0})
+ def condition(self,name,expr,x,y=0):
+  self.node(name,'if',{'conditions':{'options':{'caseSensitive':True,'leftValue':'','typeValidation':'strict','version':3},'conditions':[{'id':str(uuid.uuid4()),'leftValue':expr,'rightValue':'','operator':{'type':'boolean','operation':'true','singleValue':True}}],'combinator':'and'},'options':{}},x,y,2.3)
+ def rpc(self,name,body,x,y=0,user=False):
+  p={'method':'POST','url':BASE+('sma_publication_order_v1' if user else 'sma_publication_order_worker_v1'),'sendBody':True,'specifyBody':'json','jsonBody':body,'options':OPTS}
+  if user:p.update({'sendHeaders':True,'headerParameters':{'parameters':[{'name':'apikey','value':'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW'},{'name':'Authorization','value':"={{ $('Dashboard-Anfrage prüfen').first().json.auth }}"}]}})
+  else:p.update({'authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth'})
+  self.node(name,'httpRequest',p,x,y,4.5,**({} if user else {'credentials':SECRET}),onError='continueErrorOutput')
+ def customer(self,name,context,x,y=0):
+  self.node(name,'dataTable',{'operation':'get','dataTableId':{'__rl':True,'value':'oVIgtuR95fFUbMrN','mode':'list','cachedResultName':'SMA_Kunden'},'matchType':'allConditions','filters':{'conditions':[{'keyName':'kunde_id','keyValue':"={{ $('"+context+"').first().json.n8n_kunde_id }}"},{'keyName':'kunde_email','keyValue':"={{ $('"+context+"').first().json.kunde_email }}"},{'keyName':'zugang_aktiv','condition':'isTrue'}]},'limit':2},x,y,1,alwaysOutputData=True,onError='continueErrorOutput')
+ def write(self):
+  w={'name':self.name,'nodes':self.nodes,'connections':self.edges,'settings':SETTINGS,'pinData':{},'active':False}
+  self.path.write_text(json.dumps(w,ensure_ascii=False,indent=2)+'\n');return w
+
+def build_worker():
+ w=Builder('SMA – Veröffentlichungsauftrag – Ausführung V1',ROOT/'n8n/publishing/publication-order-execution-workflow.json')
+ w.node('Freigegebenen Auftrag ausführen','executeWorkflowTrigger',{'inputSource':'passthrough'},0,v=1.1)
+ w.code('Auftrags-ID prüfen',CORE+"\nconst r=$input.first().json;if($input.all().length!==1||Object.keys(r).join()!=='id'||!ORDER_UUID.test(r.id))throw Error('INVALID_INPUT');return [{json:r}];",240,onError='continueErrorOutput')
+ w.rpc('Auftrag exklusiv übernehmen',"={{ {p_action:'claim',p_id:$json.id} }}",480)
+ w.condition('Auftrag freigegeben?',"={{ $json.ok === true && !!$json.lease_id }}",720)
+ w.customer('Aktuelles Zielkonto laden','Auftrag exklusiv übernehmen',960)
+ w.code('Zielkonto und Ordner prüfen',CORE+'\n'+FOLDERS+"\nconst c=$('Auftrag exklusiv übernehmen').first().json;const rows=$input.all().map(i=>i.json);return [{json:{...orderTarget(rows,c),...verifiedFolders(rows,c)}}];",1200,onError='continueErrorOutput')
+ w.node('Aktuellen Dateistand lesen','httpRequest',{'url':"={{ 'https://www.googleapis.com/drive/v3/files/'+$('Auftrag exklusiv übernehmen').first().json.binding.drive_file_id }}",'authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'queryParameters':{'parameters':[{'name':'fields','value':'id,mimeType,parents,trashed,version,sha256Checksum,md5Checksum,capabilities(canDownload)'},{'name':'supportsAllDrives','value':'true'}]},'options':OPTS},1440,v=4.5,credentials=DRIVE,onError='continueErrorOutput')
+ w.code('Dateistand bestätigen',CORE+"\nreturn [{json:orderDrive($input.first().json,$('Auftrag exklusiv übernehmen').first().json,$('Zielkonto und Ordner prüfen').first().json.folders)}];",1680,onError='continueErrorOutput')
+ w.code('Gebundenen Portaltext auswählen',"return [{json:$('Auftrag exklusiv übernehmen').first().json.binding}];",1920)
+ w.node('Publisher-Arbeitskopie aufrufen','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':'JZwPbzCpgIByxk94','mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},2160,v=1.3,onError='continueErrorOutput')
+ w.code('Ausführungsfreigabe prüfen',CORE+"\nreturn [{json:orderCheck($input.first().json,$('Auftrag exklusiv übernehmen').first().json,$('Zielkonto und Ordner prüfen').first().json,$('Dateistand bestätigen').first().json)}];",2400,onError='continueErrorOutput')
+ w.rpc('Prüfstand protokollieren','={{ $json }}',2640)
+ w.code('Prüffehler protokollieren',CORE+"\nconst c=$('Auftrag exklusiv übernehmen').first().json;return [{json:{p_action:'finish_check',p_id:c.id,p_lease:c.lease_id,p_data:{target:null,drive_verified:false,text_verified:false,blockers:[orderFailure($input.first().json).code]}}}];",2160,300)
+ w.code('Auftragsfehler bereinigen',CORE+"\nreturn [{json:orderFailure($input.first().json)}];",2880,300)
+ for a,b in zip(w.nodes[:12],w.nodes[1:12]):w.edge(a['name'],b['name'])
+ w.edge('Auftrag freigegeben?','Auftragsfehler bereinigen',1)
+ for name in ['Auftrags-ID prüfen','Auftrag exklusiv übernehmen','Prüfstand protokollieren']:w.edge(name,'Auftragsfehler bereinigen',1)
+ for name in ['Aktuelles Zielkonto laden','Zielkonto und Ordner prüfen','Aktuellen Dateistand lesen','Dateistand bestätigen','Publisher-Arbeitskopie aufrufen','Ausführungsfreigabe prüfen']:w.edge(name,'Prüffehler protokollieren',1)
+ w.edge('Prüffehler protokollieren','Prüfstand protokollieren')
+ return w.write()
+
+def build_api(worker_id):
+ w=Builder('SMA – Dashboard – Veröffentlichungsauftrag V1',ROOT/'n8n/publishing/publication-order-api-workflow.json')
+ w.node('Dashboard-Auftrag','webhook',{'httpMethod':'POST','path':'sma-publication-order-v1','responseMode':'responseNode','options':{'allowedOrigins':'https://sma-automation.com'}},0,v=2.1)
+ w.code('Dashboard-Anfrage prüfen',CORE+"\nreturn [{json:orderRequest($input.first().json)}];",240,onError='continueErrorOutput')
+ w.rpc('Eigenen Auftrag bearbeiten',"={{ {p_action:$json.action,p_input:$json.input} }}",480,user=True)
+ w.condition('Zielkonto zuordnen?',"={{ $json.ok === true && $json.state === 'preparing' && $('Dashboard-Anfrage prüfen').first().json.action === 'prepare' }}",720)
+ w.rpc('Auftragsbindung lesen',"={{ {p_action:'context',p_id:$json.id} }}",960)
+ w.condition('Auftragsbindung vorhanden?','={{ $json.ok === true }}',1200)
+ w.customer('Kundenzielkonto laden','Auftragsbindung lesen',1440)
+ w.code('Kundenzielkonto prüfen',CORE+"\nreturn [{json:orderTarget($input.all().map(i=>i.json),$('Auftragsbindung lesen').first().json)}];",1680,onError='continueErrorOutput')
+ w.rpc('Zielkonto festhalten',"={{ {p_action:'bind_target',p_id:$('Auftragsbindung lesen').first().json.id,p_data:$json} }}",1920)
+ w.condition('Freigegebenen Auftrag prüfen?',"={{ $json.ok === true && ['approved','blocked'].includes($json.state) && $('Dashboard-Anfrage prüfen').first().json.action === 'approve' }}",960,300)
+ w.code('Ausführungsauftrag auswählen',"return [{json:{id:$json.id}}];",1200,300)
+ w.node('Auftragsprüfung ausführen','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':worker_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},1440,300,1.3,onError='continueErrorOutput')
+ w.code('Sichere Auftragsfehlermeldung',CORE+"\nreturn [{json:orderFailure($input.first().json)}];",1920,600)
+ w.code('Auftragsantwort prüfen',"const r=$input.first().json;if(r.ok===true&&r.can_upload===false&&r.can_publish===false&&r.id&&r.state)return [{json:r}];const codes=['AUTH_REQUIRED','INVALID_INPUT','ORDER_UNAVAILABLE','TARGET_ACCOUNT_REQUIRED','TARGET_ACCOUNT_CHANGED','FILE_CHANGED','FINAL_APPROVAL_REQUIRED','ORDER_RUNNING','FILE_REFRESH_REQUIRED','ORDER_CHANGED','REQUEST_CONFLICT','DUPLICATE_PUBLICATION','ORDER_NOT_PREPARED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','ORDER_RATE_LIMITED','ASSIGNMENT_UNAVAILABLE','ASSIGNMENT_CHANGED','INVALID_CHOICES'];return [{json:{ok:false,can_upload:false,can_publish:false,code:codes.includes(r.code)?r.code:'ORDER_UNAVAILABLE',...(r.code==='DUPLICATE_PUBLICATION'?{existing_order_id:r.existing_order_id}:{})}}];",2160,200)
+ w.node('Dashboard-Antwort','respondToWebhook',{'respondWith':'json','responseBody':'={{ $json }}','options':{'responseCode':200,'responseHeaders':{'entries':[{'name':'Cache-Control','value':'no-store'},{'name':'Access-Control-Allow-Origin','value':'https://sma-automation.com'},{'name':'Vary','value':'Origin'}]}}},2400,200,1.5)
+ for a,b in zip(w.nodes[:9],w.nodes[1:9]):w.edge(a['name'],b['name'])
+ w.edge('Zielkonto zuordnen?','Freigegebenen Auftrag prüfen?',1)
+ w.edge('Auftragsbindung vorhanden?','Auftragsantwort prüfen',1)
+ w.edge('Zielkonto festhalten','Auftragsantwort prüfen')
+ w.edge('Freigegebenen Auftrag prüfen?','Ausführungsauftrag auswählen')
+ w.edge('Freigegebenen Auftrag prüfen?','Auftragsantwort prüfen',1)
+ w.edge('Ausführungsauftrag auswählen','Auftragsprüfung ausführen')
+ w.edge('Auftragsprüfung ausführen','Auftragsantwort prüfen')
+ for name in ['Dashboard-Anfrage prüfen','Eigenen Auftrag bearbeiten','Auftragsbindung lesen','Kundenzielkonto laden','Kundenzielkonto prüfen','Zielkonto festhalten','Auftragsprüfung ausführen']:w.edge(name,'Sichere Auftragsfehlermeldung',1)
+ w.edge('Sichere Auftragsfehlermeldung','Auftragsantwort prüfen');w.edge('Auftragsantwort prüfen','Dashboard-Antwort')
+ return w.write()
+
+if __name__=='__main__':
+ p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);args=p.parse_args()
+ print('worker',len(build_worker()['nodes']),'API',len(build_api(args.worker_id)['nodes']))
