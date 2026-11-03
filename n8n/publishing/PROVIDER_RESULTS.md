@@ -1,6 +1,6 @@
 # Dauerhafte Provider-Ergebnisse und sichere Wiederaufnahme
 
-Stand 3. November 2026, Fortsetzung von PR #57. **Datenbankjournal installiert; Dispatcher und API-Anschluss sind als geprüfte Vorlagen vorbereitet, noch nicht live verbunden. Kein Social-Media-Upload, kein Posting und keine Upload-Testfreigabe.**
+Stand 3. November 2026, Fortsetzung von PR #57. **Datenbankjournal und interne n8n-Anschlüsse sind installiert und veröffentlicht. Automatischer Inhaltsabgleich für YouTube und TikTok live geprüft. Kein Social-Media-Upload, kein Posting und keine Upload-Testfreigabe.**
 
 ## Installiert und nachgewiesen
 
@@ -25,20 +25,26 @@ Vor jeder Provider-Anfrage werden Sequenz und Anfrage-UUID atomar gespeichert. N
 
 Bei TikTok werden bestätigte öffentliche IDs vereinigt. Eine spätere leere Antwort löscht sie nicht. Int64-IDs werden vor dem JSON-Parsing als exakte Strings erhalten. Abgeschlossene Ergebnisse werden nicht durch verspätete Zwischenstände überschrieben. Kontoprüfung und mindestens zehn Sekunden Abstand begrenzen Statusaufrufe. Es gibt keinen automatischen Polling- oder Upload-Retry-Loop.
 
-## Vorbereiteter n8n-Anschluss
+## Veröffentlichter n8n-Anschluss
 
 `provider-dispatch-workflow.json` hat 29 Nodes und ausschließlich einen internen Execute-Workflow-Einstieg. Ein Aufruf bearbeitet maximal eine journalgebundene Provider-Anfrage. Vor Schreibanfragen werden die bestehenden Konto-/Ordnerzuordnungen, aktuellen Drive-Metadaten, vollständigen Bytes mit SHA-256, unveränderten gespeicherten Texte, Medienchecks, Nutzerbestätigungen und der zusätzliche Testschalter geprüft. Das Konto wird über den bestehenden internen Workflow `LR2Qng41OIYuVHAR` geprüft; Zugangsdaten bleiben flüchtig in n8n.
 
 Die Vorlage enthält getrennte HTTP-Nodes für Metadaten, Dateitransfer und Status. Redirects und automatische HTTP-Wiederholungen sind aus. Upload-Session-URLs sind auf dokumentierte HTTPS-Hosts/Pfade begrenzt; unbekannte Hosts werden abgewiesen. TikTok-Upload-URLs erhalten keinen Konto-Bearer. YouTube-Teilübertragung verwendet nur die geprüften restlichen Bytes. `provider-upload-plan.cjs` erhält Titel und Caption unverändert.
 
-Der Dispatcher wurde **noch nicht in n8n importiert oder mit dem Auftragsworker verbunden**. Seine Tests sind lokale synthetische Tests sowie SQL-Tests, keine echten Provider-Aufrufe. Die neue Vergleichs-Arbeitskopie ist bereits importiert. Der Nutzer hat das Speichern deaktivierter Ausführungsdatenspeicherung und der Zeitlimits ausdrücklich freigegeben: 270 Sekunden für die Vergleichszustellung, 600 Sekunden für den Providerweg. Der anschließende Zugriff und das Zurücksetzen der Browsersteuerung scheiterten jeweils an einer Zeitüberschreitung; das Speichern ist nicht nachgewiesen. Die bestehende aktive API und der bestehende Ausführungsworker wurden nicht ersetzt. Nach Wiederherstellung des Zugriffs sind die bereits freigegebenen Einstellungen zu speichern und die Exporte/Verbindungen zu prüfen; keine erneute Einstellungsfreigabe nötig. Diese Freigabe umfasst keinen echten Uploadtest. Ein Einbau allein darf keine Testfreigabe erzeugen.
+Der Dispatcher **`JPtiMBrudXLxxSrz`** ist importiert und veröffentlicht. Die Auftrags-API **`RdtCqCWRi7P4W7B0`** (32 Nodes) ruft ihn nach der bereits gesendeten Dashboard-Antwort ausschließlich für `checked`-Aufträge aus `approve` oder `get` auf. Ein erneutes „Status erneut laden“ nimmt den bestehenden journalgebundenen Vorgang auf. Pro Aufruf bleibt es bei höchstens einer Provideroperation; kein automatischer Dauerlauf und keine neue Veröffentlichung bei unbekanntem Ausgang. `prepared`, `blocked`, `cancelled` und Kontolesen starten keinen Providerweg. Der Dispatcher bekommt ausschließlich die Auftrags-ID.
+
+Beide Folgeaufrufe laufen nach der Antwort mit `waitForSubWorkflow:true`. Der entkoppelte Aufruf lieferte im Live-Test die Vergleichsaufgabe nicht aus; der geprüfte Ersatz hält die interne Ausführung offen, während das Dashboard seine Antwort bereits erhalten hat. API und Dispatcher haben das genehmigte Limit von 600 Sekunden. Keine Speicherung von Ausführungsdaten oder Fortschritt; gleiche Eigentümer, MCP aus. Die HTTP-/Codeparameter, Credential-Referenzen und Kanten der Exporte entsprechen den Vorlagen. n8n lässt bekannte Standardfelder (`source:database`, `mode:once`, `sendBody:false`, Binärfeld `data`) im Export weg.
+
+Die vorhandene Worker-Kopie `zLlhr1I1vKm2AiiU`, Publisher-Kopie und geschützten Originale wurden nicht verändert. Alle 23 bisherigen API-Nodes sind unverändert. Temporäre Diagnoseeingaben wurden entfernt. Die separate Upload-Testfreigabetabelle bleibt leer.
+
+**Abnahmegrenze:** Der neue Inhaltsabgleich ist mit echten Vorbereitungsaufträgen nachgewiesen. Provider-Zustandsübergänge und Wiederaufnahme sind durch synthetische Node-/SQL-Tests abgesichert, aber der tatsächliche HTTP-Uploadweg wurde ausdrücklich noch nicht ausgeführt. Ein Statusabruf kann nach späterer Freigabe eine einzelne nächste Operation anstoßen; es gibt noch keinen unbeaufsichtigten Upload-Dauerlauf. Ein abgeschlossenes internes Providerergebnis ist keine bereits abgenommene öffentliche History-/Erfolgsdarstellung im Dashboard.
 
 ## Validierung
 
-- 313 Node-Tests bestanden, einschließlich Workflow-Kanten, fehlender Freigaben, Session-URL-Grenzen, exakter Texte, Binärrest und Int64-IDs.
+- 314 Node-Tests bestanden, einschließlich Workflow-Kanten, fehlender Freigaben, Session-URL-Grenzen, exakter Texte, Binärrest und Int64-IDs.
 - Vergleichs-/Auftrags-/Creator-/Provider-SQL lokal mit PGlite 0.5.14/PostgreSQL 18 bestanden.
 - Vergleich mit Delivery-Queue und Provider-Journal zusätzlich auf der produktiven PostgreSQL-17-Instanz geprüft: ausschließlich synthetische Fixtures, vollständig zurückgerollt. Medien-Stubs im isolierten Provider-Zustandsautomatentest existieren nur innerhalb der Testtransaktion; die Originalfunktions-Hashes sind danach unverändert.
-- Nach Abschluss: 0 freigegebene Aufträge, 0 Veröffentlichungsreservierungen, 0 Provider-Testfreigaben, 0 Versuche, 0 Providerereignisse, 0 Vergleichs-Queueeinträge.
+- Live-Anschluss: YouTube per erneutem Abruf und TikTok direkt bei Vorbereitung automatisch abgeglichen, vorhandener Cache unverändert. Zwei Testaufträge anschließend storniert. 0 freigegebene Aufträge, Veröffentlichungsreservierungen, Provider-Testfreigaben, Provider-Versuche und Providerereignisse. Zwei abgeschlossene Vergleichs-Queueeinträge bleiben als Nachweis erhalten.
 - Keine neue Sicherheitsberater-Warnung. Vier erwartete INFO-Hinweise für private Servicetabellen mit RLS und ohne Kundenpolicies; Kundenrollen haben keine direkten Rechte. [Hinweisbeschreibung](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
 
 ```sh
@@ -51,7 +57,7 @@ node tests/run-publication-delivery-sql.mjs
 
 Sightengine wird weiterhin mit `VIDEO_PLAN_REQUIRED` abgewiesen. Der lokale Adapter hält Videomoderation bewusst gesperrt, nachdem der vorherige echte Diensttest fehlenden Planzugriff gemeldet hatte. Die aktuelle offizielle FAQ bestätigt: Videomoderation gehört nicht zum kostenlosen Plan. In dieser Sitzung wurde kein neuer kostenpflichtiger Diensttest und kein Tarifwechsel ausgelöst. Einzelne Vorschaubilder oder eine Nutzerbestätigung werden nicht als vollständige Video-Sicherheitsprüfung umgedeutet.
 
-Die noch offenen Text-Rückfragen, die vollständige Medienprüfung, das sichere Speichern/Veröffentlichen der neuen n8n-Verbindungen und anschließend ein ausdrücklich freigegebener echter Uploadtest sind separate verbleibende Schritte. Meta, geschützte Originalworkflows, Oberfläche, Schrift und Serverumbau bleiben unverändert. Webseite und Domain wurden nicht begonnen.
+Die noch offenen Text-Rückfragen, die vollständige Medienprüfung, ein ausdrücklich freigegebener echter Uploadtest und danach die fachliche Abnahme der tatsächlichen Providerantworten sind separate verbleibende Schritte. Meta, geschützte Originalworkflows, Oberfläche, Schrift und Serverumbau bleiben unverändert. Webseite und Domain wurden nicht begonnen.
 
 Primärquellen, am 03.11.2026 geprüft:
 

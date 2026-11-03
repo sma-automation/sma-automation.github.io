@@ -2,7 +2,7 @@
 
 Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Die getrennten Medienbestätigungen aus #53 sind veröffentlicht und im echten TikTok-Vorbereitungsdialog geprüft.
 
-Stand: 3. November 2026. Diese Erweiterung verbindet den angemeldeten Dashboard-Benutzer, seine konkrete Datei-/Textversion, das tatsächliche n8n-Zielkonto und seine ausdrückliche Freigabe mit der vorhandenen Publisher-Arbeitskopie. Der Ausführungsweg endet weiterhin bei einer protokollierten Prüfung: **kein Provider-Upload und kein Social-Media-Posting**.
+Stand: 3. November 2026. Die Auftrags-API ist inzwischen mit automatischem Inhaltsabgleich und dauerhaftem Providerjournal veröffentlicht; **314 Tests bestanden**. Der reale Uploadweg bleibt durch Medienprüfung und zusätzliche ausdrückliche Testfreigabe gesperrt. **Kein Provider-Upload und kein Social-Media-Posting ausgeführt.** [Aktueller Live-Anschluss](#vergleichszustellung-und-providerjournal--live-anschluss-pr-57). Die folgenden Abschnitte dokumentieren die schrittweise eingeführten Auftrags- und Prüfkomponenten.
 
 ## Komponenten
 
@@ -29,7 +29,7 @@ Die geschützten Originale `GHBsYQcyt0JLFvRP`, `LeeH7IigyGRRUuxS` und `qwdTLh2rV
 6. Der interne Worker übernimmt nur eine Auftrags-ID und erhält eine exklusive Lease. Er prüft Kontoidentität und Kundenordner erneut, liest die aktuelle Drive-Version samt Prüfsumme und ruft dann die vorhandene Portaltext-Arbeitskopie mit der serverseitig gespeicherten Bindung auf.
 7. `finish_check` akzeptiert nur die aktuelle Lease, prüft die gespeicherte Bindung erneut und erhält alle offenen Medienprüfungen. Fehlende Kontoberechtigungsprüfung bleibt ausdrücklich ein Blocker. `can_upload` und `can_publish` bleiben immer `false`.
 
-Die Auftragsreservierung wird bei Fehlern oder Zeitüberschreitungen nicht freigegeben. Eine abgelaufene Lease darf nur die idempotente Leseprüfung erneut starten. Eine Provider-Übertragung ist damit noch nicht implementiert. Es gibt bewusst keinen automatischen Neuversuch für einen Provider-Upload.
+Die Auftragsreservierung wird bei Fehlern oder Zeitüberschreitungen nicht freigegeben. Eine abgelaufene Lease darf nur die idempotente Leseprüfung erneut starten. Die ursprüngliche Auftragsprüfung führte noch keine Provider-Übertragung aus. Der inzwischen ergänzte Providerweg ist unten beschrieben; ein unbekannter Ausgang erlaubt keinen blinden Neuversuch.
 
 ## Betrieb
 
@@ -37,7 +37,7 @@ Die additive Migration `publication_orders_bound_approval_v1` ist in SMA-Supabas
 
 Die n8n-Version verlangt veröffentlichte Unterworkflows beim Veröffentlichen eines Elternworkflows. Die reine Übergabeprüfung und die bisher unveröffentlichte Publisher-Arbeitskopie wurden deshalb als interne Abhängigkeiten veröffentlicht. Dies aktiviert keine deaktivierten Provider-Knoten und erzeugt keinen zusätzlichen öffentlichen Trigger.
 
-Die neuen Workflows haben 15 bzw. 14 Knoten, leere `pinData`, keine Speicherung erfolgreicher, fehlgeschlagener oder manueller Nutzdaten und 150 Sekunden Laufzeitlimit. Ausführungsfortschritte werden nicht gespeichert; Unterworkflow-Aufrufe sind auf denselben Eigentümer beschränkt; MCP ist deaktiviert. Nach n8n-UI-Import die Einstellungen ausdrücklich setzen: der Import übernimmt sie nicht zuverlässig. Im Abschlussexport entfernt n8n die Standardwerte `source:database`, `mode:once` und gegebenenfalls `saveExecutionProgress:false`.
+Bei der ursprünglichen Einführung hatten die Workflows 15 bzw. 14 Knoten, leere `pinData`, keine Speicherung erfolgreicher, fehlgeschlagener oder manueller Nutzdaten und 150 Sekunden Laufzeitlimit. Ausführungsfortschritte werden nicht gespeichert; Unterworkflow-Aufrufe sind auf denselben Eigentümer beschränkt; MCP ist deaktiviert. Nach n8n-UI-Import die Einstellungen ausdrücklich setzen: der Import übernimmt sie nicht zuverlässig. Im Abschlussexport entfernt n8n die Standardwerte `source:database`, `mode:once` und gegebenenfalls `saveExecutionProgress:false`.
 
 ```sh
 python n8n/publishing/build-publication-orders.py --worker-id zLlhr1I1vKm2AiiU
@@ -113,7 +113,7 @@ Validierung: 286 Node-Tests bestanden. Alle drei SQL-Prüfreihen (`publication-a
 
 Live-Abnahme am 03.11.2026 um **18:43 MEZ**: Im angemeldeten TikTok-Dialog wurde ein neuer, nicht freigegebener Testauftrag bis `prepared` angelegt. Frischer Kontonachweis mit 3600 Sekunden Höchstdauer; `TIKTOK_CREATOR_LIMIT=pass`. Der bisherige falsche Kontohinweis erschien nicht mehr unter „Offene Medienprüfungen“; visuelle Sicherheitsprüfung und semantischer Inhalts-/Portaltextabgleich blieben sichtbar. Alle Bestätigungen blieben leer, die finale Freigabe war deaktiviert. Danach wurde ausschließlich dieser Testauftrag unter Eigentümer-/Status-/Lease-/Journalprüfung storniert. Keine echte Zustimmung, kein Provider-Upload, kein Posting und keine Tarifänderung. Der Worker-Abschluss wurde mit synthetischen SQL-Fällen geprüft, nicht durch eine echte Kundenfreigabe ausgelöst.
 
-Weiter offen: Sightengine `VIDEO_PLAN_REQUIRED`, vollständiger Inhalts-/Portaltextnachweis, weitere Portalprofile und Meta-Berechtigungen sowie Upload-Dispatcher und Provider-Ergebnisjournal.
+Damals offen waren Sightengine `VIDEO_PLAN_REQUIRED`, vollständiger Inhalts-/Portaltextnachweis sowie Upload-Dispatcher und Provider-Ergebnisjournal. Den inzwischen erweiterten Stand dokumentieren die folgenden Abschnitte. Weitere Portalprofile und Meta bleiben außerhalb dieses Auftrags.
 
 Anschließend wurde der [gemeinsame Dateiabruf für YouTube und TikTok](DUAL_CHANNEL_REHEARSAL.md) mit echten Drive-Bytes und den beiden gespeicherten Kanaltexten erfolgreich geprüft. Der separate Lesetest erstellt keine Freigabe und führt keinen Provider-Upload aus.
 
@@ -121,10 +121,16 @@ Primärquelle, am 03.11.2026 geprüft: https://developers.tiktok.com/docs/en/con
 
 ## Gespeicherter Portaltextabgleich – 3. November 2026
 
-Die Auftrags-Medienansicht ergänzt jetzt einen revisionsgebundenen `PORTAL_TEXT_COMPARISON` aus dem privaten Vergleichscache. Die bestehenden offenen Prüfungen bleiben vollständig erhalten. Der echte YouTube-/TikTok-Abgleich lieferte konkrete Rückfragen; Texte und Nutzerfreigaben wurden nicht verändert. [Implementierung, Live-Nachweise und Grenzen](CONTENT_COMPARISON.md). Die automatische Ansteuerung des neuen Unterworkflows ist noch offen. [Upload-/Provider-Module](PROVIDER_RESULTS.md) sind ausschließlich offline getestet und haben keinen Dispatcher oder dauerhaften Ergebnisjournalpfad.
+Die Auftrags-Medienansicht ergänzt jetzt einen revisionsgebundenen `PORTAL_TEXT_COMPARISON` aus dem privaten Vergleichscache. Die bestehenden offenen Prüfungen bleiben vollständig erhalten. Der echte YouTube-/TikTok-Abgleich lieferte konkrete Rückfragen; Texte und Nutzerfreigaben wurden nicht verändert. [Implementierung, Live-Nachweise und Grenzen](CONTENT_COMPARISON.md). Zum Zeitpunkt dieses Erstnachweises fehlten automatische Ansteuerung und dauerhafter Providerpfad. Der folgende Live-Anschluss ergänzt beides; der tatsächliche Provider-Upload bleibt ungeprüft und freigabepflichtig. [Upload-/Provider-Module](PROVIDER_RESULTS.md).
 
-## Dauerhafte Vergleichsaufgabe und Provider-Journal – Fortsetzung PR #57
+## Vergleichszustellung und Providerjournal – Live-Anschluss PR #57
 
-Die Datenbank enthält jetzt die transaktionale Vergleichs-Queue sowie das atomare Provider-Versuchs-/Ereignisjournal mit separater expliziter Testfreigabe. Die geprüfte API-Vorlage startet den Vergleich asynchron. Die aktive API und der Ausführungsworker bleiben vorerst unverändert: Die zunächst angehaltenen n8n-Einstellungen sind inzwischen ausdrücklich freigegeben (keine Ausführungsdatenspeicherung; 270 Sekunden für den Vergleichsweg, 600 Sekunden für den Providerweg). Wegen Zeitüberschreitungen der Browsersteuerung konnte das Speichern nicht durchgeführt oder nachgewiesen werden. Der vorbereitete Provider-Dispatcher ist noch nicht importiert oder verbunden. Daher ist die Veröffentlichungsstrecke noch nicht als live fertig abgenommen. Die Einstellungsfreigabe gilt weiter; sie erlaubt keinen echten Uploadtest.
+Die Vergleichs-Queue und das atomare Providerjournal sind installiert. Die Auftrags-API `RdtCqCWRi7P4W7B0` ist mit 32 Nodes veröffentlicht: Sie sendet zuerst die bisherige Dashboard-Antwort und führt danach den internen Vergleich aus. Für ausschließlich `checked`-Aufträge aus `approve`/`get` wird anschließend genau eine journalgebundene Provideroperation aufgerufen. Die separate Upload-Testfreigabe bleibt zusätzlich erforderlich und ist nicht gesetzt. Es gibt keinen Zeittrigger oder automatischen Dauerlauf.
 
-Details und genaue Fortsetzung: [Inhaltsabgleich](CONTENT_COMPARISON.md#automatische-auftragsansteuerung--fortsetzung-pr-57), [Providerjournal und Wiederaufnahme](PROVIDER_RESULTS.md). 313 Node-Tests sowie lokale und produktive synthetische SQL-Rollbackprüfungen bestanden. Weiterhin 0 freigegebene Aufträge, Provider-Testfreigaben und Provider-Versuche. Oberfläche, Schrift und alle geschützten Originalworkflows unverändert; kein Upload, Posting oder Tarifwechsel.
+Veröffentlicht: Vergleich `1qMj37a5gXlrbCWd`, Zustellung `ZFO9NSh5nHSn3ues`, Dispatcher `JPtiMBrudXLxxSrz`. Keine Ausführungsdaten-/Fortschrittsspeicherung, nur gleicher Eigentümer, MCP aus; Zeitlimits 210/270/600 Sekunden, API ebenfalls 600 Sekunden. Die Browserverbindung ist wiederhergestellt, die genehmigten Einstellungen sind gespeichert. Die 23 bisherigen API-Nodes, Ausführungsworker, Oberfläche, Schrift und geschützten Originalworkflows bleiben unverändert.
+
+Live geprüft am 03.11.2026: YouTube-Wiederaufnahme um 21:17:55 MEZ, TikTok-Abgleich bei neuer Vorbereitung um 21:21:24 MEZ. Bestehende Vergleichsergebnisse und Texte unverändert; kein zusätzlicher Modelllauf. Alle Medienbestätigungen und finale Zustimmung blieben leer. Die zwei eigenen Testaufträge wurden danach gezielt storniert. Eine nicht angemeldete Anfrage an den veröffentlichten Webhook liefert weiterhin `AUTH_REQUIRED`.
+
+**314 Node-Tests bestanden**, einschließlich Antwortreihenfolge, fehlender Freigaben und sicherer Provider-Wiederaufnahme. Die vorherigen lokalen und produktiven synthetischen SQL-Rollbackprüfungen gelten weiter; bei diesem Anschluss wurde keine Datenbankfunktion geändert. 0 freigegebene Aufträge, Provider-Testfreigaben, Provider-Versuche oder Veröffentlichungen.
+
+Noch erforderlich sind die offenen Medien-/Textfragen (Sightengine weiterhin `VIDEO_PLAN_REQUIRED`) und die ausdrückliche Freigabe eines konkreten echten Uploadtests. Der reale Provider-HTTP-Weg und die spätere öffentliche Erfolgsdarstellung sind damit noch nicht abgenommen. Details: [Inhaltsabgleich](CONTENT_COMPARISON.md#automatische-auftragsansteuerung--live-anschluss-pr-57), [Providerjournal](PROVIDER_RESULTS.md). Webseite/Domain, Meta und Serverumbau wurden nicht begonnen.

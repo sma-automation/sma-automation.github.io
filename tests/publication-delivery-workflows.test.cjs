@@ -10,9 +10,14 @@ test('new delivery workflows have no public trigger, schedule, retries, persiste
   }
  }
 });
-test('normal order response starts comparison asynchronously and preserves response even if kickoff fails',()=>{
+test('order API responds before supervised comparison and never sends a second response',()=>{
  const w=load('publication-order-api'),n=Object.fromEntries(w.nodes.map(x=>[x.name,x]));
- assert.equal(n['Inhaltsabgleich im Hintergrund'].parameters.options.waitForSubWorkflow,false);
+ assert.equal(n['Inhaltsabgleich im Hintergrund'].parameters.options.waitForSubWorkflow,true);
+ assert.equal(w.settings.executionTimeout,600);
+ assert.equal(w.connections['Auftragsantwort prüfen'].main[0][0].node,'Dashboard-Antwort');
+ assert.equal(w.connections['Dashboard-Antwort'].main[0][0].node,'Auftragsabgleich anstoßen?');
+ assert.equal(reachable(w,w.nodes[0].name,new Set(['Dashboard-Antwort'])).has('Inhaltsabgleich im Hintergrund'),false);
+ assert.equal(reachable(w,'Auftragsabgleich anstoßen?').has('Dashboard-Antwort'),false);
  assert.equal(n['Inhaltsabgleich im Hintergrund'].parameters.workflowId.value,'ZFO9NSh5nHSn3ues');
  for(const port of w.connections['Inhaltsabgleich im Hintergrund'].main)assert.equal(port[0].node,'Unveränderte Auftragsantwort');
  assert.match(n['Unveränderte Auftragsantwort'].parameters.jsCode,/Auftragsantwort merken/);
@@ -25,6 +30,23 @@ test('provider HTTP edges require account validation and an atomic journal inten
  for(const send of sends){const n=w.nodes.find(x=>x.name===send);assert.equal(n.parameters.options.redirect.redirect.followRedirects,false);assert.equal(n.parameters.options.response.response.responseFormat,'text');assert.equal(n.parameters.options.response.response.fullResponse,true);assert.equal(w.connections[send].main[1][0].node,'Unklare Providerantwort');}
  assert.equal(w.connections['Providerergebnis speichern'].main[0][0].node,'Providerstatus sicher zurückgeben');
  assert.ok(!reachable(w,'Providerergebnis speichern').has('Provideranfrage atomar reservieren'));
+});
+test('authenticated checked orders resume one provider operation without changing the API response',()=>{
+ const w=load('publication-order-api'),n=Object.fromEntries(w.nodes.map(x=>[x.name,x]));
+ const expr=n['Geprüften Providerauftrag fortsetzen?'].parameters.conditions.conditions[0].leftValue.slice(3,-2);
+ const eligible=(state,action,ok=true)=>vm.runInNewContext(expr,{$json:{id:'test-id',state,ok},$:()=>({first:()=>({json:{action}})})});
+ for(const state of ['preparing','prepared','approved','blocked','cancelled','failed'])for(const action of ['prepare','approve','get','account'])assert.equal(eligible(state,action),false);
+ assert.equal(eligible('checked','get'),true);assert.equal(eligible('checked','approve'),true);assert.equal(eligible('checked','prepare'),false);assert.equal(eligible('checked','get',false),false);
+ const kickoff=n['Providerweg im Hintergrund'];assert.equal(kickoff.parameters.options.waitForSubWorkflow,true);assert.equal(kickoff.parameters.workflowId.value,'JPtiMBrudXLxxSrz');
+ assert.equal(reachable(w,w.nodes[0].name,new Set(['Dashboard-Antwort'])).has(kickoff.name),false);
+ for(const port of w.connections[kickoff.name].main)assert.equal(port[0].node,'Auftragsantwort nach Providerstart');
+ const original=[{json:{ok:true,id:'test-id',state:'checked',can_upload:false,can_publish:false}}];
+ const selected=vm.runInNewContext('(function(){'+n['Providerauftrag auswählen'].parameters.jsCode+'})()',{$json:original[0].json});
+ assert.equal(JSON.stringify(selected),'[{"json":{"id":"test-id"}}]');
+ const restored=vm.runInNewContext('(function(){'+n['Auftragsantwort nach Providerstart'].parameters.jsCode+'})()',{$:name=>{assert.equal(name,'Provider-Auftragsantwort merken');return {all:()=>original};}});
+ assert.equal(restored,original);
+ assert.equal(reachable(w,w.nodes[0].name,new Set(['Geprüften Providerauftrag fortsetzen?'])).has(kickoff.name),false);
+ assert.ok(!reachable(w,'Auftragsantwort nach Providerstart').has(kickoff.name));
 });
 test('n8n transfer code verifies and slices the restored binary instead of sending an entire file twice',async()=>{
  const w=load('provider-dispatch'),n=w.nodes.find(x=>x.name==='Provider-Dateirest auswählen'),crypto=require('node:crypto');

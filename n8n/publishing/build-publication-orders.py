@@ -73,7 +73,7 @@ def build_worker(account_id):
  w.edge('Prüffehler protokollieren','Prüfstand protokollieren')
  return w.write()
 
-def build_api(worker_id,account_id,comparison_delivery_id=None):
+def build_api(worker_id,account_id,comparison_delivery_id=None,provider_dispatch_id=None):
  w=Builder('SMA – Dashboard – Veröffentlichungsauftrag V1',ROOT/'n8n/publishing/publication-order-api-workflow.json')
  w.node('Dashboard-Auftrag','webhook',{'httpMethod':'POST','path':'sma-publication-order-v1','responseMode':'responseNode','options':{'allowedOrigins':'https://sma-automation.com'}},0,v=2.1)
  w.code('Dashboard-Anfrage prüfen',CORE+"\nreturn [{json:orderRequest($input.first().json)}];",240,onError='continueErrorOutput')
@@ -123,18 +123,39 @@ def build_api(worker_id,account_id,comparison_delivery_id=None):
   # order read can redeliver a lost kickoff; model calls remain fingerprint-bound.
   w.condition('Auftragsabgleich anstoßen?',"={{ $json.ok === true && !!$json.id && ['preparing','prepared','approved','blocked','checked'].includes($json.state) }}",2400,200)
   w.code('Auftragsantwort merken','return $input.all();',2640,0)
-  w.node('Inhaltsabgleich im Hintergrund','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':comparison_delivery_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':False}},2880,0,1.3,onError='continueErrorOutput')
+  w.node('Inhaltsabgleich im Hintergrund','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':comparison_delivery_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},2880,0,1.3,onError='continueErrorOutput')
   w.code('Unveränderte Auftragsantwort',"return $('Auftragsantwort merken').all();",3120,0)
-  w.edges['Auftragsantwort prüfen']['main'][0]=[]
-  w.edge('Auftragsantwort prüfen','Auftragsabgleich anstoßen?')
+  # Respond first, then retain a supervised execution for the internal calls.
+  # Detached child starts did not deliver reliably in the hosted live test.
+  w.edge('Dashboard-Antwort','Auftragsabgleich anstoßen?')
   w.edge('Auftragsabgleich anstoßen?','Auftragsantwort merken')
-  w.edge('Auftragsabgleich anstoßen?','Dashboard-Antwort',1)
   w.edge('Auftragsantwort merken','Inhaltsabgleich im Hintergrund')
   w.edge('Inhaltsabgleich im Hintergrund','Unveränderte Auftragsantwort')
   w.edge('Inhaltsabgleich im Hintergrund','Unveränderte Auftragsantwort',1)
-  w.edge('Unveränderte Auftragsantwort','Dashboard-Antwort')
- return w.write()
+ if provider_dispatch_id:
+  # Only an already checked order can enter the internal dispatcher. The
+  # database still requires the separate operator permit before any upload.
+  # A later authenticated get resumes the same journal, never a new attempt.
+  w.condition('Geprüften Providerauftrag fortsetzen?',"={{ $json.ok === true && !!$json.id && $json.state === 'checked' && ['approve','get'].includes($('Dashboard-Anfrage prüfen').first().json.action) }}",3360,200)
+  w.code('Provider-Auftragsantwort merken','return $input.all();',3600,0)
+  w.code('Providerauftrag auswählen','return [{json:{id:$json.id}}];',3840,0)
+  w.node('Providerweg im Hintergrund','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':provider_dispatch_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},4080,0,1.3,onError='continueErrorOutput')
+  w.code('Auftragsantwort nach Providerstart',"return $('Provider-Auftragsantwort merken').all();",4320,0)
+  if comparison_delivery_id:
+   w.edge('Auftragsabgleich anstoßen?','Geprüften Providerauftrag fortsetzen?',1)
+   w.edge('Unveränderte Auftragsantwort','Geprüften Providerauftrag fortsetzen?')
+  else:w.edge('Dashboard-Antwort','Geprüften Providerauftrag fortsetzen?')
+  w.edge('Geprüften Providerauftrag fortsetzen?','Provider-Auftragsantwort merken')
+  w.edge('Provider-Auftragsantwort merken','Providerauftrag auswählen')
+  w.edge('Providerauftrag auswählen','Providerweg im Hintergrund')
+  w.edge('Providerweg im Hintergrund','Auftragsantwort nach Providerstart')
+  w.edge('Providerweg im Hintergrund','Auftragsantwort nach Providerstart',1)
+ workflow=w.write()
+ if comparison_delivery_id or provider_dispatch_id:
+  workflow['settings']={**workflow['settings'],'executionTimeout':600}
+  w.path.write_text(json.dumps(workflow,ensure_ascii=False,indent=2)+'\n')
+ return workflow
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);p.add_argument('--account-id',required=True);p.add_argument('--comparison-delivery-id');args=p.parse_args()
- print('worker',len(build_worker(args.account_id)['nodes']),'API',len(build_api(args.worker_id,args.account_id,args.comparison_delivery_id)['nodes']))
+ p=argparse.ArgumentParser();p.add_argument('--worker-id',required=True);p.add_argument('--account-id',required=True);p.add_argument('--comparison-delivery-id');p.add_argument('--provider-dispatch-id');args=p.parse_args()
+ print('worker',len(build_worker(args.account_id)['nodes']),'API',len(build_api(args.worker_id,args.account_id,args.comparison_delivery_id,args.provider_dispatch_id)['nodes']))

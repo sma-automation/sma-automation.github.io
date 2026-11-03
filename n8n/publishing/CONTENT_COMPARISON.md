@@ -2,7 +2,9 @@
 
 Stand 3. November 2026. Für YouTube und TikTok gibt es jetzt einen getrennten internen Inhaltsabgleich. Er vergleicht den tatsächlich gespeicherten Titel und die Caption einschließlich Hashtags mit den vorhandenen Video-Beobachtungen, erkannten Bildtexten und gegebenenfalls dem Transkript. Er erzeugt keinen Ersatztext und bestätigt weder Rechte noch die Sicherheit des vollständigen Videos.
 
-## Live-Stand
+Aktueller Anschlussstand: Vergleich und Zustellung sind veröffentlicht und automatisch mit der Auftrags-API verbunden. **314 Tests bestanden.** Der nachfolgende Erstnachweis dokumentiert den zuvor isolierten Modelllauf; den späteren Live-Anschluss beschreibt [der aktuelle Abschnitt](#automatische-auftragsansteuerung--live-anschluss-pr-57).
+
+## Erstnachweis des gespeicherten Vergleichs
 
 | Bestandteil | Ergebnis |
 | --- | --- |
@@ -29,9 +31,9 @@ Die bestehenden Medienchecks werden ausschließlich im konkreten Auftrag um `POR
 
 Die Projektion wurde mit den beiden echten aktuellen Bindungen nach einem erfolgreichen Dashboard-Katalogabgleich um 19:38 MEZ geprüft: aktueller Kontext, unveränderte Titel-/Caption-Prüfsummen und sowohl neuer Hinweis als auch bisherige Medienblocker vorhanden. Für diese Prüfung wurde kein neuer Kundenauftrag angelegt. Eine erneute visuelle Abnahme des Auftragsdialogs ist damit nicht behauptet.
 
-## Betrieb und Reproduktion
+## Betrieb und Reproduktion des isolierten Ersttests
 
-Die neue Modellstrecke ist eine gespeicherte, unveröffentlichte interne Kopie ohne öffentlichen Webhook. Sie ist noch nicht automatisch in die Auftragsvorbereitung eingehängt. Der bestehende Auftragsworker hat ein kürzeres Zeitfenster; eine sichere asynchrone Ansteuerung ist ein eigener verbleibender Schritt. Die gespeicherten Ergebnisse werden bereits durch die installierte Auftragsprojektion gelesen.
+Beim Ersttest war die Modellstrecke eine unveröffentlichte interne Kopie ohne öffentlichen Webhook und noch nicht automatisch mit der Auftragsvorbereitung verbunden. Die gespeicherten Ergebnisse wurden bereits durch die installierte Auftragsprojektion gelesen. Der automatische Anschluss ist inzwischen umgesetzt und unten dokumentiert.
 
 ```sh
 python3 n8n/publishing/build-content-comparison.py
@@ -46,26 +48,38 @@ node tests/run-publication-accounts-sql.mjs
 
 Bei Neuinstallation zuerst die vorhandenen Datei-, Analyse- und Kontodefinitionen, danach `publication-content-comparison.sql`, dann `publication-orders.sql` installieren. Live angewendet: `publication_stored_content_comparison_20261103` und `publication_comparison_order_projection_20261103`. Vor der Änderung war der Funktionsrumpf von `publication_order_media_v1` exakt gleich dem vorherigen Repositorystand. Nur diese vorhandene Funktion wurde für die Projektion ersetzt; sonst additive Funktionen und private Tabelle.
 
-Die beiden Abschlussexporte wurden gegen die Generatoren geprüft: gleiche Nodeparameter, Code, Credential-Referenzen und Verbindungen; n8n entfernt beim Execute-Workflow-Node das Standardfeld `source:database` und erneuert IDs/Positionen beim Import. Beide Kopien sind `active:false`, ohne Pins oder Ausführungsdatenspeicherung, ohne Fortschrittsspeicherung, nur gleicher Eigentümer, MCP aus; Zeitlimits 210 beziehungsweise 450 Sekunden. Die Vorlagen verwenden die bereits vorhandenen OpenAI-/Supabase-Verbindungen. Es gab keine neue Berechtigung oder Tarifänderung.
+Die beiden Abschlussexporte wurden gegen die Generatoren geprüft: gleiche Nodeparameter, Code, Credential-Referenzen und Verbindungen; n8n entfernt beim Execute-Workflow-Node das Standardfeld `source:database` und erneuert IDs/Positionen beim Import. Beim isolierten Ersttest waren beide Kopien `active:false`, ohne Pins oder Ausführungsdatenspeicherung, ohne Fortschrittsspeicherung, nur gleicher Eigentümer, MCP aus; Zeitlimits 210 beziehungsweise 450 Sekunden. Die Vorlagen verwenden die bereits vorhandenen OpenAI-/Supabase-Verbindungen. Es gab keine neue Berechtigung oder Tarifänderung.
 
 Validierung: **301 Node-Tests bestanden**. Vergleichs-, Konto-, Auftrags- und Creator-SQL-Prüfreihen bestanden lokal unter PGlite/PostgreSQL 18; Vergleichs-, Auftrags- und Creator-Fälle zusätzlich auf der produktiven PostgreSQL-17-Instanz mit synthetischen, zurückgerollten Fixtures. Rollenrechte, geänderte Belege/Texte, falsche Leases, Wiederholungen, exakte Zitate und unveränderte Medienblocker sind abgedeckt. Keine neue Sicherheitsberater-Warnung. Für die absichtlich service-interne Tabelle entsteht derselbe INFO-Hinweis „RLS Enabled No Policy“ wie bei den übrigen privaten Servicetabellen; Kundenrollen besitzen keine Tabellen- oder Funktionsrechte. [Hinweisbeschreibung](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
 
-Sightengine bleibt bei `VIDEO_PLAN_REQUIRED`. Vollständige visuelle Sicherheitsprüfung, ausdrückliche Nutzerfreigabe, automatische asynchrone Vergleichsansteuerung und tatsächlicher Providerbetrieb bleiben offen. Meta und Serverumbau bleiben außerhalb dieses Schritts. Zur vorbereiteten Upload-/Ergebnisauswertung: [PROVIDER_RESULTS.md](PROVIDER_RESULTS.md).
+Sightengine bleibt bei `VIDEO_PLAN_REQUIRED`. Vollständige visuelle Sicherheitsprüfung, ausdrückliche Nutzerfreigabe und tatsächlicher Providerbetrieb bleiben offen. Meta und Serverumbau bleiben außerhalb dieses Schritts. Zum inzwischen angeschlossenen Upload-/Ergebnisweg: [PROVIDER_RESULTS.md](PROVIDER_RESULTS.md).
 
-## Automatische Auftragsansteuerung – Fortsetzung PR #57
+## Automatische Auftragsansteuerung – Live-Anschluss PR #57
 
-Die additive Migration `publication_comparison_delivery_v1` ist installiert. Neue YouTube-/TikTok-Videoaufträge legen ihre Abgleichaufgabe in derselben Transaktion an. Der vorhandene Vergleichscache bleibt maßgeblich. Eine Queue-Lease verhindert parallele Zustellung; verlorene Starts vor dem Modellaufruf sind bis zu dreimal zustellbar. Die vorhandene Vergleichsreservierung verhindert einen zweiten kostenpflichtigen Modellversuch für denselben Fingerabdruck. Ein neuer Belegfingerabdruck erhält einen eigenen Abgleich; alte Ergebnisse oder Leases werden nicht übernommen. Stornierte Aufträge werden nicht verarbeitet.
+Die additive Migration `publication_comparison_delivery_v1` ist installiert. Neue YouTube-/TikTok-Videoaufträge legen ihre Abgleichaufgabe in derselben Transaktion an. Queue-Leases, Fingerabdruck und der vorhandene Vergleichscache verhindern parallele Zustellung und doppelte Modellversuche. Stornierte Aufträge werden nicht verarbeitet.
 
-`comparison-delivery-workflow.json` ist als private Kopie **`ZFO9NSh5nHSn3ues`** importiert. Die vorbereitete API-Vorlage stößt sie nach erfolgreichen Auftragsantworten ohne Warten an. Auch ein erneutes `get` kann einen verlorenen Start zustellen. Fehler beim Start verändern die ursprüngliche Dashboard-Antwort nicht. Es wird kein zusätzlicher Zeittrigger eingerichtet.
+Veröffentlicht sind der Vergleichsunterworkflow **`1qMj37a5gXlrbCWd`** (11 Nodes), die interne Zustellung **`ZFO9NSh5nHSn3ues`** (8 Nodes) und die ergänzte Auftrags-API **`RdtCqCWRi7P4W7B0`** (32 Nodes). Die API sendet zuerst ihre bisherige bereinigte Dashboard-Antwort und führt danach den Unterworkflow mit `waitForSubWorkflow:true` aus. Das Dashboard wartet damit nicht auf den Inhaltsabgleich; n8n behält den ausführenden Auftrag bis zum Abschluss. Ein erneutes authentifiziertes `get` kann einen verlorenen Start wieder aufnehmen. Es gibt keinen zusätzlichen Zeittrigger oder öffentlichen Einstieg.
 
-**Noch nicht live angeschlossen:** Der Nutzer hat das Speichern von „keine Ausführungsdaten speichern“ und 270 Sekunden Zeitlimit ausdrücklich freigegeben. Der anschließende n8n-Zugriff scheiterte an Zeitüberschreitungen der Browsersteuerung; auch deren Zurücksetzen war nicht erreichbar. Das Speichern ist deshalb nicht nachgewiesen. Die neue Kopie bleibt nach dem letzten bestätigten Stand unveröffentlicht; die aktive API ist unverändert. Vor dem Anschluss die Kopie nochmals mit dem aktuellen Generator abgleichen (einschließlich des korrigierten If-Ausdrucks ohne `.binding` im n8n-Parameter), die bereits freigegebenen Einstellungen speichern und exportieren, anschließend Vergleichsunterworkflow und Delivery-Workflow veröffentlichen und die API-Vorlage übernehmen. Eine erneute Einstellungsfreigabe ist nicht erforderlich. Keine der Vorlagen besitzt einen Social-Media-Schreibpfad.
+Der vorherige entkoppelte Aufruf mit `waitForSubWorkflow:false` ließ im Live-Test die Vergleichsaufgabe auf `queued`. Der isolierte Vergleich funktionierte. Eine interne n8n-Ursache ist nicht bewiesen; der abschließend getestete Ablauf verwendet deshalb die Fortsetzung **nach** `Dashboard-Antwort` und wartet intern auf den Unterworkflow. Fehler können die bereits gesendete Antwort nicht mehr verändern oder eine zweite Antwort senden. [n8n: Ausgabe des Respond-to-Webhook-Nodes](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.respondtowebhook/).
 
-Die Queue-Prüfung bestand lokal sowie gegen PostgreSQL 17 mit synthetischen Rollback-Fixtures: atomare Auftragseinfügung, exklusive Lease, verlorener Start, falsche/späte Lease, Cacheabschluss, geänderte Belege und Stornierung. 313 Node-Tests bestanden. Kein zusätzlicher echter Modelllauf und kein neuer Kundenauftrag wurden ausgelöst. [Dauerhafte Provider-Ergebnisse und verbleibende Anschlussarbeiten](PROVIDER_RESULTS.md).
+Die ausdrücklich genehmigten Einstellungen sind gespeichert: keine erfolgreichen, fehlgeschlagenen oder manuellen Ausführungsdaten, keine Fortschrittsspeicherung; nur Unterworkflows desselben Eigentümers, MCP aus. Limits: Vergleich 210 s, Zustellung 270 s, API und Providerweg 600 s. Die Exporte wurden mit den Generatoren abgeglichen, einschließlich des korrigierten If-Ausdrucks ohne `.binding` im n8n-Parameter. Temporäre Diagnose-Pins wurden entfernt; die abschließende API enthält keine Pins. Die 23 bisherigen API-Nodes sind unverändert.
+
+### Live-Nachweis am 03.11.2026
+
+- YouTube: Nach der Korrektur löste „Status erneut laden“ die Zustellung aus; Queue-Abschluss um **21:17:55 MEZ**. Der vorherige isolierte Diagnoselauf ist davon getrennt.
+- TikTok: Ein neuer Vorbereitungsauftrag schloss seinen Vergleich automatisch um **21:21:24 MEZ** ab, knapp drei Sekunden nach Auftragseinfügung.
+- Beide Wege verwendeten exakt die bestehenden abgeschlossenen Vergleichsfingerabdrücke. Keine neue Modellprüfung, keine Änderung der gespeicherten Titel/Captions. Beide Queue-Einträge waren `completed`, ohne offene Lease und ohne neuen Modellzustellversuch.
+- In beiden Dialogen waren die konkreten Inhaltsfragen sichtbar; Medien-/Rechtebestätigungen und finale Zustimmung blieben leer, die Freigabeschaltfläche gesperrt. Anschließend wurden ausschließlich die zwei eigenen Testaufträge unter Eigentümer-, Status-, Lease- und Journalprüfung storniert.
+- **314 Node-Tests bestanden.** Die bereits geprüften SQL-Definitionen blieben bei diesem Anschluss unverändert. [Providerjournal und Wiederaufnahme](PROVIDER_RESULTS.md).
 
 ```sh
 python3 n8n/publishing/build-comparison-delivery.py
 python3 n8n/publishing/build-publication-orders.py \
   --worker-id zLlhr1I1vKm2AiiU --account-id LR2Qng41OIYuVHAR \
-  --comparison-delivery-id ZFO9NSh5nHSn3ues
+  --comparison-delivery-id ZFO9NSh5nHSn3ues \
+  --provider-dispatch-id JPtiMBrudXLxxSrz
+node --test tests/*.test.cjs
 node tests/run-publication-delivery-sql.mjs
 ```
+
+Sightengine `VIDEO_PLAN_REQUIRED`, die inhaltlichen Rückfragen und die ausdrückliche Freigabe eines echten Uploadtests bleiben separate offene Voraussetzungen. Der Anschluss selbst ist keine Medien- oder Uploadfreigabe.
