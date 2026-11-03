@@ -34,7 +34,7 @@ export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomU
     const r=await response.json();
     if(!response.ok||r?.ok!==true)throw Object.assign(Error(orderError(r?.code)),{code:r?.code,existingId:r?.existing_order_id});
     if(action==='account'){if(r.id!==input.id||r.stage!=='account'||r.target?.platform!==input.platform||r.account_check?.target_id!==r.target?.id||r.can_publish!==false||r.can_upload!==false)throw Error(orderError());return r;}
-    if(r.id!==input.id||r.can_publish!==false||r.can_upload!==false||!['preparing','prepared','approved','checking','blocked','checked'].includes(r.state))throw Error(orderError());
+    if(r.id!==input.id||r.can_publish!==false||r.can_upload!==false||!['preparing','prepared','approved','checking','blocked','checked','cancelled'].includes(r.state))throw Error(orderError());
     return r;
   }
   return {
@@ -105,8 +105,9 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     const visibilityLabels={private:'Privat',public:'Öffentlich',unlisted:'Nicht gelistet',SELF_ONLY:'Nur ich',PUBLIC_TO_EVERYONE:'Öffentlich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
     const decisions=make('ul');for(const [key,value] of Object.entries(r.choices||{}))if(decisionLabels[key])decisions.append(make('li',decisionLabels[key]+': '+(key==='visibility'?visibilityLabels[value]||value:value?'Ja':'Nein')));details.append(decisions);
     details.append(make('h3',r.draft?.title||'Gespeicherter Beitrag'),make('pre',r.draft?.caption||r.draft?.body||''));
-    statusButton.hidden=false;
-    if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
+    statusButton.hidden=r.state==='cancelled';
+    if(r.state==='cancelled')notice.textContent='Dieser Auftrag wurde storniert und kann nicht mehr freigegeben werden. Schließe dieses Fenster und bereite bei Bedarf einen neuen Auftrag vor.';
+    else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
     else if(r.approved_at)notice.textContent='Deine Freigabe ist gespeichert. Es wurde nichts veröffentlicht. '+(r.state==='checking'?'Die Prüfung läuft noch.':'Die Veröffentlichung bleibt wegen offener Prüfungen gesperrt.');
     else notice.textContent='Der Auftrag ist vorbereitet; die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
