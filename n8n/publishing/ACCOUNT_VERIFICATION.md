@@ -111,6 +111,8 @@ Die separate Erkennung wurde im angemeldeten Dashboard-Kontext für die bereits 
 | TikTok-Technik | `VIDEO_FRAMERATE`, `VIDEO_CODEC`, `VIDEO_DIMENSIONS`, `BINARY_INSPECTION` jeweils `pass` |
 | Gesamtergebnis | `needs_review`, `can_publish:false` |
 
+Die Live-Anzeige unter „Vorschau für TikTok → Dateidetails“ zeigte die vier neuen technischen Nachweise als „Geprüft“; die offenen Inhalts-/Freigabepunkte und der Sightengine-Tarifhinweis blieben sichtbar. Auch die berichtigte H.264-Empfehlung wurde im Dashboard verifiziert.
+
 Der Prüfsummenvergleich sämtlicher gespeicherten Vorschauen vor und nach dem Lauf war identisch. Die tatsächliche Quelldatei wurde aus dem zugeordneten Drive-Kundenordner geladen; die Drive-Anbindung ist für diesen geprüften Pfad funktionsfähig. Es wurde kein Veröffentlichungsauftrag vorbereitet, kein Inhalt an YouTube/TikTok hochgeladen und keine finale Zustimmung erteilt.
 
 Der alte MP4-Empfehlungstext behauptete nach erfolgreicher Codecprüfung weiterhin, der Codec müsse noch geprüft werden. Er nennt jetzt ausschließlich die H.264-Empfehlung. Diese Textkorrektur ist mit Migration `publication_video_recommendation_wording_20261103` live; die Medienprofil-Prüfreihe bestand danach erneut. Keine CSS-, Layout- oder Schriftänderung.
