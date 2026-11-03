@@ -116,3 +116,76 @@ body.wide .example-tile summary{padding:10px 14px;border:1px solid #d3dced;borde
 body.wide .example-tile summary:hover{background:#dfe7fb;border-color:#91a4db}
 @media(max-width:1050px){body.wide .example-gallery{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:650px){body.wide .example-gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}body.wide #exampleFiles{min-height:380px}}
+
+/* Approved compact portal workspace: two sections, one automatic action. */
+body.wide #optimizerToolbar{gap:24px}
+body.wide #workspaceGalleryHeader,body.wide #workspaceGalleryActions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+body.wide #workspaceGalleryHeader{justify-content:space-between;margin:0 0 20px}
+body.wide #workspaceGalleryHeader h2{margin:0}
+body.wide #workspaceGalleryActions button{padding:10px 14px;font-size:14px}
+body.wide #workspaceGalleryActions #refreshFiles{background:#edf1f8;color:#3f506c;border:1px solid #ced6e7}
+body.wide #workspaceSearch{margin:0 0 18px;max-width:640px}
+body.wide #workspaceSearch>summary{font-size:14px;font-weight:400;color:#627087;cursor:pointer;margin-bottom:8px}
+body.wide #workspaceSelectedPreview{margin:24px 0 18px}
+body.wide #workspaceSelectedPreview #mediaSummary{display:list-item;margin-top:16px;padding:10px 0;cursor:pointer}
+body.wide #workspaceContinue{display:block;margin:20px 0 0 auto}
+body.wide #workspaceSource{--optimizer-type:14px;--optimizer-weight:400;font-size:14px;font-weight:400;min-height:0;max-width:1000px}
+body.wide #workspaceText{min-height:0}
+body.wide #workspaceSelectedFile{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 18px;padding:0 2px}
+body.wide #workspaceSelectedFile>div{min-width:0}
+body.wide #workspaceSelectedName{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65ch;font-size:14px;font-weight:500}
+body.wide #workspaceSelectedKind{display:block;color:#627087;font-size:12px;margin-top:3px}
+body.wide #workspaceChangeFile{background:transparent;color:#3157cd;white-space:nowrap;padding:8px 0;flex:none;font-size:13px}
+body.wide #workspaceEditor{border:1px solid #e0e5ef;border-radius:12px;padding:22px;background:#fff}
+body.wide #workspaceSource .magic-actions{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:0 0 18px;padding:0;border:0;background:transparent}
+body.wide #workspaceSource .magic-actions h2{display:none}
+body.wide #workspaceSource .magic-actions p{margin:0;max-width:290px;font-size:13px}
+body.wide #magicText{display:inline-flex;align-items:center;gap:18px;font-size:16px;font-weight:600;min-height:48px}
+body.wide #magicText::after{content:'→';font-size:27px;line-height:1}
+body.wide #workspaceSource #sourcePanel{border:0;border-top:1px solid #e0e5ef;border-bottom:1px solid #e0e5ef;border-radius:0;margin:0 0 22px}
+body.wide #workspaceSource #sourceSummary{display:list-item;padding:13px 0;color:#627087;font-size:13px;font-weight:400}
+body.wide #workspaceSource #sourcePanel>section{padding:6px 0 16px}
+body.wide #workspaceSource #sourcePanel .field{margin-bottom:14px}
+body.wide #workspaceSource #sourcePanel .row{display:none}
+body.wide #workspaceSource #sourcePanel textarea{height:110px;min-height:100px}
+body.wide #workspaceSource #sourcePanel label{font-weight:500}
+body.wide #workspaceSource #sourcePanel .note{font-size:13px}
+body.wide #workspaceSource #sourcePanel .actions button{font-size:13px;padding:9px 12px}
+body.wide #workspaceSource #inputFields{margin:0}
+body.wide #workspaceSource #workspaceMagicEvidence{margin:0 0 14px}
+body.wide #workspaceSource #workspaceMagicEvidence>summary{background:transparent;border:0;padding:10px 0;font-size:13px}
+body.wide #workspaceSource #workspaceMagicEvidence p{font-size:13px}
+body.wide #workspaceTextHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
+body.wide #workspaceTextHeader h2{font-size:18px;font-weight:500;margin:0}
+body.wide #workspaceTextHeader>.field{display:flex;gap:8px;align-items:center;margin:0}
+body.wide #workspaceTextHeader label{font-size:13px;font-weight:400;margin:0;color:#627087}
+body.wide #workspaceTextHeader select{width:auto;max-width:140px;font-size:13px;padding:6px 9px}
+body.wide #workspaceTextEmpty{padding:0}
+body.wide #workspaceSource :is(#workspaceTextEmpty,.draft) label{font-weight:500;font-size:14px}
+body.wide #workspaceTextEmpty p{font-size:13px;margin:6px 0 0}
+body.wide #workspaceTextEmpty input,body.wide #workspaceTextEmpty textarea{background:#fafbfe;color:#627087;opacity:1}
+body.wide #workspaceTextEmpty textarea,body.wide #workspaceSource .draft textarea{min-height:140px}
+body.wide #workspaceSource .draft{padding:0;margin:0;border:0}
+body.wide #workspaceSource .draft .field{margin-bottom:14px}
+body.wide #workspaceSource .draft :is(input,textarea){padding:10px 12px}
+body.wide #workspaceSource .draft summary{background:transparent;border:0;padding:6px 0;font-size:13px;font-weight:400}
+body.wide #workspaceSource .draft .tags{margin:8px 0;font-size:13px}
+body.wide #workspaceSource .draft .note{font-size:13px}
+body.wide #workspaceResultDetails{margin-top:18px;color:#627087}
+body.wide #workspaceResultDetails>summary{font-size:13px;cursor:pointer}
+body.wide #workspaceResultDetails :is(p,.pill){font-size:13px;font-weight:400}
+body.wide #workspaceResultDetails .checks{margin:14px 0 6px}
+body.wide #workspaceSource #result>.actions{justify-content:flex-end;margin-top:18px}
+body.wide #workspaceSource #save{background:#edf1f8;color:#3157cd;padding:10px 14px;font-size:14px;font-weight:500}
+body.wide #workspaceSource #saveStatus{font-size:12px}
+body.wide #workspaceStatus #portalStatus{font-size:13px;font-weight:400;line-height:1.5}
+@media(max-width:650px){
+ body.wide #workspaceEditor{padding:16px}
+ body.wide #workspaceSelectedName{max-width:100%}
+ body.wide #workspaceSource .magic-actions{gap:10px}
+ body.wide #workspaceTextHeader{align-items:flex-start}
+ body.wide #workspaceSource input,body.wide #workspaceSource textarea,body.wide #workspaceTextHeader select{font-size:16px}
+ body.wide #workspaceGalleryActions button{font-size:14px}
+ body.wide #workspaceSource #result>.actions{align-items:flex-start;flex-direction:column}
+ body.wide #workspaceSource #save{align-self:flex-end}
+}
