@@ -41,7 +41,7 @@ export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomU
   };
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,host,portalName}) {
+export function installOrderReview(doc,{session,getContext,refresh,host,portalName,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -57,7 +57,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,statusButton,close);
   dialog.append(title,intro,controls,details,consentLabel,notice,actions);doc.body.append(dialog);
-  const style=make('style');style.textContent='#publicationOrderDialog{width:min(650px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;border:1px solid #dfe5ef;border-radius:14px;padding:24px;color:#17233b}#publicationOrderDialog::backdrop{background:#17233b66}#publicationOrderDialog label{margin:14px 0 8px}#publicationOrderDialog input[type=checkbox]{margin-right:8px}#publicationOrderDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;background:#f5f7fc;padding:14px;border-radius:10px}#publicationOrderDialog select{margin-bottom:14px}#preparePublicationOrder{margin-top:12px}';doc.head.append(style);
+  const style=make('style');style.textContent='#publicationOrderDialog{width:min(650px,calc(100vw - 24px));max-height:min(720px,calc(100dvh - 24px));top:12px;bottom:auto;margin:0 auto;overflow:auto;border:1px solid #dfe5ef;border-radius:14px;padding:24px;color:#17233b}#publicationOrderDialog::backdrop{background:#17233b66}#publicationOrderDialog label{margin:14px 0 8px}#publicationOrderDialog input[type=checkbox]{margin-right:8px}#publicationOrderDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;background:#f5f7fc;padding:14px;border-radius:10px}#publicationOrderDialog select{margin-bottom:14px}#preparePublicationOrder{margin-top:12px}';doc.head.append(style);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0;
   const fields=new Map();
   function select(key,label,values) {
@@ -100,15 +100,15 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     finally{if(generation===epoch)setWorking(false);}
   }
   button.addEventListener('click',()=>{
-    try{context=getContext();order=null;client.reset();renderChoices(context.binding.platform);controls.hidden=false;details.replaceChildren();notice.textContent='';consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;setWorking(false);dialog.showModal();}
-    catch(e){notice.textContent=e.message;controls.hidden=true;details.replaceChildren();consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;dialog.showModal();}
+    try{context=getContext();order=null;client.reset();renderChoices(context.binding.platform);controls.hidden=false;details.replaceChildren();notice.textContent='';consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;setWorking(false);dialog.showModal();onOpen();}
+    catch(e){notice.textContent=e.message;controls.hidden=true;details.replaceChildren();consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;dialog.showModal();onOpen();}
   });
   controls.addEventListener('submit',event=>{event.preventDefault();if(!controls.reportValidity())return;const choices=Object.fromEntries([...fields].map(([k,e])=>[k,k==='visibility'?e.value:e.value==='true']));return run(async()=>{await refresh();unchanged();return client.prepare(context.binding,choices);});});
   consent.addEventListener('change',()=>setWorking(working));
   approve.addEventListener('click',()=>run(()=>client.approve(order,consent.checked)));
   statusButton.addEventListener('click',()=>run(()=>client.get(order.id)));
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
-  return {lock:value=>{button.disabled=value;},clear(){epoch++;order=null;context=null;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){epoch++;order=null;context=null;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
