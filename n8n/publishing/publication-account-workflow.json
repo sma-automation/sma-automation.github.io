@@ -83,7 +83,7 @@
           "conditions": [
             {
               "id": "80c22bb4-61d3-4a90-b520-ec28ad7c6027",
-              "leftValue": "={{ ['youtube','tiktok'].includes($('Kontoprüfung anfordern').first().json.binding.platform) }}",
+              "leftValue": "={{ ['youtube','tiktok'].includes($json.target.platform) }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",

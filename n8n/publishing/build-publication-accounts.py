@@ -32,7 +32,7 @@ def build():
  w.node('Kontoprüfung anfordern','executeWorkflowTrigger',{'inputSource':'passthrough'},0,v=1.1)
  w.customer('Kundenzugang laden','Kontoprüfung anfordern',240)
  code('Kontozuordnung prüfen',"const c="+CTX+";return [{json:orderTarget($input.all().map(i=>i.json),c)}];",480)
- w.condition('YouTube oder TikTok?',"={{ ['youtube','tiktok'].includes("+CTX+".binding.platform) }}",720)
+ w.condition('YouTube oder TikTok?',"={{ ['youtube','tiktok'].includes($json.target.platform) }}",720)
  code('Kontozugang auswählen',"const configured=false;if(!configured)throw Error('TARGET_CONFIGURATION_REQUIRED');return [{json:accountInput($('Kundenzugang laden').all().map(i=>i.json),"+CTX+",$('Kontozuordnung prüfen').first().json.target)}];",960)
  rpc('Kontoprüfung sperren','claim',1200);ok('Kontosperre bestätigen',1440)
  w.customer('Gesperrten Zugang zurücklesen','Kontoprüfung anfordern',1440,-300)

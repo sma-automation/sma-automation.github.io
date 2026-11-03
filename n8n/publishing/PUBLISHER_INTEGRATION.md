@@ -1,6 +1,6 @@
 # Gespeicherte Portaltexte im Publisher vorbereiten
 
-Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – neuer, noch nicht produktiv angeschlossener Prüfpfad; privater Import wartet auf Freigabe.
+Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – privater Import erfolgt, Datenbank und n8n-Anbindung ausgerollt; getestete Anschlusskorrektur wartet wegen Browser-Timeout noch auf Einspielung.
 
 Stand der Portaltext-Integration nach PR #43: 3. November 2026. Die separate n8n-Arbeitskopie **SMA – Kunden-Publishing – Portaltext-Anbindung V1**, ID `JZwPbzCpgIByxk94`, liest die ausgewählte gespeicherte Textversion über die [Übergabeprüfung](PUBLISHER_HANDOFF.md) und bereitet die passenden Textfelder für die vorhandenen Publisher vor. Diese Stufe ist noch keine produktive Verbindung zum Social-Media-Upload.
 

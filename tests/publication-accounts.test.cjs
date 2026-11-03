@@ -72,3 +72,10 @@ test('TikTok UI offers only provider options and preserves forced interaction re
  assert.deepEqual(r.visibility,[['SELF_ONLY','Nur ich'],['PUBLIC_TO_EVERYONE','Öffentlich']]);assert.equal(r.forced.disable_comment,true);assert.equal(r.forced.disable_duet,false);
  assert.throws(()=>accountChoiceOptions('tiktok',null));assert.equal(accountChoiceOptions('youtube',null),null);
 });
+test('n8n parameter expressions avoid the runtime-reserved binding property',()=>{
+ for(const file of ['publication-account-workflow.json','publication-order-api-workflow.json','publication-order-execution-workflow.json']){
+  const w=JSON.parse(fs.readFileSync('n8n/publishing/'+file));
+  function check(v){if(typeof v==='string'&&v.startsWith('='))assert.doesNotMatch(v,/\.binding\b|\[['"]binding['"]\]/);else if(v&&typeof v==='object')Object.values(v).forEach(check);}
+  for(const n of w.nodes)check(n.parameters);
+ }
+});
