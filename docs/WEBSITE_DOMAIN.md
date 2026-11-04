@@ -24,7 +24,7 @@ Eine öffentliche SMA-Shopadresse wird ausschließlich aus der aktuellen Kundenz
 | Öffentliche Prüfansicht mit Kopierhilfe | `app/website-connection-test.html`, `app/assets/website-connection-test.mjs` |
 | Private Speicherung und authentifizierter RPC | `supabase/sql/website-domain-preparation.sql` |
 
-Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ersetzt ausschließlich den Platzhalter im vorhandenen Modul und stellt ihn beim Entfernen der Erweiterung wieder her; Die äußere Navigation, Schrift und übrigen Portalbereiche bleiben erhalten. Die Modulüberschrift und Paketinformation stehen in der Übersicht; während einer Arbeitsansicht machen sie Platz für die gewählte Aufgabe. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
+Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ersetzt ausschließlich den Platzhalter im vorhandenen Modul und stellt ihn beim Entfernen der Erweiterung wieder her; die äußere Navigation, Schrift und übrigen Portalbereiche bleiben erhalten. Die Modulüberschrift und Paketinformation stehen in der Übersicht; während einer Arbeitsansicht machen sie Platz für die gewählte Aufgabe. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
 
 ## Kompakter Arbeitsbereich
 
@@ -39,6 +39,10 @@ Unter „Webseite & Domain“ → „Shop-Button einbauen“ stehen „Shop-Butt
 `/app/website-connection-test.html?shop=<slug>` zeigt den Button, sein exaktes Ziel und denselben kopierbaren Code. Die Seite akzeptiert ausschließlich einen gültigen öffentlichen Shop-Slug; zusätzliche oder doppelte Parameter werden abgelehnt. Ziel-Origin und Shop-Pfad sind fest vorgegeben. Ohne gültigen Parameter erscheint eine Anleitung zum Öffnen über das Dashboard, kein aktiver Shop-Button. Die Prüfansicht ruft keine Kunden-API auf und speichert nichts. Bei gesperrter Zwischenablage wird der Code für manuelles Kopieren markiert.
 
 Die SMA-Hauptseite und `CNAME` bleiben unverändert. Die Prüfansicht weist den Klickweg zum Shop nach; sie bestätigt weder Domaininhaberschaft noch den Einbau auf einer externen Webseite. Checkout und Bestellfreigaben bleiben Aufgaben des bestehenden Shops. Neue SQL-Migrationen oder n8n-Änderungen sind für diese Ergänzung nicht nötig.
+
+## Produkte auf bestehenden Webseiten
+
+Die [einbettbare Produktliste](PRODUCT_EMBED.md) ergänzt den Shop-Button. Sie zeigt die öffentlichen Produkte des jeweiligen SMA-Shops mit Preis und Bestand direkt auf einer externen Webseite. Der Einstieg „Produktliste einbauen“ öffnet eine separate Vorschau mit kopierbarem Einbaucode. Aktualisierung erfolgt beim Laden oder auf Knopfdruck; die bisherige kompakte Dashboard-Übersicht bleibt erhalten. Der Einbau auf einer tatsächlichen Kundenwebseite erfolgt anschließend durch deren Betreiber.
 
 ## Zugriff und Speichern
 
