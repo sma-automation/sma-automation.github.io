@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://bnvnmdxosbnuzedokqgh.supabase.co/functions/v1/sma-shop-produkte; img-src https://bnvnmdxosbnuzedokqgh.supabase.co/storage/v1/object/sign/sma-produktbilder/; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>SMA · Produkte</title>
+<link rel="stylesheet" href="./assets/shop-catalog.css?v=1">
+</head>
+<body>
+<main>
+ <header><div><p class="eyebrow">Produkte aus unserem Shop</p><h1 id="merchantName">SMA Shop</h1></div><a id="shopOpen" target="_blank" rel="noopener noreferrer" hidden>Shop öffnen ↗</a></header>
+ <div class="toolbar"><p id="catalogStatus" role="status" aria-live="polite">Shop-Link fehlt oder ist ungültig.</p><button id="refresh" type="button" hidden>Aktualisieren</button></div>
+ <section id="products" aria-label="Produkte" aria-busy="false"></section>
+ <nav id="pager" aria-label="Produktseiten" hidden><button id="previous" type="button">← Zurück</button><span id="pageNumber"></span><button id="next" type="button">Weiter →</button></nav>
+ <p class="note" id="catalogNote" hidden>Preise und Verfügbarkeit werden beim Laden aktualisiert. Weitere Details findest du im Shop.</p>
+ <noscript><p>Aktiviere JavaScript für die Produktliste oder nutze den Shop-Link unterhalb dieser Ansicht.</p></noscript>
+</main>
+<script type="module" src="./assets/shop-catalog-page.mjs?v=1"></script>
+</body>
+</html>

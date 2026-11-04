@@ -1,5 +1,6 @@
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
 import {createShopButton} from './shop-button.mjs?v=1';
+import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
 import {mountDomainVerification} from './domain-verification.mjs?v=2';
 
 const messages={
@@ -41,7 +42,7 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
  '<section id="smaWebsiteView-shop" data-website-view="shop" class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle" hidden><h2 id="smaWebsiteLinkTitle" tabindex="-1">Shop-Button einbauen</h2>'+
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
  '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a><a data-shop-preview target="_blank" rel="noopener noreferrer">Shop-Button testen</a></div>'+
- '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details></div>'+
+ '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details><div data-catalog-actions hidden><p class="sma-website-help">Du kannst auch eine Produktliste mit aktuellem Preis und Bestand auf deiner Webseite anzeigen.</p><div class="sma-website-actions"><a data-catalog-preview target="_blank" rel="noopener noreferrer">Produktliste einbauen</a></div></div></div>'+
  '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>'+
  '<section id="smaWebsiteView-domain" data-website-view="domain" hidden><div data-domain-panel></div><div class="sma-website-actions" data-domain-setup><button type="button" data-website-open="website">Webadresse hinterlegen</button></div></section>'+
  '<p class="sma-website-status" role="status" aria-live="polite" hidden></p>';
@@ -72,7 +73,7 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.hidden=!text;status.classList.toggle('sma-website-error',error);}
  function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
- function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');}}
+ function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');$('[data-catalog-preview]').removeAttribute('href');$('[data-catalog-actions]').hidden=true;}}
  function show(state){
   if(destroyed)return;
   const draft=state.draft||{mode:'existing',website_url:'',desired_domain:''};
@@ -83,6 +84,8 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
   const button=createShopButton(link);$('[data-shop-code]').value=button?.html||'';
   $('[data-shop-preview]').removeAttribute('href');
   if(button)$('[data-shop-preview]').href=button.previewUrl;
+  const catalog=createShopCatalog(link);$('[data-catalog-preview]').removeAttribute('href');$('[data-catalog-actions]').hidden=!catalog;
+  if(catalog)$('[data-catalog-preview]').href=catalog.previewUrl;
   if(link)$('[data-shop-open]').href=link;
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
   loaded=true;dirty=false;
