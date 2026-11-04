@@ -31,7 +31,7 @@ Im Einrichtungsbereich stand noch, die automatische WordPress-Einbindung werde e
 
 Fortsetzung: Die abgeschlossene Profil-/Entwurfsprüfung nicht erneut starten. PR #69 enthält den bestandenen lokalen WordPress-/MariaDB-Praxistest und bleibt separat offen. Eine externe Testadresse fehlt weiterhin. Die [individuelle Gestaltung der SMA-Webseite](CUSTOMER_WEBSITE_DESIGN.md) ist inzwischen über PR #71 live und geprüft. Der folgende Kundenschritt [eigene Logos und Startseitenbilder](CUSTOMER_WEBSITE_IMAGES.md) ist inzwischen über PR #72 ebenfalls live und im echten privaten Upload-/Speicherablauf geprüft. Nach dem Test wurde die ursprüngliche Darstellung wiederhergestellt; Revision 6, weiterhin privat.
 
-Nächster vorbereiteter Schritt: [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md). Implementierung und lokale Prüfungen sind abgeschlossen; die Bereitstellung wartet auf Freigabe. Kein neuer Live-Kundentest und keine Änderung des privaten SHK-Entwurfs in diesem Schritt.
+Der folgende Schritt [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist über **PR #73 live**. Serverprüfungen mit zurückgerollten synthetischen Daten und die angemeldete Lese-/Navigationsprüfung im Dashboard sind bestanden. Keine Domain gespeichert, keine DNS-Abfrage und keine Änderung des privaten SHK-Entwurfs. Ein echter positiver DNS-Nachweis und die Domain-Verknüpfung brauchen weiterhin eine freigegebene Domain mit konkreter Anbieterzuordnung.
 
 ## Ergänzung: offene private Vorschau
 

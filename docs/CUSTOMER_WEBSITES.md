@@ -25,7 +25,7 @@ SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird 
 
 ## Eigene Domain
 
-Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist als nächster Kundenschritt implementiert und lokal geprüft, aber noch nicht live. Er verwendet die gespeicherte eigene Domain im neuen Erstellungsweg und ergänzt einen Direktbutton zur bestehenden Nachweisansicht. Ein bestätigter TXT-Eintrag ist ausdrücklich noch keine Domain-Verknüpfung. DNS, Hosting und Kundendaten wurden für diese Erweiterung nicht verändert.
+Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist über **PR #73 live** und im angemeldeten Dashboard geprüft. Er verwendet die gespeicherte eigene Domain im neuen Erstellungsweg und ergänzt einen Direktbutton zur bestehenden Nachweisansicht. Ein bestätigter TXT-Eintrag ist ausdrücklich noch keine Domain-Verknüpfung. DNS, Hosting und Kundendaten wurden für diese Erweiterung nicht verändert.
 
 ## SHK-Vorschau
 

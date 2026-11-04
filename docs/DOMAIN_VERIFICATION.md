@@ -2,7 +2,7 @@
 
 Stand: 4. November 2026. Domainnachweis aus PR #60 veröffentlicht; Ziel `website-v1`.
 
-Die [bearbeitbaren SMA-Kundenwebseiten](CUSTOMER_WEBSITES.md) sind inzwischen live. Als nächster Schritt ist der [Domainnachweis auch für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) implementiert und lokal geprüft, aber noch nicht bereitgestellt. Die nachfolgenden Abschnitte dokumentieren den bereits veröffentlichten Stand aus PR #60 für bestehende Webseiten.
+Die [bearbeitbaren SMA-Kundenwebseiten](CUSTOMER_WEBSITES.md) sind inzwischen live. Der [Domainnachweis auch für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist inzwischen über **PR #73 live**, serverseitig geprüft und im angemeldeten Dashboard abgenommen. Die nachfolgenden Abschnitte dokumentieren den bereits veröffentlichten Stand aus PR #60 für bestehende Webseiten.
 
 ## Veröffentlichtes Verhalten aus PR #60
 
@@ -34,7 +34,7 @@ DNS-Abfragen gehen ausschließlich an `https://dns.google/resolve` mit TXT-Typ, 
 
 - `node --test tests/*.test.cjs`: **308 bestanden**, keine Fehler (301 bisherige und 7 neue Fälle).
 - `node tests/run-domain-verification-sql.mjs`: lokale Rollen-/Zustandsprüfung bestanden. Zusätzlich geprüfte Fälle umfassen neue Prüfkennung vor alter Antwort, abgelaufene Prüfkennung sowie Zugriffsentzug während einer Abfrage.
-- Migration `20261104095446_website_domain_verification_v1` installiert; Die damalige SQL-Definition bleibt im Migrationsverzeichnis erhalten; `supabase/sql/website-domain-verification.sql` enthält inzwischen die oben verlinkte, noch nicht bereitgestellte Erweiterung. Die Supabase-CLI ist in dieser Umgebung nicht installiert; die tatsächliche Versionsnummer wurde nach der Migration über den Connector ausgelesen.
+- Migration `20261104095446_website_domain_verification_v1` installiert; Die damalige SQL-Definition bleibt im Migrationsverzeichnis erhalten; `supabase/sql/website-domain-verification.sql` enthält inzwischen die oben verlinkte Erweiterung aus PR #73, bereitgestellt als Migration `20261104182946_customer_website_domain_proof_v1`. Die Supabase-CLI ist in dieser Umgebung nicht installiert; die tatsächliche Versionsnummer wurde nach der Migration über den Connector ausgelesen.
 - Live-SQL-Prüfung mit synthetischen Kunden in einer vollständig zurückgerollten Transaktion bestanden: Erstellen/Wiederholung, Bestätigen/Laden, unzulässige Rollen, Kundentrennung, Prüfungstakt, fehlender Eintrag, geänderte Revision und Kontowechsel. Auch neuere/abgelaufene Prüfkennungen, DNS-Ausfall und Zugriffsentzug während einer laufenden Prüfung sind live bestanden. Keine echten Kundenangaben verändert.
 - Security-Advisors: keine neue Warnung. Ein zusätzlicher INFO-Eintrag [RLS ohne Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) ist die beabsichtigte Sperre aller direkten Tabellenzugriffe.
 - Browser mit synthetischer API: fehlender Nachweis, Erstellen, markierter Clipboard-Fallback, Erfolg, Neuladen, DNS-Ausfall mit altem Zeitstempel, Adresswechsel, neue Zuordnung und Zugriffsentzug geprüft. Mobile Ansicht mit 390 Pixel Frame / 375 Pixel Nutzbreite ohne horizontalen Überlauf; vorhandene Schrift geerbt. Keine Änderung des bestehenden Stylesheets erforderlich.

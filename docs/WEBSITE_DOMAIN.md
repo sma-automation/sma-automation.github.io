@@ -1,6 +1,6 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
-Aktuelle Erweiterung: [Bearbeitbare SMA-Kundenwebseiten und SHK-Vorschau](CUSTOMER_WEBSITES.md). Bestehende externe Webseiten behalten ihren Verbindungsweg. Kunden ohne Webseite können einen privaten SMA-Entwurf erzeugen und bearbeiten; eine Veröffentlichung erfordert ihren eigenen ausdrücklichen Klick. Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist zusätzlich implementiert und lokal geprüft, aber noch nicht bereitgestellt. Die nachfolgenden Abschnitte dokumentieren die ursprüngliche Vorbereitung.
+Aktuelle Erweiterung: [Bearbeitbare SMA-Kundenwebseiten und SHK-Vorschau](CUSTOMER_WEBSITES.md). Bestehende externe Webseiten behalten ihren Verbindungsweg. Kunden ohne Webseite können einen privaten SMA-Entwurf erzeugen und bearbeiten; eine Veröffentlichung erfordert ihren eigenen ausdrücklichen Klick. Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist zusätzlich über **PR #73 live** und im angemeldeten Dashboard geprüft. Die nachfolgenden Abschnitte dokumentieren die ursprüngliche Vorbereitung.
 
 Stand: 4. November 2026. Ziel `website-v1`. **Vorbereitung aus PR #58, Shop-Button aus PR #59 und Domainnachweis aus PR #60 sind veröffentlicht.** Der öffentliche Klickweg zur Shopseite wurde zusätzlich im Browser des Nutzers anhand seiner Screenshots bestätigt. Der [kundengebundene DNS-Domainnachweis](DOMAIN_VERIFICATION.md) ist angeschlossen.
 

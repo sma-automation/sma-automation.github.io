@@ -1,6 +1,6 @@
 # Eigene Domain für neue SMA-Webseiten nachweisen
 
-Stand: 4. November 2026. **Implementiert und lokal geprüft; noch nicht bereitgestellt.** Ziel `website-v1`. PR #70, #71 und #72 sind bereits live und abgeschlossen. Der vorhandene private SHK-Entwurf bleibt unverändert bei Revision 6.
+Stand: 4. November 2026. **PR #73 zusammengeführt, bereitgestellt und im angemeldeten Dashboard geprüft.** Ziel `website-v1`. PR #70, #71 und #72 sind bereits live und abgeschlossen. Der vorhandene private SHK-Entwurf bleibt unverändert bei Revision 6.
 
 ## Geschlossene Lücke und Kundenablauf
 
@@ -46,10 +46,27 @@ for testfile in tests/run-*-dom.mjs; do node "$testfile"; done
 git diff --check
 ```
 
-## Bereitstellung nach Freigabe
+## Ausgeführte Bereitstellungsreihenfolge
 
 1. Bestehende Vorbereitungs-/Nachweis- und Webseitenzustände lesend abgleichen. `supabase/sql/website-domain-verification.sql` als neue Migration anwenden. Sie ersetzt die vorhandenen Funktionen mit unverändertem Rechteumfang und verändert keine gespeicherten Zeilen. Die historische Migration `20261104095446_website_domain_verification_v1.sql` nicht überschreiben. Die tatsächliche neue Migrationsversion nach Ausführung dokumentieren.
 2. Rollen-/Zustandsprüfung mit zurückgerollten synthetischen Daten sowie Advisor-Abgleich. Die vorhandene Edge-Funktion `sma-website-domain-check` benötigt keine Änderung: Sie arbeitet bereits mit dem serverseitig ermittelten Ziel.
 3. Erst danach den PR nach `website-v1` übernehmen und die Oberfläche ausliefern. Authentifizierten Lese-/Navigationsweg prüfen, ohne eine fiktive Domain als echte Kundendomain nachzuweisen. Kein erneuter Bild-/Firmendatentest nötig.
 
 Ein echter positiver Kundennachweis benötigt eine freigegebene Domain und deren TXT-Eintrag. Die tatsächliche Domain-Verknüpfung einschließlich Zielzuordnung, HTTPS und Hosting bleibt ein gesonderter Schritt. Es wurden weder Kundendaten noch DNS, CNAME, Tarife oder Hosting geändert; keine Seite veröffentlicht. PR #69 bleibt separat offen (lokaler WordPress-Test bestanden, externe Testseite fehlt, nur Produktbereich). PR #57, Meta und Serverumbau bleiben zurückgestellt; Sightengine bleibt `VIDEO_PLAN_REQUIRED`.
+
+
+## Bereitstellung und Live-Prüfung
+
+Der Nutzer gab die Bereitstellung nach Vorlage von PR #73 und der lokalen Prüfansicht am 4. November 2026 frei.
+
+- Migration **`20261104182946_customer_website_domain_proof_v1`** installiert. Vorher stimmten alle vier Funktionsdefinitionen mit dem dokumentierten Ausgangsstand überein; danach mit dem freigegebenen PR. Rechte, Definer-/Invoker-Aufteilung, leerer Suchpfad und RLS sind unverändert. Der bestehende Edge-Endpunkt wurde nicht neu bereitgestellt.
+- Der Advisor-Abgleich meldete keine neue Feststellung. Die bestehenden [RLS-ohne-Direktzugriff-INFO-Hinweise](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) und die übrigen bereits vorhandenen Hinweise blieben unverändert.
+- Die vorhandenen und neuen Domain-SQL-Prüfungen bestanden auch auf dem echten Server mit synthetischen Kunden in zurückgerollten Transaktionen. Zeitkorrekturen der älteren Fixture wurden für diesen Lauf ausdrücklich auf ihren Testkunden begrenzt. Nach dem Rollback: keine Testkunden, keine Vorbereitung und kein Domainnachweis gespeichert.
+- PR #73 wurde als **`c395feda72eefecd538f542051becc3b3a689eb4`** nach `website-v1` übernommen. [GitHub-Pages-Lauf 41887887097](https://github.com/sma-automation/sma-automation.github.io/actions/runs/41887887097) erfolgreich abgeschlossen am 4. November 2026 um **19:32 Uhr MEZ**.
+- Ausgeliefertes Dashboard, Webseitenvorbereitung, Domainmodul und unverändertes Stylesheet stimmen bytegenau mit der freigegebenen Fassung überein.
+- Im vorhandenen angemeldeten Delta-Dashboard den Einrichtungsbereich geöffnet und „Ich benötige eine Webseite“ gewählt. Das neue Domainfeld mit Erklärung und der zusätzliche Button erschienen. Der Button öffnete die separate Domainansicht; ohne gespeicherten Stand blieb „Prüfeintrag erstellen“ gesperrt. Anschließend den gespeicherten Stand wieder geladen und die Domainansicht über die unverändert dreiteilige Übersicht geöffnet. Keine Formularspeicherung, keine neue Anmeldung und keine DNS-Abfrage.
+- Die Prüfsumme der vollständigen bestehenden Webseitenzeile blieb identisch: `743ee8e6da031bed63273590afe9ea2c`. Weiterhin genau eine private Seite, Revision **6**, keine Veröffentlichung. Der abgeschlossene Bild-/Firmenprofiltest wurde nicht erneut durchgeführt.
+
+![Angemeldete Live-Ansicht ohne hinterlegte Kundendomain; Prüfeintrag bleibt gesperrt](evidence/customer-website-domain-proof-live-2026-11-04.jpg)
+
+Dieser Schritt ist abgeschlossen. Für einen echten positiven DNS-Nachweis fehlen weiterhin eine freigegebene Kundendomain und deren TXT-Eintrag. Eine tatsächliche Verknüpfung der Domain mit der SMA-Seite ist damit noch nicht eingerichtet. Der nächste Domainschritt braucht eine konkrete Domain-/Anbieterzuordnung und einen freigegebenen Hosting-/HTTPS-Weg; keine automatische Buchung oder Änderung an DNS, Hosting oder Tarifen.

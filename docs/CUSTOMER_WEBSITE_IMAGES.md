@@ -84,3 +84,5 @@ Die Freigabe des Nutzers erfolgte am 4. November 2026 nach der Vorlage von PR #7
 ![Zwischenstand des privaten Live-Tests mit Logo und Startseitenbild; danach ursprüngliche Darstellung wiederhergestellt](evidence/customer-website-images-live-2026-11-04.jpg)
 
 Der Bildschritt ist abgeschlossen. Der vorhandene SHK-Testentwurf bleibt privat gespeichert. Die bereits abgenommenen Schritte aus PR #70/#71 nicht erneut starten. PR #69 und #57 bleiben separat offen; keine kostenpflichtige Änderung, keine externe WordPress-Testseite und keine öffentliche Kundenveröffentlichung. Eigene Kundendomains bleiben ein gesonderter Schritt mit konkreter Domain-/Anbieterzuordnung.
+
+Der anschließende [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist inzwischen über PR #73 ebenfalls live. Der Bildschritt bleibt abgeschlossen; eine tatsächliche eigene Domain-Verknüpfung erfordert weiterhin eine konkrete freigegebene Domain-/Anbieterzuordnung.
