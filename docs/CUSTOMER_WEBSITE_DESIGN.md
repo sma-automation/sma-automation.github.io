@@ -1,6 +1,6 @@
 # Individuelle Gestaltung der SMA-Kundenwebseite
 
-Stand: 4. November 2026. Ausgangspunkt ist `website-v1` nach dem zusammengeführten und live geprüften PR #70 (`6de7a26`). Die abgeschlossene Profilpflege und automatische Vorschauaktualisierung werden weiterverwendet. Die hier beschriebene Gestaltung ist vorbereitet und lokal geprüft, **noch nicht bereitgestellt**.
+Stand: 4. November 2026. Ausgangspunkt ist `website-v1` nach dem zusammengeführten und live geprüften PR #70 (`6de7a26`). Die abgeschlossene Profilpflege und automatische Vorschauaktualisierung werden weiterverwendet. Die Gestaltung wurde mit Freigabe des Nutzers über **PR #71 zusammengeführt und live bereitgestellt**. Datenbankmigration und angemeldeter privater Speichertest sind abgeschlossen; Einzelheiten unter „Live-Abnahme“.
 
 ## Nächster Kundenschritt
 
@@ -23,7 +23,7 @@ Die vorhandenen JSON-Inhalte erhalten zwei optionale, streng begrenzte Zeichenke
 
 Ältere Schreibanfragen ohne Gestaltungsfelder erhalten bereits gespeicherte Werte. Die neue Oberfläche liest auch alte Inhalte. Alte, bereits geöffnete Browserseiten müssen bei Bereitstellung neu geladen werden, da deren bisherige Inhaltsprüfung zusätzliche Felder noch nicht kennt. Die geänderten HTML-Einstiege und ihre Modul-/Stylesheet-Abhängigkeiten erhalten neue Cache-Versionen.
 
-**Erst nach Freigabe:**
+**Ausgeführte Bereitstellungsreihenfolge (nach Freigabe):**
 
 1. Die aktualisierte Fassung von `supabase/sql/customer-websites.sql` im bestehenden Projekt bereitstellen. Die Änderungen betreffen die Inhaltsvalidierung und die Beibehaltung optionaler Gestaltungsfelder bei älteren Schreibanfragen. Kein Kundeninhalt wird durch das Installationsskript geändert.
 2. Den PR in `website-v1` übernehmen und die Oberflächenbereitstellung prüfen. Die neue Oberfläche darf nicht vor dem SQL-Update ausgeliefert werden, da der alte Validator Gestaltungsfelder ablehnt.
@@ -53,4 +53,20 @@ node tests/run-wordpress-dom.mjs
 node tests/run-wordpress-sync-dom.mjs
 ```
 
-Keine Produktionsdaten verändert, keine Migration installiert, keine Veröffentlichung, Hostingbuchung oder DNS-/Tarifänderung ausgeführt. PR #69 bleibt als lokaler WordPress-Praxistest separat offen; keine externe Testadresse vorhanden und weiterhin nur Produktbereich, keine Firmenprofiltexte. PR #57 bleibt separat. Sightengine: `VIDEO_PLAN_REQUIRED`; Meta und Serverumbau bleiben zurückgestellt.
+Die obigen lokalen Prüfungen veränderten keine Produktionsdaten. Die anschließend freigegebene Bereitstellung und die zwei privaten Test-Speichervorgänge sind unten dokumentiert. Keine Kundenwebseite veröffentlicht, kein Hosting gebucht und keine DNS-/Tarifänderung ausgeführt. PR #69 bleibt als lokaler WordPress-Praxistest separat offen; keine externe Testadresse vorhanden und weiterhin nur Produktbereich, keine Firmenprofiltexte. PR #57 bleibt separat. Sightengine: `VIDEO_PLAN_REQUIRED`; Meta und Serverumbau bleiben zurückgestellt.
+
+## Live-Abnahme
+
+Am 4. November 2026 hat der Nutzer die Bereitstellung von PR #71 einschließlich der Datenbankanpassung freigegeben.
+
+- Die beiden geänderten Live-Funktionen stimmten vor der Installation mit der geprüften Ausgangsfassung überein. Migration **`20261104164513_customer_website_design_v1`** installiert. Der Vorher-/Nachher-Abgleich bestätigte eine unveränderte gespeicherte Webseitenzeile und weiterhin null veröffentlichte Seiten.
+- Native SQL-Prüfung: alle zwölf Farb-/Motivkombinationen akzeptiert, ungültige Werte abgewiesen, sitzungsloser Zugriff `AUTH_REQUIRED`, anonyme private RPC und direkte Tabellenleserechte weiterhin gesperrt, RLS aktiv. Der Webseiten-Advisor meldet weiterhin nur das beabsichtigte [INFO für RLS ohne Direktzugriff](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy). Weitere projektweite Hinweise betreffen unveränderte andere Funktionen und die Auth-Konfiguration; sie wurden nicht als Teil dieser Gestaltung geändert.
+- PR #71 mit Commit `c7d58db29f3ba43b60d5ed5670eb8bed5c1fdc4c` zusammengeführt. [GitHub-Pages-Auslieferung 41870689790](https://github.com/sma-automation/sma-automation.github.io/actions/runs/41870689790) erfolgreich. Der ausgelieferte Editor sowie Modell-, Renderer- und Editor-Modul stimmen bytegenau mit der freigegebenen Fassung überein.
+- Die vorhandene angemeldete SMA-Kundensitzung geöffnet. Der fiktive SHK-Entwurf erschien mit den bestehenden Texten, zentralen Firmendaten und zugeordnetem Testshop. Im Gestaltungsbereich **Grün + Abstrakt** gewählt und über **Änderungen speichern** gespeichert. Die Oberfläche bestätigte „Bereit.“; die native lesende Prüfung bestätigte Webseitenrevision 3 und die gespeicherten Werte.
+- Die private Live-Vorschau zeigte nach erneutem Laden die grüne Gestaltung mit abstraktem Motiv, bestehende Texte und drei Testprodukte. Es wurden echte reguläre Kundenaufrufe verwendet, keine simulierte Antwort und keine direkte Datenbankänderung am Entwurf.
+- Der automatische Fokuswechsel zwischen zwei eigenständigen Tabs wurde durch diesen Browserlauf nicht zusätzlich nachgewiesen: Die Browsersteuerung löste beim Ansprechen des anderen Tabs keine beobachtete Aktualisierung aus; deshalb erfolgte der belegte Live-Abruf durch Neuladen. Die bereits abgenommene PR-#70-Funktion sowie die lokalen Fokus-/Sichtbarkeitsprüfungen bleiben der gesonderte Nachweis.
+- Anschließend **Blau + Haus & Technik** wieder über den Editor gespeichert. Endstand **Revision 4**, `accent=blue`, `hero=shk`. Genau eine Webseite; `published`, `published_company` und `published_at` weiterhin leer; öffentliche RPC antwortet `NOT_AVAILABLE`. Keine Firmenprofilfelder bearbeitet. Der normale Website-Speicherweg übernimmt wie vorgesehen die bereits aktuellen gemeinsamen Firmendaten.
+
+![Zwischenstand des angemeldeten Live-Tests: Grün und Abstrakt, anschließend wieder auf Blau und Hausmotiv gestellt](evidence/customer-website-design-live-2026-11-04.jpg)
+
+Der private SHK-Testentwurf bleibt gespeichert. PR #69 und PR #57 bleiben separat offen. Nächster möglicher Kundenschritt: eigene Firmenlogos und Bilder für SMA-Webseiten; das ist noch nicht implementiert und nicht Teil dieser Veröffentlichung.
