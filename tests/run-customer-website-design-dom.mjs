@@ -24,11 +24,11 @@ await test('legacy pages render in unchanged blue with the house motif',()=>{
  const {document}=parseHTML('<main class="site-shell"></main>'),root=document.querySelector('main');
  const view=renderCustomerWebsite({root,content,shopURL:null});assert.equal(root.getAttribute('data-accent'),'blue');assert.equal(root.getAttribute('data-hero'),'shk');assert(root.querySelector('#house'));view.destroy();
 });
-await test('all twelve design combinations preserve text and render only the selected motif',()=>{
+await test('all design combinations preserve text and render only the selected motif',()=>{
  for(const accent of appearanceOptions.accent)for(const hero of appearanceOptions.hero){
   const {document}=parseHTML('<main class="site-shell"></main>'),root=document.querySelector('main');
-  const view=renderCustomerWebsite({root,content:{...content,accent,hero},shopURL:null});assert.equal(root.getAttribute('data-accent'),accent);assert.equal(root.getAttribute('data-hero'),hero);
-  assert.equal(root.querySelector('[data-about]').textContent,content.about);assert.equal(!!root.querySelector('.hero-visual'),hero!=='none');assert.equal(!!root.querySelector('#house'),hero==='shk');
+  const view=renderCustomerWebsite({root,content:{...content,accent,hero,...(hero==='image'?{hero_image_id:id}:{})},shopURL:null});assert.equal(root.getAttribute('data-accent'),accent);assert.equal(root.getAttribute('data-hero'),hero);
+  assert.equal(root.querySelector('[data-about]').textContent,content.about);assert.equal(!!root.querySelector('.hero-visual'),!['none','image'].includes(hero));assert.equal(!!root.querySelector('#house'),hero==='shk');
   assert.equal(root.querySelector('script'),null);view.destroy();assert.equal(root.getAttribute('data-accent'),null);assert.equal(root.children.length,0);
  }
 });

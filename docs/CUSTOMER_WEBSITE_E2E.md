@@ -29,7 +29,7 @@ Im Einrichtungsbereich stand noch, die automatische WordPress-Einbindung werde e
 - Eigene Kundendomains benötigen weiterhin ihren jeweiligen Nachweis und eine gesonderte konkrete Anbindung. Keine DNS- oder Tarifänderung vorgenommen.
 - PR #57 bleibt separat. Social-Media-Uploads/Postings benötigen ausdrückliche Freigabe; Sightengine bleibt `VIDEO_PLAN_REQUIRED`, Meta und Serverumbau bleiben zurückgestellt.
 
-Fortsetzung: Die abgeschlossene Profil-/Entwurfsprüfung nicht erneut starten. PR #69 enthält den bestandenen lokalen WordPress-/MariaDB-Praxistest und bleibt separat offen. Eine externe Testadresse fehlt weiterhin. Der nächste eigenständig umsetzbare Kundenschritt ist die [individuelle Gestaltung der SMA-Webseite](CUSTOMER_WEBSITE_DESIGN.md); deren Umsetzung und Bereitstellungsgrenze sind dort dokumentiert.
+Fortsetzung: Die abgeschlossene Profil-/Entwurfsprüfung nicht erneut starten. PR #69 enthält den bestandenen lokalen WordPress-/MariaDB-Praxistest und bleibt separat offen. Eine externe Testadresse fehlt weiterhin. Die [individuelle Gestaltung der SMA-Webseite](CUSTOMER_WEBSITE_DESIGN.md) ist inzwischen über PR #71 live und geprüft. Der folgende Kundenschritt [eigene Logos und Startseitenbilder](CUSTOMER_WEBSITE_IMAGES.md) ist separat implementiert und lokal geprüft, aber noch nicht bereitgestellt.
 
 ## Ergänzung: offene private Vorschau
 

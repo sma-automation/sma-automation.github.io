@@ -1,5 +1,5 @@
-import {mountCustomerWebsitePage} from './customer-website-view.mjs?v=2';
-import {publicWebsiteRequest,customerWebsiteRequest,getOwnerId,watchOwner} from './customer-website-api.mjs?v=2';
-const page=mountCustomerWebsitePage({publicWebsiteRequest,customerWebsiteRequest,getOwnerId,watchOwner});
+import {mountCustomerWebsitePage} from './customer-website-view.mjs?v=3';
+import {publicWebsiteRequest,customerWebsiteRequest,getOwnerId,watchOwner,websiteImageRequest} from './customer-website-api.mjs?v=3';
+const page=mountCustomerWebsitePage({publicWebsiteRequest,customerWebsiteRequest,getOwnerId,watchOwner,websiteImageRequest});
 await page.load();
 window.addEventListener('pagehide',event=>{if(!event.persisted)page.destroy();});

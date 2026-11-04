@@ -1,9 +1,9 @@
 import {readCompanyProfile} from './company-profile-model.mjs?v=1';
-import {pageMode,readCustomerWebsite,readWebsiteContent} from './customer-website-model.mjs?v=3';
-import {renderCustomerWebsite} from './customer-website-render.mjs?v=3';
+import {pageMode,readCustomerWebsite,readWebsiteContent} from './customer-website-model.mjs?v=4';
+import {renderCustomerWebsite} from './customer-website-render.mjs?v=4';
 
 // Private previews reload only saved data. Public pages keep their published snapshot.
-export function mountCustomerWebsitePage({doc=document,search=doc.defaultView.location.search,customerWebsiteRequest,publicWebsiteRequest,getOwnerId,watchOwner,renderWebsite=renderCustomerWebsite}){
+export function mountCustomerWebsitePage({doc=document,search=doc.defaultView.location.search,customerWebsiteRequest,publicWebsiteRequest,getOwnerId,watchOwner,websiteImageRequest,renderWebsite=renderCustomerWebsite}){
  const win=doc.defaultView,mode=pageMode(search),root=doc.getElementById('site'),error=doc.getElementById('pageError'),banner=doc.getElementById('previewBanner');
  let view,owner,subscription,renderKey=null,started=null,running=null,queued=false,scheduled=false,ready=false,blocked=false,destroyed=false,epoch=0;
  const previewError='Dein gespeicherter Entwurf konnte nicht geladen werden. Wechsle erneut zu dieser Vorschau oder öffne die Webseitenbearbeitung in deinem SMA-Konto.';
@@ -16,7 +16,7 @@ export function mountCustomerWebsitePage({doc=document,search=doc.defaultView.lo
  function show(content,company,shopURL){
   // An unchanged response must preserve the catalog page, scroll and open details.
   const nextKey=JSON.stringify({content,company,shopURL});
-  if(renderKey!==nextKey){view?.destroy();view=renderWebsite({root,content,company,shopURL});renderKey=nextKey;}
+  if(renderKey!==nextKey){view?.destroy();view=renderWebsite({root,content,company,shopURL,...(websiteImageRequest?{imageRequest:(id,signal)=>websiteImageRequest(id,mode.preview?null:mode.siteId,signal)}:{})});renderKey=nextKey;}
   root.hidden=false;error.hidden=true;banner.hidden=!mode.preview;doc.title=content.name+' · Webseite';
  }
  async function readPreview(){

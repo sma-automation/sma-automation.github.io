@@ -23,3 +23,25 @@ export async function companyProfileRequest(action,input={}){
  if(error||!data?.session)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
  return rpc('sma_company_profile_v1',{p_action:action,p_input:input},data.session.access_token);
 }
+
+// Image bytes pass through an owner-/published-snapshot check on every request.
+const imageEndpoint=origin+'/functions/v1/sma-website-image';
+async function imageHeaders(privateAccess,expectedOwner){
+ if(!privateAccess)return {apikey:key};
+ const {data,error}=await (await auth()).auth.getSession();if(error||!data?.session)throw Object.assign(Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
+ if(expectedOwner&&data.session.user?.id!==expectedOwner)throw Object.assign(Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
+ return {apikey:key,Authorization:'Bearer '+data.session.access_token};
+}
+async function imageError(response){const r=await response.json().catch(()=>({}));throw Object.assign(Error('IMAGE_UNAVAILABLE'),{code:r.code||'IMAGE_UNAVAILABLE'});}
+const imageID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+export async function uploadWebsiteImage(blob,id,signal,expectedOwner){
+ if(!imageID.test(id)||!['image/png','image/jpeg'].includes(blob?.type)||blob.size>2_000_000)throw Object.assign(Error('IMAGE_FORMAT'),{code:'IMAGE_FORMAT'});
+ const response=await fetch(imageEndpoint+'?id='+id,{method:'POST',headers:{...await imageHeaders(true,expectedOwner),'Content-Type':blob.type},body:blob,credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(45000)])});
+ if(!response.ok)return imageError(response);const result=await response.json();if(result?.ok!==true||result.image?.id!==id)throw Error('IMAGE_UNAVAILABLE');return result.image;
+}
+export async function websiteImageRequest(id,siteId=null,signal){
+ if(!imageID.test(id)||siteId&&!imageID.test(siteId))throw Error('IMAGE_UNAVAILABLE');
+ const response=await fetch(imageEndpoint+'?id='+id+(siteId?'&site='+siteId:''),{headers:await imageHeaders(!siteId),credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(20000)])});
+ if(!response.ok)return imageError(response);if(!['image/png','image/jpeg'].includes(response.headers.get('content-type')))throw Error('IMAGE_UNAVAILABLE');
+ const blob=await response.blob();if(blob.size<24||blob.size>2_000_000)throw Error('IMAGE_UNAVAILABLE');return blob;
+}

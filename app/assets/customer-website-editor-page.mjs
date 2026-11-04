@@ -1,6 +1,6 @@
-import {mountCustomerWebsiteEditor} from './customer-website-editor.mjs?v=3';
-import {customerWebsiteRequest,getOwnerId,watchOwner} from './customer-website-api.mjs?v=2';
-const view=mountCustomerWebsiteEditor({request:customerWebsiteRequest,getOwnerId});
+import {mountCustomerWebsiteEditor} from './customer-website-editor.mjs?v=4';
+import {customerWebsiteRequest,getOwnerId,watchOwner,uploadWebsiteImage,websiteImageRequest} from './customer-website-api.mjs?v=3';
+const view=mountCustomerWebsiteEditor({request:customerWebsiteRequest,getOwnerId,uploadImage:uploadWebsiteImage,imageRequest:websiteImageRequest});
 try{
  let owner=await getOwnerId();
  await watchOwner(next=>{if(next!==owner){owner=next;view.invalidate();if(next)view.load();}});

@@ -32,7 +32,7 @@ test('explicit invalidation discards same-account stale results',async()=>{
 test('website design keeps legacy content valid and accepts every fixed palette and motif',async()=>{
  const m=await mod(),c=await content();assert.deepEqual(m.readWebsiteContent(c),c);
  for(const accent of m.appearanceOptions.accent)for(const hero of m.appearanceOptions.hero){
-  const styled={...c,accent,hero};assert.deepEqual(m.readWebsiteContent(styled),styled);
+  const styled={...c,accent,hero,...(hero==='image'?{hero_image_id:id}:{})};assert.deepEqual(m.readWebsiteContent(styled),styled);
  }
 });
 test('website design rejects arbitrary CSS, URLs, unknown choices and non-string values',async()=>{

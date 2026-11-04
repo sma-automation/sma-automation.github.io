@@ -1,8 +1,8 @@
 import {readCompanyProfile,companyAddress} from './company-profile-model.mjs?v=1';
-import {readWebsiteContent,appearanceDefaults} from './customer-website-model.mjs?v=3';
+import {readWebsiteContent,appearanceDefaults} from './customer-website-model.mjs?v=4';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
 import {mountShopCatalog} from './shop-catalog.mjs?v=1';
-export function renderCustomerWebsite({root,content,shopURL,catalogRequest,company=null}){
+export function renderCustomerWebsite({root,content,shopURL,catalogRequest,company=null,imageRequest,makeURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url)}){
  const c=readWebsiteContent(content),p=company?readCompanyProfile(company):null,doc=root.ownerDocument,catalog=createShopCatalog(shopURL);
  // All interpolated customer content is assigned as text. The HTML below is application-owned.
  root.innerHTML='<header class="site-header"><a class="brand" href="#start"><span class="brand-mark" aria-hidden="true">⌂</span><span data-name></span></a><nav aria-label="Hauptnavigation"><a href="#leistungen" data-services-nav>Leistungen</a><a href="#produkte" data-shop-nav>Produkte</a><a href="#kontakt" class="button">Kontakt aufnehmen</a></nav></header>'+
@@ -17,6 +17,21 @@ export function renderCustomerWebsite({root,content,shopURL,catalogRequest,compa
  const visual=root.querySelector('.hero-visual');
  if(hero==='none')visual.remove();
  if(hero==='abstract')visual.innerHTML='<circle cx="200" cy="150" r="133" fill="#ffffff" opacity=".07"/><rect x="72" y="70" width="234" height="160" rx="26" fill="#ffffff" opacity=".1" transform="rotate(-12 200 150)"/><rect x="96" y="78" width="234" height="160" rx="26" fill="#ffffff" opacity=".14"/><circle cx="153" cy="134" r="23" fill="#ffffff" opacity=".85"/><path d="M199 122h87m-87 20h63M128 188h158m-158 20h111" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity=".65"/><circle cx="308" cy="227" r="35" fill="#ffffff" opacity=".9"/><path d="m292 227 11 11 21-24" fill="none" stroke="#213c59" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>';
+ let disposed=false;const imageControllers=[],imageURLs=[];
+ function loadImage(id,img,ready,failed){
+  if(!imageRequest){failed();return;}const controller=new AbortController();imageControllers.push(controller);
+  Promise.resolve().then(()=>imageRequest(id,controller.signal)).then(blob=>{
+   if(disposed)return;const url=makeURL(blob);imageURLs.push(url);img.onload=()=>{if(!disposed)ready();};img.onerror=()=>{if(!disposed)failed();};img.src=url;
+  }).catch(()=>{if(!disposed)failed();});
+ }
+ if(c.logo_image_id){
+  const mark=root.querySelector('.brand-mark'),logo=doc.createElement('img');logo.className='brand-logo';logo.alt='';logo.hidden=true;mark.before(logo);
+  loadImage(c.logo_image_id,logo,()=>{logo.hidden=false;mark.hidden=true;},()=>{logo.hidden=true;mark.hidden=false;});
+ }
+ if(hero==='image'){
+  visual.remove();const host=doc.createElement('div');host.className='hero-photo';const photo=doc.createElement('img');photo.alt=c.hero_image_alt||'';photo.hidden=true;photo.decoding='async';const hint=doc.createElement('p');hint.className='small';hint.textContent='Bild wird geladen …';host.append(photo,hint);root.querySelector('.hero').append(host);
+  loadImage(c.hero_image_id,photo,()=>{photo.hidden=false;hint.hidden=true;},()=>{photo.hidden=true;hint.textContent='Bild derzeit nicht verfügbar.';});
+ }
  const set=(selector,text)=>{for(const el of root.querySelectorAll(selector))el.textContent=text;};
  set('[data-name]',c.name);set('[data-headline]',c.headline);set('[data-intro]',c.intro);set('[data-about-title]',c.name);set('[data-about]',c.about);root.querySelector('#ueber-uns').hidden=!c.about.trim();
  const services=root.querySelector('[data-services]');let count=0;
@@ -39,5 +54,5 @@ export function renderCustomerWebsite({root,content,shopURL,catalogRequest,compa
   facts.hidden=false;
  }
  const view=catalog?mountShopCatalog({doc,search:'?shop='+catalog.slug,...(catalogRequest?{request:catalogRequest}:{})}):null;
- return {destroy(){view?.destroy();root.replaceChildren();root.removeAttribute('data-accent');root.removeAttribute('data-hero');}};
+ return {destroy(){disposed=true;for(const controller of imageControllers)controller.abort();for(const url of imageURLs)revokeURL(url);view?.destroy();root.replaceChildren();root.removeAttribute('data-accent');root.removeAttribute('data-hero');}};
 }

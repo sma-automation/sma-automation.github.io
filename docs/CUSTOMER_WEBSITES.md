@@ -19,6 +19,10 @@ Der aktuelle öffentliche Shop wird serverseitig aus dem Kundenkonto zugeordnet.
 
 SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird kein Hostingvertrag abgeschlossen, keine eigene Domain gekauft und kein DNS-Eintrag geschrieben. Eigene Domains bleiben ein weiterer Schritt. Die [individuelle Gestaltung mit Akzentfarbe und Startseitenmotiv](CUSTOMER_WEBSITE_DESIGN.md) ist über PR #71 live. Der angemeldete Speichertest ist abgeschlossen; der private SHK-Testentwurf wurde anschließend auf Blau mit Hausmotiv zurückgestellt. Die neue Vorlage verwendet Inter mit den bestehenden System-Fallbacks; die genehmigte Dashboard-Schrift und geschützte n8n-Workflows bleiben unverändert.
 
+## Vorbereitete Erweiterung: eigene Bilder
+
+[Eigene Firmenlogos und Startseitenbilder](CUSTOMER_WEBSITE_IMAGES.md) sind implementiert und lokal geprüft, aber noch nicht live. Der Kunde wählt sie im bestehenden zugeklappten Gestaltungsbereich und übernimmt sie mit „Änderungen speichern“. Ein eigener privater Speicherweg hält Bilder an den Besitzer und den getrennten veröffentlichten Stand gebunden. 381 Node-Tests, zehn neue Bild-DOM-Szenarien sowie bestehende DOM-/SQL-Prüfungen bestanden. Die Bereitstellung von Datenbank, Bild-Endpunkt und Oberfläche benötigt noch Freigabe. Der Produktbildspeicher und PR #69/#57 bleiben davon getrennt.
+
 ## SHK-Vorschau
 
 `app/website-preview-shk.html` zeigt einen fiktiven Sanitär-, Heizungs- und Klimabetrieb mit Desktop-/Handy-Umschaltung. `app/website-example-shk.html` öffnet die Beispielseite direkt. Sie nutzt denselben Renderer und dieselben Styles wie die Kundenwebseite. Produktzeichnungen und Texte sind Beispiele; es werden keine Preise, Lagerbestände, Bestellungen oder Kontaktübermittlungen vorgetäuscht. Die Vorschau benötigt keine Anmeldung und ist für Suchmaschinen als `noindex,nofollow` markiert.
