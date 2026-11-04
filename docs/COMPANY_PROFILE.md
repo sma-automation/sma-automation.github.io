@@ -14,7 +14,7 @@ Beim Wiederaufruf aktualisiert sich das Dashboard. Ein offener Webseiteneditor l
 
 Ein öffentliches SMA-Webangebot bleibt auf dem ausdrücklich veröffentlichten Stand. **Öffentliche Webseite aktualisieren** speichert Website und Firmenprofil gemeinsam als Snapshot. Ein anschließendes Speichern im Firmenprofil verändert automatisch den privaten Entwurf, nicht den öffentlichen Snapshot. Die Vorschau enthält den aktuellen privaten Profilstand. Offline-Schalten löscht auch den öffentlichen Firmen-Snapshot.
 
-Das zentrale Profil verändert keine bestehenden externen Webseiten. Deren Anbieteranschluss bleibt ein eigener Weg; der bisherige WordPress-Schritt prüft weiterhin nur den Lesezugriff. Es gibt keine versteckte DNS-, Tarif-, Domainkauf-, Zahlungs- oder Social-Media-Aktion. `sma_kunden.kunde_email`, Login und geschützte n8n-Kundenzuordnungen bleiben unverändert. Individuelle Impressums- und Datenschutztexte bleiben gesondert bearbeitbar.
+Das zentrale Profil verändert keine bestehenden externen Webseiten. Deren Anbieteranschluss bleibt ein eigener Weg; WordPress ergänzt inzwischen einen [separaten Produktentwurfsauftrag](WORDPRESS_DRAFT_SYNC.md), der keine Firmenprofiltexte überträgt. Es gibt keine versteckte DNS-, Tarif-, Domainkauf-, Zahlungs- oder Social-Media-Aktion. `sma_kunden.kunde_email`, Login und geschützte n8n-Kundenzuordnungen bleiben unverändert. Individuelle Impressums- und Datenschutztexte bleiben gesondert bearbeitbar.
 
 ## Zugriff und Migration
 
