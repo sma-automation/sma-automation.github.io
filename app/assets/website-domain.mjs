@@ -1,6 +1,7 @@
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
 import {createShopButton} from './shop-button.mjs?v=1';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
+import {mountWordpressConnection} from './wordpress-connection.mjs?v=1';
 import {mountDomainVerification} from './domain-verification.mjs?v=2';
 
 const messages={
@@ -18,7 +19,7 @@ const messages={
  BUSY:'Bitte warte, bis der aktuelle Vorgang abgeschlossen ist.'
 };
 
-export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,stylesheetUrl}){
+export function mountWebsitePreparation({page,request,domainRequest,wordpressRequest,getOwnerId,stylesheetUrl}){
  if(!page||page.querySelector('#smaWebsitePreparation'))return {destroy(){}};
  const doc=page.ownerDocument,win=doc.defaultView;
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -38,23 +39,25 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
  '<label class="sma-website-field" data-existing>Vorhandene Webseite<input name="website_url" type="text" inputmode="url" autocomplete="url" placeholder="https://meine-firma.at" maxlength="2048"></label>'+
  '<label class="sma-website-field"><span>Wunschdomain <span class="sma-website-optional">(optional)</span></span><input name="desired_domain" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="meine-firma.at" maxlength="253"><span class="sma-website-help">Ein Domainwunsch ist noch keine Verfügbarkeitsprüfung oder Reservierung.</span></label>'+
  '</fieldset><div class="sma-website-actions"><button type="submit" disabled class="sma-website-primary">Vorbereitung speichern</button><button type="button" data-reload>Gespeicherten Stand laden</button></div>'+
- '</form><p class="sma-website-help">Neue Webseiten werden individuell abgestimmt. Das Speichern beauftragt keine Erstellung, kauft keine Domain und veröffentlicht keine Webseite.</p></section>'+
+ '</form><div class="sma-website-actions"><button type="button" data-website-open="connection" data-wp-entry>WordPress verbinden</button></div><p class="sma-website-help">Neue Webseiten werden individuell abgestimmt. Das Speichern beauftragt keine Erstellung, kauft keine Domain und veröffentlicht keine Webseite.</p></section>'+
  '<section id="smaWebsiteView-shop" data-website-view="shop" class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle" hidden><h2 id="smaWebsiteLinkTitle" tabindex="-1">Shop-Button einbauen</h2>'+
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
  '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a><a data-shop-preview target="_blank" rel="noopener noreferrer">Shop-Button testen</a></div>'+
  '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details><div data-catalog-actions hidden><p class="sma-website-help">Du kannst auch eine Produktliste mit aktuellem Preis und Bestand auf deiner Webseite anzeigen.</p><div class="sma-website-actions"><a data-catalog-preview target="_blank" rel="noopener noreferrer">Produktliste einbauen</a></div></div></div>'+
  '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>'+
  '<section id="smaWebsiteView-domain" data-website-view="domain" hidden><div data-domain-panel></div><div class="sma-website-actions" data-domain-setup><button type="button" data-website-open="website">Webadresse hinterlegen</button></div></section>'+
+ '<section id="smaWebsiteView-connection" data-website-view="connection" hidden><h2 tabindex="-1">WordPress verbinden</h2><div data-wordpress-panel></div></section>'+
  '<p class="sma-website-status" role="status" aria-live="polite" hidden></p>';
  const placeholder=page.querySelector('.package-module-slot');
  if(placeholder)placeholder.replaceWith(root);else page.append(root);
  const $=s=>root.querySelector(s),fields=$('fieldset'),status=$('.sma-website-status');
  page.classList.add('sma-website-managed');
  let activeView='overview',lastView='website';
- const viewNames=['website','shop','domain'];
+ const viewNames=['website','shop','domain','connection'];
  function openView(name,{focus=true,scroll=true}={}){
   if(name!=='overview'&&!viewNames.includes(name))return;
-  activeView=name;if(name!=='overview')lastView=name;
+  if(name==='connection')wordpressView?.load();
+  activeView=name;if(name!=='overview')lastView=name==='connection'?'website':name;
   for(const panel of root.querySelectorAll('[data-website-view]'))panel.hidden=panel.dataset.websiteView!==name;
   $('[data-website-overview]').hidden=name!=='overview';$('[data-website-toolbar]').hidden=name==='overview';
   page.classList.toggle('sma-website-detail',name!=='overview');
@@ -67,13 +70,15 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
  $('[data-website-back]').addEventListener('click',()=>openView('overview'));
  const client=createWebsiteDraftClient({request,getOwnerId,uuid:()=>win.crypto.randomUUID()});
  let destroyed=false,loaded=false,busy=false,dirty=false;
+ const wordpressView=wordpressRequest?mountWordpressConnection({root:$('[data-wordpress-panel]'),request:wordpressRequest,getOwnerId}):null;
+ if(!wordpressView)$('[data-wp-entry]').hidden=true;
  const domainView=domainRequest?mountDomainVerification({root:$('[data-domain-panel]'),asPanel:true,request:domainRequest,getOwnerId,onAccessError:error=>{rejectOwner(error);setBusy(false);notice(messages[error.code],true);}}):null;
  if(!domainView){$('[data-website-open="domain"]').hidden=true;$('[data-domain-setup]').hidden=true;}
  const mode=()=>root.querySelector('[name="website_mode"]:checked').value;
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.hidden=!text;status.classList.toggle('sma-website-error',error);}
  function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
- function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');$('[data-catalog-preview]').removeAttribute('href');$('[data-catalog-actions]').hidden=true;}}
+ function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;wordpressView?.invalidate();domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');$('[data-catalog-preview]').removeAttribute('href');$('[data-catalog-actions]').hidden=true;}}
  function show(state){
   if(destroyed)return;
   const draft=state.draft||{mode:'existing',website_url:'',desired_domain:''};
@@ -90,7 +95,7 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
   loaded=true;dirty=false;
   $('[data-domain-setup]').hidden=!domainView||draft.mode==='existing'&&Boolean(draft.website_url);
-  domainView?.setDraft(state);
+  domainView?.setDraft(state);wordpressView?.setDraft(state);
  }
  async function load(){
   if(destroyed||busy)return;
@@ -99,7 +104,7 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
   catch(error){rejectOwner(error);notice(messages[error.code]||'Die Vorbereitung ist gerade nicht erreichbar. Bitte versuche es später erneut.',true);}
   finally{if(!destroyed){setBusy(false);if(!loaded)fields.disabled=true;}}
  }
- $('form').addEventListener('input',()=>{dirty=true;domainView?.invalidate('Speichere die geänderten Angaben vor der Domainprüfung.');$('[data-domain-setup]').hidden=!domainView;toggle();notice('Ungespeicherte Angaben.');});
+ $('form').addEventListener('input',()=>{dirty=true;wordpressView?.invalidate();domainView?.invalidate('Speichere die geänderten Angaben vor der Domainprüfung.');$('[data-domain-setup]').hidden=!domainView;toggle();notice('Ungespeicherte Angaben.');});
  $('form').addEventListener('submit',async event=>{
   event.preventDefault();if(busy||destroyed||!loaded)return;domainView?.invalidate('Vorbereitung wird gespeichert …');setBusy(true);notice('Vorbereitung wird gespeichert …');
   try{
@@ -123,5 +128,5 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
  const observer=new win.MutationObserver(()=>{if(!page.classList.contains('active')&&activeView!=='overview')openView('overview',{focus:false,scroll:false});if(page.classList.contains('active')&&!dirty&&!loaded)load();});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
  if(page.classList.contains('active'))load();
- return {destroy(){destroyed=true;domainView?.destroy();observer.disconnect();page.classList.remove('sma-website-managed','sma-website-detail');if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
+ return {destroy(){destroyed=true;wordpressView?.destroy();domainView?.destroy();observer.disconnect();page.classList.remove('sma-website-managed','sma-website-detail');if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
 }
