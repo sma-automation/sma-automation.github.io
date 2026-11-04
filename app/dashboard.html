@@ -6,7 +6,8 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
-import {mountWebsitePreparation} from './assets/website-domain.mjs?v=8';
+import {mountWebsitePreparation} from './assets/website-domain.mjs?v=9';
+import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -17,7 +18,7 @@ const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',t
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
 let optimizerTrigger=null,selectedFileId=null;
 let fileView=null;
-let websitePreparation=null,dashboardOwnerId=null;
+let websitePreparation=null,companyProfileDashboard=null,dashboardOwnerId=null;
 function showPublishing(){
  if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
  for(const child of publishingPage.children)child.classList.remove('sma-publishing-hidden');
@@ -57,6 +58,7 @@ function attachOptimizerPage(doc,page){
 // Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
+  companyProfileDashboard?.destroy();companyProfileDashboard=null;
   websitePreparation?.destroy();websitePreparation=null;
   const websitePage=doc?.getElementById('page-website'),ownerId=dashboardOwnerId;
   if(websitePage&&ownerId){
@@ -99,6 +101,10 @@ frame.addEventListener('load',()=>{
       }
     });
   }
+  if(doc&&ownerId)companyProfileDashboard=mountCompanyProfileDashboard({doc,expectedOwnerId:ownerId,ownerWindow:window,
+    request:async(action,input)=>{const {data,error}=await supabase.rpc('sma_company_profile_v1',{p_action:action,p_input:input});if(error)throw error;return data;},
+    getOwnerId:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;},
+    stylesheetUrl:new URL('./assets/company-profile.css?v=1',location.href).href});
   const page=doc?.getElementById('page-publishing');
   if(!page)return;
   const style=doc.createElement('style');style.textContent=`
@@ -161,7 +167,7 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -176,7 +182,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 

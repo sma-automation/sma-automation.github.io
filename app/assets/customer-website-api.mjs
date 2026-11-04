@@ -17,3 +17,9 @@ export async function customerWebsiteRequest(action,input={}){
 }
 export const publicWebsiteRequest=siteId=>rpc('sma_customer_website_public_v1',{p_site_id:siteId});
 export async function watchOwner(callback){return (await auth()).auth.onAuthStateChange((_event,session)=>callback(session?.user?.id||null)).data.subscription;}
+
+export async function companyProfileRequest(action,input={}){
+ const {data,error}=await (await auth()).auth.getSession();
+ if(error||!data?.session)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
+ return rpc('sma_company_profile_v1',{p_action:action,p_input:input},data.session.access_token);
+}

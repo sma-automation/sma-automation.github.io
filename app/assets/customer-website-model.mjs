@@ -1,3 +1,4 @@
+import {readCompanyProfile} from './company-profile-model.mjs?v=1';
 import {safeShopLink} from './website-domain-model.mjs?v=1';
 export const siteUUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export const contentLimits={name:100,headline:160,intro:600,about:4000,contact_email:254,legal_notice:6000,privacy_notice:6000,contact_phone:60,contact_address:400,service_1_title:80,service_1_text:400,service_2_title:80,service_2_text:400,service_3_title:80,service_3_text:400};
@@ -19,7 +20,9 @@ export function readCustomerWebsite(r){
  if(!Number.isSafeInteger(r.revision)||r.revision<0||r.revision>2147483647||['published','publicly_available','has_changes','can_edit'].some(k=>typeof r[k]!=='boolean'))fail('INVALID_RESPONSE');
  if(r.revision===0){if(r.site_id!==null||r.content!==null||r.website_url!==null||r.published||r.publicly_available)fail('INVALID_RESPONSE');}
  else if(r.website_url!==websiteURL(r.site_id))fail('INVALID_RESPONSE');
- return {revision:r.revision,siteId:r.site_id,content:r.content===null?null:readWebsiteContent(r.content),published:r.published,publiclyAvailable:r.publicly_available,
+ const companyRevision=r.company_revision??0;if(!Number.isSafeInteger(companyRevision)||companyRevision<0||companyRevision>2147483647||(companyRevision===0)!==!r.company_profile)fail('INVALID_RESPONSE');
+ const company=r.company_profile?readCompanyProfile(r.company_profile):null;
+ return {company,companyRevision,revision:r.revision,siteId:r.site_id,content:r.content===null?null:readWebsiteContent(r.content),published:r.published,publiclyAvailable:r.publicly_available,
   hasChanges:r.has_changes,canEdit:r.can_edit,shopURL:safeShopLink(r.shop_url),websiteURL:r.website_url};
 }
 export function createCustomerWebsiteClient({request,getOwnerId,uuid=()=>crypto.randomUUID()}){
@@ -31,7 +34,7 @@ export function createCustomerWebsiteClient({request,getOwnerId,uuid=()=>crypto.
    let input={};
    if(action!=='get'){
     if(!state)fail('AUTH_REQUIRED');
-    const intent=action==='save'?{content:readWebsiteContent(content)}:{};
+    const intent={...(action==='save'?{content:readWebsiteContent(content)}:{}),...(['save','publish'].includes(action)?{expected_company_revision:state.companyRevision}: {})};
     const signature=JSON.stringify({action,...intent});
     if(!pending||pending.signature!==signature)pending={signature,input:{...intent,expected_revision:state.revision,request_id:uuid()}};
     input=pending.input;

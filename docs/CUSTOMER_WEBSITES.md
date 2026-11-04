@@ -2,6 +2,8 @@
 
 Stand: 4. November 2026. Beide Wege bleiben im Delta-Modul erhalten. Der neue Erstellungsweg ersetzt weder die vorhandene Kundenwebseite noch ihre Verbindungsvorbereitung.
 
+Ergänzung: [Gemeinsame Firmendaten](COMPANY_PROFILE.md) verbindet Dashboard und SMA-Webseitenentwurf mit einer zentralen Bearbeitung von Firma, Firmensitz, Kontakten und Registerangaben. Bei vorhandenem Profil werden die gemeinsamen Felder im Webseiteneditor automatisch übernommen. Eine öffentliche Webseite verwendet den ausdrücklich veröffentlichten Firmen-Snapshot; spätere Profiländerungen bleiben zunächst im Entwurf.
+
 ## Bedienung
 
 Unter „Webseite & Domain“ → „Webseite einrichten“:
@@ -23,11 +25,11 @@ SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird 
 
 Migration `customer_websites_v1` installiert `sma_private.customer_websites_v1` mit RLS und vollständig entzogenen Direktrechten. Öffentliche Wrapper sind `SECURITY INVOKER`; interne Definer mit leerem Suchpfad prüfen auf jedem privaten Aufruf `auth.uid()`, eine eindeutige aktuelle Kundenzuordnung und den gespeicherten Besitzer. Schreiben/Veröffentlichen erfordert aktiven Delta-Zugang oder die vorhandene Delta-Demo. Eigentümer können nach Ablauf ihren Stand lesen und die Seite offline nehmen. Anonyme Aufrufe sehen ausschließlich den ausdrücklich veröffentlichten Snapshot, sofern Besitzer und Zugang weiterhin passen.
 
-Schreibvorgänge sperren zuerst das Kundenkonto, dann die Seite. Revision und Request-UUID verhindern verlorene Updates und doppelte Erzeugung. Wiederholungen mit gleicher Absicht liefern denselben Stand; andere Absicht, alte Revision oder Besitzerwechsel werden abgewiesen. Die öffentliche Ausgabe enthält keine Konto-IDs oder ungefragten Profil-Kontaktdaten. Nur vom Kunden eingegebene und ausdrücklich veröffentlichte Texte werden ausgegeben. Kundeninhalte werden mit `textContent` dargestellt; keine HTML-, JavaScript- oder beliebigen URL-Felder. Die Kontaktadresse wird syntaktisch begrenzt, bevor ein `mailto:`-Link entsteht.
+Schreibvorgänge sperren zuerst das Kundenkonto, dann Firmenprofil und Seite. Revision und Request-UUID verhindern verlorene Updates und doppelte Erzeugung. Speichern/Veröffentlichen prüft zusätzlich die geladene Profilrevision. Wiederholungen mit gleicher Absicht liefern denselben Stand; andere Absicht, alte Revision oder Besitzerwechsel werden abgewiesen. Die öffentliche Ausgabe enthält keine Konto-IDs oder ungefragten Profil-Kontaktdaten. Nur vom Kunden eingegebene und ausdrücklich veröffentlichte Texte werden ausgegeben. Kundeninhalte werden mit `textContent` dargestellt; keine HTML-, JavaScript- oder beliebigen URL-Felder. Die Kontaktadresse wird syntaktisch begrenzt, bevor ein `mailto:`-Link entsteht.
 
 ## Prüfungen
 
-- 345 Node-Tests bestanden, einschließlich Text-/E-Mail-Grenzen, sichere Seitenadressen, Wiederaufnahme und Kontowechsel.
+- 350 Node-Tests bestanden, einschließlich Text-/E-Mail-Grenzen, sichere Seitenadressen, Wiederaufnahme, Kontowechsel und gemeinsame Profilrevision.
 - Lokale PostgreSQL-Fälle: Rollen, fremde Kunden, Paketgrenze, genau eine Seite, Wiederholung, Konflikte, private Änderungen nach Veröffentlichung, Offline-Schaltung nach Zugangsablauf und Besitzerwechsel. Alle Fixtures zurückgerollt. Die bestehende externe Webseiten-Vorbereitung bleibt bei Erzeugung unverändert.
 - DOM-Prüfungen: Text statt HTML-Ausführung, ausgeblendete leere Bereiche, separate Vorschau, kein implizites Veröffentlichen, Sperre bei ungespeicherten Änderungen und Leeren bei Kontowechsel. Bisherige WordPress-/Dashboard-DOM-Prüfungen bestanden.
 - Browserprüfung der SHK-Vorschau auf Desktop und im 390-Pixel-Handyrahmen; kein horizontaler Überlauf in der Handyansicht. Produkt- und Kontaktbereiche sowie Navigation geprüft.
@@ -39,5 +41,6 @@ Ein authentifizierter Ende-zu-Ende-Lauf mit einem realen Kunden wurde nicht durc
 node --test tests/*.test.cjs
 node tests/run-customer-websites-sql.mjs
 node tests/run-customer-website-dom.mjs
+node tests/run-company-profile-dom.mjs
 node tests/run-wordpress-dom.mjs
 ```
