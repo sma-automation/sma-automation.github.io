@@ -1,5 +1,6 @@
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
 import {createShopButton} from './shop-button.mjs?v=1';
+import {mountDomainVerification} from './domain-verification.mjs?v=1';
 
 const messages={
  AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',
@@ -16,7 +17,7 @@ const messages={
  BUSY:'Bitte warte, bis der aktuelle Vorgang abgeschlossen ist.'
 };
 
-export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl}){
+export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,stylesheetUrl}){
  if(!page||page.querySelector('#smaWebsitePreparation'))return {destroy(){}};
  const doc=page.ownerDocument,win=doc.defaultView;
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -43,11 +44,12 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  const $=s=>root.querySelector(s),fields=$('fieldset'),status=$('.sma-website-status');
  const client=createWebsiteDraftClient({request,getOwnerId,uuid:()=>win.crypto.randomUUID()});
  let destroyed=false,loaded=false,busy=false,dirty=false;
+ const domainView=domainRequest?mountDomainVerification({root,request:domainRequest,getOwnerId,onAccessError:error=>{rejectOwner(error);setBusy(false);}}):null;
  const mode=()=>root.querySelector('[name="website_mode"]:checked').value;
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.classList.toggle('sma-website-error',error);}
  function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
- function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');}}
+ function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');}}
  function show(state){
   if(destroyed)return;
   const draft=state.draft||{mode:'existing',website_url:'',desired_domain:''};
@@ -61,17 +63,18 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
   if(link)$('[data-shop-open]').href=link;
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
   loaded=true;dirty=false;
+  domainView?.setDraft(state);
  }
  async function load(){
   if(destroyed||busy)return;
-  setBusy(true);notice('Vorbereitung wird geladen …');
+  domainView?.invalidate('Vorbereitung wird geladen …');setBusy(true);notice('Vorbereitung wird geladen …');
   try{const result=await client.load();if(destroyed)return;show(result);notice(result.draft?'Gespeicherte Vorbereitung geladen. Verbindung noch nicht geprüft.':'Du kannst deine Webseite jetzt vorbereiten.');}
   catch(error){rejectOwner(error);notice(messages[error.code]||'Die Vorbereitung ist gerade nicht erreichbar. Bitte versuche es später erneut.',true);}
   finally{if(!destroyed){setBusy(false);if(!loaded)fields.disabled=true;}}
  }
- $('form').addEventListener('input',()=>{dirty=true;toggle();notice('Ungespeicherte Angaben.');});
+ $('form').addEventListener('input',()=>{dirty=true;domainView?.invalidate('Speichere die geänderten Angaben vor der Domainprüfung.');toggle();notice('Ungespeicherte Angaben.');});
  $('form').addEventListener('submit',async event=>{
-  event.preventDefault();if(busy||destroyed||!loaded)return;setBusy(true);notice('Vorbereitung wird gespeichert …');
+  event.preventDefault();if(busy||destroyed||!loaded)return;domainView?.invalidate('Vorbereitung wird gespeichert …');setBusy(true);notice('Vorbereitung wird gespeichert …');
   try{
    const result=await client.save({mode:mode(),website_url:mode()==='existing'?$('[name="website_url"]').value:'',desired_domain:$('[name="desired_domain"]').value});
    if(destroyed)return;show(result);notice('Vorbereitung gespeichert. Verbindung noch nicht geprüft.');
@@ -93,5 +96,5 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  const observer=new win.MutationObserver(()=>{if(page.classList.contains('active')&&!dirty&&!loaded)load();});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
  if(page.classList.contains('active'))load();
- return {destroy(){destroyed=true;observer.disconnect();if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
+ return {destroy(){destroyed=true;domainView?.destroy();observer.disconnect();if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
 }

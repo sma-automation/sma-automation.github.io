@@ -1,0 +1,126 @@
+begin;
+insert into public.sma_kunden(id,user_id,paket,aktiv,demo_delta_aktiv,zahlung_bestaetigt) values
+ (-909000002001,'fa660000-0000-4000-8000-000000000081','delta',true,false,true),
+ (-909000002002,'fa660000-0000-4000-8000-000000000082','alpha',true,false,true),
+ (-909000002003,'fa660000-0000-4000-8000-000000000083',null,true,true,false);
+set local role authenticated;
+select set_config('request.jwt.claim.sub','',true);
+do $$begin
+ assert public.sma_website_domain_check_v1('get')->>'code'='AUTH_REQUIRED';
+ assert not has_function_privilege('anon','public.sma_website_domain_check_v1(text)','execute');
+ assert not has_function_privilege('authenticated','public.sma_website_domain_check_finish_v1(uuid,uuid,text)','execute');
+ assert not has_function_privilege('anon','public.sma_website_domain_check_finish_v1(uuid,uuid,text)','execute');
+ assert has_function_privilege('service_role','public.sma_website_domain_check_finish_v1(uuid,uuid,text)','execute');
+ assert not has_table_privilege('authenticated','sma_private.website_domain_checks_v1','select,insert,update,delete');
+ assert not has_table_privilege('service_role','sma_private.website_domain_checks_v1','select,insert,update,delete');
+end $$;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000081',true);
+do $$declare r jsonb;s jsonb;begin
+ assert public.sma_website_domain_check_v1('get')->>'state'='website_required';
+ assert public.sma_website_domain_check_v1('prepare')->>'code'='WEBSITE_REQUIRED';
+ assert public.sma_website_domain_check_v1('finish')->>'code'='INVALID_ACTION';
+ perform public.sma_website_preparation_v1('save','{"mode":"existing","website_url":"https://example.com/path","desired_domain":"other.org","expected_revision":0,"request_id":"a1000000-0000-4000-8000-000000000081"}');
+ assert public.sma_website_domain_check_v1('get')->>'state'='unprepared';
+ assert public.sma_website_domain_check_v1('begin')->>'code'='PREPARE_REQUIRED';
+ r:=public.sma_website_domain_check_v1('prepare');s:=public.sma_website_domain_check_v1('prepare');
+ assert r->>'record_name'='_sma-verification.example.com';
+ assert r->>'record_value'=s->>'record_value';
+ assert r->>'record_value'~'^sma-verification=[a-f0-9]{64}$';
+ assert r->'attempt_id'='null'::jsonb and r->>'state'='pending';
+ r:=public.sma_website_domain_check_v1('begin');assert r->>'attempt_id' is not null;
+ perform set_config('test.attempt',r->>'attempt_id',true);
+ assert public.sma_website_domain_check_v1('begin')->>'code'='CHECK_RATE_LIMITED';
+end $$;
+reset role;
+set local role service_role;
+do $$begin
+ assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000083',current_setting('test.attempt')::uuid,'found')->>'ok'='false';
+ assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'found')->>'ok'='true';
+ assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'found')->>'code'='CHECK_STALE';
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000081',true);
+do $$begin
+ assert public.sma_website_domain_check_v1('get')->>'state'='verified';
+ assert public.sma_website_domain_check_v1('get')->>'verified_at' is not null;
+ assert public.sma_website_preparation_v1('get')->>'website_connected'='false';
+ assert public.sma_website_preparation_v1('get')->>'can_publish'='false';
+end $$;
+reset role;
+-- A later lease wins; transport failure preserves only the last timestamp.
+update sma_private.website_domain_checks_v1 set last_attempt_at=now()-interval '61 seconds';
+set local role authenticated;
+do $$begin perform set_config('test.old_attempt',public.sma_website_domain_check_v1('begin')->>'attempt_id',true);end $$;
+reset role;
+update sma_private.website_domain_checks_v1 set last_attempt_at=now()-interval '61 seconds';
+set local role authenticated;
+do $$begin perform set_config('test.attempt',public.sma_website_domain_check_v1('begin')->>'attempt_id',true);end $$;
+reset role;
+set local role service_role;
+do $$begin
+ assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.old_attempt')::uuid,'found')->>'code'='CHECK_STALE';
+ assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'unavailable')->>'ok'='true';
+end $$;
+reset role;
+set local role authenticated;
+do $$begin
+ assert public.sma_website_domain_check_v1('get')->>'state'='verified';
+ assert public.sma_website_domain_check_v1('get')->>'last_result'='unavailable';
+end $$;
+reset role;
+update sma_private.website_domain_checks_v1 set last_attempt_at=now()-interval '61 seconds';
+set local role authenticated;
+do $$begin perform set_config('test.attempt',public.sma_website_domain_check_v1('begin')->>'attempt_id',true);end $$;
+reset role;
+update public.sma_kunden set aktiv=false where id=-909000002001;
+set local role service_role;
+do $$begin assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'found')->>'code'='ACCESS_INACTIVE';end $$;
+reset role;
+update public.sma_kunden set aktiv=true where id=-909000002001;
+update sma_private.website_domain_checks_v1 set last_attempt_at=now()-interval '121 seconds';
+set local role service_role;
+do $$begin assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'found')->>'code'='CHECK_STALE';end $$;
+reset role;
+update sma_private.website_domain_checks_v1 set last_attempt_at=now()-interval '61 seconds';
+set local role authenticated;
+do $$begin perform set_config('test.attempt',public.sma_website_domain_check_v1('begin')->>'attempt_id',true);end $$;
+reset role;
+set local role service_role;
+select public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'not_found');
+reset role;
+set local role authenticated;
+do $$begin assert public.sma_website_domain_check_v1('get')->>'state'='pending';end $$;
+reset role;
+update sma_private.website_domain_checks_v1 set last_attempt_at=now()-interval '61 seconds';
+set local role authenticated;
+do $$begin perform set_config('test.attempt',public.sma_website_domain_check_v1('begin')->>'attempt_id',true);end $$;
+reset role;
+update sma_private.website_preparations_v1 set revision=2,website_url='https://example.org/' where customer_id=-909000002001;
+set local role service_role;
+do $$begin assert public.sma_website_domain_check_finish_v1('fa660000-0000-4000-8000-000000000081',current_setting('test.attempt')::uuid,'found')->>'code'='CHECK_STALE';end $$;
+reset role;
+set local role authenticated;
+do $$begin
+ assert public.sma_website_domain_check_v1('get')->>'state'='unprepared';
+ assert public.sma_website_domain_check_v1('prepare')->>'record_name'='_sma-verification.example.org';
+ assert public.sma_website_domain_check_v1('get')->>'state'='pending';
+ assert public.sma_website_domain_check_v1('begin')->>'code'='CHECK_RATE_LIMITED';
+end $$;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000082',true);
+do $$begin assert public.sma_website_domain_check_v1('get')->>'code'='DELTA_REQUIRED';end $$;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000083',true);
+do $$begin assert public.sma_website_domain_check_v1('get')->>'state'='website_required';end $$;
+reset role;
+update public.sma_kunden set aktiv=false where id=-909000002001;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000081',true);
+do $$begin assert public.sma_website_domain_check_v1('get')->>'code'='ACCESS_INACTIVE';end $$;
+reset role;
+update public.sma_kunden set aktiv=true,user_id='fa660000-0000-4000-8000-000000000084' where id=-909000002001;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000084',true);
+do $$begin assert public.sma_website_domain_check_v1('get')->>'code'='ACCOUNT_CHANGED';end $$;
+reset role;
+rollback;
+select 'domain verification SQL cases passed' as result;

@@ -6,7 +6,7 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
-import {mountWebsitePreparation} from './assets/website-domain.mjs?v=2';
+import {mountWebsitePreparation} from './assets/website-domain.mjs?v=3';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -64,6 +64,17 @@ frame.addEventListener('load',()=>{
     websitePreparation=mountWebsitePreparation({
       page:websitePage,getOwnerId,
       stylesheetUrl:new URL('./assets/website-domain.css?v=2',location.href).href,
+      domainRequest:async(action)=>{
+        const {data,error}=await supabase.auth.getSession();
+        if(error||!data?.session||data.session.user.id!==ownerId)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
+        const response=await fetch('https://bnvnmdxosbnuzedokqgh.supabase.co/functions/v1/sma-website-domain-check',{
+          method:'POST',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(45000),
+          headers:{'Content-Type':'application/json',apikey:'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW',Authorization:'Bearer '+data.session.access_token},
+          body:JSON.stringify({action})
+        });
+        if(!response.ok)throw Object.assign(new Error('UNAVAILABLE'),{code:response.status===401?'AUTH_REQUIRED':'UNAVAILABLE'});
+        return response.json();
+      },
       request:async(action,input)=>{
         const {data,error}=await supabase.auth.getSession();
         if(error||!data?.session||data.session.user.id!==ownerId)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
