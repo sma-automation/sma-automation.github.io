@@ -59,6 +59,8 @@ Die technische Anbindung darf keinen Affiliate-Kauf voraussetzen: Bestehende gee
 
 ## Nächster Implementierungsschritt
 
+Fortschritt: Die [dauerhafte Verbindungsanfrage](WEBSITE_CONNECTION.md) ist als getesteter Kandidat implementiert. Anmeldung, verschlüsselte Zugangsdaten und tatsächliche Anbieterfreigabe sind weiterhin offen. Die nachfolgende Reihenfolge beschreibt den noch zu vervollständigenden Anschluss.
+
 Zuerst eine kundengebundene Verbindung mit ausschließlich lesender Prüfung vorbereiten: Authentifizierung, Zielwebseite, tatsächliche Fähigkeiten, Widerruf und gespeicherter Zustand. Anschließend die gezielte WordPress-Einbindung und für neue Seiten die Hostinger-Erstellung ergänzen. Einen Tarif erst anhand einer konkreten erforderlichen Fähigkeit auswählen.
 
 Der Abnahmelauf muss Zugangsentzug, falschen Kunden, unzulässige Zieladressen, verlorene Antworten, doppelte Klicks, externe Änderungen und erneutes Laden abdecken. Erst nach einem echten erfolgreichen Verbindungstest darf `website_connected` auf wahr wechseln. Erstellung/Veröffentlichung, Domain/DNS-Schreibzugriff und Bestellungen erhalten getrennte Aufträge und Freigaben.
