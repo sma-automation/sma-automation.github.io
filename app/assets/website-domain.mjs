@@ -2,7 +2,7 @@ import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?
 import {createShopButton} from './shop-button.mjs?v=1';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
 import {mountWordpressConnection} from './wordpress-connection.mjs?v=2';
-import {mountDomainVerification} from './domain-verification.mjs?v=2';
+import {mountDomainVerification,domainVerificationTarget} from './domain-verification.mjs?v=3';
 
 const messages={
  AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',
@@ -37,15 +37,15 @@ export function mountWebsitePreparation({page,request,domainRequest,wordpressReq
  '<div class="sma-website-options"><label><input type="radio" name="website_mode" value="existing" checked> Ich habe bereits eine Webseite</label>'+
  '<label><input type="radio" name="website_mode" value="new"> Ich benötige eine Webseite</label></div>'+
  '<label class="sma-website-field" data-existing>Vorhandene Webseite<input name="website_url" type="text" inputmode="url" autocomplete="url" placeholder="https://meine-firma.at" maxlength="2048"></label>'+
- '<label class="sma-website-field"><span>Wunschdomain <span class="sma-website-optional">(optional)</span></span><input name="desired_domain" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="meine-firma.at" maxlength="253"><span class="sma-website-help">Ein Domainwunsch ist noch keine Verfügbarkeitsprüfung oder Reservierung.</span></label>'+
+ '<label class="sma-website-field"><span>Eigene Domain oder Wunschdomain <span class="sma-website-optional">(optional)</span></span><input name="desired_domain" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="meine-firma.at" maxlength="253"><span class="sma-website-help">Eine Domain, die dir bereits gehört, kannst du nach dem Speichern nachweisen. Ein Wunsch wird dadurch weder geprüft noch reserviert.</span></label>'+
  '</fieldset><div class="sma-website-actions"><button type="submit" disabled class="sma-website-primary">Vorbereitung speichern</button><button type="button" data-reload>Gespeicherten Stand laden</button></div>'+
- '</form><div class="sma-website-actions" data-existing-route><button type="button" data-website-open="connection" data-wp-entry>Vorhandene WordPress-Webseite verbinden</button></div><p class="sma-website-help" data-existing-note>Deine vorhandene Webseite bleibt bei ihrem Anbieter. Nach bestätigter WordPress-Verbindung kannst du deinen SMA-Produktbereich automatisch als Entwurf erzeugen.</p><div class="sma-website-actions" data-new-route hidden><a href="https://sma-automation.com/app/website-builder.html" target="_top" class="sma-website-primary">Webseite erzeugen / bearbeiten</a><a href="https://sma-automation.com/app/website-preview-shk.html" target="_blank" rel="noopener noreferrer">Beispiel Sanitär · Heizung · Klima ↗</a></div><p class="sma-website-help" data-new-note hidden>Erstelle eine bearbeitbare Webseite mit SMA-Adresse und automatisch zugeordnetem Shop. Der Entwurf bleibt bis zu deiner Veröffentlichung privat. Eine eigene Domain ist ein zusätzlicher Schritt.</p></section>'+
+ '</form><div class="sma-website-actions" data-existing-route><button type="button" data-website-open="connection" data-wp-entry>Vorhandene WordPress-Webseite verbinden</button></div><p class="sma-website-help" data-existing-note>Deine vorhandene Webseite bleibt bei ihrem Anbieter. Nach bestätigter WordPress-Verbindung kannst du deinen SMA-Produktbereich automatisch als Entwurf erzeugen.</p><div class="sma-website-actions" data-new-route hidden><a href="https://sma-automation.com/app/website-builder.html" target="_top" class="sma-website-primary">Webseite erzeugen / bearbeiten</a><a href="https://sma-automation.com/app/website-preview-shk.html" target="_blank" rel="noopener noreferrer">Beispiel Sanitär · Heizung · Klima ↗</a><button type="button" data-website-open="domain" data-new-domain-entry>Eigene Domain nachweisen</button></div><p class="sma-website-help" data-new-note hidden>Erstelle eine bearbeitbare Webseite mit SMA-Adresse und automatisch zugeordnetem Shop. Der Entwurf bleibt bis zu deiner Veröffentlichung privat. Eine eigene Domain ist ein zusätzlicher Schritt.</p></section>'+
  '<section id="smaWebsiteView-shop" data-website-view="shop" class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle" hidden><h2 id="smaWebsiteLinkTitle" tabindex="-1">Shop-Button einbauen</h2>'+
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
  '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a><a data-shop-preview target="_blank" rel="noopener noreferrer">Shop-Button testen</a></div>'+
  '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details><div data-catalog-actions hidden><p class="sma-website-help">Du kannst auch eine Produktliste mit aktuellem Preis und Bestand auf deiner Webseite anzeigen.</p><div class="sma-website-actions"><a data-catalog-preview target="_blank" rel="noopener noreferrer">Produktliste einbauen</a></div></div></div>'+
  '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>'+
- '<section id="smaWebsiteView-domain" data-website-view="domain" hidden><div data-domain-panel></div><div class="sma-website-actions" data-domain-setup><button type="button" data-website-open="website">Webadresse hinterlegen</button></div></section>'+
+ '<section id="smaWebsiteView-domain" data-website-view="domain" hidden><div data-domain-panel></div><div class="sma-website-actions" data-domain-setup><button type="button" data-website-open="website">Webadresse oder Domain hinterlegen</button></div></section>'+
  '<section id="smaWebsiteView-connection" data-website-view="connection" hidden><h2 tabindex="-1">WordPress verbinden</h2><div data-wordpress-panel></div></section>'+
  '<p class="sma-website-status" role="status" aria-live="polite" hidden></p>';
  const placeholder=page.querySelector('.package-module-slot');
@@ -73,7 +73,7 @@ export function mountWebsitePreparation({page,request,domainRequest,wordpressReq
  const wordpressView=wordpressRequest?mountWordpressConnection({root:$('[data-wordpress-panel]'),request:wordpressRequest,syncRequest:wordpressSyncRequest,getOwnerId}):null;
  if(!wordpressView)$('[data-wp-entry]').hidden=true;
  const domainView=domainRequest?mountDomainVerification({root:$('[data-domain-panel]'),asPanel:true,request:domainRequest,getOwnerId,onAccessError:error=>{rejectOwner(error);setBusy(false);notice(messages[error.code],true);}}):null;
- if(!domainView){$('[data-website-open="domain"]').hidden=true;$('[data-domain-setup]').hidden=true;}
+ if(!domainView){for(const entry of root.querySelectorAll('[data-website-open="domain"]'))entry.hidden=true;$('[data-domain-setup]').hidden=true;}
  const mode=()=>root.querySelector('[name="website_mode"]:checked').value;
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing';$('[data-existing-route]').hidden=mode()!=='existing';$('[data-existing-note]').hidden=mode()!=='existing';$('[data-new-route]').hidden=mode()!=='new';$('[data-new-note]').hidden=mode()!=='new'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.hidden=!text;status.classList.toggle('sma-website-error',error);}
@@ -94,7 +94,8 @@ export function mountWebsitePreparation({page,request,domainRequest,wordpressReq
   if(link)$('[data-shop-open]').href=link;
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
   loaded=true;dirty=false;
-  $('[data-domain-setup]').hidden=!domainView||draft.mode==='existing'&&Boolean(draft.website_url);
+  let domainReady=false;try{domainReady=!!domainVerificationTarget(state);}catch{}
+  $('[data-domain-setup]').hidden=!domainView||domainReady;
   domainView?.setDraft(state);wordpressView?.setDraft(state);
  }
  async function load(){

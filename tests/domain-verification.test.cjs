@@ -50,3 +50,18 @@ test('client binds proof to saved host and revision and rejects invented verifie
  for(const patch of [{revision:2},{hostname:'other.com'},{record_name:'other.com'},{record_value:value+'\n'},{state:'verified',verified_at:null},{verified_at:'not-a-date'},{record_type:'CNAME'}])assert.throws(()=>readDomainCheck({...challenge,...patch},draft));
  assert.equal(readDomainCheck({...challenge,state:'verified',verified_at:'2026-11-04T09:00:00Z'},draft).state,'verified');
 });
+test('new SMA websites use their saved domain; existing websites keep their URL host',async()=>{
+ const {domainVerificationTarget,readDomainCheck}=await clientReady;
+ const fresh={revision:1,draft:{mode:'new',website_url:'',desired_domain:'example.com'}};
+ assert.deepEqual(domainVerificationTarget(fresh),{hostname:'example.com',mode:'new'});
+ assert.equal(readDomainCheck(challenge,fresh).recordValue,value);
+ assert.deepEqual(domainVerificationTarget({draft:{mode:'existing',website_url:'https://example.org/path',desired_domain:'unrelated.com'}}),{hostname:'example.org',mode:'existing'});
+ assert.throws(()=>readDomainCheck(challenge,{...fresh,draft:{...fresh.draft,desired_domain:'other.org'}}));
+ assert.throws(()=>readDomainCheck(challenge,{...fresh,revision:2}));
+});
+test('empty, malformed and overlong new-domain targets never enable a DNS challenge',async()=>{
+ const {domainVerificationTarget}=await clientReady;
+ assert.equal(domainVerificationTarget({draft:null}),null);
+ assert.equal(domainVerificationTarget({draft:{mode:'new',desired_domain:''}}),null);
+ for(const desired_domain of ['https://example.com','127.0.0.1','example.com/path','localhost','x'.repeat(63)+'.'+'x'.repeat(63)+'.'+'x'.repeat(63)+'.'+'x'.repeat(44)+'.com'])assert.throws(()=>domainVerificationTarget({draft:{mode:'new',desired_domain}}));
+});
