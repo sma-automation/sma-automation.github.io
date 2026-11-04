@@ -23,6 +23,10 @@ SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird 
 
 [Eigene Firmenlogos und Startseitenbilder](CUSTOMER_WEBSITE_IMAGES.md) sind über **PR #72 live** und im angemeldeten privaten Kundenablauf geprüft. Der Kunde wählt sie im bestehenden zugeklappten Gestaltungsbereich und übernimmt sie mit „Änderungen speichern“. Ein eigener privater Speicherweg hält Bilder an den Besitzer und den getrennten veröffentlichten Stand gebunden. 381 Node-Tests, zehn neue Bild-DOM-Szenarien sowie bestehende DOM-/SQL-Prüfungen bestanden. Datenbank, geschützter Bild-Endpunkt und Oberfläche sind freigegeben und bereitgestellt. Ein echter PNG-/WebP-Upload mit privatem Speichern und Wiederaufruf war erfolgreich; anonyme Abrufe bleiben gesperrt. Der SHK-Testentwurf ist danach wieder Blau mit Hausmotiv und ohne eigene Bildauswahl (Revision 6). Der Produktbildspeicher und PR #69/#57 bleiben davon getrennt.
 
+## Eigene Domain
+
+Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist als nächster Kundenschritt implementiert und lokal geprüft, aber noch nicht live. Er verwendet die gespeicherte eigene Domain im neuen Erstellungsweg und ergänzt einen Direktbutton zur bestehenden Nachweisansicht. Ein bestätigter TXT-Eintrag ist ausdrücklich noch keine Domain-Verknüpfung. DNS, Hosting und Kundendaten wurden für diese Erweiterung nicht verändert.
+
 ## SHK-Vorschau
 
 `app/website-preview-shk.html` zeigt einen fiktiven Sanitär-, Heizungs- und Klimabetrieb mit Desktop-/Handy-Umschaltung. `app/website-example-shk.html` öffnet die Beispielseite direkt. Sie nutzt denselben Renderer und dieselben Styles wie die Kundenwebseite. Produktzeichnungen und Texte sind Beispiele; es werden keine Preise, Lagerbestände, Bestellungen oder Kontaktübermittlungen vorgetäuscht. Die Vorschau benötigt keine Anmeldung und ist für Suchmaschinen als `noindex,nofollow` markiert.

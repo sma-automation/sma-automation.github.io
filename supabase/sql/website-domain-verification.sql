@@ -1,5 +1,5 @@
 -- DNS control evidence only. Never grants publishing, checkout or hosting access.
-create table sma_private.website_domain_checks_v1 (
+create table if not exists sma_private.website_domain_checks_v1 (
  customer_id bigint primary key references public.sma_kunden(id),
  user_id uuid not null,
  preparation_revision integer not null,
@@ -14,7 +14,7 @@ create table sma_private.website_domain_checks_v1 (
 alter table sma_private.website_domain_checks_v1 enable row level security;
 revoke all on sma_private.website_domain_checks_v1 from public,anon,authenticated,service_role;
 
-create function sma_private.website_domain_check_request_v1(p_action text)
+create or replace function sma_private.website_domain_check_request_v1(p_action text)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare
  uid uuid:=auth.uid(); c public.sma_kunden%rowtype;
@@ -30,10 +30,13 @@ begin
  if c.demo_delta_aktiv is not true and lower(btrim(coalesce(c.paket,'')))<>'delta' then return jsonb_build_object('ok',false,'code','DELTA_REQUIRED');end if;
  select * into d from sma_private.website_preparations_v1 where customer_id=c.id for update;
  if d.customer_id is not null and d.user_id is distinct from uid then return jsonb_build_object('ok',false,'code','ACCOUNT_CHANGED');end if;
- if d.customer_id is null or d.mode<>'existing' then
+ if d.customer_id is null then
   return case when p_action='get' then jsonb_build_object('ok',true,'state','website_required','revision',coalesce(d.revision,0)) else jsonb_build_object('ok',false,'code','WEBSITE_REQUIRED') end;
  end if;
- host:=substring(d.website_url from '^https://([^/?#]+)');
+ host:=case when d.mode='existing' then substring(d.website_url from '^https://([^/?#]+)') when d.mode='new' then nullif(d.desired_domain,'') end;
+ if host is null then
+  return case when p_action='get' then jsonb_build_object('ok',true,'state','domain_required','revision',d.revision) else jsonb_build_object('ok',false,'code','DOMAIN_REQUIRED') end;
+ end if;
  if not sma_private.website_domain_valid_v1(host) or length(host)>235 then return jsonb_build_object('ok',false,'code','INVALID_DOMAIN');end if;
  select * into v from sma_private.website_domain_checks_v1 where customer_id=c.id for update;
  if v.customer_id is not null and v.user_id is distinct from uid then return jsonb_build_object('ok',false,'code','ACCOUNT_CHANGED');end if;
@@ -58,7 +61,7 @@ begin
 end $$;
 revoke all on function sma_private.website_domain_check_request_v1(text) from public,anon,authenticated,service_role;
 grant execute on function sma_private.website_domain_check_request_v1(text) to authenticated;
-create function public.sma_website_domain_check_v1(p_action text)
+create or replace function public.sma_website_domain_check_v1(p_action text)
 returns jsonb language sql security invoker set search_path='' as $$select sma_private.website_domain_check_request_v1(p_action)$$;
 revoke all on function public.sma_website_domain_check_v1(text) from public,anon,authenticated,service_role;
 grant execute on function public.sma_website_domain_check_v1(text) to authenticated;
@@ -66,7 +69,7 @@ grant execute on function public.sma_website_domain_check_v1(text) to authentica
 -- Service-only completion: p_user_id comes from the Edge Function's validated
 -- Auth user, never from the request body. Check ownership/access/revision again
 -- after the external DNS lookup; an old or parallel attempt cannot win.
-create function sma_private.website_domain_check_finish_v1(p_user_id uuid,p_attempt_id uuid,p_result text)
+create or replace function sma_private.website_domain_check_finish_v1(p_user_id uuid,p_attempt_id uuid,p_result text)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare c public.sma_kunden%rowtype; d sma_private.website_preparations_v1%rowtype; v sma_private.website_domain_checks_v1%rowtype;
 begin
@@ -79,8 +82,8 @@ begin
  select * into v from sma_private.website_domain_checks_v1 where customer_id=c.id for update;
  if d.user_id is distinct from p_user_id or v.user_id is distinct from p_user_id then return jsonb_build_object('ok',false,'code','ACCOUNT_CHANGED');end if;
  if v.attempt_id is distinct from p_attempt_id or v.last_attempt_at<clock_timestamp()-interval '2 minutes'
-  or v.preparation_revision<>d.revision or d.mode<>'existing'
-  or v.hostname is distinct from substring(d.website_url from '^https://([^/?#]+)') then return jsonb_build_object('ok',false,'code','CHECK_STALE');end if;
+  or v.preparation_revision<>d.revision
+  or v.hostname is distinct from (case when d.mode='existing' then substring(d.website_url from '^https://([^/?#]+)') when d.mode='new' then nullif(d.desired_domain,'') end) then return jsonb_build_object('ok',false,'code','CHECK_STALE');end if;
  update sma_private.website_domain_checks_v1 set last_result=p_result,attempt_id=null,
   verified_at=case when p_result='found' then clock_timestamp() when p_result='not_found' then null else verified_at end
   where customer_id=c.id;
@@ -89,7 +92,7 @@ end $$;
 revoke all on function sma_private.website_domain_check_finish_v1(uuid,uuid,text) from public,anon,authenticated,service_role;
 grant usage on schema sma_private to service_role;
 grant execute on function sma_private.website_domain_check_finish_v1(uuid,uuid,text) to service_role;
-create function public.sma_website_domain_check_finish_v1(p_user_id uuid,p_attempt_id uuid,p_result text)
+create or replace function public.sma_website_domain_check_finish_v1(p_user_id uuid,p_attempt_id uuid,p_result text)
 returns jsonb language sql security invoker set search_path='' as $$select sma_private.website_domain_check_finish_v1(p_user_id,p_attempt_id,p_result)$$;
 revoke all on function public.sma_website_domain_check_finish_v1(uuid,uuid,text) from public,anon,authenticated,service_role;
 grant execute on function public.sma_website_domain_check_finish_v1(uuid,uuid,text) to service_role;

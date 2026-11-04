@@ -7,6 +7,10 @@ try{
   "grant usage on schema auth to authenticated,service_role;"+
   "create table public.sma_kunden(id bigint primary key,user_id uuid,paket text,aktiv boolean,demo_delta_aktiv boolean,zahlung_bestaetigt boolean,shop_slug text,shop_oeffentlich boolean);");
  for(const name of ['website-domain-preparation','website-domain-verification'])await db.exec(await readFile(new URL('../supabase/sql/'+name+'.sql',import.meta.url),'utf8'));
- const results=await db.exec(await readFile(new URL('./domain-verification.sql',import.meta.url),'utf8'));
- console.log(results.at(-1).rows[0].result);
+ // Reapplying the canonical definition preserves the existing table and rights.
+ await db.exec(await readFile(new URL('../supabase/sql/website-domain-verification.sql',import.meta.url),'utf8'));
+ for(const test of ['domain-verification','new-website-domain-verification']){
+  const results=await db.exec(await readFile(new URL('./'+test+'.sql',import.meta.url),'utf8'));
+  console.log(results.at(-1).rows[0].result);
+ }
 }catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}
