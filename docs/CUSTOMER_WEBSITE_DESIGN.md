@@ -15,7 +15,7 @@ Der Bereich ist zunächst zugeklappt. Geöffnet erscheinen zwei kurze Auswahlfel
 
 **Änderungen speichern** speichert Texte und Gestaltung gemeinsam im privaten Entwurf. Die offene private Vorschau übernimmt den gespeicherten Stand beim Zurückwechseln über die vorhandene Funktion aus PR #70. Ein öffentliches Angebot bleibt beim ausdrücklich veröffentlichten Snapshot. Die bestehende Aktion zum Veröffentlichen übernimmt später auch die gewählte Gestaltung; dieser Schritt wurde ausschließlich mit isolierten SQL-Testdaten geprüft.
 
-Bestehende Entwürfe und veröffentlichte Seiten ohne Gestaltungsfelder erscheinen weiterhin in Blau mit Hausmotiv. Neue freie CSS-, HTML-, URL- oder Bild-Uploadfelder werden nicht eingeführt. Eigene Fotos/Logos und individuelle Domains bleiben gesonderte Erweiterungen.
+Bestehende Entwürfe und veröffentlichte Seiten ohne Gestaltungsfelder erscheinen weiterhin in Blau mit Hausmotiv. Neue freie CSS-, HTML-, URL- oder Bild-Uploadfelder werden nicht eingeführt. Eigene Fotos/Logos sind als [gesonderte Erweiterung vorbereitet](CUSTOMER_WEBSITE_IMAGES.md), aber noch nicht live. Individuelle Domains bleiben ein weiterer Schritt.
 
 ## Speicherung und Bereitstellung
 
@@ -69,4 +69,4 @@ Am 4. November 2026 hat der Nutzer die Bereitstellung von PR #71 einschließlich
 
 ![Zwischenstand des angemeldeten Live-Tests: Grün und Abstrakt, anschließend wieder auf Blau und Hausmotiv gestellt](evidence/customer-website-design-live-2026-11-04.jpg)
 
-Der private SHK-Testentwurf bleibt gespeichert. PR #69 und PR #57 bleiben separat offen. Nächster möglicher Kundenschritt: eigene Firmenlogos und Bilder für SMA-Webseiten; das ist noch nicht implementiert und nicht Teil dieser Veröffentlichung.
+Der private SHK-Testentwurf bleibt gespeichert. PR #69 und PR #57 bleiben separat offen. Der anschließende Kundenschritt [eigene Firmenlogos und Bilder](CUSTOMER_WEBSITE_IMAGES.md) ist inzwischen separat implementiert und lokal geprüft. Seine Bereitstellung ist noch nicht freigegeben; diese Bildfunktion gehört nicht zur bereits abgeschlossenen Veröffentlichung von PR #71.

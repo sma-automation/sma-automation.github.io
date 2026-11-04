@@ -2,11 +2,12 @@ import {readCompanyProfile} from './company-profile-model.mjs?v=1';
 import {safeShopLink} from './website-domain-model.mjs?v=1';
 export const siteUUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export const contentLimits={name:100,headline:160,intro:600,about:4000,contact_email:254,legal_notice:6000,privacy_notice:6000,contact_phone:60,contact_address:400,service_1_title:80,service_1_text:400,service_2_title:80,service_2_text:400,service_3_title:80,service_3_text:400};
-export const appearanceOptions={accent:['blue','green','violet','terracotta'],hero:['shk','abstract','none']};
+export const appearanceOptions={accent:['blue','green','violet','terracotta'],hero:['shk','abstract','none','image']};
+export const imageFields={logo_image_id:'',hero_image_id:'',hero_image_alt:''};
 export const appearanceDefaults={accent:'blue',hero:'shk'};
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 export function readWebsiteContent(value){
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(contentLimits).some(k=>!Object.hasOwn(value,k))||Object.keys(value).some(k=>!Object.hasOwn(contentLimits,k)&&!Object.hasOwn(appearanceOptions,k)))fail('INVALID_CONTENT');
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(contentLimits).some(k=>!Object.hasOwn(value,k))||Object.keys(value).some(k=>!Object.hasOwn(contentLimits,k)&&!Object.hasOwn(appearanceOptions,k)&&!Object.hasOwn(imageFields,k)))fail('INVALID_CONTENT');
  if(new TextEncoder().encode(JSON.stringify(value)).length>45000)fail('INVALID_CONTENT');
  const result={};
  for(const [key,max] of Object.entries(contentLimits)){
@@ -17,6 +18,10 @@ export function readWebsiteContent(value){
  for(const [key,options] of Object.entries(appearanceOptions))if(Object.hasOwn(value,key)){
   if(!options.includes(value[key]))fail('INVALID_CONTENT');result[key]=value[key];
  }
+ for(const key of Object.keys(imageFields))if(Object.hasOwn(value,key)){
+  const text=value[key];if(typeof text!=='string'||(key==='hero_image_alt'?([...text].length>200||/[\u0000-\u001f\u007f]/.test(text)):(text!==''&&!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(text))))fail('INVALID_CONTENT');result[key]=text;
+ }
+ if(result.hero==='image'&&!result.hero_image_id)fail('INVALID_CONTENT');
  if(!result.name.trim()||!result.headline.trim()||result.contact_email&&!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(result.contact_email))fail('INVALID_CONTENT');
  return result;
 }
