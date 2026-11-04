@@ -1,0 +1,76 @@
+begin;
+insert into public.sma_kunden values
+ (-909000006001,'fa660000-0000-4000-8000-000000000061','delta',true,false,true,'fixture-shop',true),
+ (-909000006002,'fa660000-0000-4000-8000-000000000062','alpha',true,false,true,null,false);
+set local role authenticated;
+select set_config('request.jwt.claim.sub','',true);
+do $$begin
+ assert public.sma_customer_website_v1('get')->>'code'='AUTH_REQUIRED';
+ assert not has_function_privilege('anon','public.sma_customer_website_v1(text,jsonb)','EXECUTE');
+ assert not has_function_privilege('service_role','public.sma_customer_website_v1(text,jsonb)','EXECUTE');
+ assert not has_table_privilege('anon','sma_private.customer_websites_v1','SELECT,INSERT,UPDATE,DELETE');
+ assert not has_table_privilege('authenticated','sma_private.customer_websites_v1','SELECT,INSERT,UPDATE,DELETE');
+ assert not has_function_privilege('authenticated','sma_private.customer_website_content_valid_v1(jsonb)','EXECUTE');
+end $$;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000061',true);
+do $$declare r jsonb;params jsonb;id uuid;content jsonb;prepared jsonb;begin
+ prepared:=public.sma_website_preparation_v1('save','{"mode":"existing","website_url":"https://example.com/","desired_domain":"","expected_revision":0,"request_id":"ab660000-0000-4000-8000-000000000061"}');
+ assert prepared->>'ok'='true';
+ assert public.sma_customer_website_v1('get')->>'revision'='0';
+ assert public.sma_customer_website_v1('get','{"customer_id":1}')->>'code'='INVALID_INPUT';
+ assert public.sma_customer_website_v1('generate','{}')->>'code'='INVALID_INPUT';
+ params:='{"expected_revision":0,"request_id":"ab660000-0000-4000-8000-000000000062"}';
+ r:=public.sma_customer_website_v1('generate',params);id:=(r->>'site_id')::uuid;content:=r->'content';
+ assert r->>'revision'='1' and r->>'published'='false' and r->>'publicly_available'='false';
+ assert public.sma_customer_website_public_v1(id)->>'code'='NOT_AVAILABLE';
+ assert public.sma_customer_website_v1('generate',params)->>'site_id'=id::text;
+ assert public.sma_customer_website_v1('publish',params)->>'code'='REQUEST_CONFLICT';
+ assert public.sma_website_preparation_v1('get')->'draft'=prepared->'draft';
+ assert public.sma_customer_website_v1('generate',params||'{"request_id":"ab660000-0000-4000-8000-000000000063"}')->>'code'='REVISION_CONFLICT';
+ params:='{"expected_revision":1,"request_id":"ab660000-0000-4000-8000-000000000063"}';
+ assert public.sma_customer_website_v1('generate',params)->>'code'='ALREADY_CREATED';
+ assert public.sma_customer_website_v1('save',params||jsonb_build_object('content',content-'name'))->>'code'='INVALID_CONTENT';
+ assert public.sma_customer_website_v1('save',params||jsonb_build_object('content',content||'{"contact_email":"x@example.com?bcc=evil"}'))->>'code'='INVALID_CONTENT';
+ assert public.sma_customer_website_v1('save',params||jsonb_build_object('content',content||jsonb_build_object('headline',repeat('x',161))))->>'code'='INVALID_CONTENT';
+ content:=content||'{"name":"SHK Fixture","about":"Draft private text","contact_email":"contact@example.com"}';
+ params:=params||jsonb_build_object('content',content);
+ assert public.sma_customer_website_v1('save',params)->>'revision'='2';
+ assert public.sma_customer_website_v1('save',params)->>'revision'='2';
+ assert public.sma_customer_website_public_v1(id)->>'code'='NOT_AVAILABLE';
+ params:='{"expected_revision":2,"request_id":"ab660000-0000-4000-8000-000000000064"}';
+ r:=public.sma_customer_website_v1('publish',params);assert r->>'revision'='3' and r->>'publicly_available'='true' and r->>'has_changes'='false';
+ assert public.sma_customer_website_v1('publish',params)->>'revision'='3';
+ r:=public.sma_customer_website_public_v1(id);assert r->'content'->>'name'='SHK Fixture';assert not(r ?| array['user_id','customer_id','draft','revision']);
+ assert r->>'shop_url'='https://sma-automation.com/app/shop.html?shop=fixture-shop';
+ params:=jsonb_build_object('expected_revision',3,'request_id','ab660000-0000-4000-8000-000000000065','content',content||'{"about":"New draft must stay private"}');
+ assert public.sma_customer_website_v1('save',params)->>'revision'='4';
+ assert public.sma_customer_website_v1('get')->>'has_changes'='true';
+ assert public.sma_customer_website_public_v1(id)->'content'->>'about'='Draft private text';
+ perform set_config('test.site_id',id::text,true);
+end $$;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000062',true);
+do $$begin
+ assert public.sma_customer_website_v1('get')->>'revision'='0';
+ assert public.sma_customer_website_v1('generate','{"expected_revision":0,"request_id":"ab660000-0000-4000-8000-000000000066"}')->>'code'='ACCESS_INACTIVE';
+end $$;
+reset role;
+update public.sma_kunden set shop_oeffentlich=false,aktiv=false where id=-909000006001;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000061',true);
+do $$begin
+ assert public.sma_customer_website_public_v1(current_setting('test.site_id')::uuid)->>'code'='NOT_AVAILABLE';
+ assert public.sma_customer_website_v1('get')->>'can_edit'='false';
+ assert public.sma_customer_website_v1('get')->'shop_url'='null'::jsonb;
+ assert public.sma_customer_website_v1('publish','{"expected_revision":4,"request_id":"ab660000-0000-4000-8000-000000000066"}')->>'code'='ACCESS_INACTIVE';
+ assert public.sma_customer_website_v1('unpublish','{"expected_revision":4,"request_id":"ab660000-0000-4000-8000-000000000066"}')->>'published'='false';
+end $$;
+reset role;
+update public.sma_kunden set user_id='fa660000-0000-4000-8000-000000000063',aktiv=true where id=-909000006001;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa660000-0000-4000-8000-000000000063',true);
+do $$begin assert public.sma_customer_website_v1('get')->>'code'='ACCOUNT_CHANGED';end $$;
+set local role anon;
+do $$begin assert public.sma_customer_website_public_v1(current_setting('test.site_id')::uuid)->>'code'='NOT_AVAILABLE';end $$;
+reset role;
+rollback;
+select 'customer website SQL cases passed; fixtures rolled back' as result;

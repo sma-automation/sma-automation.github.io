@@ -1,5 +1,7 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
+Aktuelle Erweiterung: [Bearbeitbare SMA-Kundenwebseiten und SHK-Vorschau](CUSTOMER_WEBSITES.md). Bestehende externe Webseiten behalten ihren Verbindungsweg. Kunden ohne Webseite können einen privaten SMA-Entwurf erzeugen und bearbeiten; eine Veröffentlichung erfordert ihren eigenen ausdrücklichen Klick. Die nachfolgenden Abschnitte dokumentieren die ursprüngliche Vorbereitung.
+
 Stand: 4. November 2026. Ziel `website-v1`. **Vorbereitung aus PR #58, Shop-Button aus PR #59 und Domainnachweis aus PR #60 sind veröffentlicht.** Der öffentliche Klickweg zur Shopseite wurde zusätzlich im Browser des Nutzers anhand seiner Screenshots bestätigt. Der [kundengebundene DNS-Domainnachweis](DOMAIN_VERIFICATION.md) ist angeschlossen.
 
 Der Nutzer hat die kostenfreie Vorbereitung vorgezogen, während Sightengine-Zahlung, Videoprüfung und echter Social-Media-Uploadtest offen bleiben. PR #57 bleibt davon getrennt und ungemergt. Es gibt keinen Auftrag zu Domainkauf, Hostingwechsel, Tarifänderung oder Veröffentlichung einer Kundenwebseite.
