@@ -2,6 +2,8 @@
 
 Stand: 4. November 2026. Der Ablauf wurde in der ausgelieferten SMA-Oberfläche mit einer regulären SMA-Anmeldung im bestehenden Delta-Demo-Testkonto geprüft. Die Schreibvorgänge erfolgten über die Kundenoberfläche, nicht über direkte Datenbankänderungen oder simulierte Browserantworten.
 
+Aktueller Abschluss: Der anschließend freigegebene [öffentliche Kundentest](CUSTOMER_WEBSITE_PUBLIC_E2E.md) ist ebenfalls bestanden. Die Testseite wurde rund zwei Minuten öffentlich geprüft und wieder offline genommen. Endzustand: **Revision 8, privat, unveränderte Inhalte**. Die folgenden Abschnitte bleiben der Nachweis des früheren privaten Erstellungswegs.
+
 ## Durchgeführter Ablauf
 
 1. „Webseite & Domain“ → „Webseite einrichten“ → „Firmendaten bearbeiten“ geöffnet. Das Profil war noch nicht gespeichert; kein vorhandenes Firmenprofil wurde überschrieben.

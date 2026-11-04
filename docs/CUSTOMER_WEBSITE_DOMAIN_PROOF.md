@@ -1,6 +1,6 @@
 # Eigene Domain für neue SMA-Webseiten nachweisen
 
-Stand: 4. November 2026. **PR #73 zusammengeführt, bereitgestellt und im angemeldeten Dashboard geprüft.** Ziel `website-v1`. PR #70, #71 und #72 sind bereits live und abgeschlossen. Der vorhandene private SHK-Entwurf bleibt unverändert bei Revision 6.
+Stand: 4. November 2026. **PR #73 zusammengeführt, bereitgestellt und im angemeldeten Dashboard geprüft.** Ziel `website-v1`. PR #70, #71 und #72 sind bereits live und abgeschlossen. Bei dieser Domainabnahme blieb der private SHK-Entwurf unverändert bei Revision 6. Der danach freigegebene [öffentliche Kundentest](CUSTOMER_WEBSITE_PUBLIC_E2E.md) ist inzwischen ebenfalls abgeschlossen: wieder privat, unveränderter Inhalt, Revision 8.
 
 ## Geschlossene Lücke und Kundenablauf
 
