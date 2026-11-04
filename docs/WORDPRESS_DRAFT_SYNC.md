@@ -1,6 +1,6 @@
 # WordPress-Produktentwurf mit dauerhafter Wiederaufnahme
 
-Stand: 4. November 2026. Migration `wordpress_durable_product_draft_sync_v1` und Edge-Endpoint `sma-wordpress-sync` Version 1 sind bereitgestellt. Der neue Kundeneinstieg baut auf der bestehenden WordPress-Freigabe auf. Es ist weiterhin **keine externe WordPress-Webseite verbunden**; kein realer Produktentwurf wurde angelegt. Ein positiver Ende-zu-Ende-Test mit WordPress/MySQL und dessen Erweiterungen bleibt offen.
+Stand: 4. November 2026. Migration `wordpress_durable_product_draft_sync_v1` und Edge-Endpoint `sma-wordpress-sync` Version 1 sind bereitgestellt. Der neue Kundeneinstieg baut auf der bestehenden WordPress-Freigabe auf. Es ist weiterhin **keine externe WordPress-Webseite verbunden**; kein externer Produktentwurf wurde angelegt. Der [kostenlose lokale Praxistest](WORDPRESS_PRACTICAL_TEST.md) mit echtem WordPress/MariaDB besteht inzwischen. Der vollständige Weg über SMA-Anmeldung, Ticket, Adminfreigabe und öffentliches TLS bleibt für eine freigegebene externe Testseite offen.
 
 ## Kundenablauf
 
@@ -45,4 +45,6 @@ node tests/run-wordpress-sync-dom.mjs
 npm exec --yes --package=deno@2.9.6 -- deno check supabase/functions/sma-wordpress-sync/index.ts supabase/functions/sma-wordpress-connect/index.ts
 ```
 
-Nächste externe Abnahme: eine konkret freigegebene WordPress-Testseite verbinden, einmaligen Produktentwurf erzeugen, echte TLS-/MySQL-/Plugin-Nebenwirkungen und Darstellung prüfen. Keine Hostingbuchung, Tarifänderung, Domain-/DNS-Änderung oder Veröffentlichung wurde ausgeführt.
+Ergänzender Nachweis nach PR #68: **29 Prüfungen und ein konkurrierender Aufruf mit echtem WordPress 7.1.4/PHP 8.3.6/MariaDB 10.11.14** bestanden. Geprüft sind unter anderem eine gemeinsam verwendete Seiten-ID bei parallelen PHP-Prozessen, echte InnoDB-Rücknahme, manuelle Änderungen, Rechteentzug und WordPress-Shortcode-Ausgabe. Diese neue Prüfung ergänzt die oben beschriebenen Doubles; sie verwendet synthetische lokale Freigabe und keine SMA-Produktionsverbindung. Die 359 Node-Tests bestehen weiterhin.
+
+Nächste externe Abnahme: eine konkret freigegebene WordPress-Testseite auf vorhandenem Hosting verbinden, einmaligen Produktentwurf erzeugen, echte TLS-/Plugin-Nebenwirkungen und Darstellung prüfen. Voraussetzungen und genauer Ablauf stehen in [WORDPRESS_PRACTICAL_TEST.md](WORDPRESS_PRACTICAL_TEST.md). Keine Hostingbuchung, Tarifänderung, Domain-/DNS-Änderung oder Veröffentlichung wurde ausgeführt.
