@@ -13,6 +13,8 @@ Unter „Webseite & Domain“ → „Webseite einrichten“:
 
 Jede SMA-Seite erhält eine dauerhafte Adresse `app/website.html?site=<uuid>`. Die Vorschau unter `?preview=1` ist an die angemeldete Person gebunden. Speichern verändert ausschließlich den privaten Entwurf. Ein eigener Button veröffentlicht den gespeicherten Stand oder nimmt die Seite wieder offline; spätere Änderungen bleiben bis zur nächsten ausdrücklichen Veröffentlichung privat. Im anschließenden [angemeldeten Kundentest](CUSTOMER_WEBSITE_E2E.md) wurde genau ein privater Entwurf mit klar gekennzeichneten, fiktiven SHK-Testdaten erzeugt. Die Seite wurde nicht veröffentlicht.
 
+Eine bereits geöffnete private Vorschau übernimmt gespeicherte Änderungen beim Zurückwechseln automatisch. Gleich gebliebene Inhalte bleiben im bestehenden Seitenaufbau erhalten. Gleichzeitige Fokus-/Sichtbarkeitsereignisse werden zusammengefasst und laufende Leseanfragen nicht parallel gestartet. Bei Kontowechsel wird die Vorschau geleert; verspätete Antworten dürfen keine alten Kundendaten wieder anzeigen. Öffentliche Seiten bleiben beim veröffentlichten Snapshot und erhalten keine privaten Profilabfragen.
+
 Der aktuelle öffentliche Shop wird serverseitig aus dem Kundenkonto zugeordnet. Produkte, Preise und Verfügbarkeit werden beim Seitenaufruf über die bestehende Katalogschnittstelle geladen, ohne HTML-Kopieren oder doppelte Produktpflege. Der Katalog bietet zusätzlich „Aktualisieren“. Das ist keine Echtzeit-Bestell-, Checkout- oder Fremdanbieter-Synchronisierung. Ist der Shop nicht öffentlich, erscheint keine Produktliste. Ein Shop-Wechsel verwendet ausschließlich die aktuelle eigene Zuordnung.
 
 SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird kein Hostingvertrag abgeschlossen, keine eigene Domain gekauft und kein DNS-Eintrag geschrieben. Eigene Domains und individuelle zusätzliche Gestaltung bleiben weitere Schritte. Die neue Vorlage verwendet Inter mit den bestehenden System-Fallbacks; die genehmigte Dashboard-Schrift und geschützte n8n-Workflows bleiben unverändert.
@@ -33,6 +35,7 @@ Schreibvorgänge sperren zuerst das Kundenkonto, dann Firmenprofil und Seite. Re
 - Lokale PostgreSQL-Fälle: Rollen, fremde Kunden, Paketgrenze, genau eine Seite, Wiederholung, Konflikte, private Änderungen nach Veröffentlichung, Offline-Schaltung nach Zugangsablauf und Besitzerwechsel. Alle Fixtures zurückgerollt. Die bestehende externe Webseiten-Vorbereitung bleibt bei Erzeugung unverändert.
 - DOM-Prüfungen: Text statt HTML-Ausführung, ausgeblendete leere Bereiche, separate Vorschau, kein implizites Veröffentlichen, Sperre bei ungespeicherten Änderungen und Leeren bei Kontowechsel. Bisherige WordPress-/Dashboard-DOM-Prüfungen bestanden.
 - Browserprüfung der SHK-Vorschau auf Desktop und im 390-Pixel-Handyrahmen; kein horizontaler Überlauf in der Handyansicht. Produkt- und Kontaktbereiche sowie Navigation geprüft.
+- Automatische private Vorschau: zwölf zusätzliche DOM-Szenarien für Aktualisierung, unveränderte Inhalte, laufende Anfragen, Kontowechsel, Ladefehler, Browsernavigation und öffentliche Trennung; 359 bestehende Node-Tests bestanden. Lokale Browserprüfung mit fiktiven Daten und simuliertem Speicherweg in zwei 390-Pixel-Rahmen: Änderung speichern, Fokus zur offenen Vorschau wechseln, neue Adresse und Ansprechperson sichtbar. [Nachweis und Grenzen](CUSTOMER_WEBSITE_E2E.md#ergänzung-offene-private-vorschau).
 - Migration installiert; native Prüfung weist einen sitzungslosen privaten Aufruf mit `AUTH_REQUIRED` ab. Die neue private Tabelle erzeugt lediglich den beabsichtigten Advisor-INFO-Hinweis `rls_enabled_no_policy`, da direkte Tabellenrechte fehlen.
 
 Der [authentifizierte Browserlauf im bestehenden Delta-Demo-Testkonto](CUSTOMER_WEBSITE_E2E.md) wurde am 4. November 2026 mit fiktiven Firmendaten erfolgreich durchgeführt: zentrale Speicherung, Entwurfserzeugung, Textbearbeitung, Übernahme einer späteren Adressänderung, Wiederaufruf, Produktanzeige und anonyme Zugriffssperre. Echte Kundendaten und eine Veröffentlichung sind weiterhin nicht abgenommen.
@@ -41,6 +44,7 @@ Der [authentifizierte Browserlauf im bestehenden Delta-Demo-Testkonto](CUSTOMER_
 node --test tests/*.test.cjs
 node tests/run-customer-websites-sql.mjs
 node tests/run-customer-website-dom.mjs
+node tests/run-customer-website-refresh-dom.mjs
 node tests/run-company-profile-dom.mjs
 node tests/run-wordpress-dom.mjs
 ```

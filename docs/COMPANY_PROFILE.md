@@ -12,6 +12,8 @@ Der Kunde pflegt 16 Felder: vollständiger Firmenname, Rechtsform, Branche, Vert
 
 Beim Wiederaufruf aktualisiert sich das Dashboard. Ein offener Webseiteneditor lädt beim Zurückkehren den neuen Profilstand, sofern keine ungespeicherten Textänderungen vorliegen. Unsichere alte Schreibstände werden durch die serverseitige Profilrevision zurückgewiesen. Das vermeidet verlorene Eingaben und unbemerkte Veröffentlichung zwischenzeitlich geänderter Firmendaten.
 
+Die bereits geöffnete private Vorschau lädt gespeicherte Firmen- und Webseitendaten beim Zurückwechseln ebenfalls neu. Fokus, erneute Sichtbarkeit und Wiederherstellung über die Browsernavigation lösen ausschließlich lesende Aufrufe aus; es gibt keine zeitgesteuerte Abfrage. Unveränderte Inhalte werden nicht neu aufgebaut, sodass geöffnete Firmendetails und die Katalogseite erhalten bleiben. Bei Abmeldung oder Kontowechsel werden die bisherigen Firmendaten sofort entfernt. Ein Ladefehler entfernt den möglicherweise veralteten Stand und erlaubt beim nächsten Zurückkehren einen neuen Versuch.
+
 Ein öffentliches SMA-Webangebot bleibt auf dem ausdrücklich veröffentlichten Stand. **Öffentliche Webseite aktualisieren** speichert Website und Firmenprofil gemeinsam als Snapshot. Ein anschließendes Speichern im Firmenprofil verändert automatisch den privaten Entwurf, nicht den öffentlichen Snapshot. Die Vorschau enthält den aktuellen privaten Profilstand. Offline-Schalten löscht auch den öffentlichen Firmen-Snapshot.
 
 Das zentrale Profil verändert keine bestehenden externen Webseiten. Deren Anbieteranschluss bleibt ein eigener Weg; WordPress ergänzt inzwischen einen [separaten Produktentwurfsauftrag](WORDPRESS_DRAFT_SYNC.md), der keine Firmenprofiltexte überträgt. Es gibt keine versteckte DNS-, Tarif-, Domainkauf-, Zahlungs- oder Social-Media-Aktion. `sma_kunden.kunde_email`, Login und geschützte n8n-Kundenzuordnungen bleiben unverändert. Individuelle Impressums- und Datenschutztexte bleiben gesondert bearbeitbar.
@@ -32,11 +34,13 @@ Die Sperrreihenfolge ist Kunde → Firmenprofil → Webseite. Profilrevision und
 - Lokale Browserprüfung mit fiktiven Daten auf Desktop und im 390-Pixel-Handyrahmen; kein horizontaler Überlauf (375 Pixel nutzbare Innenbreite).
 - Native Datenbankprüfung: sitzungsloser Profilaufruf `AUTH_REQUIRED`, anonyme Ausführung und direkte Tabellenrechte verweigert, RLS aktiv. Die neue Tabelle erzeugt lediglich den beabsichtigten Advisor-INFO-Hinweis `rls_enabled_no_policy`, da sämtliche Direktrechte fehlen.
 - Anschließender [authentifizierter Browser-Speichervorgang](CUSTOMER_WEBSITE_E2E.md) mit allen 16 fiktiven Profilfeldern im bestehenden Delta-Demo-Testkonto erfolgreich. Nach einer weiteren Speicherung übernehmen Dashboard, erneut geöffneter Webseiteneditor und private Vorschau die geänderte Adresse und Ansprechperson. Keine echten Firmenangaben verwendet und nichts veröffentlicht.
+- Ergänzung zur offenen privaten Vorschau: 359 Node-Tests, zwölf neue DOM-Szenarien und die vorhandenen Profil-/Webseiten-DOM-Prüfungen bestanden. Die lokale Browserprüfung mit simuliertem Speicherweg bestätigt die Übernahme von Adresse und Ansprechperson beim Fokuswechsel; sie ersetzt keinen neuen angemeldeten Produktionstest. [Prüfdetails und Aufnahme](CUSTOMER_WEBSITE_E2E.md#ergänzung-offene-private-vorschau).
 
 ```sh
 node --test tests/*.test.cjs
 node tests/run-customer-websites-sql.mjs
 node tests/run-company-profile-dom.mjs
 node tests/run-customer-website-dom.mjs
+node tests/run-customer-website-refresh-dom.mjs
 node tests/run-wordpress-dom.mjs
 ```
