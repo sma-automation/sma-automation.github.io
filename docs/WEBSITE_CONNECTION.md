@@ -1,49 +1,72 @@
-# Dauerhafte Verbindungsanfragen – erster Implementierungsschritt
+# Webseiten-Verbindung: Anfragen und geschützte Zugangsdaten
 
-Stand: 4. November 2026. Aufbauend auf [Anbieterprüfung](WEBSITE_PROVIDER_ASSESSMENT.md) und der veröffentlichten Webseiten-Vorbereitung.
+Stand: 4. November 2026. Aufbauend auf [Anbieterprüfung](WEBSITE_PROVIDER_ASSESSMENT.md) und der veröffentlichten Webseiten-Vorbereitung. Implementierungskandidat in PR #63; noch nicht installiert oder mit einer echten Anbieteranmeldung verbunden.
 
-## Was implementiert ist
+## Dauerhafte Anfrage
 
-Die neue Anfrageverwaltung bindet eine Verbindungsanfrage an den angemeldeten Kunden, dessen gespeicherte Webadresse, die Revision der Vorbereitung und den gewählten Anschluss (`wordpress` oder `hostinger`). Die Zieladresse stammt aus dem vorhandenen Entwurf, nicht aus einem Callback oder frei übergebenen Kundenkennungen.
+Die Anfrageverwaltung bindet einen Vorgang an den angemeldeten Kunden, dessen gespeicherte Webadresse, die Revision der Vorbereitung und den gewählten Anschluss (`wordpress` oder `hostinger`). Die Zieladresse stammt aus dem vorhandenen Entwurf, nicht aus einem Callback oder frei übergebenen Kundenkennungen.
 
-Eine Anfrage ist zehn Minuten gültig. Derselbe Speicherversuch liefert nach einer verlorenen Antwort denselben Vorgang, ohne die Laufzeit zu verlängern. Ein neuer Versuch erhält eine neue Kennung; fremde oder alte Vorgänge werden abgewiesen. Ein neuer Vorgang ist höchstens einmal pro Minute möglich. Änderungen an der Webseiten-Vorbereitung machen die vorherige Anfrage ungültig, einschließlich Änderungen am Pfad derselben Domain.
+Eine Anfrage ist zehn Minuten gültig. Derselbe Speicherversuch liefert nach einer verlorenen Antwort denselben Vorgang, ohne die Laufzeit zu verlängern. Neue Versuche erhalten eine neue Kennung, höchstens einmal pro Minute. Änderungen am Entwurf machen die vorherige Anfrage ungültig, einschließlich Änderungen am Pfad derselben Domain.
 
-`revoke` widerruft **diese SMA-Verbindungsanfrage**, auch wenn inzwischen Paket oder SMA-Zugang inaktiv sind. Ein späterer Anbieteranschluss muss zusätzlich die Anbieter-Zugangsdaten löschen beziehungsweise widerrufen; das ist hier noch nicht umgesetzt. Kunden- oder Besitzerwechsel geben keine alten Anfragen frei.
+`revoke` ist auch nach Ablauf des SMA-Zugangs oder Pakets verfügbar. Mit dem neuen Speicherbaustein löscht er die zugehörigen lokalen Zugangsdaten aus Vault. Ein Besitzerwechsel, eine geänderte Vorbereitung oder ein neuer Verbindungsversuch entfernt ebenfalls die bisherige Zuordnung und deren Secret. Ein beim Anbieter ausgestelltes Anwendungspasswort oder Token wird dadurch **nicht beim Anbieter widerrufen**. Diese zusätzliche externe Aktion bleibt Aufgabe des späteren Adapters.
 
-## Dateien und Schnittstellen
+## Zugangsdaten und atomare Bestätigung
 
-| Datei | Aufgabe |
-| --- | --- |
-| `supabase/sql/website-connection-requests.sql` | Kandidat für private RLS-Tabelle, ownergebundene RPCs, Ablauf und Widerruf |
-| `app/assets/website-connection-model.mjs` | Antwortprüfung, Kontowechsel, Revisionen und sichere Wiederholung im Client; noch nicht ins Dashboard importiert |
-| `tests/website-connection.test.cjs` | Client-Verhalten und Ablehnung vorgetäuschter Verbindungsrechte |
-| `tests/website-connection.sql` | Datenbankfälle mit Rollen, Zeitablauf, Konflikten und zurückgerollten Fixtures |
-| `tests/run-website-connection-sql.mjs` | Lokaler PostgreSQL-Test mit dem vorhandenen PGlite-Prüfaufbau |
+`website-provider-credentials.sql` ergänzt eine private RLS-Tabelle und verwendet **Supabase Vault** für Zugangsdaten. Die Zuordnung enthält ausschließlich den Vault-Verweis, einen Fingerabdruck für Wiederholungen und nicht geheime Prüfmetadaten. Kunden haben weder direkten Tabellenzugriff noch Zugriff auf die serverseitigen Speicher- und Lesefunktionen.
 
-`sma_website_connection_request_v1` bietet `get`, `prepare` und `revoke` für angemeldete Kunden. `prepare` verlangt Anbieter, erwartete Revision und Anfrage-UUID. Kunden-ID, Benutzer-ID, Webadresse und Berechtigungen werden nicht als Eingaben akzeptiert. Direkter Tabellenzugriff ist auch für die Service-Rolle gesperrt.
+Der Ablauf des späteren vertrauenswürdigen Serveradapters:
 
-`sma_website_connection_context_v1` ist ausschließlich für einen späteren serverseitigen Adapter bestimmt. Er prüft Benutzer, Zugriff, gespeicherte Adresse, Revision, Vorgangskennung, Widerruf und Ablauf erneut. Das Ergebnis ist **kein Lease**, keine Anbieterfreigabe und kein Beleg für eine erfolgreich abgeschlossene Verbindung. Die spätere Bestätigungsfunktion muss dieselbe Bindung nach dem Anbieteraufruf atomar erneut prüfen.
+1. SMA-Benutzer anhand einer geprüften Sitzung bestimmen; niemals eine Benutzer-ID aus dem Browser unverändert übernehmen. `sma_website_provider_begin_v1` prüft diese Zuordnung und reserviert den aktuellen Versuch für zwei Minuten.
+2. Anbieterzugriff unabhängig prüfen: exakt die gespeicherte Webadresse, deren Anbieterkennung und tatsächlichen Lesezugriff. Diese externe Prüfung und der sichere Übergabeweg sind noch nicht implementiert. Ein vom Browser geliefertes `can_read:true` ist kein Nachweis.
+3. `sma_website_provider_finish_v1` mit der reservierten Prüfkennung aufrufen. Die Funktion prüft Besitzer, Paket, Ziel, Revision, Widerruf, Anfrageablauf und Prüfzeit erneut, während die betreffenden Zeilen gesperrt sind. Nur dann speichert sie Secret und Zuordnung in derselben Transaktion. Ein Speicherfehler hinterlässt kein verwaistes Secret.
+4. Eine verlorene Abschlussantwort mit identischen Daten wiederholen: dieselbe Bestätigung, kein zweites Secret. Ein anderer Inhalt, eine abgelöste Prüfkennung oder eine veraltete Anfrage wird abgewiesen. Ein inzwischen fehlendes Secret wird auch bei Wiederholung nicht als funktionierende Verbindung gemeldet.
 
-Alle öffentlichen Antworten enthalten weiterhin `website_connected:false`, `can_synchronize:false` und `can_publish:false`. Der Client verwirft Antworten, die diese Grenzen unzulässig verändern. Lokaler Zeitablauf entfernt die verwendbare Vorgangskennung auch dann, wenn eine Antwort während der Übertragung abläuft.
+Die Datenbank prüft Struktur und Zuordnung des Nachweises. Sie führt selbst **keinen Anbieteraufruf** aus. Die Service-Rolle ist deshalb eine Vertrauensgrenze: Sie darf `finish` ausschließlich nach einer eigenen erfolgreichen Prüfung aufrufen. Zugangsdaten dürfen nicht in URLs, Browser-Speicher, Anwendungslogs oder Fehlerantworten gelangen. Bestehende globale Vault-Rechte werden durch den Kandidaten nicht verändert.
 
-## Noch erforderlich für die echte einmalige Freigabe
+## Wiederaufnahme und Zustand
 
-1. **Ein unterstützter Anmeldeweg.** Hostingers Anmeldung für eigene Entwicklerwerkzeuge belegt noch keine für SMA registrierte Webanwendung. Clientregistrierung, Redirect und Berechtigungen sind offen. WordPress bietet einen nativen Anwendungsfreigabeweg, überträgt dabei aber Zugangsdaten in Callback-Queryparametern; dieser wird nicht ungeprüft auf eine öffentlich protokollierte Dashboard- oder Edge-Adresse gelegt.
-2. **Zugangsdaten und Bestätigung.** Benötigt werden der serverseitige Austausch beziehungsweise eine sichere Übergabe, verschlüsselte Speicherung, Widerruf, echte Prüfung des ausgewählten Ziels und atomarer Abschluss. Die Vorgangskennung dieser Implementierung ist kein OAuth-State und darf nicht als alleiniger Authentifizierungsnachweis verwendet werden. Ein OAuth-Adapter benötigt zusätzliche an Browser/Sitzung gebundene Einmalzustände und PKCE.
-3. **Gezielte Einbindung.** Nach erfolgreicher Freigabe den SMA-Produktbereich anlegen/aktualisieren, fremde Änderungen erhalten und Wiederholung absichern. Kauf, Domain-/DNS-Änderung und Veröffentlichung bleiben getrennt.
-4. **Abnahme mit einer echten freigegebenen Zielwebseite.** Der bisherige Testshop und seine Vorschau ersetzen keine externe Kundenwebseite.
+Eine erfolgreich gespeicherte Verbindung überlebt das zehnminütige Anmeldefenster. Der Server kann über `sma_website_provider_context_v1` die aktuelle, nicht geheime Vorgangskennung wiederfinden und anschließend über `sma_website_provider_credential_v1(..., 'get')` deren Zugangsdaten laden. Ändert sich die Zuordnung zwischen diesen Aufrufen, wird der Zugriff abgewiesen. Ein später Worker kann somit nicht unbemerkt die Zugangsdaten eines neueren Vorgangs verwenden.
 
-Die bereitgestellte Datenbankdefinition ist ein **lokal getesteter Kandidat**, noch keine installierte Migration. Kein neuer Endpoint und kein Dashboard-Button wurden veröffentlicht. Das verhindert, dass Kunden eine noch nicht angeschlossene Anmeldung beginnen oder eine bloße Anfrage für eine Verbindung halten. Die Oberfläche, Schrift und vorhandenen Workflows sind unverändert.
+`credential(..., 'forget')` entfernt ausschließlich die passende lokale Verbindung, etwa nach einer Anbieterablehnung. Ein verspäteter Fehler eines alten Vorgangs kann keinen neuen löschen. Inaktive Zugänge dürfen Zugangsdaten nicht laden; deren Eigentümer kann weiterhin über `revoke` löschen. Eine vorübergehende Paketdeaktivierung alleine löscht die gespeicherten Zugangsdaten nicht.
 
-## Prüfungen
+| Schnittstelle | Aufrufer | Bedeutung |
+| --- | --- | --- |
+| `sma_website_connection_request_v1` | Angemeldeter Kunde | `get`, `prepare`, `revoke`; Status der Anfrage, stets ohne Verbindungs-/Schreibrechte |
+| `sma_website_connection_context_v1` | Service-Rolle | Zeitlich begrenzter Anfragekontext; keine Anbieterfreigabe |
+| `sma_website_provider_begin_v1` / `finish_v1` | Service-Rolle | Prüfversuch reservieren und geprüfte Zugangsdaten atomar zuordnen |
+| `sma_website_provider_context_v1` | Service-Rolle | Dauerhafte Zuordnung ohne Secret wiederfinden |
+| `sma_website_provider_credential_v1` | Service-Rolle | Zugangsdaten des exakten Vorgangs laden oder lokal entfernen |
+| `sma_website_provider_status_v1` | Angemeldeter Kunde | Ausschließlich eigene geprüfte Zuordnung, ohne Zugangsdaten |
 
-**322 Node-Tests bestanden, 0 fehlgeschlagen**, einschließlich sieben neuer Fälle. Die lokale PostgreSQL-Prüfreihe für Rechte, Wiederholung, Ablauf, Adressänderung, Besitzerwechsel und Widerruf ist ebenfalls bestanden. `git diff --cached --check` meldet keine Formatfehler.
+Der neue Status kann nach erfolgreichem Abschluss `website_connected:true` melden; `verified_at` bezeichnet die letzte erfolgreiche Prüfung, keine dauernde Gültigkeitsgarantie des Anbieters. `can_synchronize` und `can_publish` bleiben **false**. Vor einem echten Arbeitsauftrag muss der Adapter Zugang und benötigte Fähigkeiten erneut prüfen. Die bisherigen Anfrageantworten und deren Client-Modell bleiben unverändert; Anfrageablauf und dauerhafte Verbindung sind getrennte Zustände. Noch kein Frontend importiert diesen neuen Status.
+
+## Dateien und Tests
+
+- `supabase/sql/website-connection-requests.sql`: Anfrageverwaltung.
+- `supabase/sql/website-provider-credentials.sql`: Vault-Anbindung, Abschluss, Wiederaufnahme und automatische lokale Entfernung. Nach der Anfrageverwaltung innerhalb einer Migrationstransaktion installieren; hier noch nicht durchgeführt.
+- `app/assets/website-connection-model.mjs`: Client für Anfragen, noch nicht im Dashboard importiert.
+- `tests/website-connection.test.cjs`, `tests/website-connection.sql`: Client- und Datenbankfälle für Anfragen.
+- `tests/website-provider.sql`: Rollen, fremde Besitzer, falsches Ziel, verspätete Antworten, Ablauf, Wiederholung, Speicherfehler, fehlende Secrets, Wiederaufnahme und Löschung.
+- `tests/sql-runtime/vault-test-double.sql`: ausschließlich lokaler Vault-Vertragsersatz, **ohne Verschlüsselung**. Der SQL-Test beweist damit Ablauf und Rechte, nicht die Kryptografie der Erweiterung.
 
 ```sh
 node --test tests/*.test.cjs
 node tests/run-website-connection-sql.mjs
+node tests/run-website-provider-sql.mjs
 ```
 
-Die SQL-Fixtures werden vollständig zurückgerollt. Es wurden keine echten Kundendaten, Zugangsdaten, Providerkonten, Webseiten oder DNS-Einträge verändert. Die Datenbankdefinition wurde gegen die gelesenen Live-Spaltentypen geprüft; das ersetzt keine spätere Live-Migration und keine echte Provider-Abnahme.
+**322 Node-Tests bestanden, 0 fehlgeschlagen.** Die lokale PostgreSQL-Prüfung für Zugangsdaten einschließlich der bisherigen Anfragefälle besteht ebenfalls; alle Fixtures werden zurückgerollt. Fehler zwischen Secret-Erstellung und Zuordnung werden gezielt ausgelöst und ihre vollständige Rücknahme geprüft. Die zeitlichen Überschneidungen werden durch versetzte Zustände geprüft, nicht durch einen Mehrprozess-Lasttest.
 
-Technische Referenzen: [Supabase Auth in Edge Functions](https://supabase.com/docs/guides/functions/auth-legacy-jwt), [Supabase Logging](https://supabase.com/docs/guides/functions/logging), [Supabase Changelog](https://supabase.com/changelog), [WordPress Freigabeablauf](https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/). Die Markdown-Dokumentationsadressen waren nicht abrufbar; die entsprechenden HTML-Seiten beziehungsweise die Supabase-Dokumentationssuche wurden verwendet.
+Zusätzlich ist die vorhandene native Vault-Erweiterung (`supabase_vault` 0.3.1) mit einem neu erzeugten synthetischen Wert geprüft: verschlüsselter Tabellenwert, korrekte Entschlüsselung und Entfernung. Die Transaktion wurde zurückgerollt. Es wurden keine bestehenden Secrets gelesen und keine echten Kundenzugangsdaten gespeichert. Dieser Test ersetzt weder eine Installation des Kandidaten auf dem Server noch eine echte Provider-Abnahme.
+
+## Noch erforderlich für die einmalige Freigabe
+
+**Anbieterweg:** Hostinger hat öffentlich bestätigt, dass sein OAuth-Server derzeit nicht für externe Integrationen freigegeben wird ([offizielles Issue #53](https://github.com/hostinger/api-mcp-server/issues/53), Antwort vom 27. August 2026). Ein eigener SMA-Weblogin ist damit aktuell kein belegbar verfügbarer Weg. Token oder Kontofreigaben sind keine bereits umgesetzte Alternative. Keine Kauf- oder Tarifentscheidung daraus ableiten.
+
+**WordPress-Anschluss zuerst:** WordPress bietet einen nativen Anwendungsfreigabeweg, überträgt dabei aber Zugangsdaten in Callback-Queryparametern. Deshalb wird dieser nicht ungeprüft auf eine protokollierte Dashboard- oder Edge-Adresse gelegt. Als nächstes ist ein sicherer Übergabeweg mit einer realen Zielprüfung nötig, gegebenenfalls über eine kleine WordPress-Erweiterung mit einmaliger Freigabe. Die Vorgangskennung allein ist kein Authentifizierungsnachweis. Für einen später unterstützten OAuth-Anbieter werden zusätzlich sitzungsgebundene Einmalzustände und PKCE benötigt.
+
+Anschließend folgen die gezielte Einbindung des SMA-Produktbereichs, Erhalt fremder Änderungen, sichere Wiederholung und die Abnahme auf einer ausdrücklich freigegebenen externen Testwebseite. Erstellung zunächst als Entwurf; Veröffentlichung, Käufe und DNS-Änderungen bleiben getrennt. Der vorhandene Testshop ersetzt diese externe Abnahme nicht.
+
+Kein neuer Endpoint und kein Dashboard-Button wurden veröffentlicht. Oberfläche, Schrift, n8n-Workflows und Live-Schema bleiben unverändert. Der Kandidat verschafft noch keine automatische Webseiten-Synchronisierung.
+
+Technische Referenzen: [Supabase Vault](https://supabase.com/docs/guides/database/vault), [Supabase Auth in Edge Functions](https://supabase.com/docs/guides/functions/auth-legacy-jwt), [Supabase Logging](https://supabase.com/docs/guides/functions/logging), [WordPress Freigabeablauf](https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/).

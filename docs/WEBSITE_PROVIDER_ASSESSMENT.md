@@ -6,7 +6,7 @@ Stand: 4. November 2026. Zielbranch `website-v1`, geprüfter Stand nach PR #62: 
 
 Der Kunde soll keinen Einbaucode kopieren müssen. Gewünscht sind eine einmalige Verbindungsfreigabe und anschließend „Synchronisieren“ beziehungsweise „Webseite erzeugen“. Anbieterempfehlungen können später Provisionen oder Kundenrabatte ergänzen.
 
-**Technische Empfehlung:** Hostinger als ersten Kandidaten für die Erstellung neuer Webseiten untersuchen; bestehende WordPress-Webseiten über einen eigenen WordPress-Anschluss unterstützen. IONOS bleibt ein Kandidat für Domain/DNS und für dort betriebenes WordPress. IONOS MyWebsite Now ist derzeit kein belegter Kandidat für den vollständig automatischen Einbau. Das ist eine technische Auswahl anhand öffentlicher Dokumentation, keine abgeschlossene Partnerschaft oder Vertragsentscheidung.
+**Technische Empfehlung:** Bestehende WordPress-Webseiten zuerst über einen eigenen Anschluss unterstützen. Hostinger bleibt ein späterer Kandidat für die Erstellung neuer Webseiten; ein eigener SMA-OAuth-Weblogin wird derzeit nicht für Drittanbieter freigegeben. [H4] IONOS bleibt ein Kandidat für Domain/DNS und für dort betriebenes WordPress. IONOS MyWebsite Now ist derzeit kein belegter Kandidat für den vollständig automatischen Einbau. Das ist eine technische Auswahl anhand öffentlicher Dokumentation, keine abgeschlossene Partnerschaft oder Vertragsentscheidung.
 
 Diese Prüfung hat keine authentifizierte Provider-API aufgerufen. Es gibt keine nachgewiesene SMA-Verbindung zu Hostinger, IONOS oder einer externen WordPress-Webseite. Kostenpflichtige Angebote, Zugang, Kontingente und Schreibberechtigungen eines konkreten Kundenkontos sind nicht geprüft.
 
@@ -18,7 +18,7 @@ Diese Prüfung hat keine authentifizierte Provider-API aufgerufen. Es gibt keine
 | Neue Webseite automatisch einrichten | Kein entsprechender Endpunkt im geprüften Hosting-API-Katalog belegt. [I1] | Einrichtung auf einem vorhandenen Web-/Cloud-Hostingauftrag, optional mit WordPress, ist dokumentiert. Agency Hosting hat einen gesonderten Weg. [H2] |
 | Bestehende WordPress-Seite ergänzen | WordPress-Anschluss möglich, wenn REST API und passende Berechtigungen verfügbar sind; Hostname allein reicht nicht als Nachweis. [W1–W3] | Derselbe WordPress-Anschluss ist der geplante Weg für bestehende Seiten. [W1–W3] |
 | Beliebigen Baukasten automatisch verändern | MyWebsite Now dokumentiert manuellen HTML-Einbau, zudem tarifabhängig. Keine öffentliche Schreib-API dafür gefunden. [I4] | Das Auflisten einer Builder-Webseite beweist keine Unterstützung für das automatische Bearbeiten ihrer Inhalte. [H2] |
-| Freigabe ohne Schlüsselkopieren | Dokumentierter Hosting-API-Einstieg verlangt API-Freischaltung und Schlüssel. [I2] | Öffentliche REST API nutzt Bearer-Token. Eigene Hostinger-Werkzeuge bieten OAuth; Eignung und Freigabe eines SMA-Webclients bleiben offen. [H1, H3] |
+| Freigabe ohne Schlüsselkopieren | Dokumentierter Hosting-API-Einstieg verlangt API-Freischaltung und Schlüssel. [I2] | Öffentliche REST API nutzt Bearer-Token. Hostinger bestätigt, dass sein OAuth-Server derzeit nicht für externe Anwendungen freigegeben wird. Eigene Werkzeuge sind kein Beleg für einen SMA-Weblogin. [H1, H3, H4] |
 
 ## Hostinger: belegter Anschlussweg und Grenzen
 
@@ -32,7 +32,9 @@ Aus der offiziellen SDK-Dokumentation [H2]:
 
 SMA muss die externe Vorgangskennung, Zielwebseite und Ergebnisse selbst dauerhaft speichern. Nach einer verlorenen Antwort zuerst abgleichen, bevor ein Erstellungsauftrag wiederholt wird. Bestehende Inhalte benötigen einen gezielten Anschluss, neue Seiten eine getrennte Erstellung und Vorschau. Eine WordPress-Installation ist noch keine fertig gestaltete Kundenwebseite.
 
-Hostinger-REST-Token übernehmen die Rechte ihres Besitzers. Die dokumentierte OAuth-Anmeldung betrifft Hostingers eigene Werkzeuge. Ohne geprüfte Clientregistrierung, Rücksprungadresse, Rechteumfang, Widerruf und Mandantenzuordnung wird kein funktionierender SMA-Anmeldebutton behauptet. [H1, H3]
+Hostinger-REST-Token übernehmen die Rechte ihres Besitzers. Im offiziellen Projekt hat Hostinger am 27. August 2026 erklärt, dass externe Integrationen keinen Zugang zu seinem OAuth-Server und keine Freischaltung eigener Callback-Adressen erhalten. Damit wird die frühere offene Frage zur Clientregistrierung zu einer konkreten Anbietergrenze. Ein eigener SMA-Anmeldebutton wird dafür nicht angeboten. [H1, H3, H4]
+
+Eine Kontofreigabe ist eine getrennte mögliche Übergabe: Die normale Freigabe für Web-/Cloud-Hosting umfasst laut Hostinger den gesamten Hostingplan. Sie ersetzt deshalb keine geprüfte Zuordnung einer einzelnen Kundenwebseite. Eine Administratorfreigabe kann zudem Kaufrechte enthalten. Einladungen, zentrale Kundenzugänge und Tarifwechsel sind in diesem Schritt weder angefordert noch eingerichtet. [H5]
 
 ## WordPress: Verbindung ohne manuelles Kopieren von HTML
 
@@ -42,7 +44,7 @@ Geplante SMA-Umsetzung:
 
 1. Webseite und angebotenen Autorisierungsweg prüfen; nur freigegebene öffentliche HTTPS-Ziele zulassen.
 2. Die Verbindung an den angemeldeten SMA-Kunden und einen kurzlebigen Einmalvorgang binden.
-3. Freigabe im WordPress-Fenster durchführen. Die Rückgabe enthält Zugangsdaten: ausschließlich serverseitig entgegennehmen, verschlüsselt speichern und sofort auf eine saubere Dashboard-Adresse umleiten. Keine Zugangsdaten in Dashboard-Speicher, Analytik, Fehlerausgaben oder Anwendungslogs übernehmen.
+3. Einen sicheren Übergabeweg für die Freigabe umsetzen. Die native WordPress-Rückgabe enthält Zugangsdaten in Queryparametern; eine anschließende Weiterleitung entfernt bereits entstandene Proxy-/Gateway-Logs nicht. Daher diesen Callback nicht direkt auf Dashboard oder Edge legen. Eine gezielte WordPress-Erweiterung mit serverseitiger Übergabe prüfen. Keine Zugangsdaten in Dashboard-Speicher, Analytik, Fehlerausgaben oder Anwendungslogs übernehmen.
 4. Rechte und Darstellungsfähigkeit nachweisen. Das bestehende iframe kann durch WordPress-Berechtigungen oder Erweiterungen gefiltert werden; deshalb ist ein echter Darstellungstest erforderlich. Falls nötig einen gezielten SMA-Baustein entwickeln, keine globalen Filter abschalten.
 5. Nur den zugeordneten SMA-Bereich anlegen/aktualisieren, dessen Kennung und Inhaltsstand speichern. Fremde Änderungen erkennen und erhalten. Erzeugung zunächst als Entwurf; Veröffentlichung gesondert freigeben.
 6. „Synchronisieren“ prüft die Zuordnung und aktualisiert diesen Bereich. Öffentlich geladene Preise und Bestände kommen weiterhin aus dem SMA-Katalog. Eine Bestell- oder Checkout-Synchronisierung wird daraus nicht abgeleitet.
@@ -59,9 +61,9 @@ Die technische Anbindung darf keinen Affiliate-Kauf voraussetzen: Bestehende gee
 
 ## Nächster Implementierungsschritt
 
-Fortschritt: Die [dauerhafte Verbindungsanfrage](WEBSITE_CONNECTION.md) ist als getesteter Kandidat implementiert. Anmeldung, verschlüsselte Zugangsdaten und tatsächliche Anbieterfreigabe sind weiterhin offen. Die nachfolgende Reihenfolge beschreibt den noch zu vervollständigenden Anschluss.
+Fortschritt: [Dauerhafte Anfragen, Vault-Speicherung, atomarer Abschluss und Wiederaufnahme](WEBSITE_CONNECTION.md) sind als getesteter Datenbankkandidat implementiert. Echte Anbieteranmeldung, unabhängige Zielprüfung und Einbindung sind weiterhin offen. Es wurde noch keine Migration installiert.
 
-Zuerst eine kundengebundene Verbindung mit ausschließlich lesender Prüfung vorbereiten: Authentifizierung, Zielwebseite, tatsächliche Fähigkeiten, Widerruf und gespeicherter Zustand. Anschließend die gezielte WordPress-Einbindung und für neue Seiten die Hostinger-Erstellung ergänzen. Einen Tarif erst anhand einer konkreten erforderlichen Fähigkeit auswählen.
+Als nächstes den WordPress-Übergabeweg und eine echte lesende Zielprüfung anschließen. Anschließend die gezielte WordPress-Einbindung ergänzen. Hostinger-Erstellung erst fortsetzen, wenn ein geeigneter, kundengebundener Freigabeweg verfügbar und geprüft ist. Einen Tarif erst anhand einer konkreten erforderlichen Fähigkeit auswählen.
 
 Der Abnahmelauf muss Zugangsentzug, falschen Kunden, unzulässige Zieladressen, verlorene Antworten, doppelte Klicks, externe Änderungen und erneutes Laden abdecken. Erst nach einem echten erfolgreichen Verbindungstest darf `website_connected` auf wahr wechseln. Erstellung/Veröffentlichung, Domain/DNS-Schreibzugriff und Bestellungen erhalten getrennte Aufträge und Freigaben.
 
@@ -69,7 +71,7 @@ Der Abnahmelauf muss Zugangsentzug, falschen Kunden, unzulässige Zieladressen, 
 
 - Offizielle API-, SDK-, WordPress- und Partnerdokumentation gelesen; Versionswechsel und Tarifgrenzen berücksichtigt. Einzelne Hostinger-Referenzseiten waren nicht abrufbar; die Einrichtungsdetails wurden mit dem offiziellen PHP-SDK abgeglichen.
 - `WEBSITE_DOMAIN.md`, `PRODUCT_EMBED.md` und bestehender Verbindungsstatus gelesen. Der vorhandene Katalog ist weiterhin ein öffentliches Embed, keine installierte Anbieteranbindung.
-- Nur Dokumentation ergänzt. Keine Änderung an Oberfläche, Schrift, Datenbank, n8n, CNAME oder laufender Webseite. Keine erneute Testausführung für diese reine Dokumentationsänderung; die 315 Tests aus PR #62 werden nicht als neuer Testlauf ausgegeben.
+- Der erste Prüfstand war eine Dokumentationsänderung. Inzwischen sind die in `WEBSITE_CONNECTION.md` beschriebenen Implementierungskandidaten ergänzt: 322 Node-Tests, lokale Datenbankfälle und ein zurückgerollter nativer Vault-Test bestanden. Keine Änderung an Oberfläche, Schrift, Live-Schema, n8n, CNAME oder laufender Webseite.
 - PR #57 bleibt offen und getrennt. Sightengine bleibt `VIDEO_PLAN_REQUIRED`. Kein Kauf, keine Tarifänderung, kein Hostingwechsel, kein DNS-Schreibzugriff, kein Social-Media-Upload und keine Kundenwebseite veröffentlicht.
 
 ## Offizielle Quellen
@@ -83,6 +85,8 @@ Alle nachfolgenden Quellen am 4. November 2026 gelesen. Konditionen und Schnitts
 - [H1 – Hostinger API-Übersicht](https://docs.hostinger.com/api-reference/overview)
 - [H2 – Offizielles Hostinger PHP-SDK: HostingWebsitesApi](https://github.com/hostinger/api-php-sdk/blob/main/docs/Api/HostingWebsitesApi.md)
 - [H3 – Hostinger Connector: Anmeldung](https://docs.hostinger.com/hostinger-connector/installation-and-setup)
+- [H4 – Hostinger: keine OAuth-Freigabe für externe Integrationen](https://github.com/hostinger/api-mcp-server/issues/53)
+- [H5 – Hostinger Kontofreigabe und Rechte](https://www.hostinger.com/support/1583777-how-to-share-access-to-your-account-at-hostinger/)
 - [W1 – WordPress REST-Authentifizierung](https://developer.wordpress.org/rest-api/using-the-rest-api/authentication/)
 - [W2 – WordPress Seiten-API](https://developer.wordpress.org/rest-api/reference/pages/)
 - [W3 – WordPress Anwendungsfreigabe](https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/)
