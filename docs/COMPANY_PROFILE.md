@@ -18,7 +18,7 @@ Das zentrale Profil verändert keine bestehenden externen Webseiten. Deren Anbie
 
 ## Zugriff und Migration
 
-Migration `shared_company_profiles_v1`: zuerst `supabase/sql/company-profiles.sql`, danach die aktualisierte `customer-websites.sql`. Bei einer Neuinstallation zuvor `website-domain-preparation.sql` für das private Schema laden. Die Migration wurde im Projekt installiert; sie fügt ausschließlich die Profiltabelle, Funktionen und zwei Website-Snapshot-Spalten hinzu. Keine echten Kundenprofile wurden angelegt oder geändert.
+Migration `shared_company_profiles_v1`: zuerst `supabase/sql/company-profiles.sql`, danach die aktualisierte `customer-websites.sql`. Bei einer Neuinstallation zuvor `website-domain-preparation.sql` für das private Schema laden. Die Migration wurde im Projekt installiert; sie fügt ausschließlich die Profiltabelle, Funktionen und zwei Website-Snapshot-Spalten hinzu. Bei der Migration wurden keine Kundenprofile angelegt oder geändert. Der spätere [angemeldete Kundentest](CUSTOMER_WEBSITE_E2E.md) speicherte ein gekennzeichnetes fiktives Profil im bestehenden Demo-Testkonto.
 
 Die Profiltabelle verwendet RLS ohne Direktrechte für `anon`, `authenticated` oder `service_role`. Die öffentliche RPC `sma_company_profile_v1` ist nur für angemeldete Benutzer ausführbar. Der private Definer mit leerem Suchpfad prüft eine eindeutige Kundenzuordnung, den bisherigen Besitzer und aktive Berechtigung. Aktive zahlungsbestätigte Kunden aller Pakete sowie der vorhandene Demo-Zugang dürfen ihre Firmendaten pflegen; die Webseitenfunktionen bleiben Delta-gebunden. Lesen des eigenen Profils bleibt nach Ablauf möglich.
 
@@ -31,7 +31,7 @@ Die Sperrreihenfolge ist Kunde → Firmenprofil → Webseite. Profilrevision und
 - DOM-Prüfungen für alle 16 Eingaben, Speicherung, Profilanzeige im Dashboard, Entfernen bei Besitzerwechsel/Abbau, schreibgeschützte gemeinsame Websitefelder, Schutz ungespeicherter Texte und sichere Ausgabe.
 - Lokale Browserprüfung mit fiktiven Daten auf Desktop und im 390-Pixel-Handyrahmen; kein horizontaler Überlauf (375 Pixel nutzbare Innenbreite).
 - Native Datenbankprüfung: sitzungsloser Profilaufruf `AUTH_REQUIRED`, anonyme Ausführung und direkte Tabellenrechte verweigert, RLS aktiv. Die neue Tabelle erzeugt lediglich den beabsichtigten Advisor-INFO-Hinweis `rls_enabled_no_policy`, da sämtliche Direktrechte fehlen.
-- Kein authentifizierter Browser-Speichervorgang mit echten Kundendaten; positive Schreibabläufe wurden mit isolierten Fixtures geprüft.
+- Anschließender [authentifizierter Browser-Speichervorgang](CUSTOMER_WEBSITE_E2E.md) mit allen 16 fiktiven Profilfeldern im bestehenden Delta-Demo-Testkonto erfolgreich. Nach einer weiteren Speicherung übernehmen Dashboard, erneut geöffneter Webseiteneditor und private Vorschau die geänderte Adresse und Ansprechperson. Keine echten Firmenangaben verwendet und nichts veröffentlicht.
 
 ```sh
 node --test tests/*.test.cjs
