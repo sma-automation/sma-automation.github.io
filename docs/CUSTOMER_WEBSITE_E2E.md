@@ -29,11 +29,11 @@ Im Einrichtungsbereich stand noch, die automatische WordPress-Einbindung werde e
 - Eigene Kundendomains benötigen weiterhin ihren jeweiligen Nachweis und eine gesonderte konkrete Anbindung. Keine DNS- oder Tarifänderung vorgenommen.
 - PR #57 bleibt separat. Social-Media-Uploads/Postings benötigen ausdrückliche Freigabe; Sightengine bleibt `VIDEO_PLAN_REQUIRED`, Meta und Serverumbau bleiben zurückgestellt.
 
-Fortsetzung im neuen Chat: `docs/CUSTOMER_WEBSITE_E2E.md`, `docs/COMPANY_PROFILE.md`, `docs/CUSTOMER_WEBSITES.md` und `docs/WORDPRESS_DRAFT_SYNC.md` lesen. Die abgeschlossene Profil-/Entwurfsprüfung nicht erneut starten. Als nächstes die Voraussetzungen für den externen WordPress-Praxistest klären; bis zu einer geeigneten freigegebenen Testseite keinen echten Anbieterauftrag auslösen.
+Fortsetzung: Die abgeschlossene Profil-/Entwurfsprüfung nicht erneut starten. PR #69 enthält den bestandenen lokalen WordPress-/MariaDB-Praxistest und bleibt separat offen. Eine externe Testadresse fehlt weiterhin. Der nächste eigenständig umsetzbare Kundenschritt ist die [individuelle Gestaltung der SMA-Webseite](CUSTOMER_WEBSITE_DESIGN.md); deren Umsetzung und Bereitstellungsgrenze sind dort dokumentiert.
 
 ## Ergänzung: offene private Vorschau
 
-Am 4. November 2026 wurde die private Vorschau um eine automatische Aktualisierung beim Zurückwechseln ergänzt. Der oben dokumentierte angemeldete Browserlauf bleibt ein eigener, früherer Nachweis. Diese Ergänzung ist zunächst eine vorbereitete Codeänderung; sie wurde nicht veröffentlicht.
+Am 4. November 2026 wurde die private Vorschau um eine automatische Aktualisierung beim Zurückwechseln ergänzt. Der oben dokumentierte angemeldete Browserlauf bleibt ein eigener, früherer Nachweis. PR #70 ist inzwischen zusammengeführt und live geprüft. Die folgenden Punkte dokumentieren die zuvor durchgeführten lokalen Prüfungen; sie sind kein Hinweis auf eine noch ausstehende Freigabe.
 
 - `customer-website-view.mjs` lädt ausschließlich den gespeicherten Entwurf und das aktuelle Firmenprofil neu. Auslöser sind Fokus, erneute Sichtbarkeit und Wiederherstellung aus dem Browser-Seitencache. Unveränderte Inhalte bleiben bestehen; keine zusätzlichen Bedienelemente, Schrift- oder Layoutänderungen.
 - Kontowechsel leeren die Vorschau sofort. Besitzerprüfung vor und nach jeder Antwort sowie die Entwertung laufender Aufrufe verhindern die erneute Anzeige alter Kontodaten. Öffentliche Seiten laden ausschließlich ihren veröffentlichten Stand.
@@ -43,4 +43,4 @@ Am 4. November 2026 wurde die private Vorschau um eine automatische Aktualisieru
 
 ![Lokale Prüfung: gespeicherter Testort und aktualisierte offene Vorschau](evidence/customer-website-preview-refresh-2026-11-04.jpg)
 
-Es wurden keine Produktionsdaten verändert, keine Webseite veröffentlicht, kein Hosting gebucht und keine WordPress-Verbindung angelegt. Der bestehende private SHK-Entwurf im Demo-Konto bleibt erhalten. PR #57 bleibt separat; der lokale WordPress-Praxistest liegt gesondert in PR #69. Ein externer WordPress-Test wartet auf eine vorhandene geeignete Testseite. Für diese Vorschauänderung steht die Freigabe zur Übernahme in `website-v1` noch aus.
+Es wurden keine Produktionsdaten verändert, keine Webseite veröffentlicht, kein Hosting gebucht und keine WordPress-Verbindung angelegt. Der bestehende private SHK-Entwurf im Demo-Konto bleibt erhalten. PR #57 bleibt separat; der lokale WordPress-Praxistest liegt gesondert in PR #69. Ein externer WordPress-Test wartet auf eine vorhandene geeignete Testseite. Die Vorschauänderung ist über PR #70 bereits in `website-v1` und live. Der neue, noch nicht bereitgestellte Gestaltungsbereich ist davon getrennt: [aktueller Stand](CUSTOMER_WEBSITE_DESIGN.md).

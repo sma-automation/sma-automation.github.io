@@ -6,3 +6,17 @@
 @media(max-width:420px){.site-shell{padding:0 16px}.site-header{gap:10px}.brand{font-size:14px}.brand-mark{width:30px;height:30px;margin-right:6px}.site-header .button{font-size:12px;padding:7px 10px}.hero{padding:25px;border-radius:14px}.hero h1{font-size:35px}.hero .secondary{display:inline-block;margin:15px 0 0}.toolbar>*{width:100%}.section-intro h2{font-size:24px}.catalog-toolbar{align-items:flex-start}.preview-banner{padding:9px 14px;font-size:12px}.demo-product{grid-template-columns:100px 1fr}.demo-product svg{max-width:90px}}
 
 .legal dt{font-weight:600;margin-top:12px}.legal dd{margin:2px 0 0;white-space:pre-line;overflow-wrap:anywhere}input[readonly],textarea[readonly]{background:#f3f6fa;color:#54657c}
+
+/* The editor inherits SMA typography; customer palettes apply only inside the site. */
+select{font:inherit;color:inherit;display:block;width:100%;min-width:0;margin-top:7px;border:1px solid var(--line);border-radius:8px;padding:11px 13px;background:#fff;min-height:44px}
+select:focus-visible{outline:3px solid #92b0ff;outline-offset:4px}
+.design-panel details{border:0;padding:0}.design-panel details>p{margin:14px 0 0}.design-options{display:grid;grid-template-columns:1fr 1fr;gap:18px}.design-options label{margin-bottom:0;min-width:0}
+.site-shell[data-accent="green"]{--blue:#256c50;--navy:#163c32}
+.site-shell[data-accent="violet"]{--blue:#7045b8;--navy:#302147}
+.site-shell[data-accent="terracotta"]{--blue:#a3472f;--navy:#452a24}
+.site-shell[data-accent]:not([data-accent="blue"]) .hero p{color:#edeff5}
+.site-shell[data-accent]:not([data-accent="blue"]) .hero .eyebrow{color:#edeff5}
+.site-shell[data-accent]:not([data-accent="blue"]) .hero .secondary{color:#edeff5}
+.site-shell[data-hero="none"] .hero{grid-template-columns:1fr}
+.site-shell[data-accent] .button:not(.primary){color:var(--blue)}
+@media(max-width:540px){.design-options{grid-template-columns:1fr;gap:0}}
