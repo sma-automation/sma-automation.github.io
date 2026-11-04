@@ -1,0 +1,64 @@
+begin;
+insert into auth.users values('fc880000-0000-4000-8000-000000000001','synthetic@example.invalid');
+insert into public.sma_kunden(id,user_id,paket,aktiv,zahlung_bestaetigt,shop_slug,shop_oeffentlich) values(-909000005001,'fc880000-0000-4000-8000-000000000001','delta',true,true,'sma-synthetic',true);
+do $$declare f text;begin
+ foreach f in array array['sma_wordpress_ticket_context_v1(uuid,uuid)','sma_wordpress_ticket_issue_v1(uuid,uuid,text,text,text)','sma_wordpress_ticket_lookup_v1(text,text)','sma_wordpress_ticket_finish_v1(uuid,uuid,uuid,jsonb)','sma_wordpress_ticket_cleanup_v1()'] loop
+  assert not has_function_privilege('anon','public.'||f,'execute');assert not has_function_privilege('authenticated','public.'||f,'execute');assert has_function_privilege('service_role','public.'||f,'execute');
+ end loop;
+ assert not has_table_privilege('authenticated','sma_private.wordpress_tickets_v1','select,insert,update,delete');
+ assert not has_table_privilege('service_role','sma_private.wordpress_tickets_v1','select,insert,update,delete');
+ assert (select relrowsecurity from pg_class where oid='sma_private.wordpress_tickets_v1'::regclass);
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fc880000-0000-4000-8000-000000000001',true);
+select public.sma_website_preparation_v1('save',jsonb_build_object('mode','existing','website_url','https://example.com/','desired_domain','','expected_revision',0,'request_id',gen_random_uuid()));
+select set_config('test.wp_attempt',public.sma_website_connection_request_v1('prepare',jsonb_build_object('provider','wordpress','expected_revision',0,'request_id',gen_random_uuid()))->>'attempt_id',true);
+reset role;
+set local role service_role;
+do $$declare u uuid:='fc880000-0000-4000-8000-000000000001';a uuid:=current_setting('test.wp_attempt')::uuid;p text:='-----BEGIN PUBLIC KEY-----'||repeat('A',500);k text:=E'-----BEGIN PRIVATE KEY-----\n'||repeat('A',2000)||E'\n-----END PRIVATE KEY-----\n';r jsonb;v uuid;begin
+ r:=public.sma_wordpress_ticket_issue_v1(u,a,p,k,repeat('a',64));assert r->>'ok'='true' and r->>'private_key'=k;
+ assert public.sma_wordpress_ticket_issue_v1(u,a,p,k||'changed',repeat('b',64))=r,'lost response must keep first signing key and ticket';
+ r:=public.sma_wordpress_ticket_lookup_v1(repeat('a',64),'https://example.com/');
+ assert r->>'ok'='true' and not(r?'private_key') and (select count(*) from jsonb_object_keys(r))=7;
+ assert r->>'account_label'='synthetic@example.invalid' and r->>'shop_slug'='sma-synthetic';
+ assert public.sma_wordpress_ticket_lookup_v1(repeat('a',64),'https://other.example/')->>'ok'='false';
+ assert public.sma_wordpress_ticket_lookup_v1(repeat('b',64),'https://example.com/')->>'ok'='false';
+ assert public.sma_wordpress_ticket_context_v1('fc880000-0000-4000-8000-000000000002',a)->>'ok'='false';
+ assert public.sma_website_provider_context_v1(u)->>'state'='not_connected','lookup must not mark connection verified';
+ v:=(public.sma_website_provider_begin_v1(u,a)->>'verification_id')::uuid;
+ assert public.sma_wordpress_verify_release_v1(u,a,gen_random_uuid())=false;
+ assert public.sma_wordpress_verify_release_v1(u,a,v)=true;
+ v:=(public.sma_website_provider_begin_v1(u,a)->>'verification_id')::uuid;
+ assert public.sma_wordpress_ticket_finish_v1(u,a,v,jsonb_build_object('website_url','https://example.com/','provider_site_id','wrong','can_read',true))->>'code'='INVALID_PROOF';
+ assert public.sma_wordpress_ticket_finish_v1(u,a,v,jsonb_build_object('website_url','https://example.com/','provider_site_id','wordpress-bridge:'||a::text,'can_read',true))->>'ok'='true';
+ assert public.sma_wordpress_ticket_lookup_v1(repeat('a',64),'https://example.com/')->>'ok'='false';
+ assert public.sma_website_provider_credential_v1(u,a,'get')->'credentials'->>'bridge_private_key'=k;
+end $$;
+reset role;
+do $$begin assert (select count(*) from vault.secrets)=1;assert not exists(select 1 from sma_private.wordpress_tickets_v1);end $$;
+update public.sma_kunden set shop_slug='changed-shop' where id=-909000005001;
+do $$begin assert not exists(select 1 from vault.secrets);assert not exists(select 1 from sma_private.website_provider_connections_v1);end $$;
+-- Reuse the request for fresh pending data; replacing target deletes its key.
+set local role service_role;
+select public.sma_wordpress_ticket_issue_v1('fc880000-0000-4000-8000-000000000001',current_setting('test.wp_attempt')::uuid,'-----BEGIN PUBLIC KEY-----'||repeat('A',500),'-----BEGIN PRIVATE KEY-----'||repeat('A',2000),repeat('c',64));
+reset role;
+update sma_private.website_preparations_v1 set revision=revision+1,website_url='https://example.com/changed/' where customer_id=-909000005001;
+do $$begin assert not exists(select 1 from vault.secrets);assert not exists(select 1 from sma_private.wordpress_tickets_v1);end $$;
+update sma_private.website_connection_requests_v1 set requested_at=clock_timestamp()-interval '61 seconds' where customer_id=-909000005001;
+set local role authenticated;
+select set_config('test.wp_attempt',public.sma_website_connection_request_v1('prepare',jsonb_build_object('provider','wordpress','expected_revision',1,'request_id',gen_random_uuid()))->>'attempt_id',true);
+reset role;
+set local role service_role;
+select public.sma_wordpress_ticket_issue_v1('fc880000-0000-4000-8000-000000000001',current_setting('test.wp_attempt')::uuid,'-----BEGIN PUBLIC KEY-----'||repeat('A',500),'-----BEGIN PRIVATE KEY-----'||repeat('A',2000),repeat('d',64));
+reset role;
+update sma_private.wordpress_tickets_v1 set expires_at=clock_timestamp()-interval '1 minute';
+set local role service_role;
+do $$begin
+ assert public.sma_wordpress_ticket_lookup_v1(repeat('d',64),'https://example.com/changed/')->>'ok'='false';
+ assert public.sma_wordpress_ticket_cleanup_v1()=1;
+ assert public.sma_wordpress_ticket_cleanup_v1()=0;
+end $$;
+reset role;
+do $$begin assert not exists(select 1 from vault.secrets);end $$;
+rollback;
+select 'WordPress ticket SQL cases passed; fixtures rolled back' as result;
