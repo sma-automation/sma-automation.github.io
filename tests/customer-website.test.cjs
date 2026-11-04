@@ -29,3 +29,20 @@ test('explicit invalidation discards same-account stale results',async()=>{
  const m=await mod(),c=await content();let release;const client=m.createCustomerWebsiteClient({getOwnerId:async()=>id,request:()=>new Promise(r=>release=r)});
  const pending=client.load();await new Promise(r=>setImmediate(r));client.invalidate();release(state(c));await assert.rejects(pending,{code:'AUTH_REQUIRED'});
 });
+test('website design keeps legacy content valid and accepts every fixed palette and motif',async()=>{
+ const m=await mod(),c=await content();assert.deepEqual(m.readWebsiteContent(c),c);
+ for(const accent of m.appearanceOptions.accent)for(const hero of m.appearanceOptions.hero){
+  const styled={...c,accent,hero};assert.deepEqual(m.readWebsiteContent(styled),styled);
+ }
+});
+test('website design rejects arbitrary CSS, URLs, unknown choices and non-string values',async()=>{
+ const m=await mod(),c=await content();
+ for(const key of ['accent','hero'])for(const value of [null,{},[],false,1,'','blue; background:url(https://example.com)','<img src=x>','https://example.com'])assert.throws(()=>m.readWebsiteContent({...c,[key]:value}),{code:'INVALID_CONTENT'});
+ assert.throws(()=>m.readWebsiteContent({...c,style:'color:red'}),{code:'INVALID_CONTENT'});
+});
+test('design-only saves preserve text and retry the same revision without publishing',async()=>{
+ const m=await mod(),c={...await content(),accent:'green',hero:'abstract'},calls=[];let fail=true;
+ const client=m.createCustomerWebsiteClient({getOwnerId:async()=>id,uuid:()=>id,request:async(action,input)=>{calls.push({action,input});if(action==='save'&&fail){fail=false;throw Error('lost');}return state(action==='save'?input.content:c,action==='save'?2:1);}});
+ await client.load();await assert.rejects(client.save(c));const result=await client.save(c);
+ assert.deepEqual(result.content,c);assert.deepEqual(calls[1],calls[2]);assert(!calls.some(c=>c.action==='publish'));
+});

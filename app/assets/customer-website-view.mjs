@@ -1,6 +1,6 @@
 import {readCompanyProfile} from './company-profile-model.mjs?v=1';
-import {pageMode,readCustomerWebsite,readWebsiteContent} from './customer-website-model.mjs?v=2';
-import {renderCustomerWebsite} from './customer-website-render.mjs?v=2';
+import {pageMode,readCustomerWebsite,readWebsiteContent} from './customer-website-model.mjs?v=3';
+import {renderCustomerWebsite} from './customer-website-render.mjs?v=3';
 
 // Private previews reload only saved data. Public pages keep their published snapshot.
 export function mountCustomerWebsitePage({doc=document,search=doc.defaultView.location.search,customerWebsiteRequest,publicWebsiteRequest,getOwnerId,watchOwner,renderWebsite=renderCustomerWebsite}){

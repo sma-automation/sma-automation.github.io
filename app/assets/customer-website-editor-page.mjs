@@ -1,4 +1,4 @@
-import {mountCustomerWebsiteEditor} from './customer-website-editor.mjs?v=2';
+import {mountCustomerWebsiteEditor} from './customer-website-editor.mjs?v=3';
 import {customerWebsiteRequest,getOwnerId,watchOwner} from './customer-website-api.mjs?v=2';
 const view=mountCustomerWebsiteEditor({request:customerWebsiteRequest,getOwnerId});
 try{

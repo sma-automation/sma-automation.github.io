@@ -24,12 +24,14 @@ declare k text; max_length integer;
 begin
  if jsonb_typeof(value) is distinct from 'object' or octet_length(value::text)>45000
   or not(value ?& array['name','headline','intro','about','contact_email','legal_notice','privacy_notice','contact_phone','contact_address','service_1_title','service_1_text','service_2_title','service_2_text','service_3_title','service_3_text'])
-  or exists(select 1 from jsonb_object_keys(value) x where x not in ('name','headline','intro','about','contact_email','legal_notice','privacy_notice','contact_phone','contact_address','service_1_title','service_1_text','service_2_title','service_2_text','service_3_title','service_3_text')) then return false;end if;
+  or exists(select 1 from jsonb_object_keys(value) x where x not in ('name','headline','intro','about','contact_email','legal_notice','privacy_notice','contact_phone','contact_address','service_1_title','service_1_text','service_2_title','service_2_text','service_3_title','service_3_text','accent','hero')) then return false;end if;
  foreach k in array array['name','headline','intro','about','contact_email','legal_notice','privacy_notice','contact_phone','contact_address','service_1_title','service_1_text','service_2_title','service_2_text','service_3_title','service_3_text'] loop
   max_length:=case k when 'name' then 100 when 'headline' then 160 when 'intro' then 600 when 'about' then 4000 when 'contact_email' then 254 when 'contact_phone' then 60 when 'contact_address' then 400 when 'service_1_title' then 80 when 'service_2_title' then 80 when 'service_3_title' then 80 when 'service_1_text' then 400 when 'service_2_text' then 400 when 'service_3_text' then 400 else 6000 end;
   if jsonb_typeof(value->k) is distinct from 'string' or length(value->>k)>max_length
    or (value->>k) ~ '[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]' then return false;end if;
  end loop;
+ if value ? 'accent' and (jsonb_typeof(value->'accent') is distinct from 'string' or value->>'accent' not in ('blue','green','violet','terracotta')) then return false;end if;
+ if value ? 'hero' and (jsonb_typeof(value->'hero') is distinct from 'string' or value->>'hero' not in ('shk','abstract','none')) then return false;end if;
  if length(btrim(value->>'name'))=0 or length(btrim(value->>'headline'))=0 then return false;end if;
  if value->>'contact_email'<>'' and (value->>'contact_email') !~ '^[A-Za-z0-9.!#$%&''*+/=?^_`{|}~-]+@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?([.][A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$' then return false;end if;
  return true;
@@ -83,7 +85,7 @@ begin
    else
     if w.customer_id is null then return jsonb_build_object('ok',false,'code','WEBSITE_REQUIRED');end if;
     update sma_private.customer_websites_v1 set
-     draft=case when p_action='save' then sma_private.website_with_company_v1(p_input->'content',company.profile) else draft end,
+     draft=case when p_action='save' then sma_private.website_with_company_v1(jsonb_strip_nulls(jsonb_build_object('accent',draft->'accent','hero',draft->'hero'))||(p_input->'content'),company.profile) else draft end,
      published=case when p_action='publish' then sma_private.website_with_company_v1(draft,company.profile) when p_action='unpublish' then null else published end,
      published_company=case when p_action='publish' then company.profile when p_action='unpublish' then null else published_company end,
      published_company_revision=case when p_action='publish' then coalesce(company.revision,0) when p_action='unpublish' then 0 else published_company_revision end,

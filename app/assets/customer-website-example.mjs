@@ -1,4 +1,4 @@
-import {renderCustomerWebsite} from './customer-website-render.mjs?v=2';
+import {renderCustomerWebsite} from './customer-website-render.mjs?v=3';
 const content={name:'Haustechnik Musterbetrieb',headline:'Wasser. Wärme. Wohlfühlen.',intro:'Sanitär, Heizung und Klima – durchdachte Lösungen für Ihr Zuhause. Von der ersten Idee bis zur passenden Haustechnik.',about:'Ein neues Bad, eine moderne Heizung oder ein angenehmes Raumklima: Hier stellt sich Ihr Betrieb mit seinen Schwerpunkten und seiner Arbeitsweise vor.\n\nDiesen Text, Ihre Leistungen und Ihre Kontaktdaten bearbeiten Sie direkt in SMA.',contact_email:'',contact_phone:'',contact_address:'',
  service_1_title:'Sanitär & Bad',service_1_text:'Badgestaltung, Wasserinstallationen und passende Ausstattung. Hier beschreiben Sie das Angebot Ihres Betriebs.',
  service_2_title:'Heizung & Wärme',service_2_text:'Heizungsmodernisierung, Wärmepumpen und Wartung. Ihre Leistungen werden hier übersichtlich vorgestellt.',

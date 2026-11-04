@@ -2,14 +2,20 @@ import {readCompanyProfile} from './company-profile-model.mjs?v=1';
 import {safeShopLink} from './website-domain-model.mjs?v=1';
 export const siteUUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export const contentLimits={name:100,headline:160,intro:600,about:4000,contact_email:254,legal_notice:6000,privacy_notice:6000,contact_phone:60,contact_address:400,service_1_title:80,service_1_text:400,service_2_title:80,service_2_text:400,service_3_title:80,service_3_text:400};
+export const appearanceOptions={accent:['blue','green','violet','terracotta'],hero:['shk','abstract','none']};
+export const appearanceDefaults={accent:'blue',hero:'shk'};
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 export function readWebsiteContent(value){
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!==Object.keys(contentLimits).sort().join('|'))fail('INVALID_CONTENT');
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(contentLimits).some(k=>!Object.hasOwn(value,k))||Object.keys(value).some(k=>!Object.hasOwn(contentLimits,k)&&!Object.hasOwn(appearanceOptions,k)))fail('INVALID_CONTENT');
  if(new TextEncoder().encode(JSON.stringify(value)).length>45000)fail('INVALID_CONTENT');
  const result={};
  for(const [key,max] of Object.entries(contentLimits)){
   if(typeof value[key]!=='string'||[...value[key]].length>max||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value[key]))fail('INVALID_CONTENT');
   result[key]=value[key];
+ }
+ // Optional for existing drafts and published snapshots; only fixed design choices are accepted.
+ for(const [key,options] of Object.entries(appearanceOptions))if(Object.hasOwn(value,key)){
+  if(!options.includes(value[key]))fail('INVALID_CONTENT');result[key]=value[key];
  }
  if(!result.name.trim()||!result.headline.trim()||result.contact_email&&!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(result.contact_email))fail('INVALID_CONTENT');
  return result;

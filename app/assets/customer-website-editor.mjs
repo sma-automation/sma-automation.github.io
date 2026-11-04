@@ -1,4 +1,4 @@
-import {createCustomerWebsiteClient,contentLimits} from './customer-website-model.mjs?v=2';
+import {createCustomerWebsiteClient,contentLimits,appearanceOptions,appearanceDefaults} from './customer-website-model.mjs?v=3';
 const messages={COMPANY_PROFILE_CHANGED:'Die Firmendaten wurden inzwischen geändert. Lade den gespeicherten Stand, damit die aktuellen Angaben übernommen werden.',AUTH_REQUIRED:'Bitte melde dich bei SMA an.',ACCOUNT_CHANGED:'Die Kontozuordnung hat sich geändert. Bitte lade das Dashboard neu.',ACCOUNT_UNAVAILABLE:'Dein SMA-Konto konnte nicht zugeordnet werden.',ACCESS_INACTIVE:'Die Webseitenbearbeitung benötigt einen aktiven Delta-Zugang.',INVALID_CONTENT:'Prüfe die Pflichtfelder, Textlängen und die Kontakt-E-Mail.',REVISION_CONFLICT:'Die Webseite wurde inzwischen geändert. Lade den gespeicherten Stand, bevor du weiterarbeitest.',REQUEST_CONFLICT:'Dieser Speicherversuch gehört zu anderen Angaben. Lade den gespeicherten Stand.',ALREADY_CREATED:'Deine Webseite wurde bereits erzeugt. Lade den gespeicherten Stand.'};
 export function mountCustomerWebsiteEditor({doc=document,request,getOwnerId,uuid}){
  const $=id=>doc.getElementById(id),client=createCustomerWebsiteClient({request,getOwnerId,uuid});let state=null,busy=false,dirty=false,destroyed=false,epoch=0;
@@ -15,6 +15,9 @@ export function mountCustomerWebsiteEditor({doc=document,request,getOwnerId,uuid
   for(const key of ['name','contact_email','contact_phone','contact_address'])doc.querySelector('[name="'+key+'"]').readOnly=!!s.company;
   if(s.content){
    for(const key of Object.keys(contentLimits))doc.querySelector('[name="'+key+'"]').value=s.content[key];
+   for(const key of Object.keys(appearanceOptions)){
+    const option=[...doc.querySelector('[name="'+key+'"]').options].find(o=>o.value===(s.content[key]??appearanceDefaults[key]));option.selected=true;
+   }
    $('shopStatus').textContent=s.shopURL?'Dein SMA-Shop ist automatisch zugeordnet.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier seine Produktliste.';
    $('publicLink').hidden=!s.publiclyAvailable;$('publicLink').removeAttribute('href');if(s.publiclyAvailable)$('publicLink').href=s.websiteURL;
    $('unpublish').hidden=!s.published;$('publish').textContent=s.published?'Öffentliche Webseite aktualisieren':'Webseite veröffentlichen';
@@ -22,7 +25,7 @@ export function mountCustomerWebsiteEditor({doc=document,request,getOwnerId,uuid
   }
   $('status').textContent=s.canEdit?'Bereit.':messages.ACCESS_INACTIVE;controls();
  }
- function clear(){client.invalidate();state=null;dirty=false;$('companyBinding').textContent='Firmendaten sind nach deiner Anmeldung verfügbar.';$('create').hidden=true;$('editor').hidden=true;$('publicLink').removeAttribute('href');for(const input of doc.querySelectorAll('input,textarea'))input.value='';controls();}
+ function clear(){client.invalidate();state=null;dirty=false;$('companyBinding').textContent='Firmendaten sind nach deiner Anmeldung verfügbar.';$('create').hidden=true;$('editor').hidden=true;$('publicLink').removeAttribute('href');for(const input of doc.querySelectorAll('input,textarea'))input.value='';for(const option of doc.querySelectorAll('select option'))option.selected=false;controls();}
  async function run(fn,message){if(busy||destroyed)return;busy=true;const version=epoch;controls();$('status').textContent=message;
   try{const s=await fn();if(destroyed||version!==epoch)return;show(s);}
   catch(e){if(destroyed||version!==epoch)return;$('status').textContent=messages[e.code]||'Die Webseite ist gerade nicht erreichbar. Deine Eingaben bleiben stehen; versuche es erneut.';$('retry').hidden=false;
@@ -31,7 +34,7 @@ export function mountCustomerWebsiteEditor({doc=document,request,getOwnerId,uuid
  }
  const load=()=>run(()=>client.load(),'Webseite wird geladen …');
  $('generate').onclick=()=>run(()=>client.generate(),'Deine Webseite wird erzeugt …');
- $('contentForm').onsubmit=event=>{event.preventDefault();const content=Object.fromEntries(Object.keys(contentLimits).map(key=>[key,doc.querySelector('[name="'+key+'"]').value]));run(()=>client.save(content),'Änderungen werden gespeichert …');};
+ $('contentForm').onsubmit=event=>{event.preventDefault();const content=Object.fromEntries([...Object.keys(contentLimits),...Object.keys(appearanceOptions)].map(key=>[key,doc.querySelector('[name="'+key+'"]').value]));run(()=>client.save(content),'Änderungen werden gespeichert …');};
  $('contentForm').oninput=()=>{dirty=true;controls();};
  $('publish').onclick=()=>{if(!dirty)run(()=>client.publish(),'Deine gespeicherte Webseite wird veröffentlicht …');};
  $('unpublish').onclick=()=>{if(!dirty)run(()=>client.unpublish(),'Deine Webseite wird offline genommen …');};

@@ -1,5 +1,5 @@
 import {readCompanyProfile,companyAddress} from './company-profile-model.mjs?v=1';
-import {readWebsiteContent} from './customer-website-model.mjs?v=2';
+import {readWebsiteContent,appearanceDefaults} from './customer-website-model.mjs?v=3';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
 import {mountShopCatalog} from './shop-catalog.mjs?v=1';
 export function renderCustomerWebsite({root,content,shopURL,catalogRequest,company=null}){
@@ -12,6 +12,11 @@ export function renderCustomerWebsite({root,content,shopURL,catalogRequest,compa
  '<section class="section" id="produkte"><div class="section-intro"><div><p class="eyebrow">Unser Angebot</p><h2>Produkte entdecken</h2><span id="merchantName" hidden></span></div><a id="shopOpen" class="button" target="_blank" rel="noopener noreferrer" hidden>Shop öffnen ↗</a></div><div class="catalog-toolbar"><p id="catalogStatus" role="status" aria-live="polite"></p><button id="refresh" type="button" hidden>Aktualisieren</button></div><div id="products" aria-label="Produkte" aria-busy="false"></div><nav id="pager" aria-label="Produktseiten" hidden><button id="previous" type="button">← Zurück</button><span id="pageNumber"></span><button id="next" type="button">Weiter →</button></nav><p class="note" id="catalogNote" hidden>Preise und Verfügbarkeit werden direkt aus unserem Shop geladen.</p></section>'+
  '<section class="contact" id="kontakt"><div><p class="eyebrow">Für Ihr nächstes Projekt</p><h2>Lassen Sie uns darüber sprechen.</h2><p>Nutzen Sie unsere Kontaktdaten für Ihre Anfrage.</p></div><div class="contact-list"><a data-email class="button primary" hidden>Anfrage per E-Mail →</a><p data-phone hidden></p><address data-address hidden></address><p data-contact-missing hidden>Kontaktdaten folgen.</p></div></section>'+
  '<footer class="site-footer"><span data-name></span><span>Webseite mit SMA</span></footer><div class="legal"><details data-company-facts hidden><summary>Firmendaten</summary><dl></dl></details><details data-legal hidden><summary>Impressum</summary><p></p></details><details data-privacy hidden><summary>Datenschutz</summary><p></p></details></div>';
+ const accent=c.accent??appearanceDefaults.accent,hero=c.hero??appearanceDefaults.hero;
+ root.setAttribute('data-accent',accent);root.setAttribute('data-hero',hero);
+ const visual=root.querySelector('.hero-visual');
+ if(hero==='none')visual.remove();
+ if(hero==='abstract')visual.innerHTML='<circle cx="200" cy="150" r="133" fill="#ffffff" opacity=".07"/><rect x="72" y="70" width="234" height="160" rx="26" fill="#ffffff" opacity=".1" transform="rotate(-12 200 150)"/><rect x="96" y="78" width="234" height="160" rx="26" fill="#ffffff" opacity=".14"/><circle cx="153" cy="134" r="23" fill="#ffffff" opacity=".85"/><path d="M199 122h87m-87 20h63M128 188h158m-158 20h111" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity=".65"/><circle cx="308" cy="227" r="35" fill="#ffffff" opacity=".9"/><path d="m292 227 11 11 21-24" fill="none" stroke="#213c59" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>';
  const set=(selector,text)=>{for(const el of root.querySelectorAll(selector))el.textContent=text;};
  set('[data-name]',c.name);set('[data-headline]',c.headline);set('[data-intro]',c.intro);set('[data-about-title]',c.name);set('[data-about]',c.about);root.querySelector('#ueber-uns').hidden=!c.about.trim();
  const services=root.querySelector('[data-services]');let count=0;
@@ -34,5 +39,5 @@ export function renderCustomerWebsite({root,content,shopURL,catalogRequest,compa
   facts.hidden=false;
  }
  const view=catalog?mountShopCatalog({doc,search:'?shop='+catalog.slug,...(catalogRequest?{request:catalogRequest}:{})}):null;
- return {destroy(){view?.destroy();root.replaceChildren();}};
+ return {destroy(){view?.destroy();root.replaceChildren();root.removeAttribute('data-accent');root.removeAttribute('data-hero');}};
 }

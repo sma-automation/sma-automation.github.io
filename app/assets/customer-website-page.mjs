@@ -1,4 +1,4 @@
-import {mountCustomerWebsitePage} from './customer-website-view.mjs?v=1';
+import {mountCustomerWebsitePage} from './customer-website-view.mjs?v=2';
 import {publicWebsiteRequest,customerWebsiteRequest,getOwnerId,watchOwner} from './customer-website-api.mjs?v=2';
 const page=mountCustomerWebsitePage({publicWebsiteRequest,customerWebsiteRequest,getOwnerId,watchOwner});
 await page.load();

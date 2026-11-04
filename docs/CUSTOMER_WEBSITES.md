@@ -17,7 +17,7 @@ Eine bereits geöffnete private Vorschau übernimmt gespeicherte Änderungen bei
 
 Der aktuelle öffentliche Shop wird serverseitig aus dem Kundenkonto zugeordnet. Produkte, Preise und Verfügbarkeit werden beim Seitenaufruf über die bestehende Katalogschnittstelle geladen, ohne HTML-Kopieren oder doppelte Produktpflege. Der Katalog bietet zusätzlich „Aktualisieren“. Das ist keine Echtzeit-Bestell-, Checkout- oder Fremdanbieter-Synchronisierung. Ist der Shop nicht öffentlich, erscheint keine Produktliste. Ein Shop-Wechsel verwendet ausschließlich die aktuelle eigene Zuordnung.
 
-SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird kein Hostingvertrag abgeschlossen, keine eigene Domain gekauft und kein DNS-Eintrag geschrieben. Eigene Domains und individuelle zusätzliche Gestaltung bleiben weitere Schritte. Die neue Vorlage verwendet Inter mit den bestehenden System-Fallbacks; die genehmigte Dashboard-Schrift und geschützte n8n-Workflows bleiben unverändert.
+SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird kein Hostingvertrag abgeschlossen, keine eigene Domain gekauft und kein DNS-Eintrag geschrieben. Eigene Domains bleiben ein weiterer Schritt. Die [individuelle Gestaltung mit Akzentfarbe und Startseitenmotiv](CUSTOMER_WEBSITE_DESIGN.md) ist als nächster Kundenschritt implementiert und lokal geprüft; die Bereitstellung steht noch aus. Die neue Vorlage verwendet Inter mit den bestehenden System-Fallbacks; die genehmigte Dashboard-Schrift und geschützte n8n-Workflows bleiben unverändert.
 
 ## SHK-Vorschau
 
