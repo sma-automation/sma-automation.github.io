@@ -6,6 +6,7 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
+import {mountWebsitePreparation} from './assets/website-domain.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -16,6 +17,7 @@ const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',t
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
 let optimizerTrigger=null,selectedFileId=null;
 let fileView=null;
+let websitePreparation=null,dashboardOwnerId=null;
 function showPublishing(){
  if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
  for(const child of publishingPage.children)child.classList.remove('sma-publishing-hidden');
@@ -55,6 +57,26 @@ function attachOptimizerPage(doc,page){
 // Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
+  websitePreparation?.destroy();websitePreparation=null;
+  const websitePage=doc?.getElementById('page-website'),ownerId=dashboardOwnerId;
+  if(websitePage&&ownerId){
+    const getOwnerId=async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;};
+    websitePreparation=mountWebsitePreparation({
+      page:websitePage,getOwnerId,
+      stylesheetUrl:new URL('./assets/website-domain.css?v=1',location.href).href,
+      request:async(action,input)=>{
+        const {data,error}=await supabase.auth.getSession();
+        if(error||!data?.session||data.session.user.id!==ownerId)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
+        const response=await fetch('https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_website_preparation_v1',{
+          method:'POST',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(15000),
+          headers:{'Content-Type':'application/json',apikey:'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW',Authorization:'Bearer '+data.session.access_token},
+          body:JSON.stringify({p_action:action,p_input:input})
+        });
+        if(!response.ok)throw Object.assign(new Error('UNAVAILABLE'),{code:response.status===401?'AUTH_REQUIRED':'UNAVAILABLE'});
+        return response.json();
+      }
+    });
+  }
   const page=doc?.getElementById('page-publishing');
   if(!page)return;
   const style=doc.createElement('style');style.textContent=`
@@ -103,6 +125,7 @@ async function dashboardHtml(){
   if(!response.ok)throw new Error(response.status===403?'Dein SMA-Zugang konnte noch nicht zugeordnet werden.':'Das Dashboard ist gerade nicht erreichbar. Bitte versuche es erneut.');
   const result=await response.json();
   if(typeof result.html!=='string'||!result.html.includes('data-sma-customer-id'))throw new Error('Das Dashboard konnte nicht vollständig geladen werden.');
+  dashboardOwnerId=data.session.user.id;
   return result.html;
 }
 // Called only by the same-origin dashboard frame after OAuth returns.
@@ -116,7 +139,7 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -131,7 +154,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 
