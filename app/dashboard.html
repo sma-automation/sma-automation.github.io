@@ -6,7 +6,7 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
-import {mountWebsitePreparation} from './assets/website-domain.mjs?v=1';
+import {mountWebsitePreparation} from './assets/website-domain.mjs?v=2';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -63,7 +63,7 @@ frame.addEventListener('load',()=>{
     const getOwnerId=async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;};
     websitePreparation=mountWebsitePreparation({
       page:websitePage,getOwnerId,
-      stylesheetUrl:new URL('./assets/website-domain.css?v=1',location.href).href,
+      stylesheetUrl:new URL('./assets/website-domain.css?v=2',location.href).href,
       request:async(action,input)=>{
         const {data,error}=await supabase.auth.getSession();
         if(error||!data?.session||data.session.user.id!==ownerId)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});

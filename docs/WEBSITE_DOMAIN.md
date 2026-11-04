@@ -1,6 +1,6 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
-Stand: 4. November 2026. Arbeitsbranch `website-domain-preparation`, Ziel `website-v1`. **Speicherung installiert und geprüft; lokale Browserabnahme abgeschlossen. Frontend-Freigabe und Live-Abnahme werden in PR #58 protokolliert.**
+Stand: 4. November 2026. Ziel `website-v1`. **Die Vorbereitung aus PR #58 ist veröffentlicht und live geprüft.** Der Anschluss `website-shop-link` ergänzt einen kopierbaren Shop-Button und eine öffentliche Prüfansicht; Deployment und abschließende Live-Abnahme werden im zugehörigen PR protokolliert.
 
 Der Nutzer hat die kostenfreie Vorbereitung vorgezogen, während Sightengine-Zahlung, Videoprüfung und echter Social-Media-Uploadtest offen bleiben. PR #57 bleibt davon getrennt und ungemergt. Es gibt keinen Auftrag zu Domainkauf, Hostingwechsel, Tarifänderung oder Veröffentlichung einer Kundenwebseite.
 
@@ -10,7 +10,7 @@ Das vorhandene Delta-Modul `#page-website` erhält ein Formular für „Ich habe
 
 Der Entwurf speichert nur vorbereitende Angaben. Domainverfügbarkeit, Inhaberschaft, DNS, TLS, Erreichbarkeit und externe Anbindung werden nicht als geprüft dargestellt. Alle Ergebnisse bleiben `state:preparation`, `domain_verified:false`, `website_connected:false` und `can_publish:false`.
 
-Eine öffentliche SMA-Shopadresse wird ausschließlich aus der aktuellen Kundenzeile zusammengesetzt. Der Kunde kann sie für einen späteren Shop-Button kopieren. Dieser Link ist keine automatische Produkt-/Bestellsynchronisierung mit einer externen Webseite.
+Eine öffentliche SMA-Shopadresse wird ausschließlich aus der aktuellen Kundenzeile zusammengesetzt. Der Kunde kann die Adresse oder einen fertigen HTML-Button kopieren und dessen Ziel in einer separaten Prüfansicht ausprobieren. Dieser Link ist keine automatische Produkt-/Bestellsynchronisierung mit einer externen Webseite.
 
 ## Umsetzung
 
@@ -20,9 +20,19 @@ Eine öffentliche SMA-Shopadresse wird ausschließlich aus der aktuellen Kundenz
 | Formular, Fehlermeldungen, Laden/Speichern/Kopieren | `app/assets/website-domain.mjs` |
 | Adressen, Ergebnisvertrag, Wiederholung und Revision | `app/assets/website-domain-model.mjs` |
 | Auf das neue Modul begrenzte Gestaltung | `app/assets/website-domain.css` |
+| Validierter öffentlicher Link und portabler HTML-Button | `app/assets/shop-button.mjs` |
+| Öffentliche Prüfansicht mit Kopierhilfe | `app/website-connection-test.html`, `app/assets/website-connection-test.mjs` |
 | Private Speicherung und authentifizierter RPC | `supabase/sql/website-domain-preparation.sql` |
 
 Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ersetzt ausschließlich den Platzhalter im vorhandenen Modul und stellt ihn beim Entfernen der Erweiterung wieder her; Navigation, bestehende Überschrift, Schrift und übrige Portalbereiche bleiben erhalten. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
+
+## Shop-Button und Prüfansicht
+
+Unter „Webseite & Domain“ stehen „Shop-Button testen“ und die aufklappbare Einbauhilfe bereit. Der Einbaucode ist ein normaler HTML-Link ohne JavaScript, iframe, Tracking oder Zugangsdaten. Er erbt die Schrift der einbindenden Webseite. Webseitenprogramme ohne HTML-Baustein können dieselbe öffentliche Adresse als gewöhnliches Linkziel verwenden.
+
+`/app/website-connection-test.html?shop=<slug>` zeigt den Button, sein exaktes Ziel und denselben kopierbaren Code. Die Seite akzeptiert ausschließlich einen gültigen öffentlichen Shop-Slug; zusätzliche oder doppelte Parameter werden abgelehnt. Ziel-Origin und Shop-Pfad sind fest vorgegeben. Ohne gültigen Parameter erscheint eine Anleitung zum Öffnen über das Dashboard, kein aktiver Shop-Button. Die Prüfansicht ruft keine Kunden-API auf und speichert nichts. Bei gesperrter Zwischenablage wird der Code für manuelles Kopieren markiert.
+
+Die SMA-Hauptseite und `CNAME` bleiben unverändert. Die Prüfansicht weist den Klickweg zum Shop nach; sie bestätigt weder Domaininhaberschaft noch den Einbau auf einer externen Webseite. Checkout und Bestellfreigaben bleiben Aufgaben des bestehenden Shops. Neue SQL-Migrationen oder n8n-Änderungen sind für diese Ergänzung nicht nötig.
 
 ## Zugriff und Speichern
 
@@ -36,7 +46,7 @@ Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapp
 
 ## Prüfstand
 
-- `node --test tests/*.test.cjs`: **298 bestanden, 0 fehlgeschlagen** auf dem Website-Zweig (290 vorhandene + 8 neue Modellfälle). Die 314 Tests aus PR #57 gehören zu dessen separatem Publishing-Zweig und sind nicht Bestandteil dieses Zielbranchs.
+- `node --test tests/*.test.cjs`: **301 bestanden, 0 fehlgeschlagen** auf dem Website-Zweig (298 aus PR #58 + 3 neue Fälle für den Shop-Button). Die neuen Fälle prüfen das genaue Ziel, scriptfreien Code, abgewiesene fremde/unsichere Adressen und ungültige/doppelte Queryparameter. Die 314 Tests aus PR #57 gehören zu dessen separatem Publishing-Zweig und sind nicht Bestandteil dieses Zielbranchs.
 - `node tests/run-website-domain-sql.mjs`: lokale PGlite-Prüfreihe bestanden. Abgedeckt: Demo/Delta, inaktiver Zugang, falsches Paket, Eigentümerwechsel, doppelte Kundenbindung, direkte Rollenrechte, Replay, Konflikte und ungültige Eingaben.
 - Migration **`20261103234313_website_domain_preparation_v1`** über die Datenbank-Migrationsschnittstelle installiert. Die identische Definition ist unter `supabase/migrations/20261103234313_website_domain_preparation_v1.sql` eingecheckt.
 - Der installierte RPC wurde als Rolle `authenticated` mit synthetischen Kunden innerhalb einer zurückgerollten Transaktion geprüft: Speichern, identisches Wiederholen, erneutes Laden, neue Revision, Konflikte, Kontowechsel sowie Paket-/Zugangssperren bestanden. Danach **0 Testkunden und 0 gespeicherte Vorbereitungen** verblieben.
@@ -47,10 +57,11 @@ Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapp
 - Mobilprüfung in einem 390-Pixel-Frame (375 Pixel nutzbare Breite mit Scrollleiste): kein horizontaler Überlauf, gestapelte Aktionen und erfolgreicher Speichervorgang. Der lokale HTTP-Prüfaufbau nutzt synthetische Anfrage-UUIDs; das Produkt verwendet `crypto.randomUUID()` auf der bestehenden HTTPS-Domain.
 - Der zwischenzeitliche Ausfall der Browsersteuerung ist behoben. Die lokale Prüfung simuliert die API; die zuvor bestandene SQL-Prüfung deckt die installierte Speicherung ab. Beides zusammen ersetzt nicht die abschließende authentifizierte Einbettung nach dem Deployment.
 - PR #57 und alle n8n-Originalworkflows bleiben unverändert. Keine Tarif-, Registrar-, DNS-, Hosting- oder Social-Media-Aktion.
+- Browserprüfung der Einbauhilfe: Dashboard-Erweiterung geöffnet, Code und Ziel geprüft; Zugriffsentzug entfernt Code und Vorschauziel. Die eigenständige Prüfansicht öffnete per echtem Klick den vorhandenen öffentlichen Shop mit drei Produkten; die Kasse blieb gesperrt. Browser-Zurück, exakter Clipboard-Inhalt und Ansicht ohne Shop-Parameter geprüft. Dashboard-Hilfe und Prüfansicht in einem 390-Pixel-Frame (375 Pixel nutzbar) mit geöffneter Anleitung ohne horizontalen Überlauf; Schrift wird geerbt, Buttonhöhe 45 Pixel. Diese Prüfung nutzte den lokalen Build und das bestehende öffentliche Shopziel; sie ist kein Kauf, externer Einbau oder Uploadtest.
 
 ## Freigabe und Betrieb
 
-Die Migration ist bereits installiert und wird nicht erneut angewendet. PR #58 führt das Frontend nach Vergleich des aktuellen Zielbranchs über den bestehenden GitHub-Pages-Deploymentweg ein. Der abschließende Deployment- und Live-Prüfstand steht in der PR-Beschreibung.
+Die Migration ist bereits installiert und wird nicht erneut angewendet. PR #58 wurde als `277d68bcfa646349a55d6108865fdd16fdde830c` nach `website-v1` zusammengeführt; GitHub-Pages-Lauf `41743933195` war erfolgreich. Die authentifizierte Frontend-Abnahme steht in PR #58. Die Shop-Button-Ergänzung verwendet denselben Deploymentweg; ihr abschließender Live-Prüfstand steht im zugehörigen PR.
 
 Im echten Delta-Dashboard wird Laden und Navigation geprüft. Einen echten Kundeneintrag nur mit zutreffenden Kundenangaben speichern; die erfolgreiche SQL-Fixture und lokale Vorschau werden nicht als bereits erfolgter Live-UI-Speichervorgang ausgegeben.
 

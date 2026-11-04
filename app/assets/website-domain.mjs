@@ -1,4 +1,5 @@
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
+import {createShopButton} from './shop-button.mjs?v=1';
 
 const messages={
  AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',
@@ -34,8 +35,9 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  '<p class="sma-website-help">Das Speichern beauftragt keine Erstellung, kauft keine Domain und veröffentlicht keine Webseite.</p>'+
  '<section class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle"><h3 id="smaWebsiteLinkTitle">SMA-Shop auf deiner Webseite</h3>'+
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
- '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a></div></div>'+
- '<p class="sma-website-help">Diesen Link kannst du später als Shop-Button auf deiner Webseite einsetzen. Die externe Webseite ist dadurch noch nicht automatisch angebunden.</p></section>';
+ '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a><a data-shop-preview target="_blank" rel="noopener noreferrer">Shop-Button testen</a></div>'+
+ '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details></div>'+
+ '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>';
  const placeholder=page.querySelector('.package-module-slot');
  if(placeholder)placeholder.replaceWith(root);else page.append(root);
  const $=s=>root.querySelector(s),fields=$('fieldset'),status=$('.sma-website-status');
@@ -45,7 +47,7 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.classList.toggle('sma-website-error',error);}
  function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
- function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;for(const input of root.querySelectorAll('input[type="text"]'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');}}
+ function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');}}
  function show(state){
   if(destroyed)return;
   const draft=state.draft||{mode:'existing',website_url:'',desired_domain:''};
@@ -53,6 +55,9 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
   $('[name="website_url"]').value=draft.website_url;$('[name="desired_domain"]').value=draft.desired_domain;toggle();
   const link=safeShopLink(state.shop_url);$('[data-shop-actions]').hidden=!link;
   $('[data-shop-url]').value=link||'';$('[data-shop-open]').removeAttribute('href');
+  const button=createShopButton(link);$('[data-shop-code]').value=button?.html||'';
+  $('[data-shop-preview]').removeAttribute('href');
+  if(button)$('[data-shop-preview]').href=button.previewUrl;
   if(link)$('[data-shop-open]').href=link;
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
   loaded=true;dirty=false;
@@ -78,6 +83,11 @@ export function mountWebsitePreparation({page,request,getOwnerId,stylesheetUrl})
   const link=safeShopLink($('[data-shop-url]').value);if(!link||destroyed)return;
   try{await win.navigator.clipboard.writeText(link);notice('Shop-Link kopiert.');}
   catch{$('[data-shop-url]').focus();$('[data-shop-url]').select();notice('Markierten Shop-Link mit Strg+C oder ⌘C kopieren.');}
+ });
+ $('[data-copy-code]').addEventListener('click',async()=>{
+  const button=createShopButton($('[data-shop-url]').value);if(!button||destroyed)return;
+  try{await win.navigator.clipboard.writeText(button.html);notice('Einbaucode kopiert.');}
+  catch{$('[data-shop-code]').focus();$('[data-shop-code]').select();notice('Markierten Einbaucode mit Strg+C oder ⌘C kopieren.');}
  });
  // Load only when the existing navigation displays this module.
  const observer=new win.MutationObserver(()=>{if(page.classList.contains('active')&&!dirty&&!loaded)load();});

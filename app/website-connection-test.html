@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>SMA · Shop-Button prüfen</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#1d2433;font:15px Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+header{background:#05070b;color:#fff}header>div,main{width:min(850px,calc(100% - 36px));margin:auto}header>div{min-height:74px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+.logo{display:flex;align-items:center;gap:7px;font-weight:700;text-decoration:none;color:#fff}.hex{width:34px;height:30px;display:grid;place-items:center;background:#fff;color:#3768ed;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+header a{color:inherit}main{padding:36px 0 54px}h1{font-size:clamp(26px,4vw,36px);line-height:1.25;margin:0 0 12px}h2{font-size:20px;margin:0 0 12px}.intro{color:#647084;margin:0 0 26px}.card{padding:24px;border:1px solid #e4e7ed;border-radius:14px;background:#fff;margin-top:20px}
+.preview{padding:28px 20px;border:1px dashed #ccd2da;border-radius:10px;text-align:center}.preview p{margin:0 0 18px}.label{font-size:13px;color:#647084;margin-bottom:8px}#shopAddress{overflow-wrap:anywhere;font-size:13px;color:#647084}p{margin:12px 0}details{margin-top:24px}summary{cursor:pointer;font-weight:600}label{display:block;margin:16px 0 8px}textarea{display:block;width:100%;min-height:135px;resize:vertical;border:1px solid #dfe3eb;border-radius:9px;padding:12px;font:inherit;color:inherit;background:#f5f7fb;overflow-wrap:anywhere}button{min-height:44px;border:1px solid #ccd5ed;border-radius:9px;padding:11px 15px;background:#f0f4ff;color:#3157cd;font:inherit;cursor:pointer;margin-top:14px}a:focus-visible,button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}.note{font-size:13px;color:#647084}#copyStatus{min-height:24px}[hidden]{display:none!important}@media(max-width:560px){main{padding-top:26px}.card{padding:18px}button{width:100%}header>div{gap:10px}header>div>a:last-child{font-size:13px}}
+</style>
+</head>
+<body>
+<header><div><a href="/" class="logo" aria-label="SMA Startseite"><span class="hex">S</span>=<span class="hex">M</span>=<span class="hex">A</span></a><a href="/app/dashboard.html">Zum Dashboard</a></div></header>
+<main>
+ <h1>Dein Shop-Button</h1>
+ <p class="intro">So gelangen Besucher von einer Webseite zum SMA-Shop.</p>
+ <section id="missing" class="card"><h2>Shop-Link fehlt</h2><p>Öffne diese Prüfansicht im Dashboard unter „Webseite &amp; Domain“ über „Shop-Button testen“.</p><noscript><p>Aktiviere JavaScript, um diese Prüfansicht zu laden. Der fertige Shop-Button auf deiner Webseite funktioniert ohne JavaScript.</p></noscript></section>
+ <section id="connection" class="card" hidden>
+  <h2>Verbindung ausprobieren</h2>
+  <p>Öffne den Shop mit dem Button. Mit „Zurück“ im Browser gelangst du wieder hierher.</p>
+  <div class="preview"><p>Entdecke die Produkte in unserem Shop.</p><a id="shopButton">Zum Shop</a></div>
+  <p class="label">Ziel des Buttons</p><p id="shopAddress"></p>
+  <details><summary>Shop-Button auf einer Webseite einbauen</summary>
+   <p>Kopiere den Code in einen HTML-Baustein deiner Webseite. Hat dein Webseitenprogramm nur ein Linkfeld, trage dort die oben angezeigte Shop-Adresse ein.</p>
+   <label for="embedCode">Einbaucode</label><textarea id="embedCode" readonly spellcheck="false"></textarea>
+   <button id="copyCode" type="button">Einbaucode kopieren</button><p id="copyStatus" role="status" aria-live="polite"></p>
+  </details>
+  <p class="note">Produkte und Verfügbarkeit werden im Shop angezeigt. Zum Einbinden auf deiner Webseite öffne die Anleitung oben.</p>
+ </section>
+</main>
+<script type="module" src="./assets/website-connection-test.mjs?v=1"></script>
+</body>
+</html>
