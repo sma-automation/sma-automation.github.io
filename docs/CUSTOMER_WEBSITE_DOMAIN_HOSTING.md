@@ -39,14 +39,16 @@ Erst nach technischer Vorbereitung und ausdrücklicher Freigabe wäre die Reihen
 4. Aktives HTTPS und korrekte Seitenzuordnung prüfen. Eine private Seite muss auch auf der Testdomain gesperrt bleiben. Einen positiven öffentlichen Inhaltstest einschließlich eigener Bilder nur mit gesondert freigegebenem Testinhalt durchführen; danach wieder offline nehmen.
 5. Bei Rückbau zuerst den Test-CNAME entfernen, danach die Domainbindung und gegebenenfalls das Testprojekt entfernen, damit kein verwaistes DNS-Ziel bleibt.
 
-## Noch vorzubereitende Softwarearbeit
+## Softwarearbeit aus dieser Machbarkeitsprüfung
+
+**Fortschreibung:** Das [lokale Testpaket](CUSTOMER_WEBSITE_DOMAIN_PACKAGE.md) ist inzwischen implementiert und geprüft, aber noch nicht zusammengeführt oder bereitgestellt. Die folgenden Punkte beschreiben die ursprünglich festgestellten Lücken und die weitergehende Grenze zur Mehrkundenlösung.
 
 - **Domain zur Seite zuordnen:** Der aktuelle öffentliche Renderer benötigt exakt `?site=<uuid>`; `/` kennt noch keine Hostzuordnung (`app/assets/customer-website-model.mjs`, `pageMode`). Ein begrenztes Testpaket braucht einen ausdrücklich zugeordneten Host und eine Seiten-ID. Unbekannte Hosts und private Vorschauparameter dürfen keine Kundenseite oder Anmeldung öffnen. Die spätere Mehrkundenlösung benötigt eine serverseitig gepflegte eindeutige Zuordnung mit Domainnachweis und Entzugsmöglichkeit.
 - **Veröffentlichungsgrenze erhalten:** Weiterhin ausschließlich den vorhandenen öffentlichen Snapshot abrufen. Keine privaten Entwürfe oder Anmeldedaten in das statische Paket schreiben. Eine Hostzuordnung darf `NOT_AVAILABLE` und die Offline-Schaltung nicht umgehen.
 - **Eigene Bilder berücksichtigen:** `supabase/functions/sma-website-image/handler.mjs` erlaubt derzeit nur den Origin `https://sma-automation.com`. Von der Testdomain werden Browserabrufe eigener Bilder deshalb abgewiesen. Für den öffentlichen Leseweg ist eine gezielte Erweiterung nötig; private Bildoperationen behalten ihren bisherigen Schutz. CORS ersetzt keine Prüfung, ob ein Bild tatsächlich zum veröffentlichten Seitenstand gehört.
 - **Abnahme begrenzen:** Neue lokale Prüfungen für Root-Aufruf, falschen Host, verweigerte private Vorschau, Offline-Seite und öffentliche Bilder vorbereiten. Den Produktabruf samt Browser-CORS und HTTPS am neuen Origin prüfen. Gestaltung und Schrift übernehmen; abgeschlossene Firmenprofil-, Editor- und WordPress-Tests nicht erneut beginnen.
 
-Der nächste unabhängig ausführbare Schritt ist damit das **lokale Testpaket samt den gezielten Anpassungen und Prüfungen**. Erst das konkrete, geprüfte Ergebnis dient als Grundlage für eine spätere Freigabe von Hosting, DNS und Veröffentlichung. Die Konto-/Zugangsfrage blockiert diese lokale Vorbereitung nicht.
+Das **lokale Testpaket samt den gezielten Anpassungen und Prüfungen** ist abgeschlossen. Das konkrete Ergebnis dient jetzt als Grundlage für eine spätere Freigabe von Hosting, DNS und Veröffentlichung. Die noch offene Konto-/Zugangsfrage hat die lokale Vorbereitung nicht blockiert.
 
 ## Quellen und Prüfgrenzen
 

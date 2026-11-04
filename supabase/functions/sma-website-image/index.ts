@@ -5,6 +5,7 @@ const base=Deno.env.get('SUPABASE_URL')!,key=Deno.env.get('SUPABASE_SERVICE_ROLE
 const objectURL=(path:string)=>base+'/storage/v1/object/sma-webseitenbilder/'+path;
 const headers={apikey:key,Authorization:'Bearer '+key};
 Deno.serve(createWebsiteImageHandler({
+ publicSiteOrigins:JSON.parse(Deno.env.get('SMA_WEBSITE_PUBLIC_ORIGINS')||'{}'),
  authenticate,rpc:serviceRpc,
  upload:async(path:string,bytes:Uint8Array,mime:string)=>{
   const r=await fetch(objectURL(path),{method:'POST',headers:{...headers,'Content-Type':mime,'cache-control':'0','x-upsert':'false'},body:new Uint8Array(bytes).buffer,redirect:'error',signal:AbortSignal.timeout(15000)});

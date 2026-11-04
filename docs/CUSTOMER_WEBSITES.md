@@ -27,7 +27,7 @@ SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird 
 
 Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist über **PR #73 live** und im angemeldeten Dashboard geprüft. Er verwendet die gespeicherte eigene Domain im neuen Erstellungsweg und ergänzt einen Direktbutton zur bestehenden Nachweisansicht. Ein bestätigter TXT-Eintrag ist ausdrücklich noch keine Domain-Verknüpfung. DNS, Hosting und Kundendaten wurden für diese Erweiterung nicht verändert.
 
-Die [Machbarkeitsprüfung für `test.sma-automation.com`](CUSTOMER_WEBSITE_DOMAIN_HOSTING.md) ist abgeschlossen: kein neuer Domainkauf nötig, DNS-Verwaltung bei IONOS. Die Testadresse ist noch nicht eingerichtet. Als nächster Schritt ist ein getrenntes lokales Testpaket für Cloudflare Pages Free vorgeschlagen; Hostzuordnung und öffentlicher Bildzugriff müssen dafür vorbereitet werden. Hosting, DNS und Veröffentlichung sind noch nicht freigegeben. Die festgestellten kommerziellen Nutzungsgrenzen von GitHub Pages sind bei der Produktionsplanung zu berücksichtigen.
+Die [Machbarkeitsprüfung für `test.sma-automation.com`](CUSTOMER_WEBSITE_DOMAIN_HOSTING.md) ist abgeschlossen: kein neuer Domainkauf nötig, DNS-Verwaltung bei IONOS. Das [getrennte lokale Testpaket](CUSTOMER_WEBSITE_DOMAIN_PACKAGE.md) mit Hostzuordnung und begrenztem öffentlichem Bildzugriff ist implementiert und geprüft (397 Node-Tests, acht neue DOM-Szenarien und lokale Browserprüfung). Es ist noch nicht zusammengeführt oder bereitgestellt; die Testadresse ist noch nicht eingerichtet. Cloudflare-Zugang, Hosting, DNS und Veröffentlichung sind noch offen. Die festgestellten kommerziellen Nutzungsgrenzen von GitHub Pages sind bei der Produktionsplanung zu berücksichtigen.
 
 ## SHK-Vorschau
 
