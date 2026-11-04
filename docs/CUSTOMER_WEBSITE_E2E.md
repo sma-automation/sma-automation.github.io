@@ -30,3 +30,17 @@ Im Einrichtungsbereich stand noch, die automatische WordPress-Einbindung werde e
 - PR #57 bleibt separat. Social-Media-Uploads/Postings benötigen ausdrückliche Freigabe; Sightengine bleibt `VIDEO_PLAN_REQUIRED`, Meta und Serverumbau bleiben zurückgestellt.
 
 Fortsetzung im neuen Chat: `docs/CUSTOMER_WEBSITE_E2E.md`, `docs/COMPANY_PROFILE.md`, `docs/CUSTOMER_WEBSITES.md` und `docs/WORDPRESS_DRAFT_SYNC.md` lesen. Die abgeschlossene Profil-/Entwurfsprüfung nicht erneut starten. Als nächstes die Voraussetzungen für den externen WordPress-Praxistest klären; bis zu einer geeigneten freigegebenen Testseite keinen echten Anbieterauftrag auslösen.
+
+## Ergänzung: offene private Vorschau
+
+Am 4. November 2026 wurde die private Vorschau um eine automatische Aktualisierung beim Zurückwechseln ergänzt. Der oben dokumentierte angemeldete Browserlauf bleibt ein eigener, früherer Nachweis. Diese Ergänzung ist zunächst eine vorbereitete Codeänderung; sie wurde nicht veröffentlicht.
+
+- `customer-website-view.mjs` lädt ausschließlich den gespeicherten Entwurf und das aktuelle Firmenprofil neu. Auslöser sind Fokus, erneute Sichtbarkeit und Wiederherstellung aus dem Browser-Seitencache. Unveränderte Inhalte bleiben bestehen; keine zusätzlichen Bedienelemente, Schrift- oder Layoutänderungen.
+- Kontowechsel leeren die Vorschau sofort. Besitzerprüfung vor und nach jeder Antwort sowie die Entwertung laufender Aufrufe verhindern die erneute Anzeige alter Kontodaten. Öffentliche Seiten laden ausschließlich ihren veröffentlichten Stand.
+- Zwölf neue DOM-Szenarien bestanden, einschließlich Wiederholung nach Ladefehler, zusammengefasster Rückkehrereignisse, serieller Leseanfragen und Aufräumen beim Verlassen. Zusätzlich bestanden die vorhandenen Profil-/Webseiten-DOM-Prüfungen und alle 359 Node-Tests.
+- Lokaler Browserlauf mit den echten Editor-/Renderer-/Vorschau-Modulen, aber fiktivem Konto und simuliertem Lesen/Speichern über lokalen Browserspeicher: Ort auf „Musterort – Standort 3 (Test)“ und Ansprechperson auf „SMA Standort-3-Testteam“ geändert und über „Firmendaten speichern“ gespeichert. Beim Fokuswechsel zur bereits geladenen Vorschau erschienen beide Werte ohne Neuladen; gespeicherte SHK-Texte blieben erhalten.
+- Die Fokusprüfung erfolgte zwischen zwei eingebetteten 390-Pixel-Browseransichten. Die Vorschau hatte 375 Pixel nutzbare Breite und 375 Pixel Inhaltsbreite, also keinen horizontalen Überlauf. Ein erfolgreicher Wechsel zwischen zwei eigenständigen Browsertabs oder eine erneute reale Supabase-Speicherung wird daraus nicht abgeleitet; Sichtbarkeits- und Browsernavigation-Ereignisse sind durch die DOM-Szenarien abgedeckt.
+
+![Lokale Prüfung: gespeicherter Testort und aktualisierte offene Vorschau](evidence/customer-website-preview-refresh-2026-11-04.jpg)
+
+Es wurden keine Produktionsdaten verändert, keine Webseite veröffentlicht, kein Hosting gebucht und keine WordPress-Verbindung angelegt. Der bestehende private SHK-Entwurf im Demo-Konto bleibt erhalten. PR #57 bleibt separat; der lokale WordPress-Praxistest liegt gesondert in PR #69. Ein externer WordPress-Test wartet auf eine vorhandene geeignete Testseite. Für diese Vorschauänderung steht die Freigabe zur Übernahme in `website-v1` noch aus.
