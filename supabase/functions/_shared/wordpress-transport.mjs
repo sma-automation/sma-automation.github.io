@@ -26,12 +26,13 @@ export function readWordpressDns(data,hostname){
  const ips=data.Answer.filter(r=>r.type===1&&owners.has(name(r.name))).map(r=>r.data);
  if(ips.length<1||ips.length>16||!ips.every(publicIPv4))error('TARGET_REJECTED');return ips;
 }
-export function parseWordpressHttp(bytes){
+export function parseWordpressHttp(bytes,{allowBridgeErrors=false}={}){
  if(!(bytes instanceof Uint8Array)||bytes.length>32768)error('PROVIDER_UNAVAILABLE');
  const latin=new TextDecoder('latin1').decode(bytes),cut=latin.indexOf('\r\n\r\n');
  if(cut<0||cut>8192)error('PROVIDER_UNAVAILABLE');
  const lines=latin.slice(0,cut).split('\r\n');
- if(!/^HTTP\/1\.[01] 200(?: [\x20-\x7e]*)?$/.test(lines.shift()))error('PROVIDER_UNAVAILABLE');
+ const status=/^HTTP\/1\.[01] (200|403|409)(?: [\x20-\x7e]*)?$/.exec(lines.shift());
+ if(!status||status[1]!=='200'&&!allowBridgeErrors)error('PROVIDER_UNAVAILABLE');
  const h={};
  for(const line of lines){
   const m=/^([!#$%&'*+.^_`|~0-9A-Za-z-]+):[ \t]*([\x20-\x7e\t]*)$/.exec(line);if(!m)error('PROVIDER_UNAVAILABLE');
@@ -55,9 +56,14 @@ export function parseWordpressHttp(bytes){
   body=new Uint8Array(total);let at=0;for(const p of parts){body.set(p,at);at+=p.length;}
  }else if(h['content-length']!==undefined&&(!/^\d{1,5}$/.test(h['content-length'])||Number(h['content-length'])!==body.length))error('PROVIDER_UNAVAILABLE');
  if(body.length>16384)error('PROVIDER_UNAVAILABLE');
- try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}catch{error('PROVIDER_UNAVAILABLE');}
+ let value;try{value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}catch{error('PROVIDER_UNAVAILABLE');}
+ if(status[1]==='200')return value;
+ if(status[1]==='409'&&value?.ok===false&&Object.keys(value).sort().join('|')==='code|ok'
+  &&['PAGE_CHANGED','REVISION_CONFLICT','REQUEST_CONFLICT','WEBSITE_CHANGED','ACCESS_REVOKED','NOT_CONNECTED','TRANSACTION_REQUIRED','CONTENT_FILTERED'].includes(value.code))return {ok:false,code:value.code};
+ if(status[1]==='403'&&value?.code==='sma_not_authorized'&&value?.data?.status===403)return {ok:false,code:'NOT_CONNECTED'};
+ error('PROVIDER_UNAVAILABLE');
 }
-export function createWordpressTransport({resolve,connect,startTls,timeoutMs=12000}){
+export function createWordpressTransport({resolve,connect,startTls,timeoutMs=12000,allowBridgeErrors=false}){
  return async(website,signed)=>{
   const {hostname,path}=wordpressTarget(website);
   if(typeof signed?.body!=='string'||encoder.encode(signed.body).length>2048||!/^[A-Za-z0-9+/]{300,700}={0,2}$/.test(signed.headers?.['X-SMA-Signature']||''))error('INVALID_REQUEST');
@@ -75,7 +81,7 @@ export function createWordpressTransport({resolve,connect,startTls,timeoutMs=120
    const parts=[];let total=0;
    for(;;){const buffer=new Uint8Array(4096),n=await conn.read(buffer);if(n===null)break;if(!Number.isInteger(n)||n<=0)error('PROVIDER_UNAVAILABLE');total+=n;if(total>32768)error('PROVIDER_UNAVAILABLE');parts.push(buffer.slice(0,n));}
    const bytes=new Uint8Array(total);let at=0;for(const p of parts){bytes.set(p,at);at+=p.length;}
-   return parseWordpressHttp(bytes);
+   return parseWordpressHttp(bytes,{allowBridgeErrors});
   })();
   try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('PROVIDER_UNAVAILABLE')),timeoutMs);})]);}
   catch(e){error(e?.code==='TARGET_REJECTED'?'TARGET_REJECTED':'PROVIDER_UNAVAILABLE');}

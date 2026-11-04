@@ -2,6 +2,8 @@
 
 Stand: 4. November 2026. Aufbauend auf [Anbieterprüfung](WEBSITE_PROVIDER_ASSESSMENT.md) und der veröffentlichten Webseiten-Vorbereitung. Anfrageverwaltung, Vault und WordPress-Tickets sind mit Migration `website_wordpress_connection_tickets` installiert. Die beiden WordPress-Endpoints sind bereitgestellt; PR #63 enthält den kompakten Dashboard-Anschluss. Eine echte externe WordPress-Verbindung ist noch nicht abgenommen.
 
+Ergänzung: Der getrennte [WordPress-Produktentwurfsauftrag](WORDPRESS_DRAFT_SYNC.md) ist mit eigener Speicherung, Ausgangsrevision und Wiederaufnahme angeschlossen. Er verwendet die hier geprüfte Verbindung und zeigt die Erstellungsaktion erst nach deren erfolgreicher Bestätigung. Die bisherigen Verbindungsantworten bleiben unverändert; der neue Auftragsstatus gibt seine eigene verfügbare Aktion an.
+
 ## Dauerhafte Anfrage
 
 Die Anfrageverwaltung bindet einen Vorgang an den angemeldeten Kunden, dessen gespeicherte Webadresse, die Revision der Vorbereitung und den gewählten Anschluss (`wordpress` oder `hostinger`). Die Zieladresse stammt aus dem vorhandenen Entwurf, nicht aus einem Callback oder frei übergebenen Kundenkennungen.
@@ -73,7 +75,7 @@ Zusätzlich wurde die vorhandene native Vault-Erweiterung (`supabase_vault` 0.3.
 
 **WordPress-Anschluss zuerst:** WordPress bietet einen nativen Anwendungsfreigabeweg, überträgt dabei aber Zugangsdaten in Callback-Queryparametern. Deshalb wird dieser nicht auf eine protokollierte Dashboard- oder Edge-Adresse gelegt. Der [WordPress-Baustein mit öffentlichem Prüfschlüssel und signierten Entwurfsaufträgen](WORDPRESS_BRIDGE.md) benötigt kein WordPress-Anwendungspasswort. SMA-Ticketausgabe, temporäre Vault-Schlüssel und die lesende Zielprüfung sind angeschlossen. Die Vorgangskennung allein ist kein Authentifizierungsnachweis. Für einen später unterstützten OAuth-Anbieter werden zusätzlich sitzungsgebundene Einmalzustände und PKCE benötigt.
 
-Anschließend folgen die gezielte Einbindung des SMA-Produktbereichs, Erhalt fremder Änderungen, sichere Wiederholung und die Abnahme auf einer ausdrücklich freigegebenen externen Testwebseite. Erstellung zunächst als Entwurf; Veröffentlichung, Käufe und DNS-Änderungen bleiben getrennt. Der vorhandene Testshop ersetzt diese externe Abnahme nicht.
+Die gezielte Einbindung des SMA-Produktbereichs, der Erhalt fremder Änderungen und die sichere Wiederholung sind im [Produktentwurfsauftrag](WORDPRESS_DRAFT_SYNC.md) angeschlossen. Offen bleibt die Abnahme auf einer ausdrücklich freigegebenen externen Testwebseite. Erstellung zunächst als Entwurf; Veröffentlichung, Käufe und DNS-Änderungen bleiben getrennt. Der vorhandene Testshop ersetzt diese externe Abnahme nicht.
 
 Die zwei Endpoints und das neue Schema sind installiert. Der Einstieg liegt im separaten Detailbereich „Webseite einrichten“ → „WordPress verbinden“; Übersicht, Schrift und geschützte n8n-Workflows bleiben erhalten. Die Verbindung allein aktiviert noch keine automatische Webseiten-Synchronisierung. Für den nächsten echten Verbindungstest fehlt beim Testkunden die externe WordPress-Adresse.
 

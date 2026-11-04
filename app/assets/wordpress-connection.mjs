@@ -1,3 +1,4 @@
+import {mountWordpressSync} from './wordpress-sync.mjs?v=1';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 export function readWordpressState(r,website,now=Date.now()){
@@ -49,19 +50,21 @@ const messages={
  VERIFICATION_BUSY:'Die Prüfung läuft bereits. Bitte warte kurz.',REQUEST_RATE_LIMITED:'Bitte warte eine Minute, bevor du eine neue Freigabe startest.',
  ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',REVISION_CONFLICT:'Der Vorgang wurde inzwischen geändert. Lade den Stand neu.'
 };
-export function mountWordpressConnection({root,request,getOwnerId}){
+export function mountWordpressConnection({root,request,syncRequest,getOwnerId}){
  const doc=root.ownerDocument,client=createWordpressClient({request,getOwnerId});let website=null,ready=false,busy=false,version=0;
  root.innerHTML='<p class="sma-website-intro">Einmal in WordPress freigeben. Voraussetzung: Der SMA-Baustein ist dort aktiviert.</p><details class="sma-website-embed"><summary>SMA-Baustein für WordPress</summary><p class="sma-website-help">Der Baustein wird einmalig in WordPress eingerichtet. Dafür ist ein WordPress-Administratorzugang erforderlich.</p><a href="https://sma-automation.com/app/downloads/sma-wordpress-bridge.zip" download>WordPress-Baustein herunterladen</a></details><p data-wp-site class="sma-website-help"></p>'+
  '<div class="sma-website-actions"><button type="button" data-wp-start class="sma-website-primary" disabled>Verbindung vorbereiten</button><a data-wp-authorize target="_blank" rel="noopener noreferrer" hidden>In WordPress freigeben ↗</a><button type="button" data-wp-verify hidden>Verbindung prüfen</button><button type="button" data-wp-reload>Stand laden</button><button type="button" data-wp-revoke hidden>Verbindung trennen</button></div>'+
- '<p role="status" aria-live="polite" data-wp-status>Speichere zuerst deine WordPress-Webadresse.</p><p class="sma-website-help">Diese Freigabe veröffentlicht keine Seite. Der Produktbereich wird anschließend als Entwurf eingerichtet.</p>';
+ '<p role="status" aria-live="polite" data-wp-status>Speichere zuerst deine WordPress-Webadresse.</p><p class="sma-website-help">Diese Freigabe veröffentlicht keine Seite. Der Produktbereich wird anschließend als Entwurf eingerichtet.</p><section data-wp-sync hidden></section>';
  const $=s=>root.querySelector(s),status=$('[data-wp-status]');
- function controls(){for(const b of root.querySelectorAll('button'))b.disabled=busy||!ready;$('[data-wp-reload]').disabled=busy||!website;root.setAttribute('aria-busy',String(busy));}
- function clear(){ready=false;client.invalidate();for(const name of ['authorize','verify','revoke'])$('[data-wp-'+name+']').hidden=true;$('[data-wp-authorize]').removeAttribute('href');controls();}
+ const syncView=syncRequest?mountWordpressSync({root:$('[data-wp-sync]'),request:syncRequest,getOwnerId}):null;
+ function controls(){for(const b of root.querySelectorAll('[data-wp-start],[data-wp-verify],[data-wp-reload],[data-wp-revoke]'))b.disabled=busy||!ready;$('[data-wp-reload]').disabled=busy||!website;root.setAttribute('aria-busy',String(busy));}
+ function clear(){ready=false;client.invalidate();syncView?.invalidate();for(const name of ['authorize','verify','revoke'])$('[data-wp-'+name+']').hidden=true;$('[data-wp-authorize]').removeAttribute('href');controls();}
  function show(s){
   ready=true;$('[data-wp-start]').hidden=s.state==='verified';$('[data-wp-start]').textContent=s.state==='pending'?'Freigabe fortsetzen':'Verbindung vorbereiten';
   $('[data-wp-verify]').hidden=s.state!=='pending';$('[data-wp-revoke]').hidden=s.revision===0||s.state==='revoked';
   $('[data-wp-authorize]').hidden=!s.authorizationUrl;$('[data-wp-authorize]').removeAttribute('href');if(s.authorizationUrl)$('[data-wp-authorize]').href=s.authorizationUrl;
-  status.textContent=s.state==='verified'?'WordPress-Zugriff erfolgreich geprüft. Die automatische Einrichtung des Produktentwurfs wird separat angeschlossen.':s.authorizationUrl?'Öffne „In WordPress freigeben“, bestätige dort die Verbindung und klicke anschließend hier auf „Verbindung prüfen“.':s.state==='pending'?'Eine Freigabe ist vorbereitet. Du kannst sie fortsetzen.':s.state==='revoked'?'Die SMA-Verbindung wurde getrennt. Entferne die Freigabe auch in WordPress.':'Du kannst die Verbindung jetzt vorbereiten.';
+  status.textContent=s.state==='verified'?'WordPress-Zugriff erfolgreich geprüft.':s.authorizationUrl?'Öffne „In WordPress freigeben“, bestätige dort die Verbindung und klicke anschließend hier auf „Verbindung prüfen“.':s.state==='pending'?'Eine Freigabe ist vorbereitet. Du kannst sie fortsetzen.':s.state==='revoked'?'Die SMA-Verbindung wurde getrennt. Entferne die Freigabe auch in WordPress.':'Du kannst die Verbindung jetzt vorbereiten.';
+  syncView?.setConnection(s,website);
  }
  async function run(fn){if(busy)return;busy=true;const current=version;controls();status.textContent='Verbindung wird geprüft …';
   try{const s=await fn();if(current===version)show(s);}
@@ -74,6 +77,6 @@ export function mountWordpressConnection({root,request,getOwnerId}){
   setDraft(s){version++;clear();website=s?.draft?.mode==='existing'?s.draft.website_url:null;$('[data-wp-site]').textContent=website||'';status.textContent=website?'Lade den Verbindungsstand, um fortzufahren.':'Speichere zuerst deine WordPress-Webadresse.';controls();},
   load(){if(website&&!busy)return run(()=>client.load(website));},
   invalidate(){version++;website=null;clear();status.textContent='Speichere die geänderte Webseite vor dem Verbinden.';},
-  destroy(){version++;clear();root.replaceChildren();}
+  destroy(){version++;clear();syncView?.destroy();root.replaceChildren();}
  };
 }

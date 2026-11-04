@@ -1,6 +1,6 @@
 # WordPress: begrenzter SMA-Anschluss mit einmaliger Freigabe
 
-Stand: 4. November 2026. SMA-Ticketausgabe, Vault-Lebenszyklus und lesende Zielprüfung sind auf dem Server bereitgestellt. PR #63 ergänzt den kompakten Dashboard-Einstieg und das Plugin-Paket. **Noch keine externe WordPress-Webseite verbunden:** Beim Testkunden ist keine Zieladresse gespeichert. Ein dauerhafter Auftrag zur automatischen Entwurfserstellung ist noch nicht angeschlossen.
+Stand: 4. November 2026. SMA-Ticketausgabe, Vault-Lebenszyklus und lesende Zielprüfung sind auf dem Server bereitgestellt. PR #63 ergänzt den kompakten Dashboard-Einstieg und das Plugin-Paket. Der neue [dauerhafte Produktentwurfsauftrag](WORDPRESS_DRAFT_SYNC.md) ergänzt Erstellungsbutton, Ergebnisspeicherung und Wiederaufnahme. **Noch keine externe WordPress-Webseite verbunden:** Beim Testkunden ist keine Zieladresse gespeichert; der echte Ende-zu-Ende-Test bleibt offen.
 
 ## Bedienung und Umfang
 
@@ -8,7 +8,7 @@ Eine WordPress-Erweiterung ersetzt das manuelle Kopieren von HTML. Ihre einmalig
 
 Der vorgesehene Verbindungsablauf startet in SMA. Ein kurzlebiger Vorgang öffnet die WordPress-Einstellungen. Dort sieht der Administrator das SMA-Konto und den Shop und bestätigt „Verbindung freigeben“. Die Bestätigung verlangt WordPress-Rechte und einen gültigen WordPress-Nonce. Eine bestehende Verbindung zu einem anderen Vorgang muss zuerst getrennt werden. Wiederholtes Bestätigen desselben Vorgangs erhält den bisherigen Entwurf.
 
-Der WordPress-Baustein unterstützt anschließend ausschließlich den eigenen Produktbereich als **Entwurf**. Der aktuell bereitgestellte SMA-Endpoint sendet jedoch nur `inspect`; er erteilt weder Synchronisierungs- noch Veröffentlichungsrechte. Der Baustein enthält keine Veröffentlichungsoperation. Er überträgt keine Preise oder Bestände in WordPress: Ein gezielt gerenderter SMA-Katalog lädt sie beim Anzeigen beziehungsweise Aktualisieren weiterhin aus dem öffentlichen SMA-Shop.
+Der WordPress-Baustein unterstützt anschließend ausschließlich den eigenen Produktbereich als **Entwurf**. Der Verbindungsendpoint `sma-wordpress-connect` sendet nur `inspect`; der getrennte Endpoint `sma-wordpress-sync` sendet nach ausdrücklichem Kundenklick einen dauerhaft gespeicherten `sync_draft`-Auftrag. Der Baustein enthält keine Veröffentlichungsoperation. Er überträgt keine Preise oder Bestände in WordPress: Ein gezielt gerenderter SMA-Katalog lädt sie beim Anzeigen beziehungsweise Aktualisieren weiterhin aus dem öffentlichen SMA-Shop.
 
 ## Schlüssel statt WordPress-Passwort
 
@@ -68,7 +68,7 @@ Die isolierten Testabhängigkeiten sind fest auf PHP.wasm 3.1.62 gesetzt. Das Pa
 ## Noch zu verbinden
 
 1. WordPress-Zieladresse festlegen, den Baustein auf der freigegebenen Testseite installieren und die einmalige Admin-Freigabe durchführen. Echte TLS-Verbindung, WordPress-Rechte, MySQL-Transaktionen und Darstellung dort prüfen. Der SMA-Testshop ist keine externe WordPress-Installation.
-2. Dauerhaften Synchronisierungsauftrag mit UUID/Revision anschließen. `can_synchronize` im SMA-Status bleibt bis dahin false, auch wenn der isolierte WordPress-Baustein Entwürfe bearbeiten kann. Verlorene Antworten, konkurrierende Aufträge und fremde Änderungen auch auf der echten Seite abnehmen.
-3. Erst danach die Erstellung eines Produktentwurfs anbieten. Veröffentlichung, Hostingkäufe, Tarif- und DNS-Änderungen bleiben getrennte Entscheidungen.
+2. Den angeschlossenen dauerhaften Synchronisierungsauftrag auf dieser Testseite abnehmen: verlorene Antworten, konkurrierende Aufträge und fremde Änderungen prüfen. Der reine Verbindungsstatus behält `can_synchronize:false`; die getrennte Auftragsschnittstelle meldet die tatsächlich verfügbare Erstellungs-/Fortsetzungsaktion.
+3. Veröffentlichung, Hostingkäufe, Tarif- und DNS-Änderungen bleiben getrennte Entscheidungen. Die echte Testseite wird nicht automatisch veröffentlicht.
 
 Offizielle Referenzen, am 4. November 2026 geprüft: [WordPress REST-Berechtigungen](https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/), [sichere HTTP-Anfragen](https://developer.wordpress.org/reference/functions/wp_safe_remote_post/), [Seiten als Entwurf speichern](https://developer.wordpress.org/reference/functions/wp_insert_post/), [Plugin-Tabellen](https://developer.wordpress.org/plugins/creating-tables-with-plugins/), [PHP.wasm-Pakete](https://wordpress.github.io/wordpress-playground/developers/architecture/php-wasm-packages/).

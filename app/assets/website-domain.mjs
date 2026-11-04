@@ -1,7 +1,7 @@
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
 import {createShopButton} from './shop-button.mjs?v=1';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
-import {mountWordpressConnection} from './wordpress-connection.mjs?v=1';
+import {mountWordpressConnection} from './wordpress-connection.mjs?v=2';
 import {mountDomainVerification} from './domain-verification.mjs?v=2';
 
 const messages={
@@ -19,7 +19,7 @@ const messages={
  BUSY:'Bitte warte, bis der aktuelle Vorgang abgeschlossen ist.'
 };
 
-export function mountWebsitePreparation({page,request,domainRequest,wordpressRequest,getOwnerId,stylesheetUrl}){
+export function mountWebsitePreparation({page,request,domainRequest,wordpressRequest,wordpressSyncRequest,getOwnerId,stylesheetUrl}){
  if(!page||page.querySelector('#smaWebsitePreparation'))return {destroy(){}};
  const doc=page.ownerDocument,win=doc.defaultView;
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -70,7 +70,7 @@ export function mountWebsitePreparation({page,request,domainRequest,wordpressReq
  $('[data-website-back]').addEventListener('click',()=>openView('overview'));
  const client=createWebsiteDraftClient({request,getOwnerId,uuid:()=>win.crypto.randomUUID()});
  let destroyed=false,loaded=false,busy=false,dirty=false;
- const wordpressView=wordpressRequest?mountWordpressConnection({root:$('[data-wordpress-panel]'),request:wordpressRequest,getOwnerId}):null;
+ const wordpressView=wordpressRequest?mountWordpressConnection({root:$('[data-wordpress-panel]'),request:wordpressRequest,syncRequest:wordpressSyncRequest,getOwnerId}):null;
  if(!wordpressView)$('[data-wp-entry]').hidden=true;
  const domainView=domainRequest?mountDomainVerification({root:$('[data-domain-panel]'),asPanel:true,request:domainRequest,getOwnerId,onAccessError:error=>{rejectOwner(error);setBusy(false);notice(messages[error.code],true);}}):null;
  if(!domainView){$('[data-website-open="domain"]').hidden=true;$('[data-domain-setup]').hidden=true;}
