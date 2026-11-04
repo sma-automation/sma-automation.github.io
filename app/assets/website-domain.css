@@ -26,5 +26,22 @@
 #smaWebsitePreparation .sma-website-status{min-height:24px;margin:16px 0 6px;font-size:14px}
 #smaWebsitePreparation .sma-website-error{color:#a52435}
 #smaWebsitePreparation .sma-website-link-section{margin-top:24px;padding-top:24px;border-top:1px solid #e4e7ed}
+#page-website.sma-website-managed .package-feature-list{display:none!important}
+#page-website.sma-website-detail .page-head,#page-website.sma-website-detail .package-module-status{display:none!important}
+#page-website.sma-website-detail #smaWebsitePreparation{margin-top:0}
+#smaWebsitePreparation .sma-website-overview{display:grid;gap:12px}
+#smaWebsitePreparation .sma-website-entry{display:flex;justify-content:space-between;align-items:center;gap:20px;width:100%;padding:17px 18px;text-align:left;background:#fff;border-color:#dfe3eb;color:inherit}
+#smaWebsitePreparation .sma-website-entry:hover{background:#f5f7fc;border-color:#bfcdf0}
+#smaWebsitePreparation .sma-website-entry>span:first-child{min-width:0}
+#smaWebsitePreparation .sma-website-entry strong{display:block;font:inherit;font-size:16px;font-weight:600;line-height:1.5}
+#smaWebsitePreparation .sma-website-entry strong+span{display:block;margin-top:3px;color:#647084;font:inherit;font-size:13px;font-weight:400;line-height:1.5}
+#smaWebsitePreparation .sma-website-entry-arrow{flex:none;color:#4065d8;font-size:25px;line-height:1}
+#smaWebsitePreparation .sma-website-workspace-header{margin:0 0 24px}
+#smaWebsitePreparation .sma-website-back{gap:10px;min-height:48px;background:#4065d8;border-color:#4065d8;color:#fff;white-space:nowrap}
+#smaWebsitePreparation .sma-website-back svg{width:24px;height:24px;flex:none}
+#smaWebsitePreparation [data-website-view]{min-width:0}
+#smaWebsitePreparation [data-website-view] h2:focus{outline:none}
+#smaWebsitePreparation [data-website-view].sma-website-link-section{margin:0;padding:0;border:0}
+#smaWebsitePreparation [data-domain-panel] .sma-domain-check{margin:0}
 #smaWebsitePreparation .sma-website-sr{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:650px){#smaWebsitePreparation{padding:18px;margin-top:18px}#smaWebsitePreparation .sma-website-options{flex-direction:column;gap:14px}#smaWebsitePreparation .sma-website-actions>*{width:100%}}

@@ -1,6 +1,6 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
-Stand: 4. November 2026. Ziel `website-v1`. **Vorbereitung aus PR #58 und Shop-Button aus PR #59 sind veröffentlicht.** Der öffentliche Klickweg zur Shopseite wurde zusätzlich im Browser des Nutzers anhand seiner Screenshots bestätigt. Der folgende Anschluss ergänzt den [kundengebundenen DNS-Domainnachweis](DOMAIN_VERIFICATION.md).
+Stand: 4. November 2026. Ziel `website-v1`. **Vorbereitung aus PR #58, Shop-Button aus PR #59 und Domainnachweis aus PR #60 sind veröffentlicht.** Der öffentliche Klickweg zur Shopseite wurde zusätzlich im Browser des Nutzers anhand seiner Screenshots bestätigt. Der [kundengebundene DNS-Domainnachweis](DOMAIN_VERIFICATION.md) ist angeschlossen.
 
 Der Nutzer hat die kostenfreie Vorbereitung vorgezogen, während Sightengine-Zahlung, Videoprüfung und echter Social-Media-Uploadtest offen bleiben. PR #57 bleibt davon getrennt und ungemergt. Es gibt keinen Auftrag zu Domainkauf, Hostingwechsel, Tarifänderung oder Veröffentlichung einer Kundenwebseite.
 
@@ -24,11 +24,17 @@ Eine öffentliche SMA-Shopadresse wird ausschließlich aus der aktuellen Kundenz
 | Öffentliche Prüfansicht mit Kopierhilfe | `app/website-connection-test.html`, `app/assets/website-connection-test.mjs` |
 | Private Speicherung und authentifizierter RPC | `supabase/sql/website-domain-preparation.sql` |
 
-Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ersetzt ausschließlich den Platzhalter im vorhandenen Modul und stellt ihn beim Entfernen der Erweiterung wieder her; Navigation, bestehende Überschrift, Schrift und übrige Portalbereiche bleiben erhalten. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
+Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapper ersetzt ausschließlich den Platzhalter im vorhandenen Modul und stellt ihn beim Entfernen der Erweiterung wieder her; Die äußere Navigation, Schrift und übrigen Portalbereiche bleiben erhalten. Die Modulüberschrift und Paketinformation stehen in der Übersicht; während einer Arbeitsansicht machen sie Platz für die gewählte Aufgabe. Die neue Gestaltung erbt die Dashboard-Schrift. Es werden keine externen Schriften, Bilder, Analyse- oder Websiteanbieter eingebunden.
+
+## Kompakter Arbeitsbereich
+
+Die Übersicht zeigt drei Einstiege: „Webseite einrichten“, „Shop-Button einbauen“ und „Eigene Domain nachweisen“. Nur die gewählte Aufgabe wird geöffnet. Ein Zurück-Button führt zur Übersicht; der Fokus folgt der geöffneten Ansicht beziehungsweise dem zuletzt verwendeten Einstieg. Die bisherigen drei rein informativen Paketkacheln werden in diesem Modul durch die drei Einstiege ersetzt.
+
+Die Formularfelder bleiben beim Wechsel im DOM, sodass ungespeicherte Eingaben erhalten bleiben. Beim Wechsel in ein anderes Dashboard-Modul wird die Übersicht wiederhergestellt. Entfernen der Erweiterung stellt den ursprünglichen Platzhalter und die ursprünglichen Modulklassen wieder her. Die Domainprüfung erhält eine eigene Ansicht ohne zusätzliche aufzuklappende Ebene; ihre Speicherung und Zugangsprüfungen bleiben unverändert.
 
 ## Shop-Button und Prüfansicht
 
-Unter „Webseite & Domain“ stehen „Shop-Button testen“ und die aufklappbare Einbauhilfe bereit. Der Einbaucode ist ein normaler HTML-Link ohne JavaScript, iframe, Tracking oder Zugangsdaten. Er erbt die Schrift der einbindenden Webseite. Webseitenprogramme ohne HTML-Baustein können dieselbe öffentliche Adresse als gewöhnliches Linkziel verwenden.
+Unter „Webseite & Domain“ → „Shop-Button einbauen“ stehen „Shop-Button testen“ und die aufklappbare Einbauhilfe bereit. Der Einbaucode ist ein normaler HTML-Link ohne JavaScript, iframe, Tracking oder Zugangsdaten. Er erbt die Schrift der einbindenden Webseite. Webseitenprogramme ohne HTML-Baustein können dieselbe öffentliche Adresse als gewöhnliches Linkziel verwenden.
 
 `/app/website-connection-test.html?shop=<slug>` zeigt den Button, sein exaktes Ziel und denselben kopierbaren Code. Die Seite akzeptiert ausschließlich einen gültigen öffentlichen Shop-Slug; zusätzliche oder doppelte Parameter werden abgelehnt. Ziel-Origin und Shop-Pfad sind fest vorgegeben. Ohne gültigen Parameter erscheint eine Anleitung zum Öffnen über das Dashboard, kein aktiver Shop-Button. Die Prüfansicht ruft keine Kunden-API auf und speichert nichts. Bei gesperrter Zwischenablage wird der Code für manuelles Kopieren markiert.
 
@@ -45,6 +51,10 @@ Die SMA-Hauptseite und `CNAME` bleiben unverändert. Die Prüfansicht weist den 
 - Die Anzahl gespeicherter Vorbereitungen ist auf eine pro Kunde begrenzt. Es gibt keinen Scheduler, kostenpflichtigen Prüfdienst, Registraraufruf, DNS-Schreibzugriff, automatischen Seitenbau oder Social-Media-Aufruf.
 
 ## Prüfstand
+
+Kompakter Arbeitsbereich (4. November 2026): **308 Tests bestanden**. Browserprüfung mit synthetischen Daten: Übersicht und getrennte Ansichten, Fokus und Zurück-Navigation, Erhalt ungespeicherter Eingaben beim Wechsel, Speichern/Neuladen, Shop-Einbaucode und Kopiermeldung, Domainprüfung mit gespeichertem Ergebnis, Verknüpfung zum Formular bei fehlenden/ungespeicherten Angaben, geleerte Felder und entfernte Shopziele nach Zugriffsentzug sowie Wiederherstellung des ursprünglichen Moduls beim Entfernen. Desktop mit Seitenleiste und mobile Ansicht mit 390 Pixel Nutzbreite geprüft; kein horizontaler Überlauf, Zurück-Button einzeilig und 48 Pixel hoch. Bestehende Datenbank- und Edge-Funktionen werden von dieser Layoutänderung nicht verändert.
+
+Vorherige Funktionsabnahmen:
 
 - `node --test tests/*.test.cjs`: **301 bestanden, 0 fehlgeschlagen** auf dem Website-Zweig (298 aus PR #58 + 3 neue Fälle für den Shop-Button). Die neuen Fälle prüfen das genaue Ziel, scriptfreien Code, abgewiesene fremde/unsichere Adressen und ungültige/doppelte Queryparameter. Die 314 Tests aus PR #57 gehören zu dessen separatem Publishing-Zweig und sind nicht Bestandteil dieses Zielbranchs.
 - `node tests/run-website-domain-sql.mjs`: lokale PGlite-Prüfreihe bestanden. Abgedeckt: Demo/Delta, inaktiver Zugang, falsches Paket, Eigentümerwechsel, doppelte Kundenbindung, direkte Rollenrechte, Replay, Konflikte und ungültige Eingaben.
