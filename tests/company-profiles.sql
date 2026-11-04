@@ -1,0 +1,102 @@
+begin;
+alter table public.sma_kunden add column kunde_name text,add column kunde_email text;
+insert into public.sma_kunden(id,user_id,paket,aktiv,demo_delta_aktiv,zahlung_bestaetigt,kunde_name,kunde_email) values
+ (-909000007001,'fa770000-0000-4000-8000-000000000071','delta',true,false,true,'Account name','private-login@example.com'),
+ (-909000007002,'fa770000-0000-4000-8000-000000000072','alpha',true,false,true,'Other account','other-private@example.com');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','',true);
+do $$begin
+ assert public.sma_company_profile_v1('get')->>'code'='AUTH_REQUIRED';
+ assert not has_function_privilege('anon','public.sma_company_profile_v1(text,jsonb)','EXECUTE');
+ assert not has_function_privilege('service_role','public.sma_company_profile_v1(text,jsonb)','EXECUTE');
+ assert not has_table_privilege('authenticated','sma_private.company_profiles_v1','SELECT,INSERT,UPDATE,DELETE');
+ assert not has_table_privilege('anon','sma_private.company_profiles_v1','SELECT,INSERT,UPDATE,DELETE');
+ assert not has_function_privilege('authenticated','sma_private.company_profile_valid_v1(jsonb)','EXECUTE');
+end $$;
+select set_config('request.jwt.claim.sub','fa770000-0000-4000-8000-000000000071',true);
+do $$declare r jsonb;p jsonb;params jsonb;content jsonb;id uuid;prepared jsonb;begin
+ r:=public.sma_company_profile_v1('get');assert r->>'revision'='0' and r->'profile'='null'::jsonb and r->'suggested'='null'::jsonb;
+ assert r::text not like '%private-login%';
+ assert public.sma_company_profile_v1('get','{"customer_id":-909000007002}')->>'code'='INVALID_INPUT';
+ assert public.sma_company_profile_v1('save','{}')->>'code'='INVALID_INPUT';
+ prepared:=public.sma_website_preparation_v1('save','{"mode":"existing","website_url":"https://example.com/","desired_domain":"","expected_revision":0,"request_id":"ab770000-0000-4000-8000-000000000071"}');
+ assert prepared->>'ok'='true';
+ r:=public.sma_customer_website_v1('generate','{"expected_revision":0,"request_id":"ab770000-0000-4000-8000-000000000072"}');
+ id:=(r->>'site_id')::uuid;content:=r->'content';
+ r:=public.sma_company_profile_v1('get');assert r->'suggested'->>'company_name'='' and r->'suggested'->>'public_email'='';
+ content:=content||'{"name":"Existing website name","contact_email":"old-public@example.com","contact_address":"Old address"}';
+ assert public.sma_customer_website_v1('save',jsonb_build_object('content',content,'expected_revision',1,'request_id','ab770000-0000-4000-8000-000000000073'))->>'revision'='2';
+ r:=public.sma_company_profile_v1('get');assert r->'suggested'->>'company_name'='Existing website name' and r->'suggested'->>'public_email'='old-public@example.com' and r->'suggested'->>'previous_address'='Old address';
+ p:='{"company_name":"SHK Fixture GmbH","legal_form":"GmbH","industry":"Sanitär Heizung Klima","representative":"Example Person","street":"Musterstraße","house_number":"12a","postal_code":"1010","city":"Wien","country":"Österreich","public_email":"office@example.com","phone":"+43 1 123456","contact_person":"Example Contact","opening_hours":"Mo–Fr 08:00–17:00","vat_id":"ATU-FIXTURE","register_number":"FN-FIXTURE","register_court":"Fixture court"}';
+ params:=jsonb_build_object('profile',p,'expected_revision',0,'request_id','ab770000-0000-4000-8000-000000000074');
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p-'city'))->>'code'='INVALID_PROFILE';
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p||'{"company_name":""}'))->>'code'='INVALID_PROFILE';
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p||'{"unexpected":"x"}'))->>'code'='INVALID_PROFILE';
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p||'{"public_email":"x@example.com?bcc=evil"}'))->>'code'='INVALID_PROFILE';
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p||jsonb_build_object('city',E'new\nline')))->>'code'='INVALID_PROFILE';
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p||jsonb_build_object('city',repeat('x',101))))->>'code'='INVALID_PROFILE';
+ assert public.sma_company_profile_v1('save',params||'{"expected_revision":2147483647}')->>'code'='INVALID_INPUT';
+ assert public.sma_company_profile_v1('save',params)->>'revision'='1';
+ assert public.sma_company_profile_v1('save',params)->>'revision'='1';
+ assert public.sma_company_profile_v1('save',params||jsonb_build_object('profile',p||'{"city":"Graz"}'))->>'code'='REQUEST_CONFLICT';
+ assert public.sma_company_profile_v1('save',params||'{"request_id":"ab770000-0000-4000-8000-000000000075"}')->>'code'='REVISION_CONFLICT';
+ r:=public.sma_customer_website_v1('get');assert r->>'revision'='2' and r->>'company_revision'='1';
+ assert r->'company_profile'=p and r->'content'->>'name'='SHK Fixture GmbH' and r->'content'->>'contact_address'=E'Musterstraße 12a\n1010 Wien\nÖsterreich';
+ assert r->'content'->>'contact_email'='office@example.com' and r->'content'->>'contact_phone'='+43 1 123456';
+ assert public.sma_customer_website_public_v1(id)->>'code'='NOT_AVAILABLE';
+ assert public.sma_customer_website_v1('save',jsonb_build_object('content',content,'expected_revision',2,'request_id','ab770000-0000-4000-8000-000000000076'))->>'code'='COMPANY_PROFILE_CHANGED';
+ params:='{"expected_revision":2,"expected_company_revision":1,"request_id":"ab770000-0000-4000-8000-000000000076"}';
+ r:=public.sma_customer_website_v1('save',params||jsonb_build_object('content',content));assert r->>'revision'='3' and r->'content'->>'name'='SHK Fixture GmbH';
+ params:='{"expected_revision":3,"expected_company_revision":1,"request_id":"ab770000-0000-4000-8000-000000000077"}';
+ assert public.sma_customer_website_v1('publish',params)->>'has_changes'='false';
+ r:=public.sma_customer_website_public_v1(id);assert r->'company_profile'=p and r->'content'->>'contact_email'='office@example.com';
+ assert not(r ?| array['user_id','customer_id','draft','revision']);
+ p:=p||'{"city":"Graz","public_email":"new-office@example.com","contact_person":"New Contact"}';
+ params:=jsonb_build_object('profile',p,'expected_revision',1,'request_id','ab770000-0000-4000-8000-000000000078');
+ assert public.sma_company_profile_v1('save',params)->>'revision'='2';
+ r:=public.sma_customer_website_v1('get');assert r->>'has_changes'='true' and r->>'company_revision'='2' and r->'content'->>'contact_email'='new-office@example.com';
+ r:=public.sma_customer_website_public_v1(id);assert r->'content'->>'contact_email'='office@example.com' and r->'company_profile'->>'city'='Wien';
+ params:='{"expected_revision":4,"request_id":"ab770000-0000-4000-8000-000000000079"}';
+ assert public.sma_customer_website_v1('publish',params)->>'code'='COMPANY_PROFILE_CHANGED';
+ assert public.sma_customer_website_v1('publish',params||'{"expected_company_revision":1}')->>'code'='COMPANY_PROFILE_CHANGED';
+ assert public.sma_customer_website_v1('save',params||jsonb_build_object('content',content,'expected_company_revision',1))->>'code'='COMPANY_PROFILE_CHANGED';
+ assert public.sma_customer_website_v1('publish',params||'{"expected_company_revision":2}')->>'has_changes'='false';
+ r:=public.sma_customer_website_public_v1(id);assert r->'company_profile'=p and r->'content'->>'contact_email'='new-office@example.com';
+ -- Company-only details also make the public snapshot out of date.
+ p:=p||'{"register_number":"UPDATED-FIXTURE"}';
+ assert public.sma_company_profile_v1('save',jsonb_build_object('profile',p,'expected_revision',2,'request_id','ab770000-0000-4000-8000-000000000080'))->>'revision'='3';
+ assert public.sma_customer_website_v1('get')->>'has_changes'='true';
+ assert public.sma_website_preparation_v1('get')->'draft'=prepared->'draft';
+ perform set_config('test.profile',p::text,true);perform set_config('test.company_site',id::text,true);
+end $$;
+select set_config('request.jwt.claim.sub','fa770000-0000-4000-8000-000000000072',true);
+do $$declare r jsonb;begin
+ r:=public.sma_company_profile_v1('get');assert r->>'revision'='0' and r->'profile'='null'::jsonb and r->'suggested'='null'::jsonb;
+ assert public.sma_company_profile_v1('save',jsonb_build_object('profile',current_setting('test.profile')::jsonb,'expected_revision',0,'request_id','ab770000-0000-4000-8000-000000000081'))->>'revision'='1','active Alpha can edit its own business details';
+end $$;
+reset role;
+do $$begin
+ assert (select kunde_name='Account name' and kunde_email='private-login@example.com' from public.sma_kunden where id=-909000007001);
+end $$;
+update public.sma_kunden set aktiv=false where id=-909000007001;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa770000-0000-4000-8000-000000000071',true);
+do $$begin
+ assert public.sma_company_profile_v1('get')->>'can_edit'='false';
+ assert public.sma_company_profile_v1('get')->>'revision'='3';
+ assert public.sma_company_profile_v1('save',jsonb_build_object('profile',current_setting('test.profile')::jsonb,'expected_revision',3,'request_id','ab770000-0000-4000-8000-000000000082'))->>'code'='ACCESS_INACTIVE';
+ assert public.sma_customer_website_public_v1(current_setting('test.company_site')::uuid)->>'code'='NOT_AVAILABLE';
+ assert public.sma_customer_website_v1('unpublish','{"expected_revision":5,"request_id":"ab770000-0000-4000-8000-000000000082"}')->>'published'='false';
+end $$;
+reset role;
+do $$begin assert (select published_company is null and published_company_revision=0 from sma_private.customer_websites_v1 where customer_id=-909000007001);end $$;
+update public.sma_kunden set user_id='fa770000-0000-4000-8000-000000000073',aktiv=true where id=-909000007001;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fa770000-0000-4000-8000-000000000073',true);
+do $$begin
+ assert public.sma_company_profile_v1('get')->>'code'='ACCOUNT_CHANGED';
+ assert public.sma_customer_website_v1('get')->>'code'='ACCOUNT_CHANGED';
+end $$;
+reset role;
+rollback;
+select 'Company profile SQL checks passed: ownership, validation, revisions, shared draft, separate public snapshot; fixtures rolled back' as result;

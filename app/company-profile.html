@@ -1,0 +1,15 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://esm.sh; style-src 'self'; connect-src https://bnvnmdxosbnuzedokqgh.supabase.co https://esm.sh; base-uri 'none'; object-src 'none'; form-action 'none'">
+<title>SMA · Firmendaten</title><link rel="stylesheet" href="./assets/customer-website.css?v=2"><link rel="stylesheet" href="./assets/company-profile.css?v=1"></head>
+<body class="builder"><header class="workspace-header"><a href="/app/dashboard.html" class="back">← Dashboard</a><span class="brand">SMA</span></header><main class="workspace">
+<div class="page-heading"><div><p class="eyebrow">Dein Unternehmen</p><h1>Firmendaten</h1></div><span id="profileBadge" class="badge">Wird geladen</span></div>
+<p class="muted">Einmal erfassen: SMA verwendet diese Angaben im Dashboard und in deinem Webseitenentwurf.</p>
+<p id="profileStatus" role="status" aria-live="polite">Deine Anmeldung wird geprüft …</p><a id="profileLogin" href="/app/index.html" hidden>Bei SMA anmelden</a>
+<form id="profileForm" hidden><fieldset id="profileFields" disabled>
+<section class="panel"><h2>Unternehmen</h2><div class="company-grid" data-profile-group="company"></div></section>
+<section class="panel"><h2>Firmensitz</h2><div class="company-grid" data-profile-group="address"></div><p id="previousAddress" class="muted small" hidden></p></section>
+<section class="panel"><h2>Kontakt</h2><p class="muted small">Trage hier die geschäftlichen Kontaktdaten ein, die auf deiner Webseite erscheinen sollen.</p><div class="company-grid" data-profile-group="contact"></div></section>
+<details class="panel"><summary>Register- und Steuerangaben · sofern vorhanden</summary><div class="company-grid" data-profile-group="register"></div></details>
+</fieldset><div class="toolbar"><button id="profileSave" class="primary" type="submit">Firmendaten speichern</button><button id="profileReload" type="button">Gespeicherten Stand laden</button><a href="/app/website-builder.html" class="button">Zur Webseite →</a></div>
+<p class="muted small">Änderungen werden automatisch in den Webseitenentwurf übernommen. Eine bereits öffentliche Webseite wird erst über „Öffentliche Webseite aktualisieren“ geändert. Deine SMA-Anmeldedaten bleiben davon getrennt.</p></form>
+<button id="profileRetry" type="button" hidden>Erneut laden</button><noscript><p>Aktiviere JavaScript, um deine Firmendaten zu bearbeiten.</p></noscript></main><script type="module" src="./assets/company-profile-page.mjs?v=1"></script></body></html>

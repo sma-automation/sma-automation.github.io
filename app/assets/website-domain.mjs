@@ -32,7 +32,7 @@ export function mountWebsitePreparation({page,request,domainRequest,wordpressReq
  '<button type="button" class="sma-website-entry" data-website-open="domain" aria-controls="smaWebsiteView-domain"><span><strong>Eigene Domain nachweisen</strong><span>DNS-Prüfeintrag erstellen und den Nachweis prüfen.</span></span><span class="sma-website-entry-arrow" aria-hidden="true">→</span></button>'+
  '</div><div class="sma-website-workspace-header" data-website-toolbar hidden><button type="button" data-website-back class="sma-website-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Webseite &amp; Domain</button></div>'+
  '<section id="smaWebsiteView-website" data-website-view="website" aria-labelledby="smaWebsitePreparationTitle" hidden><h2 id="smaWebsitePreparationTitle" tabindex="-1">Webseite einrichten</h2>'+
- '<p class="sma-website-intro">Hinterlege deine bestehende Webseite oder deinen Wunsch für eine neue Seite.</p>'+
+ '<div data-company-profile-dashboard></div><p class="sma-website-intro">Hinterlege deine bestehende Webseite oder deinen Wunsch für eine neue Seite.</p>'+
  '<form novalidate><fieldset class="sma-website-fields" disabled><legend class="sma-website-sr">Webseite und Domain</legend>'+
  '<div class="sma-website-options"><label><input type="radio" name="website_mode" value="existing" checked> Ich habe bereits eine Webseite</label>'+
  '<label><input type="radio" name="website_mode" value="new"> Ich benötige eine Webseite</label></div>'+
