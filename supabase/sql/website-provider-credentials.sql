@@ -86,6 +86,15 @@ begin
    or octet_length(p_credentials->>'access_token') not between 16 and 8192
    or p_credentials->>'access_token' ~ '[[:space:][:cntrl:]]'
   then return jsonb_build_object('ok',false,'code','INVALID_CREDENTIALS');end if;
+ elsif p_credentials ? 'bridge_private_key' then
+  -- WordPress bridge: a per-attempt signing key, never a WordPress password.
+  -- This checks shape only. The trusted adapter must import the key and obtain
+  -- an independently verified signed-command response before calling finish.
+  if (select count(*) from jsonb_object_keys(p_credentials))<>1
+   or jsonb_typeof(p_credentials->'bridge_private_key') is distinct from 'string'
+   or octet_length(p_credentials->>'bridge_private_key') not between 1024 and 8192
+   or p_credentials->>'bridge_private_key' !~ E'^-----BEGIN PRIVATE KEY-----\\n[A-Za-z0-9+/=\\n]+\\n-----END PRIVATE KEY-----\\n?$'
+  then return jsonb_build_object('ok',false,'code','INVALID_CREDENTIALS');end if;
  else
   if not(p_credentials ?& array['username','password']) or (select count(*) from jsonb_object_keys(p_credentials))<>2
    or jsonb_typeof(p_credentials->'username') is distinct from 'string' or jsonb_typeof(p_credentials->'password') is distinct from 'string'

@@ -49,7 +49,7 @@ Geplante SMA-Umsetzung:
 5. Nur den zugeordneten SMA-Bereich anlegen/aktualisieren, dessen Kennung und Inhaltsstand speichern. Fremde Änderungen erkennen und erhalten. Erzeugung zunächst als Entwurf; Veröffentlichung gesondert freigeben.
 6. „Synchronisieren“ prüft die Zuordnung und aktualisiert diesen Bereich. Öffentlich geladene Preise und Bestände kommen weiterhin aus dem SMA-Katalog. Eine Bestell- oder Checkout-Synchronisierung wird daraus nicht abgeleitet.
 
-Dieser Ablauf ist noch nicht implementiert. Die WordPress-Freigabe ersetzt weder eine Domainregistrierung noch den Nachweis, dass alle Theme-, Plugin- und Rollenvarianten unterstützt sind.
+Der begrenzte [WordPress-Baustein und das Signaturprotokoll](WORDPRESS_BRIDGE.md) sind jetzt als lokal getesteter Kandidat implementiert. Die Ticketausgabe in SMA und die externe Zielprüfung sind noch nicht angeschlossen. Die WordPress-Freigabe ersetzt weder eine Domainregistrierung noch den Nachweis, dass alle Theme-, Plugin- und Rollenvarianten unterstützt sind.
 
 ## Partnerprogramme getrennt behandeln
 
@@ -63,7 +63,7 @@ Die technische Anbindung darf keinen Affiliate-Kauf voraussetzen: Bestehende gee
 
 Fortschritt: [Dauerhafte Anfragen, Vault-Speicherung, atomarer Abschluss und Wiederaufnahme](WEBSITE_CONNECTION.md) sind als getesteter Datenbankkandidat implementiert. Echte Anbieteranmeldung, unabhängige Zielprüfung und Einbindung sind weiterhin offen. Es wurde noch keine Migration installiert.
 
-Als nächstes den WordPress-Übergabeweg und eine echte lesende Zielprüfung anschließen. Anschließend die gezielte WordPress-Einbindung ergänzen. Hostinger-Erstellung erst fortsetzen, wenn ein geeigneter, kundengebundener Freigabeweg verfügbar und geprüft ist. Einen Tarif erst anhand einer konkreten erforderlichen Fähigkeit auswählen.
+Als nächstes den implementierten WordPress-Baustein an die SMA-Ticketausgabe und eine echte lesende Zielprüfung anschließen. Anschließend die gezielte WordPress-Einbindung ergänzen. Hostinger-Erstellung erst fortsetzen, wenn ein geeigneter, kundengebundener Freigabeweg verfügbar und geprüft ist. Einen Tarif erst anhand einer konkreten erforderlichen Fähigkeit auswählen.
 
 Der Abnahmelauf muss Zugangsentzug, falschen Kunden, unzulässige Zieladressen, verlorene Antworten, doppelte Klicks, externe Änderungen und erneutes Laden abdecken. Erst nach einem echten erfolgreichen Verbindungstest darf `website_connected` auf wahr wechseln. Erstellung/Veröffentlichung, Domain/DNS-Schreibzugriff und Bestellungen erhalten getrennte Aufträge und Freigaben.
 
@@ -71,7 +71,7 @@ Der Abnahmelauf muss Zugangsentzug, falschen Kunden, unzulässige Zieladressen, 
 
 - Offizielle API-, SDK-, WordPress- und Partnerdokumentation gelesen; Versionswechsel und Tarifgrenzen berücksichtigt. Einzelne Hostinger-Referenzseiten waren nicht abrufbar; die Einrichtungsdetails wurden mit dem offiziellen PHP-SDK abgeglichen.
 - `WEBSITE_DOMAIN.md`, `PRODUCT_EMBED.md` und bestehender Verbindungsstatus gelesen. Der vorhandene Katalog ist weiterhin ein öffentliches Embed, keine installierte Anbieteranbindung.
-- Der erste Prüfstand war eine Dokumentationsänderung. Inzwischen sind die in `WEBSITE_CONNECTION.md` beschriebenen Implementierungskandidaten ergänzt: 322 Node-Tests, lokale Datenbankfälle und ein zurückgerollter nativer Vault-Test bestanden. Keine Änderung an Oberfläche, Schrift, Live-Schema, n8n, CNAME oder laufender Webseite.
+- Der erste Prüfstand war eine Dokumentationsänderung. Inzwischen sind die in `WEBSITE_CONNECTION.md` beschriebenen Implementierungskandidaten ergänzt: 327 Node-Tests, lokale Datenbankfälle und ein zurückgerollter nativer Vault-Test bestanden. Keine Änderung an Oberfläche, Schrift, Live-Schema, n8n, CNAME oder laufender Webseite.
 - PR #57 bleibt offen und getrennt. Sightengine bleibt `VIDEO_PLAN_REQUIRED`. Kein Kauf, keine Tarifänderung, kein Hostingwechsel, kein DNS-Schreibzugriff, kein Social-Media-Upload und keine Kundenwebseite veröffentlicht.
 
 ## Offizielle Quellen

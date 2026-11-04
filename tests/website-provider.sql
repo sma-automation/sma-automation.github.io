@@ -284,5 +284,24 @@ do $$begin
  assert not exists(select 1 from sma_private.website_provider_connections_v1);
  assert (select count(*) from vault.secrets)=1 and exists(select 1 from vault.secrets where id=current_setting('test.unrelated_secret')::uuid);
 end $$;
+-- Signed WordPress bridge keys use the same owner/attempt-bound Vault lifecycle.
+-- This is a structural PEM fixture; crypto import and signatures are tested in PHP/JS.
+set local role authenticated;
+select set_config('request.jwt.claim.sub','fb770000-0000-4000-8000-000000000001',true);
+select set_config('test.bridge_attempt',(public.sma_website_connection_request_v1('prepare',jsonb_build_object('provider','wordpress','expected_revision',3,'request_id',gen_random_uuid()))->>'attempt_id'),true);
+reset role;
+set local role service_role;
+do $$declare u uuid:='fb770000-0000-4000-8000-000000000001';a uuid:=current_setting('test.bridge_attempt')::uuid;v uuid;
+ p jsonb:='{"website_url":"https://example.com/changed-again/","provider_site_id":"wordpress-bridge-fixture","can_read":true}';
+ c jsonb:=jsonb_build_object('bridge_private_key',E'-----BEGIN PRIVATE KEY-----\n'||repeat('A',2000)||E'\n-----END PRIVATE KEY-----\n');begin
+ v:=(public.sma_website_provider_begin_v1(u,a)->>'verification_id')::uuid;
+ assert public.sma_website_provider_finish_v1(u,a,v,p,'{"bridge_private_key":"invalid"}')->>'code'='INVALID_CREDENTIALS';
+ assert public.sma_website_provider_finish_v1(u,a,v,p,c||'{"username":"unexpected"}')->>'code'='INVALID_CREDENTIALS';
+ assert public.sma_website_provider_finish_v1(u,a,v,p,c)->>'state'='verified';
+ assert public.sma_website_provider_credential_v1(u,a,'get')->'credentials'=c;
+ assert public.sma_website_provider_credential_v1(u,a,'forget')->>'state'='disconnected';
+end $$;
+reset role;
+do $$begin assert (select count(*) from vault.secrets)=1,'bridge key removed without touching unrelated secret';end $$;
 rollback;
 select 'website provider credential SQL cases passed (Vault contract double; fixtures rolled back)' as result;
