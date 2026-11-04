@@ -1,6 +1,6 @@
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
 import {createShopButton} from './shop-button.mjs?v=1';
-import {mountDomainVerification} from './domain-verification.mjs?v=1';
+import {mountDomainVerification} from './domain-verification.mjs?v=2';
 
 const messages={
  AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',
@@ -22,32 +22,55 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
  const doc=page.ownerDocument,win=doc.defaultView;
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
  const root=doc.createElement('section');root.id='smaWebsitePreparation';
- root.setAttribute('aria-labelledby','smaWebsitePreparationTitle');
+ root.setAttribute('aria-label','Webseite und Domain einrichten');
  // Only static application text enters innerHTML. Customer values use value/textContent.
- root.innerHTML='<h2 id="smaWebsitePreparationTitle">Deine Webseite vorbereiten</h2>'+
- '<p class="sma-website-intro">Hinterlege deine bestehende Webseite oder deinen Wunsch für eine neue Seite. Neue Webseiten werden individuell mit dir abgestimmt.</p>'+
+ root.innerHTML='<div data-website-overview class="sma-website-overview">'+
+ '<button type="button" class="sma-website-entry" data-website-open="website" aria-controls="smaWebsiteView-website"><span><strong>Webseite einrichten</strong><span>Bestehende Adresse oder Wunsch für eine neue Seite hinterlegen.</span></span><span class="sma-website-entry-arrow" aria-hidden="true">→</span></button>'+
+ '<button type="button" class="sma-website-entry" data-website-open="shop" aria-controls="smaWebsiteView-shop"><span><strong>Shop-Button einbauen</strong><span>Shop-Link, Einbaucode und Vorschau öffnen.</span></span><span class="sma-website-entry-arrow" aria-hidden="true">→</span></button>'+
+ '<button type="button" class="sma-website-entry" data-website-open="domain" aria-controls="smaWebsiteView-domain"><span><strong>Eigene Domain nachweisen</strong><span>DNS-Prüfeintrag erstellen und den Nachweis prüfen.</span></span><span class="sma-website-entry-arrow" aria-hidden="true">→</span></button>'+
+ '</div><div class="sma-website-workspace-header" data-website-toolbar hidden><button type="button" data-website-back class="sma-website-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Webseite &amp; Domain</button></div>'+
+ '<section id="smaWebsiteView-website" data-website-view="website" aria-labelledby="smaWebsitePreparationTitle" hidden><h2 id="smaWebsitePreparationTitle" tabindex="-1">Webseite einrichten</h2>'+
+ '<p class="sma-website-intro">Hinterlege deine bestehende Webseite oder deinen Wunsch für eine neue Seite.</p>'+
  '<form novalidate><fieldset class="sma-website-fields" disabled><legend class="sma-website-sr">Webseite und Domain</legend>'+
  '<div class="sma-website-options"><label><input type="radio" name="website_mode" value="existing" checked> Ich habe bereits eine Webseite</label>'+
  '<label><input type="radio" name="website_mode" value="new"> Ich benötige eine Webseite</label></div>'+
  '<label class="sma-website-field" data-existing>Vorhandene Webseite<input name="website_url" type="text" inputmode="url" autocomplete="url" placeholder="https://meine-firma.at" maxlength="2048"></label>'+
- '<label class="sma-website-field">Wunschdomain <span class="sma-website-optional">(optional)</span><input name="desired_domain" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="meine-firma.at" maxlength="253"><span class="sma-website-help">Ein Domainwunsch ist noch keine Verfügbarkeitsprüfung oder Reservierung.</span></label>'+
+ '<label class="sma-website-field"><span>Wunschdomain <span class="sma-website-optional">(optional)</span></span><input name="desired_domain" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="meine-firma.at" maxlength="253"><span class="sma-website-help">Ein Domainwunsch ist noch keine Verfügbarkeitsprüfung oder Reservierung.</span></label>'+
  '</fieldset><div class="sma-website-actions"><button type="submit" disabled class="sma-website-primary">Vorbereitung speichern</button><button type="button" data-reload>Gespeicherten Stand laden</button></div>'+
- '</form><p class="sma-website-status" role="status" aria-live="polite">Vorbereitung wird geladen …</p>'+
- '<p class="sma-website-help">Das Speichern beauftragt keine Erstellung, kauft keine Domain und veröffentlicht keine Webseite.</p>'+
- '<section class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle"><h3 id="smaWebsiteLinkTitle">SMA-Shop auf deiner Webseite</h3>'+
+ '</form><p class="sma-website-help">Neue Webseiten werden individuell abgestimmt. Das Speichern beauftragt keine Erstellung, kauft keine Domain und veröffentlicht keine Webseite.</p></section>'+
+ '<section id="smaWebsiteView-shop" data-website-view="shop" class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle" hidden><h2 id="smaWebsiteLinkTitle" tabindex="-1">Shop-Button einbauen</h2>'+
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
  '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a><a data-shop-preview target="_blank" rel="noopener noreferrer">Shop-Button testen</a></div>'+
  '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details></div>'+
- '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>';
+ '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>'+
+ '<section id="smaWebsiteView-domain" data-website-view="domain" hidden><div data-domain-panel></div><div class="sma-website-actions" data-domain-setup><button type="button" data-website-open="website">Webadresse hinterlegen</button></div></section>'+
+ '<p class="sma-website-status" role="status" aria-live="polite" hidden></p>';
  const placeholder=page.querySelector('.package-module-slot');
  if(placeholder)placeholder.replaceWith(root);else page.append(root);
  const $=s=>root.querySelector(s),fields=$('fieldset'),status=$('.sma-website-status');
+ page.classList.add('sma-website-managed');
+ let activeView='overview',lastView='website';
+ const viewNames=['website','shop','domain'];
+ function openView(name,{focus=true,scroll=true}={}){
+  if(name!=='overview'&&!viewNames.includes(name))return;
+  activeView=name;if(name!=='overview')lastView=name;
+  for(const panel of root.querySelectorAll('[data-website-view]'))panel.hidden=panel.dataset.websiteView!==name;
+  $('[data-website-overview]').hidden=name!=='overview';$('[data-website-toolbar]').hidden=name==='overview';
+  page.classList.toggle('sma-website-detail',name!=='overview');
+  if(!busy&&!status.classList.contains('sma-website-error'))notice(dirty?'Ungespeicherte Angaben.':'');
+  const target=name==='overview'?$('[data-website-open="'+lastView+'"]'):$('[data-website-view="'+name+'"] h2');
+  if(focus)target?.focus({preventScroll:true});
+  if(scroll)root.scrollIntoView({block:'start',behavior:'auto'});
+ }
+ for(const button of root.querySelectorAll('[data-website-open]'))button.addEventListener('click',()=>openView(button.dataset.websiteOpen));
+ $('[data-website-back]').addEventListener('click',()=>openView('overview'));
  const client=createWebsiteDraftClient({request,getOwnerId,uuid:()=>win.crypto.randomUUID()});
  let destroyed=false,loaded=false,busy=false,dirty=false;
- const domainView=domainRequest?mountDomainVerification({root,request:domainRequest,getOwnerId,onAccessError:error=>{rejectOwner(error);setBusy(false);}}):null;
+ const domainView=domainRequest?mountDomainVerification({root:$('[data-domain-panel]'),asPanel:true,request:domainRequest,getOwnerId,onAccessError:error=>{rejectOwner(error);setBusy(false);notice(messages[error.code],true);}}):null;
+ if(!domainView){$('[data-website-open="domain"]').hidden=true;$('[data-domain-setup]').hidden=true;}
  const mode=()=>root.querySelector('[name="website_mode"]:checked').value;
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing'; };
- function notice(text,error=false){if(destroyed)return;status.textContent=text;status.classList.toggle('sma-website-error',error);}
+ function notice(text,error=false){if(destroyed)return;status.textContent=text;status.hidden=!text;status.classList.toggle('sma-website-error',error);}
  function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
  function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');}}
  function show(state){
@@ -63,21 +86,22 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
   if(link)$('[data-shop-open]').href=link;
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
   loaded=true;dirty=false;
+  $('[data-domain-setup]').hidden=!domainView||draft.mode==='existing'&&Boolean(draft.website_url);
   domainView?.setDraft(state);
  }
  async function load(){
   if(destroyed||busy)return;
   domainView?.invalidate('Vorbereitung wird geladen …');setBusy(true);notice('Vorbereitung wird geladen …');
-  try{const result=await client.load();if(destroyed)return;show(result);notice(result.draft?'Gespeicherte Vorbereitung geladen. Verbindung noch nicht geprüft.':'Du kannst deine Webseite jetzt vorbereiten.');}
+  try{const result=await client.load();if(destroyed)return;show(result);notice('');}
   catch(error){rejectOwner(error);notice(messages[error.code]||'Die Vorbereitung ist gerade nicht erreichbar. Bitte versuche es später erneut.',true);}
   finally{if(!destroyed){setBusy(false);if(!loaded)fields.disabled=true;}}
  }
- $('form').addEventListener('input',()=>{dirty=true;domainView?.invalidate('Speichere die geänderten Angaben vor der Domainprüfung.');toggle();notice('Ungespeicherte Angaben.');});
+ $('form').addEventListener('input',()=>{dirty=true;domainView?.invalidate('Speichere die geänderten Angaben vor der Domainprüfung.');$('[data-domain-setup]').hidden=!domainView;toggle();notice('Ungespeicherte Angaben.');});
  $('form').addEventListener('submit',async event=>{
   event.preventDefault();if(busy||destroyed||!loaded)return;domainView?.invalidate('Vorbereitung wird gespeichert …');setBusy(true);notice('Vorbereitung wird gespeichert …');
   try{
    const result=await client.save({mode:mode(),website_url:mode()==='existing'?$('[name="website_url"]').value:'',desired_domain:$('[name="desired_domain"]').value});
-   if(destroyed)return;show(result);notice('Vorbereitung gespeichert. Verbindung noch nicht geprüft.');
+   if(destroyed)return;show(result);notice('Vorbereitung gespeichert.');
   }catch(error){rejectOwner(error);notice(messages[error.code]||'Das Speichern konnte nicht bestätigt werden. Du kannst denselben Stand erneut speichern.',true);}
   finally{if(!destroyed){setBusy(false);toggle();}}
  });
@@ -93,8 +117,8 @@ export function mountWebsitePreparation({page,request,domainRequest,getOwnerId,s
   catch{$('[data-shop-code]').focus();$('[data-shop-code]').select();notice('Markierten Einbaucode mit Strg+C oder ⌘C kopieren.');}
  });
  // Load only when the existing navigation displays this module.
- const observer=new win.MutationObserver(()=>{if(page.classList.contains('active')&&!dirty&&!loaded)load();});
+ const observer=new win.MutationObserver(()=>{if(!page.classList.contains('active')&&activeView!=='overview')openView('overview',{focus:false,scroll:false});if(page.classList.contains('active')&&!dirty&&!loaded)load();});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
  if(page.classList.contains('active'))load();
- return {destroy(){destroyed=true;domainView?.destroy();observer.disconnect();if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
+ return {destroy(){destroyed=true;domainView?.destroy();observer.disconnect();page.classList.remove('sma-website-managed','sma-website-detail');if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
 }

@@ -1,12 +1,12 @@
 # Domainnachweis für das Kundenmodul
 
-Stand: 4. November 2026. Arbeitsbranch `website-domain-verification`, Ziel `website-v1`.
+Stand: 4. November 2026. Domainnachweis aus PR #60 veröffentlicht; Ziel `website-v1`.
 
 Der Nutzer überlässt die nächste technische Fortsetzung nach dem bestätigten öffentlichen Shop-Klickweg der Umsetzung. Ergänzt wird das Kundenmodul, ohne einen Testshop auf der SMA-Hauptseite zu bewerben. Neue Webseiten bleiben manuelle Projekte; es entsteht kein Baukasten.
 
 ## Verhalten
 
-Unter „Webseite & Domain“ steht die zunächst geschlossene Anleitung „Eigene Domain nachweisen“. Für eine gespeicherte bestehende Webadresse kann der Kunde einen TXT-Prüfeintrag erstellen und Name/Wert kopieren. Die eigentliche DNS-Abfrage erfolgt erst mit „Domainnachweis prüfen“.
+Unter „Webseite & Domain“ öffnet der Einstieg „Eigene Domain nachweisen“ eine eigene Arbeitsansicht. Der Zurück-Button führt zur kompakten Übersicht. Bei fehlender gespeicherter Webadresse führt „Webadresse hinterlegen“ zum Formular. Für eine gespeicherte bestehende Webadresse kann der Kunde einen TXT-Prüfeintrag erstellen und Name/Wert kopieren. Die eigentliche DNS-Abfrage erfolgt erst mit „Domainnachweis prüfen“.
 
 SMA prüft ausschließlich den Eintrag `_sma-verification.<gespeicherter Hostname>`. Wunschdomains werden nicht abgefragt. Der öffentliche Shop-Button bleibt unabhängig vom Nachweis nutzbar. Die Domain muss nicht erneut gekauft oder zu einem anderen Anbieter umgezogen werden. Die Anwendung ändert selbst keine DNS-Einträge.
 
