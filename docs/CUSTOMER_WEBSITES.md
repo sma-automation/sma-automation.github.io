@@ -19,9 +19,9 @@ Der aktuelle öffentliche Shop wird serverseitig aus dem Kundenkonto zugeordnet.
 
 SMA-Seiten verwenden die vorhandene Infrastruktur und eine SMA-Adresse. Es wird kein Hostingvertrag abgeschlossen, keine eigene Domain gekauft und kein DNS-Eintrag geschrieben. Eigene Domains bleiben ein weiterer Schritt. Die [individuelle Gestaltung mit Akzentfarbe und Startseitenmotiv](CUSTOMER_WEBSITE_DESIGN.md) ist über PR #71 live. Der angemeldete Speichertest ist abgeschlossen; der private SHK-Testentwurf wurde anschließend auf Blau mit Hausmotiv zurückgestellt. Die neue Vorlage verwendet Inter mit den bestehenden System-Fallbacks; die genehmigte Dashboard-Schrift und geschützte n8n-Workflows bleiben unverändert.
 
-## Vorbereitete Erweiterung: eigene Bilder
+## Eigene Bilder
 
-[Eigene Firmenlogos und Startseitenbilder](CUSTOMER_WEBSITE_IMAGES.md) sind implementiert und lokal geprüft, aber noch nicht live. Der Kunde wählt sie im bestehenden zugeklappten Gestaltungsbereich und übernimmt sie mit „Änderungen speichern“. Ein eigener privater Speicherweg hält Bilder an den Besitzer und den getrennten veröffentlichten Stand gebunden. 381 Node-Tests, zehn neue Bild-DOM-Szenarien sowie bestehende DOM-/SQL-Prüfungen bestanden. Die Bereitstellung von Datenbank, Bild-Endpunkt und Oberfläche benötigt noch Freigabe. Der Produktbildspeicher und PR #69/#57 bleiben davon getrennt.
+[Eigene Firmenlogos und Startseitenbilder](CUSTOMER_WEBSITE_IMAGES.md) sind über **PR #72 live** und im angemeldeten privaten Kundenablauf geprüft. Der Kunde wählt sie im bestehenden zugeklappten Gestaltungsbereich und übernimmt sie mit „Änderungen speichern“. Ein eigener privater Speicherweg hält Bilder an den Besitzer und den getrennten veröffentlichten Stand gebunden. 381 Node-Tests, zehn neue Bild-DOM-Szenarien sowie bestehende DOM-/SQL-Prüfungen bestanden. Datenbank, geschützter Bild-Endpunkt und Oberfläche sind freigegeben und bereitgestellt. Ein echter PNG-/WebP-Upload mit privatem Speichern und Wiederaufruf war erfolgreich; anonyme Abrufe bleiben gesperrt. Der SHK-Testentwurf ist danach wieder Blau mit Hausmotiv und ohne eigene Bildauswahl (Revision 6). Der Produktbildspeicher und PR #69/#57 bleiben davon getrennt.
 
 ## SHK-Vorschau
 

@@ -1,6 +1,6 @@
 # Eigene Bilder für SMA-Kundenwebseiten
 
-Stand: 4. November 2026. Aufbauend auf der bereits live geprüften Gestaltung aus PR #71 (`website-v1`, Ausgangscommit `f09a230`). **Implementiert und lokal geprüft; noch keine Bereitstellung oder Produktionsänderung.** Die nächste Freigabe betrifft die unten beschriebene Datenbank-, Edge- und Oberflächenänderung. Der bestehende private SHK-Testentwurf bleibt unverändert.
+Stand: 4. November 2026. Aufbauend auf der bereits live geprüften Gestaltung aus PR #71 (`website-v1`, Ausgangscommit `f09a230`). **PR #72 ist nach Freigabe zusammengeführt, live bereitgestellt und im angemeldeten privaten Kundenablauf geprüft.** Der SHK-Testentwurf wurde nach dem Bildtest auf seine ursprüngliche Darstellung zurückgestellt. Einzelheiten und Endzustand unter „Bereitstellung und Live-Abnahme“.
 
 ## Kundenablauf
 
@@ -50,9 +50,9 @@ deno check supabase/functions/sma-website-image/index.ts
 git diff --check
 ```
 
-Ein echter Supabase-Storage-/Edge-Durchlauf ist **noch offen** und kann erst nach freigegebener Bereitstellung geprüft werden. Es wurde kein Produktionsbild hochgeladen, keine Datenbankmigration installiert und keine Kundenwebseite veröffentlicht.
+Die oben aufgeführten lokalen Prüfungen veränderten keine Produktionsdaten. Der anschließend freigegebene echte Supabase-Storage-/Edge-Durchlauf ist inzwischen ebenfalls bestanden; siehe unten. Es wurde keine Kundenwebseite veröffentlicht.
 
-## Bereitstellung nach Freigabe
+## Ausgeführte Bereitstellungsreihenfolge
 
 1. Bestehenden privaten Entwurf und veröffentlichten Zustand lesend sichern/abgleichen. In einer Migration zuerst `supabase/sql/customer-website-images.sql`, danach die aktualisierte `supabase/sql/customer-websites.sql` installieren. Im bestehenden Projekt ist die Webseitentabelle bereits vorhanden. Die Installation verändert keinen gespeicherten Webseiteninhalt.
 2. `supabase/functions/sma-website-image/index.ts` samt lokalen Imports bereitstellen. **`verify_jwt=false`** ist für den öffentlichen Bildpfad und Publishable-Key erforderlich; private Aufrufe werden innerhalb der Funktion über `/auth/v1/user` geprüft. Sie benötigt nur die vorhandenen serverseitigen `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`. Keine neuen Kunden-Credentials oder Browserzugänge.
@@ -62,3 +62,25 @@ Ein echter Supabase-Storage-/Edge-Durchlauf ist **noch offen** und kann erst nac
 Ein Zurückrollen muss die bereits gespeicherten optionalen Bildfelder weiter akzeptieren. Bucket und Bildtabelle nicht als Rollback löschen; zuerst den Uploadweg sperren oder vorwärts korrigieren und vorhandene Referenzen lesbar halten.
 
 PR #70 und #71 sind abgeschlossen und live. PR #69 bleibt separat offen: lokaler WordPress-/MariaDB-Test bestanden, keine externe Testseite vorhanden und weiterhin nur Produktbereich, keine Firmenprofiltexte. PR #57 bleibt separat. Eigene Kundendomains benötigen weiterhin eine konkrete freigegebene Anbindung. Sightengine: `VIDEO_PLAN_REQUIRED`; Meta und Serverumbau später.
+
+
+## Bereitstellung und Live-Abnahme
+
+Die Freigabe des Nutzers erfolgte am 4. November 2026 nach der Vorlage von PR #72 und der lokalen Bildvorschau.
+
+- Migration **`20261104174541_customer_website_images_v1`** installiert. Die bestehenden Funktionsdefinitionen stimmten vorher mit dem freigegebenen Ausgangsstand überein; die installierten Definitionen stimmen mit PR #72 überein. Alle acht überprüften Funktionen behalten den leeren Suchpfad; öffentliche Wrapper sind weiterhin Invoker.
+- Vor und nach der Installation blieb die Prüfsumme der bestehenden Webseitenzeile identisch (`4c20fdb3c95f5e4b0d0bb1f1ecaf9fde`). Genau eine Webseite, null veröffentlichte Seiten, Revision 4 und Blau/Hausmotiv. Der neue Bildspeicher war leer, privat und auf 2 MB PNG/JPEG begrenzt. Browserrollen haben weder direkte Tabellenrechte noch Ausführungsrechte auf dem Bild-Service-RPC; Service-RPC und RLS sind aktiv.
+- Edge-Funktion **`sma-website-image`**, Version 1, ist aktiv. Fehlende Anmeldung liefert HTTP 401 `AUTH_REQUIRED`; ein nicht veröffentlichter Bildabruf liefert HTTP 404 `IMAGE_UNAVAILABLE`, jeweils mit `no-store` und korrekter CORS-Freigabe für die SMA-Oberfläche.
+- Der Advisor meldet für die neue private Tabelle ausschließlich den erwarteten [RLS-ohne-Direktzugriff-INFO-Hinweis](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy). Die weiteren Hinweise betreffen unveränderte vorhandene Funktionen und die Auth-Konfiguration; sie wurden durch diese Erweiterung nicht geändert.
+- PR #72 wurde mit Commit `261890e25c27dfbb02271df8b5c4f734327f3db8` nach `website-v1` zusammengeführt. Auslieferung: [GitHub Pages 41880445762](https://github.com/sma-automation/sma-automation.github.io/actions/runs/41880445762).
+
+- Die Pages-Auslieferung war erfolgreich. Der ausgelieferte Editor und die Editor-, Bild-, Renderer- und API-Module stimmen bytegenau mit der freigegebenen Fassung überein. Das vollständig ausgelesene Edge-Paket stimmt ebenfalls mit allen sieben lokalen Dateien überein.
+- In der vorhandenen angemeldeten Kundensitzung ein synthetisches PNG-Logo und ein WebP-Startseitenbild über die regulären Dateifelder ausgewählt. Beide Uploads erfolgreich: PNG **320 × 160, 4.426 Bytes** und umgewandeltes JPEG **960 × 640, 17.020 Bytes**, jeweils `ready` und mit übereinstimmender Dateigröße im echten privaten Storage.
+- Über **Änderungen speichern** beide Bildbezüge und eine fiktive Bildbeschreibung übernommen: Webseitenrevision **5**, Motiv `image`, weiterhin unveröffentlicht. Private Live-Vorschau erneut geladen: beide Bilder wurden über den authentifizierten Edge-Endpunkt vollständig dekodiert und als Blob-URLs angezeigt. Danach auch den Editor neu geladen: beide Miniaturen, das Motiv und die Bildbeschreibung waren gespeichert. Kein simulierter Speicherweg in diesem Test.
+- Ohne Anmeldung: privater Logo-Abruf HTTP 401 `AUTH_REQUIRED`; Logo und Startseitenbild über den öffentlichen Seitenpfad jeweils HTTP 404 `IMAGE_UNAVAILABLE`; direkter öffentlicher Storage-Abruf ebenfalls abgewiesen (`Bucket not found`). Die öffentliche Webseiten-RPC antwortete weiterhin `NOT_AVAILABLE`.
+- Anschließend beide Bildauswahlen über **Entfernen** und **Änderungen speichern** wieder aus dem Entwurf genommen. Endzustand **Revision 6**, Blau, Hausmotiv, leere Bildbezüge und leere Bildbeschreibung. Genau eine private Webseite; `published`, `published_company` und `published_at` weiterhin leer. Die Prüfsummen der übrigen Webseiteninhalte und des vollständigen Firmenprofils sind vor/nach dem Test identisch.
+- Die zwei kleinen synthetischen Bildkopien bleiben ausschließlich privat und ohne Entwurfsbezug gespeichert. Sie fallen nach 24 Stunden beim nächsten Upload unter die dokumentierte Bereinigung; kein manueller Löschauftrag oder Termin wurde eingerichtet.
+
+![Zwischenstand des privaten Live-Tests mit Logo und Startseitenbild; danach ursprüngliche Darstellung wiederhergestellt](evidence/customer-website-images-live-2026-11-04.jpg)
+
+Der Bildschritt ist abgeschlossen. Der vorhandene SHK-Testentwurf bleibt privat gespeichert. Die bereits abgenommenen Schritte aus PR #70/#71 nicht erneut starten. PR #69 und #57 bleiben separat offen; keine kostenpflichtige Änderung, keine externe WordPress-Testseite und keine öffentliche Kundenveröffentlichung. Eigene Kundendomains bleiben ein gesonderter Schritt mit konkreter Domain-/Anbieterzuordnung.
