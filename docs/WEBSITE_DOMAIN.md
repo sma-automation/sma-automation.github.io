@@ -1,6 +1,6 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
-Stand: 4. November 2026. Ziel `website-v1`. **Die Vorbereitung aus PR #58 ist veröffentlicht und live geprüft.** Der Anschluss `website-shop-link` ergänzt einen kopierbaren Shop-Button und eine öffentliche Prüfansicht; Deployment und abschließende Live-Abnahme werden im zugehörigen PR protokolliert.
+Stand: 4. November 2026. Ziel `website-v1`. **Vorbereitung aus PR #58 und Shop-Button aus PR #59 sind veröffentlicht.** Der öffentliche Klickweg zur Shopseite wurde zusätzlich im Browser des Nutzers anhand seiner Screenshots bestätigt. Der folgende Anschluss ergänzt den [kundengebundenen DNS-Domainnachweis](DOMAIN_VERIFICATION.md).
 
 Der Nutzer hat die kostenfreie Vorbereitung vorgezogen, während Sightengine-Zahlung, Videoprüfung und echter Social-Media-Uploadtest offen bleiben. PR #57 bleibt davon getrennt und ungemergt. Es gibt keinen Auftrag zu Domainkauf, Hostingwechsel, Tarifänderung oder Veröffentlichung einer Kundenwebseite.
 
@@ -71,4 +71,4 @@ npm ci --prefix tests/sql-runtime --ignore-scripts
 node tests/run-website-domain-sql.mjs
 ```
 
-Ein späterer Schritt muss Inhaberschaft und konkrete Art der externen Anbindung nachweisen. Domainregistrierung, Kauf, Hosting, DNS-Änderungen und automatischer Datenabgleich sind nicht Bestandteil dieser Vorbereitung. Sightengine bleibt `VIDEO_PLAN_REQUIRED`; ein echter Uploadtest benötigt weiterhin eine ausdrückliche Freigabe.
+Der neue [Domainnachweis](DOMAIN_VERIFICATION.md) ergänzt eine Prüfung der DNS-Kontrolle für gespeicherte bestehende Webseiten. Der reale Nachweis verlangt einen TXT-Eintrag beim Domainanbieter. Der tatsächliche Button-Einbau auf einer Kundenwebseite ist damit noch nicht geprüft. Domainregistrierung, Kauf, Hostingwechsel, automatisches Ändern von DNS-Einträgen und automatischer Produkt-/Bestellabgleich sind nicht Bestandteil dieser Vorbereitung. Sightengine bleibt `VIDEO_PLAN_REQUIRED`; ein echter Uploadtest benötigt weiterhin eine ausdrückliche Freigabe.
