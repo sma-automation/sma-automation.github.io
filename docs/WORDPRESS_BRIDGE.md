@@ -67,6 +67,8 @@ Die isolierten Testabhängigkeiten sind fest auf PHP.wasm 3.1.62 gesetzt. Das Pa
 
 ## Noch zu verbinden
 
+Ergänzung nach PR #68: Der [kostenlose lokale WordPress-/MariaDB-Praxistest](WORDPRESS_PRACTICAL_TEST.md) ergänzt die bisherigen Speicher-Doubles jetzt um echte WordPress-Seiten, REST-Dispatch, InnoDB-Rücknahme und konkurrierende PHP-/Datenbankverbindungen. 29 Prüfungen und der Parallelfall bestanden. Diese lokale Prüfung verwendet synthetische Freigabe; Ticket-/Adminablauf, öffentliches TLS und externe Darstellung bleiben offen.
+
 1. WordPress-Zieladresse festlegen, den Baustein auf der freigegebenen Testseite installieren und die einmalige Admin-Freigabe durchführen. Echte TLS-Verbindung, WordPress-Rechte, MySQL-Transaktionen und Darstellung dort prüfen. Der SMA-Testshop ist keine externe WordPress-Installation.
 2. Den angeschlossenen dauerhaften Synchronisierungsauftrag auf dieser Testseite abnehmen: verlorene Antworten, konkurrierende Aufträge und fremde Änderungen prüfen. Der reine Verbindungsstatus behält `can_synchronize:false`; die getrennte Auftragsschnittstelle meldet die tatsächlich verfügbare Erstellungs-/Fortsetzungsaktion.
 3. Veröffentlichung, Hostingkäufe, Tarif- und DNS-Änderungen bleiben getrennte Entscheidungen. Die echte Testseite wird nicht automatisch veröffentlicht.
