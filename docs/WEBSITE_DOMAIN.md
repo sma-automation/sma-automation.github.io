@@ -1,6 +1,6 @@
 # Webseite & Domain – kostenfreie Vorbereitung
 
-Stand: 4. November 2026. Arbeitsbranch `website-domain-preparation`, Ziel `website-v1`. **Speicherung installiert und geprüft. Frontend in PR #58; noch nicht veröffentlicht, Browser-Endprüfung offen.**
+Stand: 4. November 2026. Arbeitsbranch `website-domain-preparation`, Ziel `website-v1`. **Speicherung installiert und geprüft; lokale Browserabnahme abgeschlossen. Frontend-Freigabe und Live-Abnahme werden in PR #58 protokolliert.**
 
 Der Nutzer hat die kostenfreie Vorbereitung vorgezogen, während Sightengine-Zahlung, Videoprüfung und echter Social-Media-Uploadtest offen bleiben. PR #57 bleibt davon getrennt und ungemergt. Es gibt keinen Auftrag zu Domainkauf, Hostingwechsel, Tarifänderung oder Veröffentlichung einer Kundenwebseite.
 
@@ -43,15 +43,16 @@ Der bestehende Dashboard-HTML-Workflow wird nicht verändert. Der äußere Wrapp
 - In der Live-Datenbank verhindert zusätzlich der eindeutige Index `sma_kunden_user_id_key` doppelte Nutzerzuordnungen. Der erste Live-Fixturelauf wurde beim absichtlichen Duplikat durch diesen Index abgebrochen und vollständig zurückgerollt. Der anschließende Live-Lauf ohne dieses künstliche Duplikat bestand. Die lokale Fixture ohne diesen Index prüft zusätzlich die defensive Ablehnung durch den RPC selbst.
 - Rollenprüfung live: kein anonymer RPC-Aufruf, kein direkter Tabellenzugriff für Kunden; öffentlicher Wrapper bleibt `SECURITY INVOKER`.
 - Security-Advisors: keine neue Warnung. Ein zusätzlicher Hinweis [RLS ohne Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) entspricht der beabsichtigten Sperre aller direkten Tabellenzugriffe. Die schon vorher bestehenden Hinweise/Warnungen anderer Tabellen, Funktionen und Auth-Einstellungen wurden nicht verändert.
-- Browserteilprüfung in einer isolierten Vorschau: Formular wird anstelle des Platzhalters eingebunden; leere vorhandene Webadresse erhält die richtige Pflichtfeldmeldung. Die Vorschau verwendet ausschließlich synthetische Daten. **Wiederholung nach verlorener Antwort, Kopieren, schmale Darstellung und die authentifizierte Live-Einbettung sind im Browser noch nicht abgenommen.** Die Browsersteuerung ist während der Prüfung mehrfach mit Timeout ausgefallen; auch ihr Neustart war nicht erreichbar. Ein angeklickter Speichertest wird ausdrücklich nicht als bestanden gezählt.
-- Frontend weiterhin unveröffentlicht; PR #58 bleibt Entwurf. Der Zielbranch, PR #57 und alle n8n-Originalworkflows wurden in diesem Schritt nicht geändert. Keine Tarif-, Registrar-, DNS-, Hosting- oder Social-Media-Aktion wurde ausgeführt.
+- Browserabnahme am 4. November 2026 mit synthetischen Daten bestanden: Formular ersetzt den Platzhalter, Pflichtfeldmeldung, Speichern/Neuladen bestehender und neuer Webseiten, Normalisierung der Adresse, verlorene Antwort und identische Wiederholung ohne zweite Änderung, Ladefehler mit erfolgreichem Wiederholen, exakter kopierter Shop-Link, Zugriffsentzug mit geleerten/gesperrten Feldern und entferntem Shop-Link, Entfernen des Moduls mit Wiederherstellung des ursprünglichen Platzhalters.
+- Mobilprüfung in einem 390-Pixel-Frame (375 Pixel nutzbare Breite mit Scrollleiste): kein horizontaler Überlauf, gestapelte Aktionen und erfolgreicher Speichervorgang. Der lokale HTTP-Prüfaufbau nutzt synthetische Anfrage-UUIDs; das Produkt verwendet `crypto.randomUUID()` auf der bestehenden HTTPS-Domain.
+- Der zwischenzeitliche Ausfall der Browsersteuerung ist behoben. Die lokale Prüfung simuliert die API; die zuvor bestandene SQL-Prüfung deckt die installierte Speicherung ab. Beides zusammen ersetzt nicht die abschließende authentifizierte Einbettung nach dem Deployment.
+- PR #57 und alle n8n-Originalworkflows bleiben unverändert. Keine Tarif-, Registrar-, DNS-, Hosting- oder Social-Media-Aktion.
 
-## Fortsetzung
+## Freigabe und Betrieb
 
-1. PR #58 unverändert auf dem aktuellen Head aufnehmen. Die Datenbankmigration ist bereits installiert und muss nicht erneut angewendet werden.
-2. Sobald die Browsersteuerung wieder erreichbar ist, Desktop-/Mobilansicht und vollständigen Formularablauf mit synthetischen Daten prüfen: Speichern/Neuladen, verlorene Antwort ohne zweite Änderung, Ladefehler/erneutes Laden, Kopieren, Zugriffsentzug und Entfernen des Moduls beim Abmelden.
-3. Zielbranch und PR-Head vor dem Merge erneut vergleichen. Erst nach der ausstehenden Browserprüfung das Frontend nach `website-v1` übernehmen und den vorhandenen Deploymentweg verwenden.
-4. Authentifiziertes Laden im echten Delta-Dashboard prüfen. Einen echten Kundeneintrag nur mit zutreffenden Kundenangaben speichern; die erfolgreiche SQL-Fixture ist kein Nachweis für einen bereits erfolgten Live-UI-Speichervorgang.
+Die Migration ist bereits installiert und wird nicht erneut angewendet. PR #58 führt das Frontend nach Vergleich des aktuellen Zielbranchs über den bestehenden GitHub-Pages-Deploymentweg ein. Der abschließende Deployment- und Live-Prüfstand steht in der PR-Beschreibung.
+
+Im echten Delta-Dashboard wird Laden und Navigation geprüft. Einen echten Kundeneintrag nur mit zutreffenden Kundenangaben speichern; die erfolgreiche SQL-Fixture und lokale Vorschau werden nicht als bereits erfolgter Live-UI-Speichervorgang ausgegeben.
 
 ```sh
 node --test tests/*.test.cjs
