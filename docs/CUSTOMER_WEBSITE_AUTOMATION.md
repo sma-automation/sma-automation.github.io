@@ -35,6 +35,12 @@ Providerantworten. Requests gehen nur an den fest vorgegebenen IONOS-API-Host,
 ohne Redirects, mit Zeit- und Antwortgrößenlimit. Zugangsdaten bleiben in der
 geschützten Laufzeit. Der Adapter ist nicht mit dem Browser verbunden.
 
+Die Schlüsselprüfung toleriert kopierte Rand-Leerzeichen/Zeilenumbrüche vor,
+nach und zwischen den vollständigen Teilen `Präfix.geheimerSchlüssel`.
+Innerhalb der Teile wird nichts verändert; fehlende Teile oder Trennpunkte
+werden nicht geraten. Feste Fehlercodes unterscheiden diese Eingabefehler,
+ohne den Schlüssel, seine Teile oder Providerantworten auszugeben.
+
 `preflight.mjs` prüft ausschließlich lesend die bekannte Cloudflare-Testadresse
 und deren IONOS-CNAME. Ein positiver Preflight bedeutet vorhandene Provider-
 Lesbarkeit und passenden Bestandszustand, **keinen** erfolgreichen automatischen
@@ -44,6 +50,8 @@ Neuaufbau und keinen Nachweis der Schreibberechtigung.
 
 1. Einmalige sichere Freigabe der Domainverwaltung. Für den IONOS-Testaccount
    wird `IONOS_DNS_API_KEY` als GitHub Actions Repository Secret verwendet.
+   Der Eintrag ist jetzt vorhanden; sein Format muss noch korrigiert werden
+   (aktueller Test: `IONOS_KEY_SEPARATOR_MISSING`).
    Ein Cloudflare-Pages-Token ersetzt diesen IONOS-Zugang nicht. Der vorhandene
    temporäre Cloudflare-Token läuft laut Einrichtung am 12. November 2026 ab;
    der Dauerbetrieb braucht einen betreuten Ablauf-/Erneuerungsprozess.
@@ -71,16 +79,24 @@ geprüfte Verbindungen, keine pauschale Zusage für beliebige Registrare.
 
 ## Prüfungen
 
-15 neue Tests für Plan-/Zonenbegrenzung, bestehende Root-/Mail-Daten, Konflikte,
+17 Tests für Schlüsselzusammensetzung, Plan-/Zonenbegrenzung, bestehende Root-/Mail-Daten, Konflikte,
 parallele Änderungen vor dem Schreiben, verlorene Schreibantworten, Wiederholung,
 falsche Providerantworten, Größenlimits und den rein lesenden Preflight bestanden.
 Der [echte Preflight-Lauf](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42043729793)
-am 5. November 2026, 14:18 UTC, hat die 15 Adaptertests auch auf GitHub bestanden.
-Cloudflare bestätigt `TEST_DOMAIN_ACTIVE`. Der IONOS-Teil meldet
-`IONOS_ACCESS_REQUIRED`: `IONOS_DNS_API_KEY` ist nicht hinterlegt. Deshalb endet
-der Lauf erwartungsgemäß ohne Bereitschaftsbestätigung; `dnsModified:false`.
+am 5. November 2026, 14:18 UTC, hat die ursprünglichen 15 Adaptertests auch auf
+GitHub bestanden. Damals fehlte der IONOS-Eintrag. Nach Freischaltung des
+IONOS-API-Produkts und Hinterlegung des Secrets meldete Versuch 3 des Laufs
+um 15:28 UTC `IONOS_KEY_FORMAT_INVALID`.
+
+Der [präzisierte Preflight](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42055976438)
+auf Commit `6ab4f74e2e266178919c824d3c0d3d6ba13935d7` bestätigt am
+5. November 2026, 15:32 UTC: alle 17 Adaptertests bestanden,
+`cloudflare:TEST_DOMAIN_ACTIVE`, `ionos:IONOS_KEY_SEPARATOR_MISSING`,
+`dnsModified:false`, `ready:false`. Im hinterlegten Wert fehlt der Trennpunkt;
+welche beiden tatsächlichen Teile gespeichert wurden, wird nicht ausgegeben.
+Es erfolgt noch kein IONOS-API-Aufruf, solange die Zusammensetzung ungültig ist.
 Noch kein IONOS-Schreibaufruf, kein neuer Host und keine Kundendatenänderung in
-diesem Block. Die vollständige lokale Node-Suite umfasst jetzt 414 bestandene Tests.
+diesem Block. Die vollständige lokale Node-Suite umfasst jetzt 416 bestandene Tests.
 
 ```sh
 node --test tests/website-setup-ionos.test.cjs
