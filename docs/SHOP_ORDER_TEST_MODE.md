@@ -1,11 +1,11 @@
 # Shopify test-order classification
 
-Status: prepared, not deployed (2026-11-05).
+Status: backend deployed and verified; dashboard release tracked in PR #80
+(2026-11-05, UTC).
 
-The dashboard currently displays test order #1010 as paid without identifying
-the simulated payment. Shopify's authoritative `Order.test` flag now has a
-complete proposed path from the signed order webhook and periodic recovery to
-the canonical order table and dashboard.
+Shopify's authoritative `Order.test` flag is preserved from the signed order
+webhook and periodic recovery through the canonical order table. The dashboard
+change identifies simulated payments explicitly, including test order #1010.
 
 ## Behaviour
 
@@ -34,14 +34,34 @@ Repeated deliveries preserve the canonical row and mirror timestamp.
   non-test orders. #1010 is a test order. No orders, payments or inventory were
   changed for this inspection.
 
-The initial live rollback-preflight confirmation expired without execution.
-The SQL suites were instead executed in an isolated synthetic database.
-Read-only verification confirmed ten production orders and no new column.
+The SQL suites ran in an isolated synthetic database. Production verification
+then confirmed the following deployment results:
+
+- Migration `track_shopify_order_test_mode` applied both SQL files atomically.
+- Recovery workflow `wudynmKEwHU8QPQ4` published with the updated query and
+  validator only. Export comparison confirmed all other nodes, connections and
+  settings were unchanged.
+- Signed webhook workflow `GHBsYQcyt0JLFvRP` published version
+  `68d295c6-c07f-4fdc-8395-528d4a92b3d6` with 511 nodes. The only change from
+  the former published version is the additional JSON body field in
+  **SMA – Supabase – Bestellung spiegeln**. HMAC verification is unchanged.
+- The separate 515-node inventory draft was backed up and restored. Draft
+  version `5927ba8a-b235-42cc-b13f-abf800a3e146` matches the original draft
+  exactly except for the same test-status field. It remains unpublished.
+- Recovery completed at 22:52:03 UTC: ten rows classified, six test and four
+  non-test, no inserts and no timestamp conflicts. Hashes excluding only the
+  new flag and mirror timestamp confirmed all business values unchanged.
+- Repeat recovery completed at 23:02:08 UTC: ten checked, ten unchanged, zero
+  inserts, zero updates and zero conflicts. #1010 remains 85.79 EUR and test.
+- Supabase security-advisor findings are unchanged from the pre-migration
+  baseline; no grants, policies or new public functions were added.
+
+No new purchase was used for this verification. The webhook deployment was
+verified by exact export comparison; recovery was exercised end to end.
 
 ## Deployment sequence
 
-1. Restore the n8n authenticated session; it currently shows the sign-in page.
-   Export the active workflow and separately saved draft before editing.
+1. Export the active workflow and separately saved draft before editing.
 2. Apply `supabase/sql/order-test-mode.sql` followed by
    `supabase/sql/order-reconciliation.sql` in one migration. The column is
    nullable with no default; existing senders remain compatible.
