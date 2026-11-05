@@ -93,7 +93,8 @@ export function createIonosDns({apiKey,authorizedZones=[],fetchImpl=fetch}){
   }catch{fail(create?'DNS_WRITE_UNCONFIRMED':'IONOS_UNAVAILABLE');}
   if(!response.ok){
    await response.body?.cancel().catch(()=>{});
-   if([401,403].includes(response.status))fail('IONOS_ACCESS_DENIED');
+   if(response.status===401)fail('IONOS_KEY_REJECTED');
+   if(response.status===403)fail('IONOS_ACCESS_FORBIDDEN');
    if(response.status===429)fail('IONOS_RATE_LIMITED');
    fail(create?'DNS_WRITE_UNCONFIRMED':'IONOS_UNAVAILABLE');
   }

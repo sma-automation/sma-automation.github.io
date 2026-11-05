@@ -121,7 +121,7 @@ test('nonnative zones and inconsistent/malformed records stop before writes',asy
  }
 });
 test('provider errors are bounded fixed codes and never leak credential/body',async()=>{
- for(const [status,expected] of [[401,'IONOS_ACCESS_DENIED'],[403,'IONOS_ACCESS_DENIED'],[429,'IONOS_RATE_LIMITED'],[500,'IONOS_UNAVAILABLE'],[302,'IONOS_UNAVAILABLE']]){
+ for(const [status,expected] of [[401,'IONOS_KEY_REJECTED'],[403,'IONOS_ACCESS_FORBIDDEN'],[429,'IONOS_RATE_LIMITED'],[500,'IONOS_UNAVAILABLE'],[302,'IONOS_UNAVAILABLE']]){
   const dns=await client({fetchImpl:async()=>new Response(key,{status})});await assert.rejects(()=>dns.inspect(plan),e=>e.code===expected&&!e.message.includes(key));
  }
  const malformed=await client({fetchImpl:async()=>new Response('not JSON '+key)});await assert.rejects(()=>malformed.inspect(plan),/IONOS_RESPONSE_INVALID/);
