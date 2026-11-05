@@ -50,8 +50,9 @@ Neuaufbau und keinen Nachweis der Schreibberechtigung.
 
 1. Einmalige sichere Freigabe der Domainverwaltung. Für den IONOS-Testaccount
    wird `IONOS_DNS_API_KEY` als GitHub Actions Repository Secret verwendet.
-   Der Eintrag ist jetzt vorhanden; sein Format muss noch korrigiert werden
-   (aktueller Test: `IONOS_KEY_SEPARATOR_MISSING`).
+   Der Eintrag ist vorhanden und sein Format ist jetzt gültig. IONOS lehnt
+   jedoch die Anmeldung mit HTTP 401 ab (`IONOS_KEY_REJECTED`). Ein gültiges
+   zusammengehöriges Präfix-/Secret-Paar ist weiterhin erforderlich.
    Ein Cloudflare-Pages-Token ersetzt diesen IONOS-Zugang nicht. Der vorhandene
    temporäre Cloudflare-Token läuft laut Einrichtung am 12. November 2026 ab;
    der Dauerbetrieb braucht einen betreuten Ablauf-/Erneuerungsprozess.
@@ -88,15 +89,26 @@ GitHub bestanden. Damals fehlte der IONOS-Eintrag. Nach Freischaltung des
 IONOS-API-Produkts und Hinterlegung des Secrets meldete Versuch 3 des Laufs
 um 15:28 UTC `IONOS_KEY_FORMAT_INVALID`.
 
-Der [präzisierte Preflight](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42055976438)
-auf Commit `6ab4f74e2e266178919c824d3c0d3d6ba13935d7` bestätigt am
-5. November 2026, 15:32 UTC: alle 17 Adaptertests bestanden,
-`cloudflare:TEST_DOMAIN_ACTIVE`, `ionos:IONOS_KEY_SEPARATOR_MISSING`,
-`dnsModified:false`, `ready:false`. Im hinterlegten Wert fehlt der Trennpunkt;
-welche beiden tatsächlichen Teile gespeichert wurden, wird nicht ausgegeben.
-Es erfolgt noch kein IONOS-API-Aufruf, solange die Zusammensetzung ungültig ist.
+Der [Preflight vom 5. November 2026, 15:32 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42055976438)
+meldete zunächst `IONOS_KEY_SEPARATOR_MISSING`. Nach Korrektur des gespeicherten
+Eintrags bestand die Formatprüfung; Versuch 2 um 15:51 UTC wurde von IONOS mit
+`IONOS_ACCESS_DENIED` abgewiesen.
+
+Der [genauere Zugangstest um 15:53 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42059565638)
+auf Commit `8e75b82dcba3d9ac805df5612558c35706e13bf7` unterscheidet HTTP 401
+(`IONOS_KEY_REJECTED`) von HTTP 403 (`IONOS_ACCESS_FORBIDDEN`). Ergebnis:
+alle 17 Adaptertests bestanden, `cloudflare:TEST_DOMAIN_ACTIVE`,
+`ionos:IONOS_KEY_REJECTED`, `dnsModified:false`, `ready:false`.
+Die HTTP-401-Antwort kommt beim lesenden Abruf der DNS-Zonen; ein fehlender
+Trennpunkt ist damit nicht mehr der aktuelle Blocker. Ob der geheime Teil
+falsch kopiert wurde, zu einem anderen Präfix gehört oder anderweitig ungültig
+ist, lässt sich aus HTTP 401 allein nicht unterscheiden. Kein Schlüsselwert
+oder ungefilterter Provider-Antworttext wird ausgegeben.
+
 Noch kein IONOS-Schreibaufruf, kein neuer Host und keine Kundendatenänderung in
-diesem Block. Die vollständige lokale Node-Suite umfasst jetzt 416 bestandene Tests.
+diesem Block. Die letzte vollständige lokale Node-Suite bestand mit 416 Tests;
+die anschließende Unterscheidung der HTTP-Fehler wurde mit allen 17 betroffenen
+DNS-/Preflight-Tests lokal und im echten GitHub-Lauf geprüft.
 
 ```sh
 node --test tests/website-setup-ionos.test.cjs
