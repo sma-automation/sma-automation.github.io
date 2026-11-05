@@ -7,6 +7,21 @@ export class SetupError extends Error {
  constructor(code){super(code);this.code=code;}
 }
 const fail=code=>{throw new SetupError(code);};
+function credential(value){
+ // Copy/paste may add whitespace around the two complete parts. Never remove
+ // characters within either part, guess a missing separator, or log its value.
+ if(typeof value!=='string'||!value.trim())fail('IONOS_ACCESS_REQUIRED');
+ if(value.length>2048)fail('IONOS_KEY_FORMAT_INVALID');
+ const parts=value.trim().split('.');
+ if(parts.length===1)fail('IONOS_KEY_SEPARATOR_MISSING');
+ if(parts.length!==2)fail('IONOS_KEY_SEPARATOR_INVALID');
+ const [prefix,secret]=parts.map(part=>part.trim());
+ if(!prefix||!secret)fail('IONOS_KEY_PART_MISSING');
+ if(/\s/u.test(prefix+secret))fail('IONOS_KEY_INTERNAL_WHITESPACE');
+ if(!/^[A-Za-z0-9_-]+$/.test(prefix)||!/^[A-Za-z0-9_-]+$/.test(secret))fail('IONOS_KEY_CHARACTERS_INVALID');
+ if(prefix.length<8||prefix.length>128||secret.length<16||secret.length>512)fail('IONOS_KEY_LENGTH_INVALID');
+ return prefix+'.'+secret;
+}
 function hostname(value){
  if(typeof value!=='string'||value.length>253||value!==value.toLowerCase()||value.endsWith('.'))fail('INVALID_HOSTNAME');
  const labels=value.split('.');
@@ -65,8 +80,7 @@ async function limitedBody(response){
 }
 export function createIonosDns({apiKey,authorizedZones=[],fetchImpl=fetch}){
  // The allowlist comes from the private provider connection, never a browser.
- if(typeof apiKey!=='string'||!apiKey)fail('IONOS_ACCESS_REQUIRED');
- if(!/^[A-Za-z0-9_-]{8,128}\.[A-Za-z0-9_-]{16,512}$/.test(apiKey))fail('IONOS_KEY_FORMAT_INVALID');
+ apiKey=credential(apiKey);
  const allowed=new Set(authorizedZones.map(hostname));
  if(!allowed.size)fail('IONOS_ZONE_AUTHORIZATION_REQUIRED');
  async function request(path,{body,method='GET'}={}){

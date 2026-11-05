@@ -37,9 +37,38 @@ test('DNS plan only accepts a subdomain within an explicitly authorized zone and
 });
 test('missing/malformed credential and missing private allowlist fail before network',async()=>{
  const {createIonosDns}=await modulePromise;
- for(const apiKey of [undefined,'','Bearer '+key,key+'\n','public.secret'])assert.throws(()=>createIonosDns({apiKey,authorizedZones:[plan.zone]}));
+ for(const apiKey of [undefined,'','Bearer '+key,'public.secret'])assert.throws(()=>createIonosDns({apiKey,authorizedZones:[plan.zone]}));
  assert.throws(()=>createIonosDns({apiKey:key}),/ZONE_AUTHORIZATION_REQUIRED/);
  const f=fixture(),dns=await client(f,{authorizedZones:['other.com']});await assert.rejects(()=>dns.ensureCname(plan),/ZONE_NOT_AUTHORIZED/);assert.equal(f.calls.length,0);
+});
+test('copy whitespace around complete key parts is normalized before sending the header',async()=>{
+ for(const apiKey of [' '+key+'\r\n',key.replace('.',' \n.\t'), '\u00a0'+key+'\u00a0']){
+  const f=fixture({records:[cname()]});
+  const result=await (await client(f,{apiKey})).inspect(plan);
+  assert.equal(result.state,'present');assert.equal(f.calls.length,2);
+  assert.ok(f.calls.every(c=>c.options.headers['X-API-Key']===key&&c.options.method==='GET'));
+ }
+});
+test('malformed keys receive actionable fixed codes without revealing either part or making requests',async()=>{
+ const {createIonosDns}=await modulePromise;let calls=0;
+ for(const [apiKey,expected] of [
+  [' \r\n','IONOS_ACCESS_REQUIRED'],
+  [key.replace('.',''),'IONOS_KEY_SEPARATOR_MISSING'],
+  ['publicprefix.','IONOS_KEY_PART_MISSING'],
+  ['.'+key.split('.')[1],'IONOS_KEY_PART_MISSING'],
+  [key+'.extra','IONOS_KEY_SEPARATOR_INVALID'],
+  [key.replace('ABC','A\nBC'),'IONOS_KEY_INTERNAL_WHITESPACE'],
+  [key.replace('_','!'),'IONOS_KEY_CHARACTERS_INVALID'],
+  ['publicprefix.short','IONOS_KEY_LENGTH_INVALID'],
+  ['x'.repeat(2049),'IONOS_KEY_FORMAT_INVALID']
+ ]){
+  assert.throws(()=>createIonosDns({apiKey,authorizedZones:[plan.zone],fetchImpl:async()=>{calls++;}}),e=>e.code===expected&&e.message===expected&&!e.stack.includes(apiKey));
+ }
+ assert.equal(calls,0);
+ const {preflight}=await preflightPromise;
+ const report=await preflight({env:{IONOS_DNS_API_KEY:key.replace('.','')},fetchImpl:async()=>{calls++;}});
+ assert.deepEqual(report,{cloudflare:'CLOUDFLARE_ACCESS_REQUIRED',ionos:'IONOS_KEY_SEPARATOR_MISSING',dnsModified:false,ready:false});
+ assert.equal(calls,0);assert.ok(!JSON.stringify(report).includes(key.split('.')[1]));
 });
 test('inspection never writes and returns only the matched zone/record identifiers',async()=>{
  const f=fixture({records:[cname()]});const result=await (await client(f)).inspect(plan);
