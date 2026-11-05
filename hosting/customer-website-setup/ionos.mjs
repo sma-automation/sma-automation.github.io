@@ -7,7 +7,7 @@ export class SetupError extends Error {
  constructor(code){super(code);this.code=code;}
 }
 const fail=code=>{throw new SetupError(code);};
-function credential(value,publicPrefix){
+export function resolveIonosApiKey(value,publicPrefix){
  // Copy/paste may add whitespace around the two complete parts. Never remove
  // characters within either part, guess a missing separator, or log its value.
  if(typeof value!=='string'||!value.trim())fail('IONOS_ACCESS_REQUIRED');
@@ -100,7 +100,7 @@ async function limitedBody(response){
 }
 export function createIonosDns({apiKey,publicPrefix,authorizedZones=[],fetchImpl=fetch}){
  // The allowlist comes from the private provider connection, never a browser.
- apiKey=credential(apiKey,publicPrefix);
+ apiKey=resolveIonosApiKey(apiKey,publicPrefix);
  const allowed=new Set(authorizedZones.map(hostname));
  if(!allowed.size)fail('IONOS_ZONE_AUTHORIZATION_REQUIRED');
  async function request(path,{body,method='GET'}={}){

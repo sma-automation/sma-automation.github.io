@@ -1,0 +1,35 @@
+name: Customer domain automation - temporary DNS write check
+
+on:
+  push:
+    branches: [customer-domain-automation]
+    paths:
+      - .github/workflows/customer-domain-dns-writecheck.yml
+      - hosting/customer-website-setup/write-probe.mjs
+      - tests/website-setup-write-probe.test.cjs
+
+permissions: {}
+concurrency:
+  group: sma-customer-domain-dns-writecheck
+  cancel-in-progress: false
+
+jobs:
+  temporary-dns-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch exact public source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/sma-domain-writecheck"
+          git -C "$RUNNER_TEMP/sma-domain-writecheck" remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git -C "$RUNNER_TEMP/sma-domain-writecheck" fetch --depth=1 origin "$GITHUB_SHA"
+          git -C "$RUNNER_TEMP/sma-domain-writecheck" checkout --detach FETCH_HEAD
+      - name: Verify DNS conflict and exact cleanup handling
+        run: node --test "$RUNNER_TEMP/sma-domain-writecheck/tests/website-setup-ionos.test.cjs" "$RUNNER_TEMP/sma-domain-writecheck/tests/website-setup-write-probe.test.cjs"
+      - name: Create, repeat and remove one temporary SMA test record
+        env:
+          IONOS_DNS_API_KEY: ${{ secrets.IONOS_DNS_API_KEY }}
+          IONOS_DNS_API_PREFIX: 3a7441c7fe44415ea2e39ce4265311d4
+        run: node "$RUNNER_TEMP/sma-domain-writecheck/hosting/customer-website-setup/write-probe.mjs"
