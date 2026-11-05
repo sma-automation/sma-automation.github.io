@@ -41,6 +41,16 @@ Innerhalb der Teile wird nichts verändert; fehlende Teile oder Trennpunkte
 werden nicht geraten. Feste Fehlercodes unterscheiden diese Eingabefehler,
 ohne den Schlüssel, seine Teile oder Providerantworten auszugeben.
 
+Alternativ kann der Aufrufer den öffentlichen Präfix explizit separat
+konfigurieren (`publicPrefix`). Dann darf der geschützte Wert nur den geheimen
+Teil enthalten; der Adapter setzt genau diese beiden Werte zusammen. Ein
+vollständiges Paar bleibt zulässig, muss aber zum konfigurierten Präfix passen.
+Ein öffentlicher Präfix allein wird als `IONOS_SECRET_REQUIRED` abgewiesen.
+Der Test-Workflow konfiguriert den vom Nutzer gezeigten öffentlichen Präfix des
+Schlüssels `SMA-DNS-Automatisierung-2` als `IONOS_DNS_API_PREFIX`; der geheime
+Wert bleibt ausschließlich im GitHub Secret. Es werden keine Präfixe geraten
+und keine alternativen Schlüssel durchprobiert.
+
 `preflight.mjs` prüft ausschließlich lesend die bekannte Cloudflare-Testadresse
 und deren IONOS-CNAME. Ein positiver Preflight bedeutet vorhandene Provider-
 Lesbarkeit und passenden Bestandszustand, **keinen** erfolgreichen automatischen
@@ -50,9 +60,12 @@ Neuaufbau und keinen Nachweis der Schreibberechtigung.
 
 1. Einmalige sichere Freigabe der Domainverwaltung. Für den IONOS-Testaccount
    wird `IONOS_DNS_API_KEY` als GitHub Actions Repository Secret verwendet.
-   Der Eintrag ist vorhanden und sein Format ist jetzt gültig. IONOS lehnt
-   jedoch die Anmeldung mit HTTP 401 ab (`IONOS_KEY_REJECTED`). Ein gültiges
-   zusammengehöriges Präfix-/Secret-Paar ist weiterhin erforderlich.
+   Der Eintrag ist vorhanden. Nach mehreren Kopierversuchen ohne Trennpunkt
+   ergänzt der Test-Workflow den explizit konfigurierten öffentlichen Präfix
+   jetzt selbst. Der Zugangstest um 16:24 UTC erreicht IONOS, wird aber mit
+   HTTP 401 abgewiesen (`IONOS_KEY_REJECTED`). Der zum neuen Präfix gehörende
+   geheime Wert muss deshalb noch korrekt im Secret hinterlegt werden; die
+   Ursache des abgewiesenen Werts ist nicht ausgelesen oder bewiesen.
    Ein Cloudflare-Pages-Token ersetzt diesen IONOS-Zugang nicht. Der vorhandene
    temporäre Cloudflare-Token läuft laut Einrichtung am 12. November 2026 ab;
    der Dauerbetrieb braucht einen betreuten Ablauf-/Erneuerungsprozess.
@@ -80,7 +93,7 @@ geprüfte Verbindungen, keine pauschale Zusage für beliebige Registrare.
 
 ## Prüfungen
 
-17 Tests für Schlüsselzusammensetzung, Plan-/Zonenbegrenzung, bestehende Root-/Mail-Daten, Konflikte,
+20 Tests für Schlüsselzusammensetzung, Plan-/Zonenbegrenzung, bestehende Root-/Mail-Daten, Konflikte,
 parallele Änderungen vor dem Schreiben, verlorene Schreibantworten, Wiederholung,
 falsche Providerantworten, Größenlimits und den rein lesenden Preflight bestanden.
 Der [echte Preflight-Lauf](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42043729793)
@@ -105,9 +118,22 @@ falsch kopiert wurde, zu einem anderen Präfix gehört oder anderweitig ungülti
 ist, lässt sich aus HTTP 401 allein nicht unterscheiden. Kein Schlüsselwert
 oder ungefilterter Provider-Antworttext wird ausgegeben.
 
+Versuch 2 desselben Laufs um 16:10 UTC und Versuch 3 um 16:20 UTC meldeten nach
+weiteren Secret-Aktualisierungen `IONOS_KEY_SEPARATOR_MISSING`. Diese Versuche
+erreichten IONOS noch nicht. Sie belegen keine erneute IONOS-Ablehnung.
+
+Der [Lauf mit getrennt konfiguriertem öffentlichem Präfix](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42064167734)
+am 5. November 2026, 16:24 UTC, auf Commit
+`6958d9f5ec6a5dc17d6b494f2cc3fe161a1bf165` bestand alle 20 betroffenen Tests.
+Ergebnis: `cloudflare:TEST_DOMAIN_ACTIVE`, `ionos:IONOS_KEY_REJECTED`,
+`dnsModified:false`, `ready:false`. Die automatische Ergänzung des bekannten
+Präfixes ist damit technisch geprüft; ein erfolgreicher Zugang ist noch nicht
+bewiesen. Der Nutzer muss nur den geheimen Wert aus dem unteren IONOS-Feld
+„Verschlüsselung“ speichern, nicht mehr beide Teile manuell zusammensetzen.
+
 Noch kein IONOS-Schreibaufruf, kein neuer Host und keine Kundendatenänderung in
 diesem Block. Die letzte vollständige lokale Node-Suite bestand mit 416 Tests;
-die anschließende Unterscheidung der HTTP-Fehler wurde mit allen 17 betroffenen
+die anschließende getrennte Präfix-Konfiguration wurde mit allen 20 betroffenen
 DNS-/Preflight-Tests lokal und im echten GitHub-Lauf geprüft.
 
 ```sh
