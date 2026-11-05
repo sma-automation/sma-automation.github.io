@@ -1,5 +1,7 @@
 # Testdomain: geprüfter Hostingweg
 
+> Fortschreibung 5. November: Der unten beschriebene Vorbereitungsstand ist historisch. [Domain-/HTTPS-/Inhaltstest abgeschlossen](CUSTOMER_WEBSITE_CUSTOM_DOMAIN_E2E.md); [bestätigte Adresse im Kundeneditor](CUSTOMER_WEBSITE_ADDRESSES.md).
+
 Stand: **4. November 2026. Machbarkeit geprüft, noch nicht eingerichtet.** Der Nutzer hat die Prüfung einer Testadresse unter der vorhandenen SMA-Domain erlaubt. Eine Buchung, Kontoeröffnung, DNS-Änderung oder Veröffentlichung wurde dadurch nicht freigegeben und in diesem Schritt nicht ausgeführt.
 
 ## Ergebnis

@@ -1,5 +1,7 @@
 # Lokales Testpaket für die eigene Kundenadresse
 
+> Fortschreibung 5. November: Der unten beschriebene Vorbereitungsstand ist historisch. [Domain-/HTTPS-/Inhaltstest abgeschlossen](CUSTOMER_WEBSITE_CUSTOM_DOMAIN_E2E.md); [bestätigte Adresse im Kundeneditor](CUSTOMER_WEBSITE_ADDRESSES.md).
+
 Stand: **4. November 2026. Implementiert und lokal geprüft, nicht zusammengeführt oder bereitgestellt.** Die [Machbarkeitsprüfung](CUSTOMER_WEBSITE_DOMAIN_HOSTING.md) wird damit um das konkret baubare Testpaket ergänzt.
 
 ## Ergebnis
