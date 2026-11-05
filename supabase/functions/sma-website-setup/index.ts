@@ -24,18 +24,19 @@ Deno.serve(async request=>{
  if(request.method!=='POST')return json({ok:false,code:'METHOD_NOT_ALLOWED'},405);
  const token=request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
  if(!token||token.length>16000)return json({ok:false,code:'AUTH_REQUIRED'},401);
+ let stage='request';
  try{
   const raw=await boundedText(request as unknown as Response,10000),input=JSON.parse(raw);
   if(input?.action==='bootstrap'){
-   const identity=await verifyBootstrapIdentity(token);
-   const cfToken=normalizeCloudflareToken(input.cloudflare_token);
+   stage='identity';const identity=await verifyBootstrapIdentity(token);
+   stage='credential_format';const cfToken=normalizeCloudflareToken(input.cloudflare_token);
    const apiKey=resolveIonosApiKey(input.ionos_key,input.prefix);
    // Validate the same real provider access that already passed in GitHub.
-   const cf=createPages({accountId:input.account_id,token:cfToken});
+   stage='cloudflare';const cf=createPages({accountId:input.account_id,token:cfToken});
    const domain=await cf.call('/accounts/'+input.account_id+'/pages/projects/sma-customer-website-test/domains/test.sma-automation.com');
    if(domain?.status!=='active')return json({ok:false,code:'PROVIDER_ACCESS_UNCONFIRMED'},409);
-   await createIonosDns({apiKey,authorizedZones:['sma-automation.com']}).inspect({zone:'sma-automation.com',hostname:'test.sma-automation.com',target:'sma-customer-website-test.pages.dev'});
-   const result=await rpc('install',{sha:identity.sha,account_id:input.account_id,prefix:input.prefix,ionos_key:apiKey,cloudflare_token:cfToken});
+   stage='ionos';await createIonosDns({apiKey,authorizedZones:['sma-automation.com']}).inspect({zone:'sma-automation.com',hostname:'test.sma-automation.com',target:'sma-customer-website-test.pages.dev'});
+   stage='install';const result=await rpc('install',{sha:identity.sha,account_id:input.account_id,prefix:input.prefix,ionos_key:apiKey,cloudflare_token:cfToken});
    return json(result,result.ok?200:403);
   }
   if(JSON.stringify(input)!=='{}')return json({ok:false,code:'INVALID_INPUT'},400);
@@ -45,5 +46,5 @@ Deno.serve(async request=>{
   // The caller may disconnect. The durable lease and cron retry survive this process.
   EdgeRuntime.waitUntil(runClaim(claim,token).catch(()=>{/* lease expires; cron reclaims */}));
   return json({ok:true,code:'ACCEPTED'},202);
- }catch{return json({ok:false,code:'REQUEST_REJECTED'},403);}
+ }catch{return json({ok:false,code:'REQUEST_REJECTED',stage},403);}
 });

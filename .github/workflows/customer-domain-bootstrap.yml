@@ -29,7 +29,7 @@ jobs:
             const {value}=await identity.json();
             const response=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+value,'Content-Type':'application/json'},redirect:'error',signal:AbortSignal.timeout(60000),body:JSON.stringify({action:'bootstrap',ionos_key:process.env.IONOS_KEY,prefix:'3a7441c7fe44415ea2e39ce4265311d4',cloudflare_token:process.env.CF_TOKEN,account_id:process.env.CF_ACCOUNT.trim()})});
             const result=await response.json();
-            if(!response.ok||result.code!=='PROVIDERS_INSTALLED')throw Error();
+            if(!response.ok||result.code!=='PROVIDERS_INSTALLED'){console.log(JSON.stringify({status:response.status,code:['REQUEST_REJECTED','BOOTSTRAP_REJECTED','PROVIDER_ACCESS_UNCONFIRMED'].includes(result.code)?result.code:'UNCONFIRMED',stage:['request','identity','credential_format','cloudflare','ionos','install'].includes(result.stage)?result.stage:undefined}));throw Error();}
             console.log('Verified providers installed. No credentials printed or written to artifacts.');
           } catch { console.log('Provider installation was not confirmed.');process.exitCode=1; }
           NODE
