@@ -7,11 +7,18 @@ export class SetupError extends Error {
  constructor(code){super(code);this.code=code;}
 }
 const fail=code=>{throw new SetupError(code);};
-function credential(value){
+function credential(value,publicPrefix){
  // Copy/paste may add whitespace around the two complete parts. Never remove
  // characters within either part, guess a missing separator, or log its value.
  if(typeof value!=='string'||!value.trim())fail('IONOS_ACCESS_REQUIRED');
  if(value.length>2048)fail('IONOS_KEY_FORMAT_INVALID');
+ // A separately configured public prefix lets the protected value contain
+ // only the secret. Never infer a prefix from the secret or try candidates.
+ if(publicPrefix!==undefined){
+  if(typeof publicPrefix!=='string'||!/^[A-Za-z0-9_-]{8,128}$/.test(publicPrefix))fail('IONOS_PUBLIC_PREFIX_INVALID');
+  if(value.trim()===publicPrefix)fail('IONOS_SECRET_REQUIRED');
+  if(!value.includes('.'))value=publicPrefix+'.'+value.trim();
+ }
  const parts=value.trim().split('.');
  if(parts.length===1)fail('IONOS_KEY_SEPARATOR_MISSING');
  if(parts.length!==2)fail('IONOS_KEY_SEPARATOR_INVALID');
@@ -20,6 +27,7 @@ function credential(value){
  if(/\s/u.test(prefix+secret))fail('IONOS_KEY_INTERNAL_WHITESPACE');
  if(!/^[A-Za-z0-9_-]+$/.test(prefix)||!/^[A-Za-z0-9_-]+$/.test(secret))fail('IONOS_KEY_CHARACTERS_INVALID');
  if(prefix.length<8||prefix.length>128||secret.length<16||secret.length>512)fail('IONOS_KEY_LENGTH_INVALID');
+ if(publicPrefix!==undefined&&prefix!==publicPrefix)fail('IONOS_PREFIX_MISMATCH');
  return prefix+'.'+secret;
 }
 function hostname(value){
@@ -78,9 +86,9 @@ async function limitedBody(response){
  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
  try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{fail('IONOS_RESPONSE_INVALID');}
 }
-export function createIonosDns({apiKey,authorizedZones=[],fetchImpl=fetch}){
+export function createIonosDns({apiKey,publicPrefix,authorizedZones=[],fetchImpl=fetch}){
  // The allowlist comes from the private provider connection, never a browser.
- apiKey=credential(apiKey);
+ apiKey=credential(apiKey,publicPrefix);
  const allowed=new Set(authorizedZones.map(hostname));
  if(!allowed.size)fail('IONOS_ZONE_AUTHORIZATION_REQUIRED');
  async function request(path,{body,method='GET'}={}){

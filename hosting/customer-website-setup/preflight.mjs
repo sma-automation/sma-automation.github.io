@@ -24,7 +24,7 @@ export async function preflight({env=process.env,fetchImpl=fetch}={}){
   }catch{report.cloudflare='CLOUDFLARE_CHECK_FAILED';}
  }
  try{
-  const dns=createIonosDns({apiKey:env.IONOS_DNS_API_KEY,authorizedZones:[testPlan.zone],fetchImpl});
+  const dns=createIonosDns({apiKey:env.IONOS_DNS_API_KEY,publicPrefix:env.IONOS_DNS_API_PREFIX,authorizedZones:[testPlan.zone],fetchImpl});
   const result=await dns.inspect(testPlan);
   report.ionos=result.state==='present'?'TEST_CNAME_CONFIRMED':'TEST_CNAME_MISSING';
  }catch(error){report.ionos=error instanceof SetupError?error.code:'IONOS_CHECK_FAILED';}

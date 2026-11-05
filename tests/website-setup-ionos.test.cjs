@@ -74,6 +74,36 @@ test('inspection never writes and returns only the matched zone/record identifie
  const f=fixture({records:[cname()]});const result=await (await client(f)).inspect(plan);
  assert.deepEqual(result,{state:'present',recordId,zoneId});assert.ok(f.calls.every(c=>c.options.method==='GET'));
 });
+test('an explicit public prefix accepts secret-only input and sends the same authenticated header',async()=>{
+ const [publicPrefix,secret]=key.split('.');
+ for(const apiKey of [secret,' \r\n'+secret+'\t',key]){
+  const f=fixture({records:[cname()]});
+  const result=await (await client(f,{apiKey,publicPrefix})).inspect(plan);
+  assert.equal(result.state,'present');assert.equal(f.calls.length,2);
+  assert.ok(f.calls.every(c=>c.options.method==='GET'&&c.options.headers['X-API-Key']===key));
+ }
+});
+test('separate prefix fails closed for prefix-only values, wrong pairing, or unsafe configuration',async()=>{
+ const {createIonosDns}=await modulePromise;let calls=0;
+ for(const [apiKey,publicPrefix,expected] of [
+  ['publicprefix','publicprefix','IONOS_SECRET_REQUIRED'],
+  [key,'differentprefix','IONOS_PREFIX_MISMATCH'],
+  [key,'publicprefix\r\n','IONOS_PUBLIC_PREFIX_INVALID'],
+  [key,'short','IONOS_PUBLIC_PREFIX_INVALID'],
+  [key,{},'IONOS_PUBLIC_PREFIX_INVALID'],
+  ['secret\nwithinternalwhitespace','publicprefix','IONOS_KEY_INTERNAL_WHITESPACE'],
+  ['short','publicprefix','IONOS_KEY_LENGTH_INVALID']
+ ]){
+  assert.throws(()=>createIonosDns({apiKey,publicPrefix,authorizedZones:[plan.zone],fetchImpl:async()=>{calls++;}}),e=>e.code===expected&&e.message===expected&&!e.message.includes(apiKey));
+ }
+ assert.equal(calls,0);
+});
+test('preflight can authenticate with a separately configured prefix without exposing the secret',async()=>{
+ const {preflight}=await preflightPromise;const f=fixture({records:[cname()]});
+ const result=await preflight({env:{IONOS_DNS_API_PREFIX:'publicprefix',IONOS_DNS_API_KEY:key.split('.')[1]},fetchImpl:f.fetchImpl});
+ assert.deepEqual(result,{cloudflare:'CLOUDFLARE_ACCESS_REQUIRED',ionos:'TEST_CNAME_CONFIRMED',dnsModified:false,ready:false});
+ assert.ok(f.calls.every(c=>c.options.method==='GET'));assert.ok(!JSON.stringify(result).includes(key.split('.')[1]));
+});
 test('creates one CNAME and leaves root/mail records untouched; re-running does not duplicate',async()=>{
  const mail=cname({id:'33333333-3333-4333-8333-333333333333',name:plan.zone,type:'MX',content:'mx00.ionos.de'});
  const root=cname({id:'44444444-4444-4444-8444-444444444444',name:plan.zone,type:'A',content:'185.199.108.153'});

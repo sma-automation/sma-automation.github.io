@@ -33,4 +33,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
           IONOS_DNS_API_KEY: ${{ secrets.IONOS_DNS_API_KEY }}
+          # Public identifier of the user's newly created test-account key.
+          # The protected value may be either the secret alone or the full pair.
+          IONOS_DNS_API_PREFIX: 3a7441c7fe44415ea2e39ce4265311d4
         run: node "$RUNNER_TEMP/sma-domain-automation/hosting/customer-website-setup/preflight.mjs"
