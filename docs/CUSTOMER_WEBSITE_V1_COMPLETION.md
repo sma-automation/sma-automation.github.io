@@ -1,6 +1,11 @@
-# SMA-Kundenwebseite V1 – Abschluss des eigenen Webseitenwegs
+# SMA-Kundenwebseite V1 – funktionierender Webseitenweg, Einrichtung noch offen
 
 Stand: 5. November 2026.
+
+**Korrektur:** Die nachfolgend geprüften Webseitenfunktionen sind vorhanden. Der
+Gesamtblock ist noch nicht fertig, solange die automatische Einrichtung einer
+neuen Kundenadresse nicht funktioniert. Sie gehört zum Pflichtumfang; aktueller
+Fortschritt und Abnahmekriterien: [Automatische Einrichtung](CUSTOMER_WEBSITE_AUTOMATION.md).
 
 ## Abgeschlossener Funktionsumfang
 
@@ -39,7 +44,11 @@ git diff --check
 
 Der bestätigte eigene Webseitenweg ist kein Nachweis für alle externen Anbieter. PR #69 enthält den lokalen WordPress-/MariaDB-Test; ein positiver Test auf einer freigegebenen externen WordPress-Seite fehlt weiterhin. Bestehende Anbieter werden dadurch weder automatisch ersetzt noch vollständig synchronisiert.
 
-Neue eigene Kundendomains werden in V1 durch SMA eingerichtet und bestätigt. Selbstbediente Domainregistrierung, automatische DNS-/Hosting-Einrichtung und ein gemeinsamer Entzugslebenszyklus für beliebige Kunden bleiben spätere Automatisierung. Der gespeicherte Wunsch oder TXT-Nachweis allein ist keine aktive Hostzuordnung.
+Neue eigene Kundendomains werden derzeit durch SMA eingerichtet und bestätigt.
+Automatische DNS-/Hosting-Einrichtung und gemeinsamer Entzugslebenszyklus fehlen
+noch und sind notwendige Restarbeit für den Kundenablauf. Der gespeicherte Wunsch
+oder TXT-Nachweis allein ist keine aktive Hostzuordnung. Kostenpflichtige
+Domainregistrierung bleibt eine separate, ausdrücklich freizugebende Aktion.
 
 Checkout-/Bestellabwicklung des Shops, PR #57/Social-Publishing, Sightengine, Meta und die externe Servermigration bleiben getrennte Arbeitsblöcke. „Webseitenweg abgeschlossen“ bedeutet keine Freigabe dieser anderen Bereiche. Keine echte Kundenseite wurde im Abschlussblock veröffentlicht; der vorhandene Teststand bleibt privat.
 
