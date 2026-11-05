@@ -60,7 +60,7 @@ revoke all on function sma_private.website_setup_wake_v1() from public,anon,auth
 create function sma_private.website_setup_request_v1(p_action text,p_input jsonb default '{}')
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare uid uuid:=auth.uid();c public.sma_kunden%rowtype;w sma_private.customer_websites_v1%rowtype;
- j sma_private.website_setup_jobs_v1%rowtype; ready boolean; new_id uuid;
+ j sma_private.website_setup_jobs_v1%rowtype; ready boolean; new_id uuid; generated jsonb;
 begin
  if uid is null then return jsonb_build_object('ok',false,'code','AUTH_REQUIRED');end if;
  if p_action is null or p_action not in ('get','start','retry') or p_input is distinct from '{}'::jsonb then return jsonb_build_object('ok',false,'code','INVALID_INPUT');end if;
@@ -69,12 +69,20 @@ begin
  if c.aktiv is not true or not(c.demo_delta_aktiv is true or c.zahlung_bestaetigt is true)
   or (c.demo_delta_aktiv is not true and lower(btrim(coalesce(c.paket,'')))<>'delta') then return jsonb_build_object('ok',false,'code','ACCESS_INACTIVE');end if;
  select * into w from sma_private.customer_websites_v1 where customer_id=c.id;
- if w.user_id is distinct from uid then return jsonb_build_object('ok',false,'code',case when w.site_id is null then 'WEBSITE_DRAFT_REQUIRED' else 'ACCOUNT_CHANGED' end);end if;
+ if w.site_id is not null and w.user_id is distinct from uid then return jsonb_build_object('ok',false,'code','ACCOUNT_CHANGED');end if;
  select exists(select 1 from sma_private.website_setup_config_v1 where enabled) into ready;
  select * into j from sma_private.website_setup_jobs_v1 where customer_id=c.id for update;
- if j.id is not null and (j.user_id<>uid or j.site_id<>w.site_id) then return jsonb_build_object('ok',false,'code','ACCOUNT_CHANGED');end if;
+ if j.id is not null and (j.user_id is distinct from uid or j.site_id is distinct from w.site_id) then return jsonb_build_object('ok',false,'code','ACCOUNT_CHANGED');end if;
  if p_action in ('start','retry') then
   if not ready then return jsonb_build_object('ok',false,'code','SETUP_UNAVAILABLE');end if;
+  if w.site_id is null then
+   if p_action<>'start' then return jsonb_build_object('ok',false,'code','WEBSITE_DRAFT_REQUIRED');end if;
+   -- The customer row is locked. Reuse the existing generator and company-profile
+   -- checks; draft and setup job commit together. GET never creates anything.
+   generated:=sma_private.customer_website_request_v1('generate',jsonb_build_object('expected_revision',0,'request_id',gen_random_uuid()));
+   if generated->>'ok' is distinct from 'true' then return generated;end if;
+   select * into strict w from sma_private.customer_websites_v1 where customer_id=c.id and user_id=uid;
+  end if;
   if j.id is null then
    new_id:=gen_random_uuid();
    insert into sma_private.website_setup_jobs_v1(id,customer_id,user_id,site_id,hostname,project_name)
@@ -86,7 +94,7 @@ begin
   end if;
   perform sma_private.website_setup_wake_v1();
  end if;
- return jsonb_build_object('ok',true,'available',ready,'job',case when j.id is null then null else jsonb_build_object(
+ return jsonb_build_object('ok',true,'available',ready,'draft_exists',w.site_id is not null,'job',case when j.id is null then null else jsonb_build_object(
   'id',j.id,'hostname',j.hostname,'phase',j.phase,'blocked',j.blocked,'code',j.error_code,'updated_at',j.updated_at,'completed_at',j.completed_at) end);
 end $$;
 revoke all on function sma_private.website_setup_request_v1(text,jsonb) from public,anon,authenticated,service_role;

@@ -1,6 +1,6 @@
 import {readCustomerWebsite} from './customer-website-model.mjs?v=5';
 
-// Read-only owner summary. Creating, saving and publishing stay in the editor.
+// Read-only owner summary. Mutations stay in the editor and setup action.
 export function mountCustomerWebsiteDashboard({page,request,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=page.ownerDocument.defaultView}){
  const doc=page.ownerDocument,root=page.querySelector('#smaWebsitePreparation');
  const target=root?.querySelector('[data-website-view="website"]'),entry=root?.querySelector('[data-website-overview] [data-website-open="website"]');
@@ -55,9 +55,10 @@ export function mountCustomerWebsiteDashboard({page,request,getOwnerId,expectedO
  const observer=new doc.defaultView.MutationObserver(()=>{const now=active();if(now!==wasActive){wasActive=now;visibility();}});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
  ownerWindow.addEventListener('focus',schedule);ownerWindow.document.addEventListener('visibilitychange',visibility);
+ page.addEventListener('sma:website-setup-changed',schedule);
  const restored=event=>{if(event.persisted)schedule();};ownerWindow.addEventListener('pageshow',restored);
  $('[data-site-retry]').onclick=schedule;
  if(watchOwner)Promise.resolve().then(()=>disposed?null:watchOwner(owner=>{if(owner!==expectedOwnerId&&!disposed)invalidate();})).then(value=>{if(disposed)value?.unsubscribe();else subscription=value;}).catch(()=>{if(!disposed)invalidate();});
  schedule();
- return {destroy(){disposed=true;generation++;queued=false;subscription?.unsubscribe();observer.disconnect();ownerWindow.removeEventListener('focus',schedule);ownerWindow.document.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('pageshow',restored);clear();panel.remove();}};
+ return {destroy(){disposed=true;generation++;queued=false;subscription?.unsubscribe();observer.disconnect();page.removeEventListener('sma:website-setup-changed',schedule);ownerWindow.removeEventListener('focus',schedule);ownerWindow.document.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('pageshow',restored);clear();panel.remove();}};
 }

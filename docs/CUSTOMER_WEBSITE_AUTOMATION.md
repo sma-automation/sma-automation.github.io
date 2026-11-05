@@ -18,7 +18,9 @@ Die bisher manuell registrierte Adresse `test.sma-automation.com` wurde in der K
 
 ## Kundenablauf und Reichweite
 
-Dashboard → „Webseite & Domain“ → „Webseite einrichten“ → **„SMA-Webadresse automatisch einrichten“**. Eine vorhandene SMA-Seite ist Voraussetzung. Fortschritt, Wartephasen und Wiederaufnahme überleben das Schließen des Browsers. Veröffentlichung erfolgt ausschließlich durch den bestehenden Editor. Schrift und Layoutklassen bleiben unverändert.
+Dashboard → „Webseite & Domain“ → „Webseite einrichten“ → „Neue Webseite“ → **„SMA-Webadresse automatisch einrichten“**. Beim ersten ausdrücklichen Start erzeugt der Server einen fehlenden privaten Entwurf aus dem bestehenden Firmendatenprofil. Ohne gespeicherte Firmendaten bleibt die bisherige neutrale Vorlage bearbeitbar. Vorhandene Entwürfe und veröffentlichte Stände werden nicht neu erzeugt oder verändert. Entwurf und Auftrag werden in einer Transaktion gespeichert; ein fehlgeschlagener Auftrag hinterlässt keinen unvollständigen neuen Stand. Statusabfragen erzeugen nichts.
+
+Fortschritt, Wartephasen und Wiederaufnahme überleben das Schließen des Browsers. Die Dashboard-Übersicht lädt nach Erstellung des Entwurfs und Bestätigung der Adresse ausschließlich den aktuellen eigenen Webseitenstand nach; ungespeicherte Einrichtungsangaben bleiben erhalten. Veröffentlichung erfolgt ausschließlich durch den bestehenden Editor. Schrift und Layoutklassen bleiben unverändert.
 
 Der Server vergibt `seite-<Kundennummer>-<Seitenkennung>.sma-automation.com`. Aktive Delta-Kunden erhalten damit abgegrenzte Hosts in der von SMA kontrollierten IONOS-Zone. Host, Zone, Projektname und Anbieter-URL sind keine Browserparameter. Der Plattformschlüssel berechtigt Kunden nicht zur Änderung anderer Hosts.
 
@@ -47,8 +49,8 @@ IONOS-/Cloudflare-Zugangsdaten liegen verschlüsselt in Vault. Ein separates zuf
 ## Prüfungen
 
 - 437 Node-Tests erfolgreich, einschließlich IONOS, Pages-Eigentumsprüfung, verlorener Antworten, OIDC und dynamischer Bild-Origin-Sperren.
-- 41 SQL-Vertragsprüfungen: Delta/Besitzer, private Entwürfe, wiederholter Start, Leases, Retry, Aktivierung, Vault-ACL, Origin-Widerruf und kein vom Kunden gewählter Host.
-- DOM-Prüfungen für Start, Doppelklick-Sperre, Fortschritt, Retry, Besitzerwechsel und Teardown. Bestehende neue-Domain- und Webseitenübersicht-Prüfungen bestanden.
+- 65 SQL-Vertragsprüfungen: erstmalige Erstellung mit Firmendaten, lesende Abfragen ohne Entwurf, abgeschaltete Einrichtung, atomarer Rücklauf bei Auftragsfehler, Erhalt bestehender Inhalte und Veröffentlichungen, Delta/Besitzer, wiederholter Start, Leases, Retry, Aktivierung, Vault-ACL, Origin-Widerruf und kein vom Kunden gewählter Host.
+- DOM-Prüfungen für erstmaligen Start, Doppelklick-Sperre, Fortschritt, Retry, Besitzerwechsel und Teardown. 12 Webseitenübersicht-Szenarien einschließlich sofortigem Nachladen von Entwurf/Adresse ohne Formularverlust; acht bestehende neue-Domain-Szenarien bestanden.
 - Bestehende SQL-Suiten für Webseiten, Firmendaten, Bilder, Design und bestätigte Adressen bestanden.
 - Security-Advisors: keine neue Warnung. Die drei privaten Tabellen melden erwartungsgemäß RLS ohne direkte Kunden-Policies.
 - Frühere echte [IONOS-Schreibprobe](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42066886980): CNAME angelegt, ohne Duplikat wiederverwendet, exakt eigene ID entfernt, Löschung bestätigt. Getrennt vom jetzt behaltenen Kundenhost.
