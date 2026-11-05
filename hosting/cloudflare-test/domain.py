@@ -72,10 +72,17 @@ def run(api, attach=False):
         raise CheckError("DOMAIN_RESULT_MISMATCH")
     def state(value):
         return value if value in STATES else "unknown"
+    def diagnostic(section):
+        value = (domain.get(section) or {}).get("error_message")
+        return re.sub(r"[\r\n]", " ", value).replace(api.token, "[redacted]")[:500] if isinstance(value, str) else None
+    method = (domain.get("validation_data") or {}).get("method")
     return {"code": "DOMAIN_ATTACHED" if created else "DOMAIN_STATUS", "domain": DOMAIN,
             "cname_target": TARGET, "status": state(domain.get("status")),
             "validation": state((domain.get("validation_data") or {}).get("status")),
             "verification": state((domain.get("verification_data") or {}).get("status")),
+            "validation_method": method if method in {"http", "txt"} else "unknown",
+            "validation_error": diagnostic("validation_data"),
+            "verification_error": diagnostic("verification_data"),
             "dns_modified": False}
 
 
