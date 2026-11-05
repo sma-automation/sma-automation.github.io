@@ -28,7 +28,7 @@ async function boot({storage=new Map(),slug='sma-testkunde',products=initial,blo
   localStorage:{getItem(k){if(blocked)throw Error('blocked');return storage.get(k)||null},setItem(k,v){if(blocked)throw Error('blocked');storage.set(k,v)},removeItem(k){if(blocked)throw Error('blocked');storage.delete(k)}},
   async fetch(url,options){if(options?.method==='POST'){requests.push(JSON.parse(options.body));return checkoutFetch(url,options)}if(failFetch)throw new Error('offline');const q=new URL(url).searchParams;const list=q.has('suche')?products.filter(p=>p.name.includes(q.get('suche'))):products;const page=Number(q.get('seite'))||1;return {ok:true,json:async()=>({ok:true,shop:{name:slug},gesamt:list.length,seiten:Math.ceil(list.length/10),produkte:list.slice((page-1)*10,page*10)})}}
  };
- vm.runInNewContext(enabled?script.replace('const CHECKOUT_PUBLIC_ENABLED = false;','const CHECKOUT_PUBLIC_ENABLED = true;'):script,context);await settle();
+ vm.runInNewContext(script.replace(/const CHECKOUT_PUBLIC_ENABLED = (?:true|false);/,'const CHECKOUT_PUBLIC_ENABLED = '+enabled+';'),context);await settle();
  const add=index=>get('grid').children[index].children[1].children.at(-1).onclick();
  const open=()=>get('cartOpen').onclick();
  const change=(row,delta)=>get('cartLines').children[row].children[1].children[2].children[delta>0?2:0].onclick();

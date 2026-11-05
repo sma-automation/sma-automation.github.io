@@ -66,11 +66,10 @@ const $=id=>document.getElementById(id);
 const API='https://bnvnmdxosbnuzedokqgh.supabase.co/functions/v1/sma-shop-produkte';
 const CHECKOUT_API='https://bnvnmdxosbnuzedokqgh.supabase.co/functions/v1/sma-shop-checkout';
 // Checkout V2: keine Freigabe per URL-Parameter oder Testmodus.
-// Für die geplante Liveschaltung zunächst NACH abgeschlossenen Tests
-// manuell auf true setzen. Zusätzlich prüft Supabase zwingend:
-// sma_shopify_konten.aktiv === true UND SMA_CHECKOUT_LIVE_ENABLED === "true".
+// Zusätzlich prüft Supabase zwingend die versionierte globale Freigabe
+// CHECKOUT_RELEASE_ENABLED UND sma_shopify_konten.aktiv === true.
 // Ein HTML-Schalter ersetzt NIEMALS diese beiden serverseitigen Prüfungen.
-const CHECKOUT_PUBLIC_ENABLED = false;
+const CHECKOUT_PUBLIC_ENABLED = true;
 const MAX_CHECKOUT_POSITIONS=20;
 const MAX_CHECKOUT_PER_ITEM=20;
 const MAX_CHECKOUT_TOTAL_QTY=40;
