@@ -777,13 +777,17 @@ const zahlungsstatusTexte = {
 };
 const lieferstatusTexte = {
   fulfilled: 'Versendet',
+  fulfillment_not_required: 'Kein Versand erforderlich',
   unfulfilled: 'Noch nicht versendet',
+  open: 'Noch nicht versendet',
   partial: 'Teilweise versendet',
   partially_fulfilled: 'Teilweise versendet',
   restocked: 'Wieder eingelagert',
   on_hold: 'Zurückgestellt',
   scheduled: 'Versand geplant',
   requested: 'Versand angefordert',
+  pending_fulfillment: 'Versandbestätigung ausstehend',
+  request_declined: 'Versandanfrage abgelehnt',
   in_progress: 'In Bearbeitung',
   delivered: 'Zugestellt'
 };
@@ -799,8 +803,8 @@ function deutscherBestellstatus(wert,art){
   }
   return {
     text:lieferstatusTexte[code]||'Lieferstatus unbekannt',
-    green:code==='fulfilled'||code==='delivered',
-    orange:['unfulfilled','partial','partially_fulfilled','on_hold','scheduled','requested','in_progress'].includes(code)
+    green:['fulfilled','delivered','fulfillment_not_required'].includes(code),
+    orange:['unfulfilled','open','partial','partially_fulfilled','on_hold','scheduled','requested','pending_fulfillment','request_declined','in_progress'].includes(code)
   };
 }
 
