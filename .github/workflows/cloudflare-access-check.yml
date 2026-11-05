@@ -46,8 +46,32 @@ jobs:
           account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
           if not token:
               finish("TOKEN_SECRET_MISSING")
-          if not token.isascii() or any(ord(char) < 33 or ord(char) == 127 for char in token):
-              finish("TOKEN_SECRET_CONTAINS_WHITESPACE_OR_NON_ASCII")
+          # Accept an unambiguous copied Bearer header or code fence as text.
+          # Never execute a supplied command, use its URL, or print its contents.
+          fenced = re.fullmatch(r"```(?:[A-Za-z0-9_-]+)?[ \t]*\r?\n([\s\S]*?)\r?\n```", token)
+          if fenced:
+              token = fenced.group(1).strip()
+          if len(token) >= 2 and token[0] == token[-1] and token[0] in "\"'":
+              token = token[1:-1].strip()
+          bearer_value = r"[A-Za-z0-9._~+/\-]+=*"
+          header_values = re.findall(
+              r"(?i)\bAuthorization[ \t]*:[ \t]*Bearer[ \t]+(" + bearer_value + r")(?=[\s\"'`\\]|$)",
+              token,
+          )
+          if header_values:
+              if len(set(header_values)) != 1:
+                  finish("TOKEN_SECRET_AMBIGUOUS")
+              token = header_values[0]
+          else:
+              bare = re.fullmatch(r"(?:Bearer[ \t]+)?(" + bearer_value + r")", token, re.IGNORECASE)
+              if bare:
+                  token = bare.group(1)
+              elif not token.isascii():
+                  finish("TOKEN_SECRET_UNRECOGNIZED_NON_ASCII_TEXT")
+              elif "\n" in token or "\r" in token:
+                  finish("TOKEN_SECRET_UNRECOGNIZED_MULTILINE_TEXT")
+              else:
+                  finish("TOKEN_SECRET_UNRECOGNIZED_TEXT")
           if not re.fullmatch(r"[0-9a-fA-F]{32}", account):
               finish("ACCOUNT_SECRET_MISSING_OR_INVALID")
 
