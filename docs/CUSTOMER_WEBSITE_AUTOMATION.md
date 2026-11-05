@@ -74,8 +74,13 @@ geprüfte Verbindungen, keine pauschale Zusage für beliebige Registrare.
 15 neue Tests für Plan-/Zonenbegrenzung, bestehende Root-/Mail-Daten, Konflikte,
 parallele Änderungen vor dem Schreiben, verlorene Schreibantworten, Wiederholung,
 falsche Providerantworten, Größenlimits und den rein lesenden Preflight bestanden.
-Die echten Providerergebnisse werden nach dem GitHub-Lauf ergänzt. Noch kein
-IONOS-Schreibaufruf, kein neuer Host und keine Kundendatenänderung in diesem Block.
+Der [echte Preflight-Lauf](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42043729793)
+am 5. November 2026, 14:18 UTC, hat die 15 Adaptertests auch auf GitHub bestanden.
+Cloudflare bestätigt `TEST_DOMAIN_ACTIVE`. Der IONOS-Teil meldet
+`IONOS_ACCESS_REQUIRED`: `IONOS_DNS_API_KEY` ist nicht hinterlegt. Deshalb endet
+der Lauf erwartungsgemäß ohne Bereitschaftsbestätigung; `dnsModified:false`.
+Noch kein IONOS-Schreibaufruf, kein neuer Host und keine Kundendatenänderung in
+diesem Block. Die vollständige lokale Node-Suite umfasst jetzt 414 bestandene Tests.
 
 ```sh
 node --test tests/website-setup-ionos.test.cjs
