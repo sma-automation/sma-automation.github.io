@@ -17,8 +17,9 @@ It receives no credentials and cannot create or update Cloudflare resources.
 The original deployment controller is retained for audit, but no automatic
 workflow invokes it. Existing projects are never overwritten by that controller.
 
-The local work environment received Cloudflare HTTP 403 / error 1010 during the
-public check; public file and header verification is being checked from GitHub.
+Public verification succeeded in [GitHub Actions run 42026970015](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42026970015): all 16 served files matched the release hashes; the seventeenth file (`_headers`) was confirmed through the applied response headers. Unknown routes return the exact prepared 404 page. All configured no-store, noindex, content-type, referrer, framing, and CSP headers were verified.
+
+An initial local request using Python's default user agent received error 1010. The verifier uses the descriptive `SMA-Release-Verification/1.0` user agent, as recommended in [Cloudflare's error 1010 documentation](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/). No security setting was changed.
 
 No custom domain, IONOS DNS, nameserver, billing, Supabase, image endpoint, or
 customer publication status was changed. The static package is deployed; the
