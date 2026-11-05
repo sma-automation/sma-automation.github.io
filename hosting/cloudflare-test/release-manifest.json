@@ -1,0 +1,70 @@
+{
+  "404.html": {
+    "bytes": 369,
+    "sha256": "30565508fe00346049aa179d6b133fcb54171c5ed3a6fca51804715a3fe6733d"
+  },
+  "_headers": {
+    "bytes": 467,
+    "sha256": "62881b9f4dcf1915f38c3cc3529ba0a58283d0d5acb2b32fd3ee2a46b89aed7b"
+  },
+  "assets/company-profile-model.mjs": {
+    "bytes": 4165,
+    "sha256": "09e70d2afe3e96bd737135201b118f30dacd07d16ead92d2d49405b964f405f0"
+  },
+  "assets/customer-website-domain-model.mjs": {
+    "bytes": 1115,
+    "sha256": "48e4d1b9d7376546248edf571cb08c7fe803d8962e429115b24d957b56ed9710"
+  },
+  "assets/customer-website-domain-view.mjs": {
+    "bytes": 549,
+    "sha256": "f64fec22d6f83cce320825cc4e87b70078db3b0568b0995df5db51029dbe645e"
+  },
+  "assets/customer-website-model.mjs": {
+    "bytes": 5267,
+    "sha256": "5a13bed6e49f8a61f6456965c66d296f4cf3bf9f00f9fabc40402b6d71eb1d79"
+  },
+  "assets/customer-website-public-api.mjs": {
+    "bytes": 1397,
+    "sha256": "4809ba3cf3f40fc6183b28f3c3abebf4019a3267babb2f49431d4e2993a0a094"
+  },
+  "assets/customer-website-render.mjs": {
+    "bytes": 9781,
+    "sha256": "338967a64258132d3a9a4ee073906c9375218d8ffd4ee63caebcc53341d21cea"
+  },
+  "assets/customer-website-view.mjs": {
+    "bytes": 4968,
+    "sha256": "842ce53e5139302e276d7d7bcb93de73e5765a551d7fe9fcfca6942b6181500a"
+  },
+  "assets/customer-website.css": {
+    "bytes": 10228,
+    "sha256": "562c33305d85f9906ba17300f27e249e68793217db3cf1157dd67dd871c5cc4f"
+  },
+  "assets/shop-catalog-model.mjs": {
+    "bytes": 3897,
+    "sha256": "f369de0315a7d45b7be52372f93de19725db96399f397fdac7e8194d28930761"
+  },
+  "assets/shop-catalog.mjs": {
+    "bytes": 4326,
+    "sha256": "402c3bd4f02a5795eb10c9d8a8d6adbdf5872e252615e62eb49653ea0ebe1eb5"
+  },
+  "assets/website-domain-model.mjs": {
+    "bytes": 3876,
+    "sha256": "741f469ee74e4a67dcf6034c1b827cbb041b487e8e1462b9c17311a3ad81a6fe"
+  },
+  "binding.mjs": {
+    "bytes": 130,
+    "sha256": "41a0461e87a13cc915b76964a570f4b454e4797fa66d3d7014c995b921fa4a6f"
+  },
+  "index.html": {
+    "bytes": 946,
+    "sha256": "0ac8f95ee4246b7e29d18f1b98df039ddabb9df3b1ebc7ec489f41301009385f"
+  },
+  "page.mjs": {
+    "bytes": 598,
+    "sha256": "fb6d0ef15249bf99aed6a62a0f74456dbd5e8095a62e165b1f670fd47b01a07f"
+  },
+  "robots.txt": {
+    "bytes": 26,
+    "sha256": "331ea9090db0c9f6f597bd9840fd5b171830f6e0b3ba1cb24dfa91f0c95aedc1"
+  }
+}

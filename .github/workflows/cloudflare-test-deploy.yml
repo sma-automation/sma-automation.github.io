@@ -1,0 +1,65 @@
+name: Prepare isolated Cloudflare test release
+
+on:
+  push:
+    branches: [cloudflare-access-check]
+    paths:
+      - .github/workflows/cloudflare-test-deploy.yml
+      - hosting/cloudflare-test/**
+
+permissions: {}
+
+concurrency:
+  group: sma-cloudflare-test-release
+  cancel-in-progress: false
+
+env:
+  SMA_CLOUDFLARE_RELEASE_APPROVAL: pending
+
+jobs:
+  test-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Fetch pinned public source and release controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/sma-controls"
+          git -C "$RUNNER_TEMP/sma-controls" remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git -C "$RUNNER_TEMP/sma-controls" fetch --depth=1 origin "$GITHUB_SHA"
+          git -C "$RUNNER_TEMP/sma-controls" checkout --detach FETCH_HEAD
+          git init "$RUNNER_TEMP/sma-source"
+          git -C "$RUNNER_TEMP/sma-source" remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git -C "$RUNNER_TEMP/sma-source" fetch --depth=1 origin 84cd5c37d7c7336c6adfe9a792776009f453fba3
+          git -C "$RUNNER_TEMP/sma-source" checkout --detach FETCH_HEAD
+
+      - name: Build and verify the exact 17-file package
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/sma-source/hosting/customer-website/build.mjs" --origin https://test.sma-automation.com --site f931c608-a7fd-40df-9762-574c39301849 --out "$RUNNER_TEMP/sma-test-release"
+          python3 "$RUNNER_TEMP/sma-controls/hosting/cloudflare-test/control.py" validate "$RUNNER_TEMP/sma-test-release"
+          SMA_RELEASE_TEST_DIRECTORY="$RUNNER_TEMP/sma-test-release" python3 "$RUNNER_TEMP/sma-controls/hosting/cloudflare-test/test_control.py"
+
+      - name: Prepare pinned Cloudflare CLI without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/sma-wrangler" --no-audit --no-fund wrangler@4.158.0
+          WRANGLER_SEND_METRICS=false "$RUNNER_TEMP/sma-wrangler/node_modules/.bin/wrangler" --version
+
+      - name: Read-only preflight
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 "$RUNNER_TEMP/sma-controls/hosting/cloudflare-test/control.py" preflight "$RUNNER_TEMP/sma-test-release"
+
+      - name: Create and upload only after explicit release approval
+        if: env.SMA_CLOUDFLARE_RELEASE_APPROVAL == 'approved-2026-11-05-release1'
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 "$RUNNER_TEMP/sma-controls/hosting/cloudflare-test/control.py" deploy "$RUNNER_TEMP/sma-test-release" --wrangler "$RUNNER_TEMP/sma-wrangler/node_modules/.bin/wrangler"
