@@ -57,4 +57,15 @@ await test('destroy removes listeners and clears late subscriptions and data',as
 await test('leaving during owner check and returning still loads the newest state once',async()=>{
  const gate=deferred();let n=0;const f=fixture({getOwnerId:()=>++n===1?gate.promise:Promise.resolve(id)});await tick();f.page.classList.remove('active');await tick();f.page.classList.add('active');await tick();gate.resolve(id);await tick();await tick();assert.equal(f.calls.length,1);assert.match(f.$('[data-site-address]').textContent,/test.sma-automation.com/);f.destroy();
 });
+await test('setup changes refresh the draft and address without losing unsaved preparation',async()=>{
+ let result=state({revision:0,site_id:null,content:null,custom_domain:null,website_url:null});const f=fixture({request:()=>result});await tick();
+ assert.equal(f.$('.sma-website-site-summary').hidden,true);f.$('[name="desired_domain"]').value='keep-this.example.com';
+ f.$('[name="desired_domain"]').dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ result=state({custom_domain:null});f.page.dispatchEvent(new f.window.CustomEvent('sma:website-setup-changed'));await tick();
+ assert.equal(f.$('.sma-website-site-summary').hidden,false);assert.match(f.$('[data-site-state]').textContent,/Privater Entwurf/);
+ result=state();f.page.dispatchEvent(new f.window.CustomEvent('sma:website-setup-changed'));await tick();
+ assert.match(f.$('[data-site-address]').textContent,/test.sma-automation.com/);assert.equal(f.$('[name="desired_domain"]').value,'keep-this.example.com');
+ assert.equal(f.calls.length,3);assert.ok(f.calls.every(call=>call.action==='get'));
+ f.destroy();f.page.dispatchEvent(new f.window.CustomEvent('sma:website-setup-changed'));await tick();assert.equal(f.calls.length,3);
+});
 console.log(`Customer website dashboard: ${passed} DOM scenarios passed; existing preparation preserved; owner reads only.`);

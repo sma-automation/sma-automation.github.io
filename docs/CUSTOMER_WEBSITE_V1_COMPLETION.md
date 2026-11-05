@@ -1,11 +1,12 @@
-# SMA-Kundenwebseite V1 – funktionierender Webseitenweg, Einrichtung noch offen
+# SMA-Kundenwebseite V1 – Webseitenweg mit automatischer SMA-Adresse
 
 Stand: 5. November 2026.
 
-**Korrektur:** Die nachfolgend geprüften Webseitenfunktionen sind vorhanden. Der
-Gesamtblock ist noch nicht fertig, solange die automatische Einrichtung einer
-neuen Kundenadresse nicht funktioniert. Sie gehört zum Pflichtumfang; aktueller
-Fortschritt und Abnahmekriterien: [Automatische Einrichtung](CUSTOMER_WEBSITE_AUTOMATION.md).
+Die automatische Einrichtung einer **SMA-Unteradresse** ist inzwischen mit echtem
+Hosting-, DNS- und HTTPS-Durchlauf belegt. Neue Kunden können mit einem Klick zuerst
+ihren privaten Entwurf und anschließend die Adresse einrichten. Der vorhandene
+Entwurf bleibt privat. Aktueller Umfang und Nachweise:
+[Automatische Einrichtung](CUSTOMER_WEBSITE_AUTOMATION.md).
 
 ## Abgeschlossener Funktionsumfang
 
@@ -22,7 +23,7 @@ Die neue Übersicht liest ausschließlich `sma_customer_website_v1('get', {})`. 
 
 Besitzer werden vor und nach jeder Anfrage gegen den Besitzer des geladenen Dashboards geprüft. Authentifizierungswechsel leeren Adresse und Links sofort; verspätete Antworten dürfen sie nicht zurückbringen. Verborgene Ansichten, Fehler, zerstörte Ansichten und fehlgeschlagene Besitzerprüfungen behalten keine alten Links. Nur validierte Antworten des bestehenden Modells werden dargestellt.
 
-## Abschlussprüfung
+## Frühere Abschlussprüfung der Webseitenübersicht
 
 - 399 vorhandene Node-Tests bestanden.
 - 11 neue DOM-Szenarien: vorhandener privater Stand ohne Vorbereitung, öffentliche Adresse/kanonischer Rückfall, neues Konto, inaktiver Zugang, verzögertes Laden, Erhalt ungespeicherter Angaben, zusammengefasste und serialisierte Anfragen, Kontowechsel, fehlende Auth-Ereignisse, verborgene Ansichten, Netzfehler/Wiederholung, ungültige Adresse, Abbau und verspätete Antworten.
@@ -44,11 +45,12 @@ git diff --check
 
 Der bestätigte eigene Webseitenweg ist kein Nachweis für alle externen Anbieter. PR #69 enthält den lokalen WordPress-/MariaDB-Test; ein positiver Test auf einer freigegebenen externen WordPress-Seite fehlt weiterhin. Bestehende Anbieter werden dadurch weder automatisch ersetzt noch vollständig synchronisiert.
 
-Neue eigene Kundendomains werden derzeit durch SMA eingerichtet und bestätigt.
-Automatische DNS-/Hosting-Einrichtung und gemeinsamer Entzugslebenszyklus fehlen
-noch und sind notwendige Restarbeit für den Kundenablauf. Der gespeicherte Wunsch
-oder TXT-Nachweis allein ist keine aktive Hostzuordnung. Kostenpflichtige
-Domainregistrierung bleibt eine separate, ausdrücklich freizugebende Aktion.
+SMA-Unteradressen werden automatisch eingerichtet und bestätigt. Die Laufzeit
+prüft die aktuelle Besitzer- und Zugangszuordnung; physische Hostingressourcen
+werden bei Zugangssperre nicht automatisch gelöscht. Fremde Wunschdomains und
+deren Anbieterzugänge bleiben getrennt: Ein gespeicherter Wunsch oder TXT-Nachweis
+allein ist keine aktive Hostzuordnung. Kostenpflichtige Domainregistrierung bleibt
+eine separate, ausdrücklich freizugebende Aktion.
 
 Checkout-/Bestellabwicklung des Shops, PR #57/Social-Publishing, Sightengine, Meta und die externe Servermigration bleiben getrennte Arbeitsblöcke. „Webseitenweg abgeschlossen“ bedeutet keine Freigabe dieser anderen Bereiche. Keine echte Kundenseite wurde im Abschlussblock veröffentlicht; der vorhandene Teststand bleibt privat.
 

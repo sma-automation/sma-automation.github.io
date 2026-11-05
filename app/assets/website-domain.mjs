@@ -1,4 +1,4 @@
-import {mountWebsiteSetup} from './website-setup.mjs?v=1';
+import {mountWebsiteSetup} from './website-setup.mjs?v=2';
 import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
 import {createShopButton} from './shop-button.mjs?v=1';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';

@@ -1,7 +1,7 @@
 name: Customer website automatic setup checks
 on:
   push:
-    branches: [customer-domain-automation, website-v1]
+    branches: [customer-domain-automation, customer-website-first-setup, website-v1]
     paths:
       - hosting/customer-website-setup/**
       - supabase/functions/sma-website-setup/**
@@ -9,6 +9,7 @@ on:
       - supabase/sql/website-automatic-setup.sql
       - supabase/sql/website-setup-origin.sql
       - app/assets/website-setup.mjs
+      - app/assets/customer-website-dashboard.mjs
       - app/assets/website-domain.mjs
       - app/dashboard.html
       - tests/**
