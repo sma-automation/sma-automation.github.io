@@ -26,11 +26,13 @@ Google and Cloudflare public DNS both returned the exact CNAME. Root NS remain `
 
 The initial activation check timed out while Cloudflare still reported `CNAME record not set`. The DNS record was independently confirmed. A guarded validation-refresh workflow was prepared, but the domain had become active by execution time, so its guard performed no PATCH. No additional DNS/CAA/security changes were needed. The one-time refresh workflow no longer runs automatically on pushes.
 
-## Scope and remaining work
+## Completed visible test and current state
 
-The deployed static package is unchanged: PR #74 source commit `84cd5c37d7c7336c6adfe9a792776009f453fba3`, 17 files, 52,105 bytes. The private SHK site `f931c608-a7fd-40df-9762-574c39301849` has not been published. `website-v1`, PR #74, billing and backend configuration remain unchanged.
+The deployed static package is unchanged: PR #74 source commit `84cd5c37d7c7336c6adfe9a792776009f453fba3`, 17 files, 52,105 bytes.
 
-The domain/HTTPS and private-page checks are complete. A positive customer-content and own-image test is still separate: review and explicitly approve the test content, prepare the image endpoint/origin configuration if required, then temporarily publish only that test content and return it offline after verification. Do not imply that this positive publishing/image test has already passed.
+The subsequent authorized [visible custom-domain test](../../docs/CUSTOMER_WEBSITE_CUSTOM_DOMAIN_E2E.md) passed on 5 November, 14:15–14:17 Vienna time. The image endpoint is now version 2, with an explicit public-image origin/site binding. The existing fictitious SHK draft and synthetic images were briefly published, verified through the actual hostname and anonymous HTTP, then returned offline. The original content and company profile hashes are unchanged; final website revision 12, company revision 2. Both own images are again inaccessible publicly.
+
+`website-v1`, PR #74, billing, main-domain DNS and the deployed static package remain unchanged. This is one verified test-host binding, not an implemented general multi-customer domain registry.
 
 ## Sources
 
