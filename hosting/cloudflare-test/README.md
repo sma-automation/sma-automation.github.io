@@ -21,8 +21,6 @@ Public verification succeeded in [GitHub Actions run 42026970015](https://github
 
 An initial local request using Python's default user agent received error 1010. The verifier uses the descriptive `SMA-Release-Verification/1.0` user agent, as recommended in [Cloudflare's error 1010 documentation](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/). No security setting was changed.
 
-The custom test-domain association is now prepared; see [domain setup](DOMAIN_CONFIGURATION.md).
-No IONOS DNS, nameserver, billing, Supabase, image endpoint, or customer publication status was changed. The static package is deployed; the
-private customer draft remains private. `website-v1` and PR #74 are unchanged.
-The frontend intentionally rejects the Pages hostname as a customer-site origin;
-it is prepared for `test.sma-automation.com`, whose external DNS entry is still pending.
+The custom hostname https://test.sma-automation.com/ is active and verified; see [domain verification](DOMAIN_CONFIGURATION.md). The user added only the agreed IONOS CNAME for `test`; root DNS, mail and nameservers remain unchanged. HTTPS, all public file hashes, security headers and the offline customer-page boundary passed [the custom-host check](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42031316412).
+
+The private customer draft remains private. No billing, Supabase configuration, image endpoint or publication status was changed. `website-v1` and PR #74 remain unchanged. The frontend intentionally rejects the Pages hostname as a customer-site origin; the custom hostname displays the expected offline-page message until a separate customer-content test is approved.

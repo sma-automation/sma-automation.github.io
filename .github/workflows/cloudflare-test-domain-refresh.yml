@@ -1,10 +1,7 @@
 name: Refresh test-domain validation after confirmed external DNS update
 
 on:
-  push:
-    branches: [cloudflare-access-check]
-    paths:
-      - .github/workflows/cloudflare-test-domain-refresh.yml
+  workflow_dispatch:
 
 permissions: {}
 
