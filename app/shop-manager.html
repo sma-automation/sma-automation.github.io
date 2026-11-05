@@ -822,6 +822,14 @@ function renderOrders(orders){
     const badges=document.createElement('div');badges.className='badges';
     const zahlung=deutscherBestellstatus(order.zahlungsstatus,'zahlung');
     const lieferung=deutscherBestellstatus(order.lieferstatus,'lieferung');
+    if(order.markt==='shopify'){
+      if(order.ist_testbestellung===true){
+        badges.append(makeBadge('Testbestellung – keine echte Zahlung',false,true));
+        if(zahlung.green)zahlung.text='Testzahlung bestätigt';
+      }else if(order.ist_testbestellung!==false){
+        badges.append(makeBadge('Teststatus noch nicht bestätigt',false,true));
+      }
+    }
     badges.append(makeBadge(zahlung.text,zahlung.green,zahlung.orange),makeBadge(lieferung.text,lieferung.green,lieferung.orange));
     body.append(title,meta,badges);
     const total=document.createElement('div');total.className='amount';
@@ -832,7 +840,7 @@ function renderOrders(orders){
 
 // Daten werden seitenweise aus Supabase geladen, damit auch große Shops vollständig erreichbar bleiben.
 const PRODUKT_FELDER='sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at';
-const BESTELL_FELDER='id,markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung';
+const BESTELL_FELDER='id,markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung,ist_testbestellung';
 
 function showLoading(elementId,message){
   const element=document.getElementById(elementId);

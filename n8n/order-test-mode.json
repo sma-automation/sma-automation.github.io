@@ -1,0 +1,10 @@
+{
+  "node": "SMA – Supabase – Bestellung spiegeln",
+  "change": "Append one JSON body parameter after HMAC verification; preserve credentials, headers, URL, conflict key and all existing mappings.",
+  "parameter": {
+    "name": "ist_testbestellung",
+    "value": "={{ typeof $('SMA – Shopify Bestellungen – Webhook').first().json.body.test === 'boolean' ? $('SMA – Shopify Bestellungen – Webhook').first().json.body.test : null }}"
+  },
+  "source": "Signed Shopify order.test. Preserve boolean false; missing or malformed values stay unknown.",
+  "deployment": "Apply database support first. Patch both the published baseline and separate draft, preserving their differences. Never publish unrelated draft changes."
+}

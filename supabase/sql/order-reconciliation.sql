@@ -96,6 +96,7 @@ begin
       or stamp<created or stamp>clock_timestamp()+interval '5 minutes'
       or amount is null or amount<0 or amount>1000000000000
       or coalesce(o->>'waehrung','') !~ '^[A-Z]{3}$'
+      or (o?'ist_testbestellung' and jsonb_typeof(o->'ist_testbestellung') not in ('boolean','null'))
       or coalesce(o->>'zahlungsstatus','') not in ('unknown','authorized','expired','paid','partially_paid','partially_refunded','pending','refunded','voided')
       or coalesce(o->>'lieferstatus','') not in ('fulfilled','fulfillment_not_required','in_progress','on_hold','open','partially_fulfilled','pending_fulfillment','request_declined','restocked','scheduled','unfulfilled') then
       raise exception 'Invalid order payload';
@@ -105,9 +106,9 @@ begin
       and markt_konto_id=s.markt_konto_id and externe_bestell_id=o->>'externe_bestell_id' for update;
     if not found then
       insert into public.sma_bestellungen(kunde_id,markt,markt_konto_id,externe_bestell_id,
-        bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung,quelle_aktualisiert_am)
+        bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung,quelle_aktualisiert_am,ist_testbestellung)
       values(k.kunde_id,'shopify',s.markt_konto_id,o->>'externe_bestell_id',o->>'bestellnummer',
-        created,o->>'zahlungsstatus',o->>'lieferstatus',amount,o->>'waehrung',stamp)
+        created,o->>'zahlungsstatus',o->>'lieferstatus',amount,o->>'waehrung',stamp,(o->>'ist_testbestellung')::boolean)
       on conflict(markt,markt_konto_id,externe_bestell_id) do nothing;
       get diagnostics rows_affected=row_count;
       if rows_affected=1 then inserted:=inserted+1; continue; end if;
@@ -121,14 +122,20 @@ begin
     if b.quelle_aktualisiert_am is null or stamp>b.quelle_aktualisiert_am then
       update public.sma_bestellungen set bestellnummer=o->>'bestellnummer',erstellt_am=created,
         zahlungsstatus=o->>'zahlungsstatus',lieferstatus=o->>'lieferstatus',
-        gesamtbetrag=amount,waehrung=o->>'waehrung',quelle_aktualisiert_am=stamp where id=b.id;
+        gesamtbetrag=amount,waehrung=o->>'waehrung',quelle_aktualisiert_am=stamp,
+        ist_testbestellung=coalesce((o->>'ist_testbestellung')::boolean,b.ist_testbestellung) where id=b.id;
       changed:=changed+1;
     elsif stamp<b.quelle_aktualisiert_am then stale:=stale+1;
     elsif (b.bestellnummer,b.erstellt_am,lower(coalesce(b.zahlungsstatus,'unknown')),
       case lower(b.lieferstatus) when 'partial' then 'partially_fulfilled' else lower(b.lieferstatus) end,
       b.gesamtbetrag,b.waehrung)
-      is not distinct from (o->>'bestellnummer',created,o->>'zahlungsstatus',o->>'lieferstatus',amount,o->>'waehrung') then
-      unchanged:=unchanged+1;
+      is not distinct from (o->>'bestellnummer',created,o->>'zahlungsstatus',o->>'lieferstatus',amount,o->>'waehrung')
+      and (b.ist_testbestellung is null or o->>'ist_testbestellung' is null
+           or b.ist_testbestellung=(o->>'ist_testbestellung')::boolean) then
+      if b.ist_testbestellung is null and o->>'ist_testbestellung' is not null then
+        update public.sma_bestellungen set ist_testbestellung=(o->>'ist_testbestellung')::boolean where id=b.id;
+        changed:=changed+1;
+      else unchanged:=unchanged+1; end if;
     else
       conflicts:=conflicts+1;
       if conflicts<=100 then conflict_ids:=conflict_ids||jsonb_build_array(o->>'externe_bestell_id'); end if;

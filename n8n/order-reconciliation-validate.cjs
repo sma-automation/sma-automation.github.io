@@ -19,11 +19,13 @@ function validatePages(pages, claim, now = Date.now()) {
       if (typeof o.name !== 'string' || !o.name || o.name.length > 255 || !Number.isFinite(created) || !Number.isFinite(updated) || updated < created || updated > now + 300000) throw Error('INVALID_ORDER');
       if (o.displayFinancialStatus !== null && !financial.has(o.displayFinancialStatus)) throw Error('INVALID_FINANCIAL_STATUS');
       if (!fulfillment.has(o.displayFulfillmentStatus)) throw Error('INVALID_FULFILLMENT_STATUS');
+      if (typeof o.test !== 'boolean') throw Error('INVALID_TEST_FLAG');
       if (typeof money?.amount !== 'string' || !/^\d+(?:\.\d+)?$/.test(money.amount) || Number(money.amount) > 1e12 || !/^[A-Z]{3}$/.test(money?.currencyCode || '')) throw Error('INVALID_MONEY');
       ids.add(o.id);
       orders.push({externe_bestell_id:o.id,bestellnummer:o.name,erstellt_am:o.createdAt,
         quelle_aktualisiert_am:o.updatedAt,zahlungsstatus:(o.displayFinancialStatus || 'UNKNOWN').toLowerCase(),
-        lieferstatus:o.displayFulfillmentStatus.toLowerCase(),gesamtbetrag:money.amount,waehrung:money.currencyCode});
+        lieferstatus:o.displayFulfillmentStatus.toLowerCase(),gesamtbetrag:money.amount,waehrung:money.currencyCode,
+        ist_testbestellung:o.test});
     }
   });
   if (orders.length > 10000) throw Error('ORDER_LIMIT');
