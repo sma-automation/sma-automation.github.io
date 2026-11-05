@@ -8,7 +8,7 @@ einen neuen Kunden. Die automatische Einrichtung ist ein notwendiger Teil der
 Kundenwebseite und kein optionaler späterer Ausbau. Die frühere Abschlussmeldung
 in `CUSTOMER_WEBSITE_V1_COMPLETION.md` war insoweit zu weitgehend.
 
-## Fertig vorbereiteter Teil dieses Arbeitsschritts
+## Geprüfter IONOS-Anschluss
 
 `hosting/customer-website-setup/ionos.mjs` implementiert den serverseitigen
 IONOS-DNS-Anschluss. Er akzeptiert nur einen konkreten CNAME-Auftrag für eine
@@ -22,8 +22,8 @@ verlorener Schreibantwort bleibt das Ergebnis unbestätigt; der nächste Lauf
 liest zuerst den tatsächlichen Stand, statt nochmals blind zu schreiben.
 
 Fremde, doppelte oder deaktivierte Einträge, belegte Unterbäume, Wildcards und
-delegierte Vorfahren blockieren die Änderung. Es gibt kein Löschen, kein
-Ersetzen einer Zone, keinen Nameserverwechsel und keinen stillen Eingriff in
+delegierte Vorfahren blockieren die Änderung. Der CNAME-Adapter bietet kein
+Löschen, kein Ersetzen einer Zone, keinen Nameserverwechsel und keinen stillen Eingriff in
 bestehende Mail-/Webdienste. Die IONOS-API bietet für diesen POST keinen hier
 belegten bedingten Schreibvertrag: Fremde gleichzeitige Änderungen zwischen
 letztem Lesen und Schreiben bleiben eine Betriebsgrenze. Ein zukünftiger
@@ -60,12 +60,12 @@ Neuaufbau und keinen Nachweis der Schreibberechtigung.
 
 1. Einmalige sichere Freigabe der Domainverwaltung. Für den IONOS-Testaccount
    wird `IONOS_DNS_API_KEY` als GitHub Actions Repository Secret verwendet.
-   Der Eintrag ist vorhanden. Nach mehreren Kopierversuchen ohne Trennpunkt
-   ergänzt der Test-Workflow den explizit konfigurierten öffentlichen Präfix
-   jetzt selbst. Der Zugangstest um 16:24 UTC erreicht IONOS, wird aber mit
-   HTTP 401 abgewiesen (`IONOS_KEY_REJECTED`). Der zum neuen Präfix gehörende
-   geheime Wert muss deshalb noch korrekt im Secret hinterlegt werden; die
-   Ursache des abgewiesenen Werts ist nicht ausgelesen oder bewiesen.
+   Der geheime Wert wurde korrekt hinterlegt. Der Test-Workflow ergänzt den
+   explizit konfigurierten öffentlichen Präfix. Lesezugang und tatsächliches
+   Anlegen eines temporären CNAME sind erfolgreich nachgewiesen; dieser
+   Zugang ist kein aktueller Blocker mehr. Für den Mehrkundenbetrieb muss die
+   Verbindung weiterhin einem berechtigten Besitzer und dessen Zone zugeordnet
+   und sicher in der Auftragslaufzeit verfügbar gemacht werden.
    Ein Cloudflare-Pages-Token ersetzt diesen IONOS-Zugang nicht. Der vorhandene
    temporäre Cloudflare-Token läuft laut Einrichtung am 12. November 2026 ab;
    der Dauerbetrieb braucht einen betreuten Ablauf-/Erneuerungsprozess.
@@ -91,53 +91,61 @@ Pages eine Cloudflare-Zone/Nameserver-Konfiguration. Der hier vorbereitete
 CNAME-Anschluss migriert keine Hauptdomain. Weitere Anbieter benötigen eigene
 geprüfte Verbindungen, keine pauschale Zusage für beliebige Registrare.
 
-## Prüfungen
+## Echte Nachweise vom 5. November 2026
 
-20 Tests für Schlüsselzusammensetzung, Plan-/Zonenbegrenzung, bestehende Root-/Mail-Daten, Konflikte,
-parallele Änderungen vor dem Schreiben, verlorene Schreibantworten, Wiederholung,
-falsche Providerantworten, Größenlimits und den rein lesenden Preflight bestanden.
-Der [echte Preflight-Lauf](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42043729793)
-am 5. November 2026, 14:18 UTC, hat die ursprünglichen 15 Adaptertests auch auf
-GitHub bestanden. Damals fehlte der IONOS-Eintrag. Nach Freischaltung des
-IONOS-API-Produkts und Hinterlegung des Secrets meldete Versuch 3 des Laufs
-um 15:28 UTC `IONOS_KEY_FORMAT_INVALID`.
+**IONOS-Zugang und DNS-Schreibfunktion sind geprüft. Der vollständige
+Kundenautomatismus ist weiterhin offen.**
 
-Der [Preflight vom 5. November 2026, 15:32 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42055976438)
-meldete zunächst `IONOS_KEY_SEPARATOR_MISSING`. Nach Korrektur des gespeicherten
-Eintrags bestand die Formatprüfung; Versuch 2 um 15:51 UTC wurde von IONOS mit
-`IONOS_ACCESS_DENIED` abgewiesen.
+- [Erster erfolgreicher Zugangstest, 16:34 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42065758134),
+  Commit `e2805bdcf50904b8a3ba8bb182b7bcf947ffb0b7`: alle 22 Tests bestanden,
+  `cloudflare:TEST_DOMAIN_ACTIVE`, `ionos:TEST_CNAME_CONFIRMED`,
+  `dnsModified:false`, `ready:true`.
+- [Echter Schreibtest, 16:40 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42066886980),
+  Commit `18c43b9be4b341972ab7e5ad11c9317ca93ea120`: alle 28 Adapter-/Probe-Tests
+  bestanden, `status:DNS_WRITE_CHECK_PASSED`, `created:true`,
+  `repeatedWithoutDuplicate:true`, `removed:true`.
+- [Erneuter Bestandscheck desselben Commits, 16:40 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42066886897):
+  Cloudflare-Testadresse weiterhin aktiv, IONOS-Test-CNAME weiterhin passend,
+  alle 22 Preflight-/Adaptertests bestanden.
 
-Der [genauere Zugangstest um 15:53 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42059565638)
-auf Commit `8e75b82dcba3d9ac805df5612558c35706e13bf7` unterscheidet HTTP 401
-(`IONOS_KEY_REJECTED`) von HTTP 403 (`IONOS_ACCESS_FORBIDDEN`). Ergebnis:
-alle 17 Adaptertests bestanden, `cloudflare:TEST_DOMAIN_ACTIVE`,
-`ionos:IONOS_KEY_REJECTED`, `dnsModified:false`, `ready:false`.
-Die HTTP-401-Antwort kommt beim lesenden Abruf der DNS-Zonen; ein fehlender
-Trennpunkt ist damit nicht mehr der aktuelle Blocker. Ob der geheime Teil
-falsch kopiert wurde, zu einem anderen Präfix gehört oder anderweitig ungültig
-ist, lässt sich aus HTTP 401 allein nicht unterscheiden. Kein Schlüsselwert
-oder ungefilterter Provider-Antworttext wird ausgegeben.
+Der Schreibtest hat genau
+`setup-check-42066886980-1.sma-automation.com` mit Ziel
+`sma-customer-website-test.pages.dev` angelegt. Eine Wiederholung hat denselben
+Datensatz verwendet, ohne einen zweiten anzulegen. Anschließend wurde die im
+Lauf zurückgelesene Datensatz-ID entfernt und das Fehlen des Eintrags über die
+IONOS-API bestätigt. Es wurde keine neue Cloudflare-Domain angemeldet und keine
+Kundenwebseite veröffentlicht. Der bestehende Testhost blieb erhalten.
 
-Versuch 2 desselben Laufs um 16:10 UTC und Versuch 3 um 16:20 UTC meldeten nach
-weiteren Secret-Aktualisierungen `IONOS_KEY_SEPARATOR_MISSING`. Diese Versuche
-erreichten IONOS noch nicht. Sie belegen keine erneute IONOS-Ablehnung.
+`write-probe.mjs` ist ein separater Test mit fest begrenzter Zone und einem aus
+GitHub-Laufnummer und Versuch erzeugten Hostnamen. Vorhandene Einträge blockieren
+den Test. Nur die konkret erzeugte ID mit unverändertem Ziel wird entfernt;
+Änderungen, Duplikate oder ein unbestätigtes Anlegen führen zu einem klaren
+Aufräum-/Prüfbedarf statt zum Löschen einer geratenen ID. Der Workflow
+`customer-domain-dns-writecheck.yml` serialisiert diese Tests und läuft nur bei
+Änderungen an seinem eigenen Workflow-/Probe-/Testcode auf
+`customer-domain-automation`. Der normale Preflight bleibt vollständig lesend.
 
-Der [Lauf mit getrennt konfiguriertem öffentlichem Präfix](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42064167734)
-am 5. November 2026, 16:24 UTC, auf Commit
-`6958d9f5ec6a5dc17d6b494f2cc3fe161a1bf165` bestand alle 20 betroffenen Tests.
-Ergebnis: `cloudflare:TEST_DOMAIN_ACTIVE`, `ionos:IONOS_KEY_REJECTED`,
-`dnsModified:false`, `ready:false`. Die automatische Ergänzung des bekannten
-Präfixes ist damit technisch geprüft; ein erfolgreicher Zugang ist noch nicht
-bewiesen. Der Nutzer muss nur den geheimen Wert aus dem unteren IONOS-Feld
-„Verschlüsselung“ speichern, nicht mehr beide Teile manuell zusammensetzen.
+Die 28 lokalen und GitHub-Tests decken Schlüsselzusammensetzung, sichere
+Zonenbegrenzung, unveränderte Root-/Mail-Daten im Modell, Konflikte, Wiederholung,
+verlorene Antworten, das dokumentierte Antwortformat und begrenztes Entfernen
+des temporären Eintrags ab. Die letzte vollständige lokale Node-Suite vor
+diesen Erweiterungen bestand mit 416 Tests; nach den Erweiterungen wurden die
+28 betroffenen Tests ausgeführt. `git diff --check` ist sauber.
 
-Noch kein IONOS-Schreibaufruf, kein neuer Host und keine Kundendatenänderung in
-diesem Block. Die letzte vollständige lokale Node-Suite bestand mit 416 Tests;
-die anschließende getrennte Präfix-Konfiguration wurde mit allen 20 betroffenen
-DNS-/Preflight-Tests lokal und im echten GitHub-Lauf geprüft.
+### Behobene Hindernisse
+
+Die früheren Läufe scheiterten an fehlenden Schlüsselbestandteilen bzw. HTTP
+401. Nach Speicherung ausschließlich des geheimen Teils wurde die Anmeldung
+akzeptiert; [Versuch 2 um 16:29 UTC](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42064167734)
+erreichte die DNS-Zonen und scheiterte noch an `INVALID_RECORD_RESPONSE`.
+Die Antwortprüfung wurde mit dem öffentlichen IONOS-OpenAPI-Schema abgeglichen:
+Record-IDs sind undurchsichtige Zeichenketten ohne garantierte UUID-Version;
+`disabled` ist optional mit Standard `false`. Der Parser berücksichtigt beides,
+weist explizit ungültige Typen weiterhin ab und liefert nur feste Fehlercodes.
+Der erfolgreiche Zugangstest bestätigt die Korrektur mit echten Daten.
 
 ```sh
-node --test tests/website-setup-ionos.test.cjs
+node --test tests/website-setup-ionos.test.cjs tests/website-setup-write-probe.test.cjs
 node hosting/customer-website-setup/preflight.mjs
 ```
 
@@ -145,6 +153,10 @@ node hosting/customer-website-setup/preflight.mjs
 
 - [IONOS DNS API](https://developer.hosting.ionos.de/docs/dns), OpenAPI 1.0.2:
   `GET /v1/zones`, `GET /v1/zones/{zoneId}`, `POST /v1/zones/{zoneId}/records`.
+  Der temporäre Schreibtest nutzt zusätzlich das dokumentierte
+  `DELETE /v1/zones/{zoneId}/records/{recordId}` für seine eigene erzeugte ID.
+  [OpenAPI-Schema](https://developer.hosting.ionos.com/assets/kms-swagger-specs/dns.yaml):
+  `record-response.id` ist eine Zeichenkette, `disabled` hat Standard `false`.
   Die Dokumentation weist auf mögliche Deaktivierung kollidierender Dienste hin.
 - [IONOS Zugangsschlüssel](https://developer.hosting.ionos.de/docs/getstarted):
   `X-API-Key: publicprefix.secret`.
