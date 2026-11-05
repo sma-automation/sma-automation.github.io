@@ -49,14 +49,26 @@ export function validatePlan(input){
 const canonical=value=>typeof value==='string'?value.toLowerCase().replace(/\.$/,''):null;
 function recordsOf(zone,expected){
  if(!zone||!UUID.test(zone.id)||canonical(zone.name)!==expected||zone.type!=='NATIVE'||!Array.isArray(zone.records)||zone.records.length>10000)fail('INVALID_ZONE_RESPONSE');
- const ids=new Set();
+ const ids=new Set(),records=[];
  for(const record of zone.records){
-  if(!record||!UUID.test(record.id)||ids.has(record.id)||typeof record.name!=='string'||!record.name||typeof record.type!=='string'||typeof record.content!=='string'||typeof record.disabled!=='boolean')fail('INVALID_RECORD_RESPONSE');
+  if(!record||typeof record!=='object'||Array.isArray(record))fail('INVALID_RECORD_RESPONSE_OBJECT');
+  // IONOS record-response declares an opaque string ID, not a versioned UUID.
+  // It is returned as metadata only, never interpolated into a request URL.
+  if(typeof record.id!=='string'||!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(record.id))fail('INVALID_RECORD_RESPONSE_ID');
+  if(ids.has(record.id))fail('INVALID_RECORD_RESPONSE_DUPLICATE_ID');
+  if(typeof record.name!=='string'||!record.name)fail('INVALID_RECORD_RESPONSE_NAME');
+  if(typeof record.type!=='string'||!record.type)fail('INVALID_RECORD_RESPONSE_TYPE');
+  if(typeof record.content!=='string')fail('INVALID_RECORD_RESPONSE_CONTENT');
+  // The public OpenAPI schema declares disabled optional with default false.
+  // Only omission uses the default; null/string/number must still fail closed.
+  const disabled=Object.hasOwn(record,'disabled')?record.disabled:false;
+  if(typeof disabled!=='boolean')fail('INVALID_RECORD_RESPONSE_DISABLED');
   const name=canonical(record.name);
-  if(name!==expected&&!name.endsWith('.'+expected))fail('INVALID_RECORD_RESPONSE');
+  if(name!==expected&&!name.endsWith('.'+expected))fail('INVALID_RECORD_RESPONSE_ZONE');
   ids.add(record.id);
+  records.push({...record,disabled});
  }
- return zone.records;
+ return records;
 }
 function inspectRecords(zone,plan){
  const records=recordsOf(zone,plan.zone),exact=records.filter(record=>canonical(record.name)===plan.hostname);

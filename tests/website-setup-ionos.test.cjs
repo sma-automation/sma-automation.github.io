@@ -146,9 +146,26 @@ test('provider create success alone does not mark DNS ready',async()=>{
 });
 test('nonnative zones and inconsistent/malformed records stop before writes',async()=>{
  const slave=fixture({zoneType:'SLAVE'});await assert.rejects(()=>(client(slave)).then(dns=>dns.inspect(plan)),/ZONE_UNAVAILABLE/);
- for(const records of [[cname({id:'../../bad'})],[cname({disabled:undefined})],[cname({name:'other.com'})],[cname(),cname()]]){
+ for(const records of [[cname({id:'../../bad'})],[cname({disabled:null})],[cname({disabled:'false'})],[cname({disabled:0})],[cname({name:'other.com'})],[cname(),cname()]]){
   const f=fixture({records});await assert.rejects(()=>(client(f)).then(dns=>dns.ensureCname(plan)),/INVALID_RECORD_RESPONSE/);assert.ok(f.calls.every(c=>c.options.method==='GET'));
  }
+});
+test('provider record IDs may be opaque strings rather than RFC4122 version 1-5 UUIDs',async()=>{
+ for(const id of ['record:abc_001-CNAME','22222222-2222-7222-8222-222222222222']){
+  const f=fixture({records:[cname({id})]});
+  const result=await (await client(f)).ensureCname(plan);
+  assert.equal(result.recordId,id);assert.equal(result.changed,false);
+  assert.ok(f.calls.every(c=>c.options.method==='GET'));
+ }
+});
+test('omitted disabled uses documented false default while explicit true still blocks',async()=>{
+ const enabled=cname();delete enabled.disabled;
+ const f=fixture({records:[enabled]});
+ assert.equal((await (await client(f)).ensureCname(plan)).changed,false);
+ assert.ok(f.calls.every(c=>c.options.method==='GET'));
+ const disabled=fixture({records:[cname({disabled:true})]});
+ await assert.rejects(()=>(client(disabled)).then(dns=>dns.ensureCname(plan)),/DNS_RECORD_CONFLICT/);
+ assert.ok(disabled.calls.every(c=>c.options.method==='GET'));
 });
 test('provider errors are bounded fixed codes and never leak credential/body',async()=>{
  for(const [status,expected] of [[401,'IONOS_KEY_REJECTED'],[403,'IONOS_ACCESS_FORBIDDEN'],[429,'IONOS_RATE_LIMITED'],[500,'IONOS_UNAVAILABLE'],[302,'IONOS_UNAVAILABLE']]){
