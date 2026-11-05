@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
+import {contentLimits,websiteURL} from '../app/assets/customer-website-model.mjs';
+import {mountCustomerWebsiteEditor} from '../app/assets/customer-website-editor.mjs';
+const html=await readFile(new URL('../app/website-builder.html',import.meta.url),'utf8');
+const id='ab660000-0000-4000-8000-000000000061',domain={site_id:id,hostname:'test.sma-automation.com',verified_at:'2026-11-05T13:16:59Z'};
+const state={ok:true,site_id:id,revision:1,content:{...Object.fromEntries(Object.keys(contentLimits).map(k=>[k,''])),name:'Fixture',headline:'Fixture'},published:false,publicly_available:false,has_changes:true,can_edit:true,shop_url:null,website_url:websiteURL(id),custom_domain:domain};
+const {document:doc}=parseHTML(html);let result=state,owner=id,fail=false,delay=null;const calls=[];
+const view=mountCustomerWebsiteEditor({doc,getOwnerId:async()=>owner,request:async action=>{calls.push(action);if(fail)throw Error('offline');return delay?await delay:result;}});
+const address=doc.getElementById('websiteAddress'),link=doc.getElementById('publicLink');
+await view.load();assert.equal(address.hidden,false);assert.match(address.textContent,/https:\/\/test.sma-automation.com\//);assert.match(address.textContent,/privat/);assert.equal(link.hidden,true);assert.equal(link.getAttribute('href'),null);
+result={...state,published:true,publicly_available:true};await view.load();assert.equal(link.href,'https://test.sma-automation.com/');assert.equal(link.hidden,false);
+result={...result,custom_domain:null};await view.load();assert.equal(address.hidden,true);assert.equal(address.textContent,'');assert.equal(link.href,websiteURL(id));
+result={...state,published:true,publicly_available:true};await view.load();fail=true;await view.load();assert.equal(address.hidden,true);assert.equal(link.getAttribute('href'),null);fail=false;
+result={...state,can_edit:false,custom_domain:null};await view.load();assert.equal(address.hidden,true);assert.equal(link.hidden,true);
+result=state;await view.load();let release;delay=new Promise(r=>release=r);const pending=view.load();await new Promise(r=>setImmediate(r));owner='other-owner';view.invalidate();release(state);await pending;assert.equal(address.textContent,'');assert.equal(link.getAttribute('href'),null);assert.equal(doc.getElementById('editor').hidden,true);view.destroy();
+assert(calls.every(action=>action==='get'));console.log('Confirmed address DOM checks passed: private/online, fallback, revocation, offline, access loss, account change; reads only.');

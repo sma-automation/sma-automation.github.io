@@ -1,5 +1,5 @@
 import {readCompanyProfile} from './company-profile-model.mjs?v=1';
-import {safeShopLink} from './website-domain-model.mjs?v=1';
+import {safeShopLink,normalizeDomain} from './website-domain-model.mjs?v=1';
 export const siteUUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export const contentLimits={name:100,headline:160,intro:600,about:4000,contact_email:254,legal_notice:6000,privacy_notice:6000,contact_phone:60,contact_address:400,service_1_title:80,service_1_text:400,service_2_title:80,service_2_text:400,service_3_title:80,service_3_text:400};
 export const appearanceOptions={accent:['blue','green','violet','terracotta'],hero:['shk','abstract','none','image']};
@@ -26,6 +26,13 @@ export function readWebsiteContent(value){
  return result;
 }
 export function websiteURL(id){if(!siteUUID.test(id))fail('INVALID_RESPONSE');return 'https://sma-automation.com/app/website.html?site='+id;}
+function readCustomDomain(value,siteId,canEdit){
+ if(value===undefined||value===null)return null;
+ if(!value||typeof value!=='object'||Array.isArray(value)||!canEdit||!siteUUID.test(siteId||'')||value.site_id!==siteId||typeof value.verified_at!=='string'||!Number.isFinite(Date.parse(value.verified_at)))fail('INVALID_RESPONSE');
+ let host;try{host=normalizeDomain(value.hostname);}catch{fail('INVALID_RESPONSE');}
+ if(!host||host!==value.hostname||Object.keys(value).sort().join('|')!=='hostname|site_id|verified_at')fail('INVALID_RESPONSE');
+ return {hostname:host,url:'https://'+host+'/',verifiedAt:value.verified_at};
+}
 export function readCustomerWebsite(r){
  if(r?.ok!==true)fail(r?.code||'UNAVAILABLE');
  if(!Number.isSafeInteger(r.revision)||r.revision<0||r.revision>2147483647||['published','publicly_available','has_changes','can_edit'].some(k=>typeof r[k]!=='boolean'))fail('INVALID_RESPONSE');
@@ -34,7 +41,7 @@ export function readCustomerWebsite(r){
  const companyRevision=r.company_revision??0;if(!Number.isSafeInteger(companyRevision)||companyRevision<0||companyRevision>2147483647||(companyRevision===0)!==!r.company_profile)fail('INVALID_RESPONSE');
  const company=r.company_profile?readCompanyProfile(r.company_profile):null;
  return {company,companyRevision,revision:r.revision,siteId:r.site_id,content:r.content===null?null:readWebsiteContent(r.content),published:r.published,publiclyAvailable:r.publicly_available,
-  hasChanges:r.has_changes,canEdit:r.can_edit,shopURL:safeShopLink(r.shop_url),websiteURL:r.website_url};
+  hasChanges:r.has_changes,canEdit:r.can_edit,shopURL:safeShopLink(r.shop_url),websiteURL:r.website_url,customDomain:readCustomDomain(r.custom_domain,r.site_id,r.can_edit)};
 }
 export function createCustomerWebsiteClient({request,getOwnerId,uuid=()=>crypto.randomUUID()}){
  let owner=null,state=null,pending=null,busy=false,generation=0;
