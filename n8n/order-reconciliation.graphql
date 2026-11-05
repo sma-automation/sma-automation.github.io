@@ -1,7 +1,7 @@
 query SMAOrderRecovery($after: String, $filter: String!, $first: Int!) {
   orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $filter) {
     nodes {
-      id name createdAt updatedAt
+      id name createdAt updatedAt test
       displayFinancialStatus displayFulfillmentStatus
       currentTotalPriceSet { shopMoney { amount currencyCode } }
     }

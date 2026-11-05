@@ -55,7 +55,7 @@ function harness(){
   return {api:context.api,document,nodes,timers,queries,docEvents,winEvents,
     respond:fn=>respond=fn,advance:ms=>now+=ms};
 }
-const order=(id=9,status='paid')=>({id,markt:'shopify',bestellnummer:'#'+(1000+id),
+const order=(id=9,status='paid')=>({id,markt:'shopify',ist_testbestellung:false,bestellnummer:'#'+(1000+id),
   erstellt_am:'2026-11-01T12:56:39Z',zahlungsstatus:status,lieferstatus:'UNFULFILLED',gesamtbetrag:'45.89',waehrung:'EUR'});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
@@ -64,6 +64,26 @@ const status=h=>h.nodes.get('bestellStatus').textContent;
 const response=(data,count=data.length)=>({data,count,error:null});
 const poll=h=>h.api.loadOrdersPage(h.api.state().requested,{background:true});
 const nextTimer=h=>[...h.timers.values()][0];
+
+test('polling enriches unknown orders with verified test classification without calling them real payments',async()=>{
+  const h=harness();h.api.init();
+  h.respond(()=>response([{...order(10),ist_testbestellung:null}]));await h.api.loadOrdersPage();
+  const badgeTexts=()=>list(h).children[0].children[0].children[2].children.map(b=>b.textContent);
+  assert.ok(badgeTexts().includes('Teststatus noch nicht bestätigt'));
+  h.respond(()=>response([{...order(10),ist_testbestellung:true}]));await poll(h);
+  assert.deepEqual(badgeTexts(),['Testbestellung – keine echte Zahlung','Testzahlung bestätigt','Noch nicht versendet']);
+  assert.ok(h.queries.every(q=>q.columns.includes('ist_testbestellung')&&q.operation==='select'));
+});
+
+test('only a boolean false confirms non-test mode; older missing flags remain unknown',async()=>{
+  const h=harness();h.api.init();
+  for(const flag of [undefined,null,'false',0]){
+    h.respond(()=>response([{...order(),ist_testbestellung:flag}]));await h.api.loadOrdersPage();
+    assert.equal(list(h).children[0].children[0].children[2].children[0].textContent,'Teststatus noch nicht bestätigt');
+  }
+  h.respond(()=>response([order()]));await h.api.loadOrdersPage();
+  assert.deepEqual(list(h).children[0].children[0].children[2].children.map(b=>b.textContent),['Bezahlt','Noch nicht versendet']);
+});
 
 test('scheduled refresh discovers a new order in an initially empty list and updates its payment/shipping status',async()=>{
   const h=harness();h.api.init();h.respond(()=>response([]));await h.api.loadOrdersPage();
