@@ -1,8 +1,10 @@
 # Shopify-Bestandsentwurf: Übernahme vor Spiegelung
 
-Stand: 6. November 2026. **Vorbereiteter, unveröffentlichter Kandidat.**
-Der laufende Bestandsworkflow, Shopify und die produktive Datenbank wurden in
-diesem Arbeitsschritt nicht verändert. Shopify Payments bleibt im Testmodus.
+Stand: 6. November 2026 (Europe/Vienna). **Separater manueller n8n-Prüflauf bestanden;
+Kandidat weiterhin unveröffentlicht.** Der laufende Bestandsworkflow und der
+erhaltene 515-Node-Entwurf wurden nicht verändert. Im Prüflauf wurden für
+SMA-TEST-002 dieselben vier Stück in Supabase und n8n bestätigt und genau eine
+Journalmeldung ergänzt. Shopify Payments bleibt im Testmodus.
 
 ## Ausgangslage
 
@@ -20,7 +22,7 @@ Lesende Bestandsaufnahme dieser Sitzung:
 - Shopify bestätigt für SMA-TEST-002 vier Stück; Supabase enthält ebenfalls vier.
 - SMA-TEST-001 hat bei Shopify einen Rohbestand von -6; SMA führt ihn als null
   verfügbare Stück. Das entspricht der bestehenden Behandlung negativer Werte.
-- Das Bestandsjournal enthält 17 abgeschlossene Meldungen, zuletzt zur
+- Vor dem Prüflauf enthielt das Bestandsjournal 17 abgeschlossene Meldungen, zuletzt zur
   Testbestellung #1010 am 5. November 2026 um 21:55:17 UTC.
 - Die Definitionen der bestehenden Bestands-RPCs wurden gelesen. Es gibt in
   diesem Schritt keine Migration, Änderung an Rechten oder neue SQL-Funktion.
@@ -68,7 +70,7 @@ node --test tests/inventory-draft.test.cjs tests/shop-stock.test.cjs
 git diff --check
 ```
 
-40 Tests bestanden: 30 für den neuen Vertrag und Patch, zehn vorhandene
+42 Tests bestanden: 32 für Vertrag, Patch und isolierten Prüflauf, zehn vorhandene
 Dashboard-Bestandstests. Der synthetische Durchlauf führt die tatsächlich
 eingebetteten Code-Nodes und HTTP-Body-Ausdrücke aus. Er prüft unter anderem
 Kunden-/Kontobindung, Doppelaufrufe, belegte/abgelaufene Sperren, zweite Lesung,
@@ -81,10 +83,52 @@ Ein exakter Vergleich des privaten Gesamtexports prüft zusätzlich, dass nur
 die vorgesehenen Bestands-Nodes/-Verbindungen verändert und neun Nodes ergänzt
 werden. Zugangskonfiguration und alle übrigen Inhalte bleiben gleich.
 
-**Noch ausstehend:** Import in eine getrennte unveröffentlichte n8n-Arbeitskopie
-und ein kontrollierter Ausführungstest mit dem vorhandenen n8n-Zugang. In dieser
-Sitzung waren keine vorhandenen Browser-Tabs und keine n8n-Verbindung verfügbar.
-Der erhaltene Originalentwurf wurde daher nicht überschrieben oder veröffentlicht.
+## Echter manueller Prüflauf
+
+Nach erneuter Prüfung war die bestehende n8n-Anmeldung verfügbar; eine neue
+Anmeldung war nicht nötig. Der frisch exportierte Originalentwurf stimmte in
+allen Feldern exakt mit dem gesicherten 515-Node-Export überein.
+
+`n8n/build-inventory-draft-qa.cjs` erstellt daraus einen **privaten** Prüflauf mit
+26 Nodes. Er verwendet die bestehenden n8n-Zugänge, einen manuellen Trigger und
+den korrigierten Bestandszweig. Vor dem Commit bindet ein zusätzlicher Wächter
+Kunde, Konto, Shop, Variante, Produkt, SKU und den bestätigten Bestand von vier
+Stück. Andere Produkte oder Mengen brechen ab. Der zweite Claim verwendet im
+selben Lauf dieselbe Lieferkennung und muss `duplicate` / `done` liefern.
+
+Getrennte n8n-Arbeitskopie: **QA – Shopify Bestandsentwurf – PR81**,
+ID `iVy7hpNBjDLxV1Ro`, gespeichert und nicht veröffentlicht. Der Prüflauf hat
+keinen Webhook-/Zeittrigger und enthält keine Shopify-Mutation.
+
+Der echte Lauf am **5. November 2026, 23:41:28 UTC** (6. November, 00:41 Uhr Wien)
+lief vollständig erfolgreich durch:
+
+- Bestehender Shopify-Zugang und beide Bestandsabfragen funktionieren.
+- Supabase bestätigt `applied:true`, vier Stück und den serverseitigen
+  Erfassungszeitpunkt `2026-11-05T23:41:28.149654Z`.
+- Die nachgelagerte n8n-Spiegelung wurde bestätigt; `finish` setzt die Meldung
+  um `23:41:28.668319Z` auf `done`.
+- Der identische zweite Claim liefert `duplicate` / `done`; er schreibt den
+  Bestand kein zweites Mal.
+- Unabhängige SQL-Nachprüfung: 18 abgeschlossene Meldungen insgesamt,
+  genau ein Versuch für die neue Meldung, Bestand vier, keine laufende Sperre.
+- Rückexport: alle 26 Nodes, ausführbarer Code, HTTP-Parameter und Verbindungen
+  entsprechen dem Prüfkandidaten. n8n entfernt lediglich implizite Code-Defaults
+  und die leere Ausgangsliste des End-Nodes.
+
+Der Dateiimport übernimmt in dieser n8n-Oberfläche **keine allgemeinen
+Workflow-Einstellungen**. Diese wurden deshalb im getrennten QA-Workflow
+anschließend gesetzt: Timeout 90 Sekunden, künftige manuelle/erfolgreiche/
+fehlgeschlagene Ausführungsdaten nicht dauerhaft speichern. Der erste erfolgreiche
+Lauf verwendete noch die n8n-Standardeinstellungen. Keine Rohdaten oder
+Zugangskonfiguration werden ins Repository übernommen.
+
+Für die Wiederholung nach Import stets zuerst die Workflow-Einstellungen
+kontrollieren; die JSON-Angaben allein reichen dafür nicht aus.
+
+![n8n-Abschluss mit vier Stück und erkanntem Doppelaufruf](evidence/shop-inventory-qa-pr81.jpg)
+
+## Noch offene Freigabegrenze
 
 Supabase und n8n Data Tables sind keine gemeinsame Transaktion. Ein Ausfall nach
 dem Commit kann eine vorübergehend abweichende Spiegelung hinterlassen. Ein
@@ -100,7 +144,8 @@ Der 524-Node-Kandidat enthält auch ältere, hier nicht abgenommene Änderungen 
 Entwurfs. **Kein vollständiger Austausch des veröffentlichten 511-Node-Workflows.**
 Eine spätere Veröffentlichung benötigt den dann frischen Export, den gezielten
 Vergleich mit der veröffentlichten Version und die Abnahme des gesamten
-übernommenen Bestandszweigs. Dieser PR allein ist kein Live-Nachweis.
+übernommenen Bestandszweigs. Der erfolgreiche isolierte Lauf ist kein Nachweis
+für eine produktive Veröffentlichung des gesamten Kundenworkflows.
 
 Quellen: [Shopify-Mengen und Zustände](https://shopify.dev/docs/apps/build/inventory-management-apps/manage-quantities-states),
 [InventoryLevel 2026-07](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/InventoryLevel),

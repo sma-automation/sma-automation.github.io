@@ -6,9 +6,41 @@ const {inventoryNames:N,inventorySingle,inventoryPrepare,inventoryBody,inventory
   inventoryEvaluate,inventoryCanonical,inventoryMirror,inventoryDone} = require('../n8n/inventory-draft-contract.cjs');
 const {patchInventoryDraft} = require('../n8n/patch-inventory-draft.cjs');
 const graph = require('./fixtures/inventory-draft.json');
+const {buildInventoryQA} = require('../n8n/build-inventory-draft-qa.cjs');
 const now = Date.parse('2026-11-06T00:00:00Z');
 const leaseId = '00000000-0000-4000-8000-000000000001';
 const gid = (type,id=1)=>`gid://shopify/${type}/${id}`;
+function qaFixture(){
+ const source=structuredClone(graph);
+ for(const suffix of ['Credential laden','Credential entschlüsseln','Credential vorbereiten','Access Token holen'])
+  source.nodes.push({id:suffix,name:'SMA – Produkt – Shopify Sync – '+suffix,type:'n8n-nodes-base.noOp',parameters:{},position:[0,0]});
+ return source;
+}
+test('isolated QA has only a manual entry and commits only after its scope guard',()=>{
+ const source=qaFixture(),before=structuredClone(source),qa=buildInventoryQA(source);
+ assert.deepEqual(source,before);assert.equal(qa.active,false);assert.equal(qa.nodes.length,26);
+ assert.equal(qa.nodes.filter(n=>n.type==='n8n-nodes-base.manualTrigger').length,1);
+ assert.equal(qa.nodes.some(n=>/webhook|scheduleTrigger|executeWorkflowTrigger/.test(n.type)),false);
+ assert.equal(qa.nodes.some(n=>/Produkt aktualisieren|Produkt erstellen/.test(n.name)),false);
+ const beforeCommit=Object.entries(qa.connections).filter(([,c])=>c.main.flat().some(e=>e.node===N.commit));
+ assert.deepEqual(beforeCommit.map(([name])=>name),['QA – Nur bestätigten Testbestand übernehmen']);
+ assert.equal(qa.connections[N.done].main[0][0].node,'QA – Gleiche Meldung wiederholen');
+ assert.equal(qa.settings.executionTimeout,90);assert.equal(qa.settings.saveManualExecutions,false);
+});
+test('real QA guard rejects changes to its product scope or confirmed quantity and requires duplicate completion',()=>{
+ const qa=buildInventoryQA(qaFixture()),guard=qa.nodes.find(n=>n.name==='QA – Nur bestätigten Testbestand übernehmen');
+ const job={kunde_id:'kunde_3182',produkt_id:'10c2f5a9-0571-4023-a1d6-df871813e1a7',markt_konto_id:'d7d70abf-9180-48ad-897a-f074149326cc',variant_id:'gid://shopify/ProductVariant/58648962433355',shop_domain:'6r0d8z-cd.myshopify.com',bestand:4};
+ const product={sku:'SMA-TEST-002',bestand:4};
+ const run=(s,p)=>vm.runInNewContext('(function(){'+guard.parameters.jsCode+'})()',{$input:{first:()=>({json:s})},$:()=>({first:()=>({json:p})})});
+ assert.equal(run(job,product)[0].json.bestand,4);
+ for(const key of Object.keys(job))assert.throws(()=>run({...job,[key]:key==='bestand'?3:'other'},product),/QA_SCOPE_OR_STOCK_CHANGED/);
+ assert.throws(()=>run(job,{...product,bestand:3}),/QA_SCOPE_OR_STOCK_CHANGED/);
+ assert.throws(()=>run(job,{...product,sku:'SMA-TEST-001'}),/QA_SCOPE_OR_STOCK_CHANGED/);
+ const verify=qa.nodes.find(n=>n.name==='QA – Ergebnis');
+ const finish=r=>vm.runInNewContext('(function(){'+verify.parameters.jsCode+'})()',{$input:{first:()=>({json:r})}});
+ assert.equal(finish({ok:true,action:'duplicate',status:'done'})[0].json.duplicate_ignored,true);
+ for(const r of [{ok:false,action:'duplicate',status:'done'},{ok:true,action:'process',status:'done'},{ok:true,action:'duplicate',status:'processing'}])assert.throws(()=>finish(r),/QA_DUPLICATE_NOT_CONFIRMED/);
+});
 function fixture(){
   const product={id:1,kunde_id:'n8n-customer',produkt_id:'product'};
   const mapping={markt:'shopify',kunde_id:product.kunde_id,produkt_id:product.produkt_id,
