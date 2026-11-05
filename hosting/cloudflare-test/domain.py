@@ -15,7 +15,7 @@ STATES = {"initializing", "pending", "active", "deactivated", "blocked", "error"
 
 
 class DomainApi:
-    def __init__(self, account, token, allow_attach=False):
+    def __init__(self, account, token, allow_attach=False, allow_retry=False):
         if not re.fullmatch(r"[0-9a-fA-F]{32}", account):
             raise CheckError("ACCOUNT_FORMAT_INVALID")
         self.project = "/accounts/" + account + "/pages/projects/" + PROJECT
@@ -23,12 +23,14 @@ class DomainApi:
         self.domain = self.domains + "/" + DOMAIN
         self.token = token
         self.allow_attach = allow_attach
+        self.allow_retry = allow_retry
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def request(self, path, method="GET", data=None, missing_ok=False):
         read = method == "GET" and data is None and path in {"/user/tokens/verify", self.project, self.domain}
         attach = self.allow_attach and method == "POST" and path == self.domains and data == {"name": DOMAIN}
-        if not read and not attach:
+        retry = self.allow_retry and method == "PATCH" and path == self.domain and data is None
+        if not read and not attach and not retry:
             raise CheckError("OPERATION_NOT_ALLOWED")
         request = urllib.request.Request(
             "https://api.cloudflare.com/client/v4" + path,
@@ -51,7 +53,7 @@ class DomainApi:
         return body.get("result")
 
 
-def run(api, attach=False):
+def run(api, attach=False, retry=False):
     token = api.request("/user/tokens/verify")
     if not isinstance(token, dict) or token.get("status") != "active":
         raise CheckError("TOKEN_NOT_ACTIVE")
@@ -70,13 +72,19 @@ def run(api, attach=False):
         return {"code": "DOMAIN_NOT_ATTACHED", "domain": DOMAIN, "cname_target": TARGET}
     if not isinstance(domain, dict) or domain.get("name") != DOMAIN:
         raise CheckError("DOMAIN_RESULT_MISMATCH")
+    retried = False
+    if retry and domain.get("status") != "active":
+        domain = api.request(api.domain, "PATCH")
+        if not isinstance(domain, dict) or domain.get("name") != DOMAIN:
+            raise CheckError("DOMAIN_RETRY_RESULT_MISMATCH")
+        retried = True
     def state(value):
         return value if value in STATES else "unknown"
     def diagnostic(section):
         value = (domain.get(section) or {}).get("error_message")
         return re.sub(r"[\r\n]", " ", value).replace(api.token, "[redacted]")[:500] if isinstance(value, str) else None
     method = (domain.get("validation_data") or {}).get("method")
-    return {"code": "DOMAIN_ATTACHED" if created else "DOMAIN_STATUS", "domain": DOMAIN,
+    return {"code": "DOMAIN_ATTACHED" if created else "DOMAIN_VALIDATION_RETRIED" if retried else "DOMAIN_STATUS", "domain": DOMAIN,
             "cname_target": TARGET, "status": state(domain.get("status")),
             "validation": state((domain.get("validation_data") or {}).get("status")),
             "verification": state((domain.get("verification_data") or {}).get("status")),
@@ -88,12 +96,12 @@ def run(api, attach=False):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["status", "attach"], default="status", nargs="?")
+    parser.add_argument("mode", choices=["status", "attach", "retry"], default="status", nargs="?")
     args = parser.parse_args()
     api = DomainApi(os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip(),
                     normalize_token(os.environ.get("CLOUDFLARE_API_TOKEN_READONLY", "")),
-                    allow_attach=args.mode == "attach")
-    print(json.dumps(run(api, attach=args.mode == "attach"), sort_keys=True))
+                    allow_attach=args.mode == "attach", allow_retry=args.mode == "retry")
+    print(json.dumps(run(api, attach=args.mode == "attach", retry=args.mode == "retry"), sort_keys=True))
 
 
 if __name__ == "__main__":
