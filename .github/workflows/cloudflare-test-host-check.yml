@@ -1,0 +1,68 @@
+name: Verify custom test hostname and private-page boundary
+
+on:
+  push:
+    branches: [cloudflare-access-check]
+    paths:
+      - .github/workflows/cloudflare-test-host-check.yml
+
+permissions: {}
+
+jobs:
+  verify-custom-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Fetch public verification code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/sma-host-check"
+          git -C "$RUNNER_TEMP/sma-host-check" remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git -C "$RUNNER_TEMP/sma-host-check" fetch --depth=1 origin "$GITHUB_SHA"
+          git -C "$RUNNER_TEMP/sma-host-check" checkout --detach FETCH_HEAD
+      - name: Wait for active hostname using read-only API calls
+        env:
+          CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sma-host-check/hosting/cloudflare-test"
+          python3 -u - <<'PY'
+          import json, os, time
+          from domain import DomainApi, run, normalize_token
+          api = DomainApi(os.environ['CLOUDFLARE_ACCOUNT_ID'].strip(), normalize_token(os.environ['CLOUDFLARE_API_TOKEN_READONLY']))
+          for attempt in range(13):
+              result = run(api)
+              print(json.dumps(result), flush=True)
+              if result.get('status') == 'active':
+                  break
+              if attempt == 12:
+                  raise SystemExit('DOMAIN_ACTIVATION_STILL_PENDING')
+              time.sleep(15)
+          PY
+      - name: Verify HTTPS files, headers and offline customer page without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sma-host-check/hosting/cloudflare-test"
+          python3 -u - <<'PY'
+          import json, re, urllib.request
+          import verify_public
+          verify_public.BASE = 'https://test.sma-automation.com'
+          verify_public.main()
+          request = urllib.request.Request(verify_public.BASE + '/assets/customer-website-public-api.mjs', headers={'User-Agent':'SMA-Public-Page-Verification/1.0'})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              source = response.read(10000).decode()
+          origin = re.search("const origin='([^']+)'", source).group(1)
+          assert origin == 'https://bnvnmdxosbnuzedokqgh.supabase.co'
+          key = re.search("const key='([^']+)'", source).group(1)
+          assert key.startswith('sb_publishable_')
+          request = urllib.request.Request(origin + '/rest/v1/rpc/sma_customer_website_public_v1', data=json.dumps({'p_site_id':'f931c608-a7fd-40df-9762-574c39301849'}).encode(), method='POST', headers={'Content-Type':'application/json','apikey':key,'Origin':verify_public.BASE,'User-Agent':'SMA-Public-Page-Verification/1.0'})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              result = json.load(response)
+              assert response.headers.get('Access-Control-Allow-Origin') in {verify_public.BASE, '*'}, 'PUBLIC_READ_CORS_MISMATCH'
+          assert result == {'ok': False, 'code': 'NOT_AVAILABLE'}, 'PRIVATE_PAGE_BOUNDARY_UNCONFIRMED'
+          print(json.dumps({'code':'CUSTOM_HOST_VERIFIED', 'url':verify_public.BASE, 'private_page':'NOT_AVAILABLE', 'public_read_cors':'valid'}))
+          PY
