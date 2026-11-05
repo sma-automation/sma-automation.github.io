@@ -1,0 +1,39 @@
+name: Customer domain automation - provider preflight
+
+on:
+  push:
+    branches: [customer-domain-automation]
+    paths:
+      - .github/workflows/customer-domain-preflight.yml
+      - hosting/customer-website-setup/**
+      - tests/website-setup-ionos.test.cjs
+
+permissions: {}
+concurrency:
+  group: sma-customer-domain-preflight
+  cancel-in-progress: false
+
+jobs:
+  inspect-providers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Fetch exact public source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/sma-domain-automation"
+          git -C "$RUNNER_TEMP/sma-domain-automation" remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git -C "$RUNNER_TEMP/sma-domain-automation" fetch --depth=1 origin "$GITHUB_SHA"
+          git -C "$RUNNER_TEMP/sma-domain-automation" checkout --detach FETCH_HEAD
+      - name: Verify DNS conflict and retry handling
+        run: node --test "$RUNNER_TEMP/sma-domain-automation/tests/website-setup-ionos.test.cjs"
+      - name: Read existing test binding and provider access without changes
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
+          IONOS_DNS_API_KEY: ${{ secrets.IONOS_DNS_API_KEY }}
+          # Public identifier of the user's newly created test-account key.
+          # The protected value may be either the secret alone or the full pair.
+          IONOS_DNS_API_PREFIX: 3a7441c7fe44415ea2e39ce4265311d4
+        run: node "$RUNNER_TEMP/sma-domain-automation/hosting/customer-website-setup/preflight.mjs"

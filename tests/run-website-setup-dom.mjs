@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
+import {mountWebsiteSetup} from '../app/assets/website-setup.mjs';
+const tick=()=>new Promise(r=>setImmediate(r));
+const {document,window}=parseHTML('<html><body><section></section></body></html>');
+const root=document.querySelector('section'),calls=[];let owner='owner-1',pending=null,result={ok:true,available:true,job:null};
+const view=mountWebsiteSetup({root,getOwnerId:async()=>owner,request:async(action,input)=>{calls.push({action,input});return pending?pending:result;}});
+await tick();assert.equal(root.querySelector('button').disabled,false);assert.deepEqual(calls,[{action:'get',input:{}}]);
+result={ok:true,available:true,job:{hostname:'seite-4-f931c608.sma-automation.com',phase:'project',blocked:false}};
+root.querySelector('button').click();root.querySelector('button').click();await tick();assert.equal(calls.filter(c=>c.action==='start').length,1);assert.match(root.textContent,/Hosting wird eingerichtet/);assert.equal(root.querySelector('button').disabled,true);
+result.job={...result.job,phase:'active'};await view.load();assert.match(root.textContent,/SMA-Webadresse ist eingerichtet/);assert.match(root.textContent,/Entwurf bleibt/);assert.equal(root.querySelector('button').disabled,true);
+result.job={...result.job,phase:'dns',blocked:true};await view.load();assert.equal(root.querySelector('button').disabled,false);root.querySelector('button').click();await tick();assert.equal(calls.at(-1).action,'retry');
+let release;pending=new Promise(r=>release=r);const loading=view.load();await tick();owner='owner-2';release(result);await loading;assert.equal(root.querySelector('[data-setup-address]').textContent,'');assert.match(root.textContent,/Kundenzuordnung/);
+view.destroy();assert.equal(root.textContent,'');
+console.log('Setup DOM checks passed: read-only load, one-click start, duplicate-click suppression, progress, private draft wording, retry, owner change, teardown.');

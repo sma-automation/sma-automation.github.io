@@ -15,11 +15,14 @@ const codes=new Set(['AUTH_REQUIRED','ACCOUNT_UNAVAILABLE','ACCOUNT_CHANGED','AC
 const fail=code=>{throw Object.assign(Error(code),{code});};
 const checked=r=>{if(r?.ok!==true)fail(codes.has(r?.code)?r.code:'UNAVAILABLE');return r;};
 function pathFor(r){if(!uuid.test(r.id)||!['image/png','image/jpeg'].includes(r.mime))fail('IMAGE_UNAVAILABLE');return 'images/'+r.id+(r.mime==='image/png'?'.png':'.jpg');}
-export function createWebsiteImageHandler({authenticate,rpc,upload,download,remove,publicSiteOrigins={}}){
+export function createWebsiteImageHandler({authenticate,rpc,upload,download,remove,publicSiteOrigins={},resolvePublicOrigin}){
  const publicSites=publicWebsiteOrigins(publicSiteOrigins);
  return async request=>{
   const origin=request.headers.get('origin'),params=new URL(request.url).searchParams,id=params.get('id'),site=params.get('site');
-  const publicRead=publicSites.get(origin)===site&&!!site&&uuid.test(id||'')&&params.size===2&&
+  let permitted=false;
+  const candidate=!!site&&uuid.test(site)&&uuid.test(id||'')&&typeof origin==='string'&&/^https:\/\/[a-z0-9.-]+$/.test(origin)&&origin!==originAllowed;
+  if(candidate){try{permitted=resolvePublicOrigin?await resolvePublicOrigin(origin,site)===true:publicSites.get(origin)===site;}catch{permitted=false;}}
+  const publicRead=permitted&&!!site&&uuid.test(id||'')&&params.size===2&&
    !request.headers.has('authorization')&&(request.method==='GET'||request.method==='OPTIONS'&&request.headers.get('access-control-request-method')==='GET'&&
     (request.headers.get('access-control-request-headers')||'').split(',').every(header=>!header.trim()||header.trim().toLowerCase()==='apikey'));
   const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Origin, Authorization, Access-Control-Request-Method, Access-Control-Request-Headers',
@@ -41,6 +44,7 @@ export function createWebsiteImageHandler({authenticate,rpc,upload,download,remo
     inspectWebsiteImage(bytes);
     // A change of owner, access or published snapshot during the download revokes the response.
     const again=await call(action,input);if(again.sha256!==media.sha256)fail('IMAGE_UNAVAILABLE');
+    if(publicRead&&resolvePublicOrigin&&await resolvePublicOrigin(origin,site)!==true)fail('IMAGE_UNAVAILABLE');
     return new Response(bytes,{headers:{...headers,'Content-Type':media.mime,'Content-Length':String(bytes.length)}});
    }
    const bytes=await boundedImageBody(request),info=inspectWebsiteImage(bytes);

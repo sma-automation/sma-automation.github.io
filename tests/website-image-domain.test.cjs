@@ -1,10 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises');
 const site='ab990000-0000-4000-8000-000000000071',id='ab990000-0000-4000-8000-000000000072',origin='https://test.sma-automation.com';
-async function fixture(config={[origin]:site}){
+async function fixture(config={[origin]:site},resolver){
  const {createWebsiteImageHandler}=await import('../supabase/functions/sma-website-image/handler.mjs'),{imageDigest}=await import('../supabase/functions/_shared/website-image.mjs');
  const bytes=new Uint8Array(await fs.readFile(__dirname+'/fixtures/website-images/logo.png'));let available=true,downloads=0,revokeDuringDownload=false;
  const calls=[];
- const handler=createWebsiteImageHandler({publicSiteOrigins:config,authenticate:()=>{throw Error('must not authenticate');},rpc:async(_name,p)=>{calls.push(p);return available?{ok:true,id,mime:'image/png',size:bytes.length,sha256:await imageDigest(bytes)}:{ok:false,code:'IMAGE_UNAVAILABLE'};},download:async()=>{downloads++;if(revokeDuringDownload)available=false;return bytes;},upload:()=>{throw Error('must not upload');},remove:()=>{throw Error('must not remove');}});
+ const handler=createWebsiteImageHandler({publicSiteOrigins:config,resolvePublicOrigin:resolver,authenticate:()=>{throw Error('must not authenticate');},rpc:async(_name,p)=>{calls.push(p);return available?{ok:true,id,mime:'image/png',size:bytes.length,sha256:await imageDigest(bytes)}:{ok:false,code:'IMAGE_UNAVAILABLE'};},download:async()=>{downloads++;if(revokeDuringDownload)available=false;return bytes;},upload:()=>{throw Error('must not upload');},remove:()=>{throw Error('must not remove');}});
  return {handler,calls,bytes,get downloads(){return downloads;},offline(){available=false;},revokeDuringDownload(){revokeDuringDownload=true;}};
 }
 const req=(options={},query='?id='+id+'&site='+site)=>new Request('https://api.example.test/image'+query,{...options,headers:{origin,...options.headers}});
@@ -37,4 +37,15 @@ test('public-origin configuration rejects wildcards, paths, credentials and inva
  const {publicWebsiteOrigins}=await import('../supabase/functions/sma-website-image/handler.mjs');
  for(const config of [null,[],{'*':site},{'http://test.example.com':site},{'https://test.example.com/':site},{'https://test.example.com:443':site},{'https://user@test.example.com':site},{'https://a..example.com':site},{'https://sma-automation.com':site},{[origin]:'invalid'}])assert.throws(()=>publicWebsiteOrigins(config));
  const config={[origin]:site},f=await fixture(config);config[origin]=id;assert.equal((await f.handler(req())).status,200);
+});
+
+test('dynamic origin lookup overrides a stale static allowlist and fails closed',async()=>{
+ for(const resolver of [async()=>false,async()=>{throw Error('offline');}]){
+  const f=await fixture({[origin]:site},resolver),r=await f.handler(req());assert.equal(r.status,403);assert.equal(f.downloads,0);
+ }
+ const calls=[],f=await fixture({},async(o,s)=>{calls.push([o,s]);return o===origin&&s===site;});
+ const r=await f.handler(req());assert.equal(r.status,200);assert.deepEqual(calls,[[origin,site],[origin,site]]);
+});
+test('address revocation during image download suppresses the bytes',async()=>{
+ let checks=0;const f=await fixture({},async()=>++checks===1),r=await f.handler(req());assert.equal(r.status,404);assert.equal((await r.json()).code,'IMAGE_UNAVAILABLE');
 });

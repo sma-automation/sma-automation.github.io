@@ -29,6 +29,11 @@ Der Webseitenbereich erkennt jetzt einen vorhandenen SMA-Entwurf unabhängig von
 
 ## Eigene Domain
 
+**Automatische Einrichtung ist Pflichtumfang und noch offen.** Der manuell
+bestätigte Testhost genügt dafür nicht. Der [aktuelle Anschluss und die
+Abnahmekriterien](CUSTOMER_WEBSITE_AUTOMATION.md) führen die erforderliche
+Providerfreigabe und den vollständigen Kundenablauf auf.
+
 Der [Domainnachweis für neue SMA-Webseiten](CUSTOMER_WEBSITE_DOMAIN_PROOF.md) ist über **PR #73 live** und im angemeldeten Dashboard geprüft. Er verwendet die gespeicherte eigene Domain im neuen Erstellungsweg und ergänzt einen Direktbutton zur bestehenden Nachweisansicht. Ein bestätigter TXT-Eintrag ist ausdrücklich noch keine Domain-Verknüpfung. DNS, Hosting und Kundendaten wurden für diese Erweiterung nicht verändert.
 
 Die [Cloudflare-Testadresse mit IONOS-CNAME, HTTPS und begrenztem öffentlichem Bildzugriff](CUSTOMER_WEBSITE_CUSTOM_DOMAIN_E2E.md) ist eingerichtet und geprüft. Ein kurzer sichtbarer Test mit fiktiven Inhalten war erfolgreich; danach wurde der unveränderte Originalentwurf wieder privat gestellt. [PR #74](https://github.com/sma-automation/sma-automation.github.io/pull/74) ist zusammengeführt und ausgeliefert. Die [bestätigte Besitzer-/Seitenzuordnung](CUSTOMER_WEBSITE_ADDRESSES.md) wird im Editor angezeigt und für den öffentlichen Link verwendet. Beliebige Kundendomains werden in V1 administrativ eingerichtet; automatische Provisionierung und gemeinsamer DNS-/Hosting-/Bild-Entzug sind kein abgeschlossener Mehrkundenautomatismus. Die festgestellten kommerziellen Nutzungsgrenzen von GitHub Pages bleiben Bestandteil der späteren Hosting-/Serverplanung.
