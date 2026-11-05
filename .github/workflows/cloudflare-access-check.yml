@@ -1,0 +1,84 @@
+name: SMA Cloudflare access check (read only)
+
+on:
+  push:
+    branches: [cloudflare-access-check]
+    paths: [.github/workflows/cloudflare-access-check.yml]
+
+permissions: {}
+
+jobs:
+  verify-access:
+    if: github.repository == 'sma-automation/sma-automation.github.io' && github.ref == 'refs/heads/cloudflare-access-check'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # No checkout, third-party actions, deployment, or credential artifacts.
+      - name: Verify token and Pages read access
+        shell: python
+        env:
+          CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+
+          def finish(code, ok=False, http_status=None):
+              result = {"check": "cloudflare_pages_read", "ok": ok, "code": code}
+              if http_status is not None:
+                  result["http_status"] = http_status
+              # Only fixed status labels and numeric HTTP status may reach logs.
+              output = json.dumps(result, sort_keys=True)
+              print(output)
+              summary = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary:
+                  with open(summary, "a", encoding="utf-8") as handle:
+                      handle.write("```json\n" + output + "\n```\n")
+              sys.exit(0 if ok else 1)
+
+          token = os.environ.get("CLOUDFLARE_API_TOKEN_READONLY", "").strip()
+          account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+          if not token:
+              finish("TOKEN_SECRET_MISSING")
+          if not re.fullmatch(r"[0-9a-fA-F]{32}", account):
+              finish("ACCOUNT_SECRET_MISSING_OR_INVALID")
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect())
+
+          def get(path):
+              request = urllib.request.Request(
+                  "https://api.cloudflare.com/client/v4" + path,
+                  headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
+                  method="GET",
+              )
+              try:
+                  with opener.open(request, timeout=20) as response:
+                      body = response.read(1048577)
+                  if len(body) > 1048576:
+                      finish("RESPONSE_TOO_LARGE")
+                  data = json.loads(body)
+              except urllib.error.HTTPError as error:
+                  finish("CLOUDFLARE_HTTP_ERROR", http_status=int(error.code))
+              except (urllib.error.URLError, OSError):
+                  finish("CLOUDFLARE_CONNECTION_ERROR")
+              except (ValueError, UnicodeError):
+                  finish("CLOUDFLARE_INVALID_RESPONSE")
+              if not isinstance(data, dict) or data.get("success") is not True:
+                  finish("CLOUDFLARE_REQUEST_REJECTED")
+              return data.get("result")
+
+          verification = get("/user/tokens/verify")
+          if not isinstance(verification, dict) or verification.get("status") != "active":
+              finish("TOKEN_NOT_ACTIVE")
+          projects = get("/accounts/" + account + "/pages/projects?per_page=1")
+          if not isinstance(projects, list):
+              finish("PAGES_INVALID_RESPONSE")
+          finish("CLOUDFLARE_ACCESS_OK", ok=True)
