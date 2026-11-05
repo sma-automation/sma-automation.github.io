@@ -78,12 +78,20 @@ export async function performSetupStep({job,providers,template,hashContent,fetch
  if(job.phase==='dns'){const record=await dns.ensureCname(plan);return {dns_record_id:record.recordId,dns_zone_id:record.zoneId};}
  if(job.phase!=='verify')fail('INVALID_JOB');
  const record=await dns.inspect(plan);if(record.state!=='present'||record.recordId!==job.provider_state?.dns_record_id)fail('DNS_RECORD_CONFLICT');
- const domain=await cf.call(p+'/domains/'+job.hostname);if(domain.name!==job.hostname||domain.status!=='active')fail('HTTPS_PENDING');
  let lookup;try{
   const r=await fetchImpl('https://cloudflare-dns.com/dns-query?name='+job.hostname+'&type=CNAME',{headers:{Accept:'application/dns-json'},redirect:'error',signal:AbortSignal.timeout(10000)});
   if(!r.ok)fail('DNS_PENDING');lookup=JSON.parse(await boundedText(r,16000));
  }catch{fail('DNS_PENDING');}
  if(lookup.Status!==0||!lookup.Answer?.some(a=>a.type===5&&a.name.replace(/\.$/,'')===job.hostname&&a.data.replace(/\.$/,'')===target))fail('DNS_PENDING');
+ const domain=await cf.call(p+'/domains/'+job.hostname);
+ if(domain.name!==job.hostname)fail('RESOURCE_CONFLICT');
+ if(domain.status!=='active'){
+  if(!['initializing','pending'].includes(domain.status))fail('DOMAIN_VALIDATION_FAILED');
+  // Once DNS is publicly visible, request a bounded validation retry. This
+  // uses the documented Pages endpoint and only our already-owned hostname.
+  if(job.attempts===1||job.attempts===4||job.attempts%10===0)await cf.call(p+'/domains/'+job.hostname,{method:'PATCH'});
+  fail('DOMAIN_VALIDATION_PENDING');
+ }
  try{
   const r=await fetchImpl('https://'+job.hostname+'/binding.mjs',{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000)});
   if(!r.ok||await boundedText(r,4096)!==bindingText(job.hostname,job.site_id))fail('HTTPS_PENDING');

@@ -9,7 +9,7 @@ async function rpc(action:string,input:unknown){
  if(!r.ok)throw Error('DATABASE_UNAVAILABLE');return JSON.parse(await boundedText(r,20000));
 }
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
-const waits=new Set(['CLOUDFLARE_UNAVAILABLE','PROVIDER_RATE_LIMITED','IONOS_UNAVAILABLE','IONOS_RATE_LIMITED','DNS_WRITE_UNCONFIRMED','DEPLOYMENT_PENDING','DNS_PENDING','HTTPS_PENDING']);
+const waits=new Set(['CLOUDFLARE_UNAVAILABLE','PROVIDER_RATE_LIMITED','IONOS_UNAVAILABLE','IONOS_RATE_LIMITED','DNS_WRITE_UNCONFIRMED','DEPLOYMENT_PENDING','DNS_PENDING','HTTPS_PENDING','DOMAIN_VALIDATION_PENDING']);
 async function runClaim(claim:any,token:string){
  const {job,providers}=claim;
  try{

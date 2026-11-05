@@ -1,0 +1,39 @@
+name: Customer website automatic setup checks
+on:
+  push:
+    branches: [customer-domain-automation, website-v1]
+    paths:
+      - hosting/customer-website-setup/**
+      - supabase/functions/sma-website-setup/**
+      - supabase/functions/sma-website-image/**
+      - supabase/sql/website-automatic-setup.sql
+      - supabase/sql/website-setup-origin.sql
+      - app/assets/website-setup.mjs
+      - app/assets/website-domain.mjs
+      - app/dashboard.html
+      - tests/**
+      - .github/workflows/customer-domain-setup-tests.yml
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read exact public source commit
+        run: |
+          git init .
+          git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install pinned test dependencies
+        run: |
+          npm ci --prefix tests/sql-runtime --ignore-scripts
+          npm ci --prefix tests/dom-runtime --ignore-scripts
+      - name: Check server contracts and customer controls
+        run: |
+          node --test tests/*.test.cjs
+          node tests/run-website-setup-sql.mjs
+          node tests/run-website-setup-dom.mjs
+          node tests/run-new-website-domain-dom.mjs
+          node tests/run-customer-website-dashboard-dom.mjs
+          node tests/run-customer-websites-sql.mjs

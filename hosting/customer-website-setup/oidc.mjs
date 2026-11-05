@@ -10,7 +10,7 @@ export async function verifyBootstrapIdentity(token,{fetchImpl=fetch,now=Date.no
   const header=JSON.parse(new TextDecoder().decode(decode(parts[0]))),claims=JSON.parse(new TextDecoder().decode(decode(parts[1])));
   if(header.alg!=='RS256'||header.typ!=='JWT'||typeof header.kid!=='string'||header.jku||header.jwk||header.x5u)reject();
   const seconds=Math.floor(now/1000);
-  if(claims.iss!==issuer||claims.aud!==bootstrapAudience||claims.sub!=='repo:sma-automation/sma-automation.github.io:ref:refs/heads/customer-domain-automation'
+  if(claims.iss!==issuer||claims.aud!==bootstrapAudience||claims.sub!=='repo:sma-automation@329573094/sma-automation.github.io@1371569809:ref:refs/heads/customer-domain-automation'
    ||claims.repository_id!=='1371569809'||claims.repository!=='sma-automation/sma-automation.github.io'
    ||claims.ref!=='refs/heads/customer-domain-automation'||claims.event_name!=='push'
    ||claims.workflow_ref!=='sma-automation/sma-automation.github.io/.github/workflows/customer-domain-bootstrap.yml@refs/heads/customer-domain-automation'

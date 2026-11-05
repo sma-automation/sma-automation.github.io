@@ -11,7 +11,7 @@ try{
  "create function net.http_post(url text,body jsonb,headers jsonb,timeout_milliseconds integer) returns bigint language sql as $$select 1::bigint$$;"+
  "create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid,bucket_id text,name text);alter table storage.objects enable row level security;");
  await db.exec(await readFile(new URL('./sql-runtime/vault-test-double.sql',import.meta.url),'utf8'));
- for(const file of ['website-domain-preparation.sql','company-profiles.sql','customer-websites.sql','customer-website-images.sql','customer-website-addresses.sql','website-automatic-setup.sql'])await db.exec(await readFile(new URL('../supabase/sql/'+file,import.meta.url),'utf8'));
+ for(const file of ['website-domain-preparation.sql','company-profiles.sql','customer-websites.sql','customer-website-images.sql','customer-website-addresses.sql','website-automatic-setup.sql','website-setup-origin.sql'])await db.exec(await readFile(new URL('../supabase/sql/'+file,import.meta.url),'utf8'));
  await db.query('insert into public.sma_kunden(id,user_id,paket,aktiv,demo_delta_aktiv) values(91,$1,\'delta\',true,true),(92,$2,\'delta\',true,true)',[uid,other]);
  const user=async(action,input={})=>{await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);try{return (await db.query('select public.sma_website_setup_v1($1,$2) as r',[action,input])).rows[0].r;}finally{await db.exec('reset role');}};
  const worker=async(action,input={})=>{await db.exec('set role service_role');try{return (await db.query('select public.sma_website_setup_worker_v1($1,$2) as r',[action,input])).rows[0].r;}finally{await db.exec('reset role');}};
@@ -41,6 +41,15 @@ try{
  eq((await user('get')).job.phase,'active');eq((await worker('claim',{token})).job,null);
  eq((await db.query('select published is null as private,revision from sma_private.customer_websites_v1 where customer_id=91')).rows[0],{private:true,revision:1});
  eq((await db.query('select public.sma_website_origin_v1($1,$2) as yes',[start.job.hostname,site.site_id])).rows[0].yes,true);
+ // A fixture publication remains local; test address withdrawal for browser reads.
+ await db.exec('update sma_private.customer_websites_v1 set published=draft where customer_id=91');
+ await db.query("select set_config('request.headers',$1,false)",[JSON.stringify({origin:'https://'+start.job.hostname})]);
+ eq((await db.query('select public.sma_customer_website_public_v1($1) as r',[site.site_id])).rows[0].r.ok,true);
+ await db.exec('update sma_private.customer_website_addresses_v1 set revoked_at=now() where customer_id=91');
+ eq((await db.query('select public.sma_customer_website_public_v1($1) as r',[site.site_id])).rows[0].r.code,'NOT_AVAILABLE');
+ await db.query("select set_config('request.headers',$1,false)",[JSON.stringify({origin:'https://sma-automation.com'})]);
+ eq((await db.query('select public.sma_customer_website_public_v1($1) as r',[site.site_id])).rows[0].r.ok,true);
+ await db.exec('update sma_private.customer_website_addresses_v1 set revoked_at=null where customer_id=91');
  await db.query('update public.sma_kunden set user_id=$1 where id=91',[other]);
  eq((await user('get')).code,'ACCOUNT_UNAVAILABLE');eq((await db.query('select public.sma_website_origin_v1($1,$2) as yes',[start.job.hostname,site.site_id])).rows[0].yes,false);
  for(const role of ['anon','authenticated']){
