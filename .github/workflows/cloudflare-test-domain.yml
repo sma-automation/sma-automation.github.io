@@ -1,4 +1,4 @@
-name: Bind agreed test hostname to isolated Cloudflare project
+name: Inspect agreed Cloudflare test hostname (read only)
 
 on:
   push:
@@ -26,8 +26,8 @@ jobs:
           git -C "$RUNNER_TEMP/sma-domain-controls" remote add origin https://github.com/sma-automation/sma-automation.github.io.git
           git -C "$RUNNER_TEMP/sma-domain-controls" fetch --depth=1 origin "$GITHUB_SHA"
           git -C "$RUNNER_TEMP/sma-domain-controls" checkout --detach FETCH_HEAD
-      - name: Attach only test.sma-automation.com, without DNS changes
+      - name: Read test.sma-automation.com status without changes
         env:
           CLOUDFLARE_API_TOKEN_READONLY: ${{ secrets.CLOUDFLARE_API_TOKEN_READONLY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: python3 "$RUNNER_TEMP/sma-domain-controls/hosting/cloudflare-test/domain.py" attach
+        run: python3 "$RUNNER_TEMP/sma-domain-controls/hosting/cloudflare-test/domain.py" status
