@@ -1,0 +1,26 @@
+/* Approved chapter navigation: the exact optimizer typography, fine grey baseline,
+   blue selected underline and grey inactive tabs. No general font replacement. */
+.sma-chapters{display:flex!important;align-items:stretch;flex-wrap:wrap;gap:0 24px!important;border:0;border-bottom:1px solid #e0e5ef;margin:0 0 22px!important;padding:0!important;background:transparent}
+.sma-chapters>button{display:block;flex:0 1 auto!important;width:auto!important;min-height:48px;max-width:100%;border:0!important;border-bottom:3px solid transparent!important;border-radius:0!important;background:#f2f4f8!important;color:#627087!important;padding:13px 11px 16px!important;margin:0 0 -1px!important;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;font-size:16px!important;font-weight:600!important;line-height:1.4!important;box-shadow:none!important;cursor:pointer}
+.sma-chapters>button[aria-selected=true]{color:#3157cd!important;border-bottom-color:#4065d8!important;background:#fff!important}
+.sma-chapters>button:hover{background:#f2f4f8!important}
+.sma-chapters[hidden]{display:none!important}
+.sma-chapters>button:focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}
+.sma-chapter-panel[hidden],[role=tabpanel][hidden]{display:none!important}
+.sma-chapter-panel{min-width:0;outline:none}
+.sma-chapter-panel>.card,.sma-chapter-panel>.company-profile-overview{margin-top:0}
+.sma-chapter-panel>.card+.card{margin-top:20px}
+[data-sma-chapters]>.grid:empty,[data-sma-chapters]>.platform-list:empty{display:none!important}
+[data-sma-chapters]>.page-head{margin-bottom:22px}
+[data-sma-chapters]>.page-head h1{margin-bottom:18px}
+[data-sma-chapters]>.page-head>.sma-chapters{width:100%}
+[data-sma-chapters]>.page-head>.sma-chapters+p{margin-top:0}
+#page-publishing.sma-optimizing .sma-chapters{display:none!important}
+#page-publishing [data-chapter=files]>.page-head h1{font-size:20px}
+#page-social .sma-chapter-panel .platform-card{max-width:960px}
+#page-website[data-sma-chapters] .package-module-status.unlocked,#page-shop[data-sma-chapters] .package-module-status.unlocked,#page-seller[data-sma-chapters] .package-module-status.unlocked,#page-assistant[data-sma-chapters] .package-module-status.unlocked{display:none}
+#page-website[data-sma-chapters] #smaWebsitePreparation{margin:0;padding:0;max-width:none;border:0;background:transparent}
+#page-website[data-sma-chapters] [data-website-overview],#page-website[data-sma-chapters] [data-website-toolbar]{display:none!important}
+#page-website[data-sma-chapters] #smaWebsitePreparation [data-website-view]{max-width:1000px}
+#page-shop[data-sma-chapters]>.package-feature-list{display:none!important}
+@media(max-width:650px){.sma-chapters{gap:0 16px!important}.sma-chapters>button{font-size:16px!important}.sma-chapter-panel>.grid{grid-template-columns:minmax(0,1fr)}}

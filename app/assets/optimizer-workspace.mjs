@@ -17,6 +17,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   doc.body.classList.add('wide');
   const toolbar = make('nav', 'optimizerToolbar');
   toolbar.setAttribute('aria-label', 'Optimierung');
+  toolbar.classList.add('sma-chapters');toolbar.setAttribute('role','tablist');
   const files = make('section', 'workspaceFiles');
   files.setAttribute('aria-label', 'Bild- und Videogalerie');
   const source = make('div', 'workspaceSource');
@@ -32,8 +33,15 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     buttons[key] = button('workspaceTab-' + key, label, () => show(key));
     buttons[key].setAttribute('aria-controls', panels[key].id);
     buttons[key].setAttribute('aria-pressed', 'false');
+    buttons[key].setAttribute('role','tab');
+    panels[key].setAttribute('role','tabpanel');panels[key].setAttribute('aria-labelledby',buttons[key].id);
     toolbar.append(buttons[key]);
   }
+  toolbar.addEventListener('keydown', event => {
+    const keys=Object.keys(buttons),index=keys.findIndex(key=>buttons[key]===event.target);if(index<0)return;
+    let next;if(event.key==='ArrowRight')next=(index+1)%keys.length;else if(event.key==='ArrowLeft')next=(index+keys.length-1)%keys.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=keys.length-1;else return;
+    event.preventDefault();show(keys[next]);buttons[keys[next]].focus();
+  });
 
   const galleryHeader = make('div', 'workspaceGalleryHeader');
   const galleryActions = make('div', 'workspaceGalleryActions');
@@ -185,7 +193,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const changed = active !== key;
     active = key;
     for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== key;
-    for (const [name, tab] of Object.entries(buttons)) tab.setAttribute('aria-pressed', String(name === key));
+    for (const [name, tab] of Object.entries(buttons)) {tab.setAttribute('aria-pressed', String(name === key));tab.setAttribute('aria-selected',String(name===key));tab.tabIndex=name===key?0:-1;}
     for (const video of main.querySelectorAll('video')) video.pause();
     toolbar.hidden = key === 'preview';
     statusRow.hidden = key === 'preview';

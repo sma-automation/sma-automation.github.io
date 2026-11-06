@@ -20,7 +20,7 @@ const messages={
  BUSY:'Bitte warte, bis der aktuelle Vorgang abgeschlossen ist.'
 };
 
-export function mountWebsitePreparation({page,request,setupRequest,domainRequest,wordpressRequest,wordpressSyncRequest,getOwnerId,stylesheetUrl}){
+export function mountWebsitePreparation({page,request,setupRequest,domainRequest,wordpressRequest,wordpressSyncRequest,getOwnerId,stylesheetUrl,chapterNavigation=false}){
  if(!page||page.querySelector('#smaWebsitePreparation'))return {destroy(){}};
  const doc=page.ownerDocument,win=doc.defaultView;
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -55,13 +55,19 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  page.classList.add('sma-website-managed');
  let activeView='overview',lastView='website';
  const viewNames=['website','shop','domain','connection'];
+ if(chapterNavigation){
+  const company=doc.createElement('section');company.id='smaWebsiteView-company';company.dataset.websiteView='company';company.hidden=true;
+  company.append($('[data-company-profile-dashboard]'));root.append(company);viewNames.push('company');
+ }
  function openView(name,{focus=true,scroll=true}={}){
+  if(chapterNavigation&&name==='overview')name='website';
   if(name!=='overview'&&!viewNames.includes(name))return;
   if(name==='connection')wordpressView?.load();
   activeView=name;if(name!=='overview')lastView=name==='connection'?'website':name;
   for(const panel of root.querySelectorAll('[data-website-view]'))panel.hidden=panel.dataset.websiteView!==name;
   $('[data-website-overview]').hidden=name!=='overview';$('[data-website-toolbar]').hidden=name==='overview';
-  page.classList.toggle('sma-website-detail',name!=='overview');
+  page.classList.toggle('sma-website-detail',!chapterNavigation&&name!=='overview');
+  if(chapterNavigation)page.dispatchEvent(new win.CustomEvent('sma:website-view-changed',{detail:{view:name}}));
   if(!busy&&!status.classList.contains('sma-website-error'))notice(dirty?'Ungespeicherte Angaben.':'');
   const target=name==='overview'?$('[data-website-open="'+lastView+'"]'):$('[data-website-view="'+name+'"] h2');
   if(focus)target?.focus({preventScroll:true});
@@ -129,8 +135,9 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
   catch{$('[data-shop-code]').focus();$('[data-shop-code]').select();notice('Markierten Einbaucode mit Strg+C oder ⌘C kopieren.');}
  });
  // Load only when the existing navigation displays this module.
- const observer=new win.MutationObserver(()=>{if(!page.classList.contains('active')&&activeView!=='overview')openView('overview',{focus:false,scroll:false});if(page.classList.contains('active')&&!dirty&&!loaded)load();});
+ const observer=new win.MutationObserver(()=>{if(!chapterNavigation&&!page.classList.contains('active')&&activeView!=='overview')openView('overview',{focus:false,scroll:false});if(page.classList.contains('active')&&!dirty&&!loaded)load();});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
+ if(chapterNavigation)openView('website',{focus:false,scroll:false});
  if(page.classList.contains('active'))load();
- return {destroy(){destroyed=true;setupView?.destroy();wordpressView?.destroy();domainView?.destroy();observer.disconnect();page.classList.remove('sma-website-managed','sma-website-detail');if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
+ return {openChapter:chapterNavigation?(name)=>openView(name,{focus:false,scroll:false}):undefined,destroy(){destroyed=true;setupView?.destroy();wordpressView?.destroy();domainView?.destroy();observer.disconnect();page.classList.remove('sma-website-managed','sma-website-detail');if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
 }
