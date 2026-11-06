@@ -141,8 +141,9 @@ aufträge. Erfolgreiche öffentliche oder private Providerergebnisse wurden hier
 gesonderte Abnahme und wurde nicht gestartet. Medienblocker und Meta bleiben
 separate Themen. Monatskennzahlen und Monatsarchiv sind jetzt an die vorhandenen
 Aufträge angeschlossen. Gespeicherte Portaltext-Stände sind jetzt als erster Teil der
-Bearbeitungshistorie angeschlossen. Ein vollständiges Änderungsjournal für
-Editor-Einstellungen, Zuordnungen und Analyseversuche sowie Analytics für
+Bearbeitungshistorie angeschlossen. Der Dateiverlauf ergänzt jetzt gespeicherte
+Datei-/Portalzuordnungen ab seiner Installation. Ein Änderungsjournal für
+Editor-Einstellungen und Analyseversuche sowie Analytics für
 Reichweite, Zielgruppen und Plattformresonanz bleiben offen. Die bestehenden
 Magic-Effect-Ergebnisse werden bei Wiederholung überschrieben; sie sind kein
 unveränderliches Ereignisjournal. Aus Aufträgen werden keine Analytics-Werte
@@ -237,3 +238,91 @@ Die Monatsauswahl ist standardmäßig eingeklappt und zeigt den gewählten Monat
 mit „Zeitraum ändern“. Nach der Auswahl klappt sie wieder zu. Die Kennzahlen
 und Zeilenabstände sind kompakter, ohne die Schriftfamilie zu ändern. Dadurch
 beginnen die eigentlichen Einträge weiter oben auf der Seite.
+
+
+## Dateiverlauf (2026-11-06)
+
+Das dritte Kapitel **Dateiverlauf** verwendet dieselbe Kapitelsteuerung und
+fünf sichtbare Einträge pro Seite wie Aufträge/Portaltexte. Jeder Eintrag zeigt
+Dateiname, Portal, Ereignis und Erfassungszeit; Details enthalten den damals
+gebundenen Titel/Text, Datei-/Entwurf-/Zuordnungsversion und den ursprünglichen
+Speicherzeitpunkt. Angezeigt werden gespeicherte Zuordnungen, kein Beleg einer
+Veröffentlichung oder einer erneuten Inhaltsanalyse.
+
+- **Übernommener Stand**: Zuordnung bei Einführung des Journals. Erfasst am
+  Installationstag, nicht rückdatiert; frühere überschriebene Änderungen sind
+  nicht enthalten. Der ursprüngliche Speicherzeitpunkt bleibt separat sichtbar.
+- **Datei zugeordnet**: neue Zuordnung nach der Installation.
+- **Zuordnung aktualisiert**: geänderter Entwurf, Entwurfstand, Dateistand oder
+  gebundener Text. Eine neue Entwurfversion kann denselben Text enthalten.
+  Änderungen nur an Zeitstempel/Zuordnungszähler erzeugen kein weiteres Ereignis.
+
+### Speicherung und Zugriff
+
+`sma_private.publication_assignment_history_v1` enthält unabhängige Snapshots.
+Ein privater AFTER-Trigger auf INSERT/UPDATE der bestehenden Zuordnungstabelle
+schreibt genau im selben Vorgang. Ein zurückgerollter Speichervorgang hinterlässt
+keinen Verlauf. Bestehende Dateikataloge, Portalentwürfe, Zuordnungs-RPCs und deren
+Konfliktprüfung werden nicht geändert. Dateiumbenennungen, Löschen, Editorzustände
+und Analyseversuche sind keine eigenen Ereignisse dieses Journals.
+
+Der einmalige Ausgangsstand und das Anlegen des Triggers erfolgen atomar unter
+Schreibsperre auf der Zuordnungstabelle. Erneutes Installieren legt keinen zweiten
+Ausgangsstand an. Unstimmige Kunden-/Benutzerzuordnungen werden nicht übernommen.
+Browser- und Service-Rollen haben keine direkten Lese- oder Schreibrechte auf
+die neue Tabelle; RLS ist aktiv. Die Triggerfunktion hat einen leeren Suchpfad
+und ist nicht direkt für diese Rollen ausführbar.
+
+Der rein lesende RPC `public.sma_publication_assignment_history_v1(p_input)`
+verwendet einen stabilen Invoker-Wrapper mit privatem Definer. Er prüft Anmeldung,
+eindeutige Kundenzuordnung und aktiven bezahlten/Demo-Zugang. Gespeicherter Besitzer
+und Kunde müssen weiterhin zu Datei und Entwurf passen. Verwaiste oder umgehängte
+Datensätze bleiben für beide Konten unsichtbar. Keine Tokens, Providerantworten
+oder Benutzer-/Kundenkennungen werden ausgegeben.
+
+Die gemeinsame Monatsauswahl verwendet die **Erfassungszeit in Europe/Vienna**.
+20 Datensätze pro Abruf, Keyset-Cursor aus Erfassung und Ereignis-ID, fünf pro
+Bildschirmseite. Die Auftragskennzahlen zählen weiterhin ausschließlich Aufträge.
+Seiten-/Monatswechsel, Abmeldung, versteckter Browser und verspätete Antworten
+werden wie bei den anderen History-Kapiteln behandelt. Details werden als Text
+und nicht als HTML eingesetzt. Es gibt keinen Schreib- oder Veröffentlichungs-
+knopf in diesem Kapitel.
+
+Quelle: `supabase/sql/publication-assignment-history.sql`; identische,
+mit Supabase CLI erzeugte Migration:
+`supabase/migrations/20261106153113_publication_assignment_history_v1.sql`.
+Ein Frontend-Rollback kann die zusätzliche Tabelle/Reader ungenutzt belassen.
+Falls die zusätzliche Speicherung zurückgenommen werden muss, nur den Trigger
+entfernen; die bisherigen Snapshots erhalten. Keine Rückänderung an Originaldaten.
+
+### Prüfung
+
+- **539 Repository-Tests**, **79 neue SQL-Prüfungen**, **26 History-DOM-Szenarien**.
+- Bisherige SQL-Suiten: **62 Aufträge + 52 Monate + 57 Portaltexte**; zusätzlich
+  **8 Dashboard-Kapitel-Szenarien** unverändert erfolgreich.
+- Lokale echte PostgreSQL-Ausführung (PGlite): Ausgangsstand ohne Quelländerung,
+  INSERT/ON CONFLICT UPDATE, keine Dopplung bei Metadatenänderung, Rollback,
+  unveränderte ältere Texte/Dateinamen, Kundentrennung einschließlich Besitzer-
+  wechsel und verwaister Eltern, Rollenrechte, Wiener Winter-/Sommerzeitgrenzen,
+  32 Einträge über Cursorgrenzen und unveränderte Daten bei Leseaufrufen.
+- DOM: drittes Kapitel, klare Ausgangsstandskennzeichnung, sichere Textausgabe,
+  fünf Zeilen über die 20er-Abrufgrenze, Kapitel-/Monats-/Kontowechsel, verspätete
+  Antworten, Fehler/Wiederholung und Teardown.
+
+```sh
+node tests/run-publication-assignment-history-sql.mjs
+```
+
+Produktiver Nachweis: Migration im bestehenden Projekt `bnvnmdxosbnuzedokqgh`
+angewendet, Trigger aktiv. **Vier Ausgangsstände** stimmen vollständig mit den
+vier vorhandenen Zuordnungen überein. Der vollständige Hash der Original-
+zuordnungen bleibt vor/nach Installation identisch:
+`2f5ce5d1e642e747826283e45381d3b1`. Ein reiner Leseaufruf unter Kundenrolle in einer
+zurückgerollten Transaktion liefert November = 4, Oktober = 0, alle Monate = 4;
+alle vier sind ausdrücklich `baseline`. Keine künstlichen Bearbeitungen an
+produktiven Dateien oder Texten für diesen Nachweis.
+
+Security-Advisors: weiterhin vier anonyme und sechs authentifizierte bestehende
+Definer-Warnungen sowie die bestehende Passwortschutz-Warnung. Eine zusätzliche
+INFO-Meldung (jetzt 38) betrifft die absichtlich policylose, direkt gesperrte
+private Journaltabelle. Keine zusätzliche Sicherheitswarnung.

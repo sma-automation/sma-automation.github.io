@@ -12,7 +12,7 @@ Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf alle zwöl
 | Social Media | YouTube · TikTok · Instagram · Facebook |
 | Content | Meine Dateien · Content Optimizer · Magic Effect |
 | Musikbibliothek | Tracks · Meine Playlist |
-| History | Aufträge · Portaltexte |
+| History | Aufträge · Portaltexte · Dateiverlauf |
 | Einstellungen | Kundenkonto · Firmendaten · Paket & Credits · Schnittstellen |
 | Tutorials | Schnellstart · Anleitungen · Hilfe |
 | 24/7 Verkäufer | Beratung · Produkte & Content |
