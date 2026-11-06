@@ -1,7 +1,8 @@
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=2';
-let supabase,coverView;
+import {mountOriginalVideo} from './original-video-preview.mjs?v=1';
+let supabase,coverView,originalVideo;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=8';
@@ -40,7 +41,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
    facts:selectedMediaFacts,source:$('source_text').value,language:$('language').value,
    draftStatus:draft?(dirty?'Aktuelle, noch nicht gespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet'):''};
  },
- onView:view=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
+ onView:view=>{if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
 }):null;
 if(workspace){
  window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files'].includes(event.data.view))workspace.show(event.data.view);});
@@ -153,12 +154,13 @@ async function loadAssetPreview(force=false){
  finally{if(mediaViewController===controller)mediaViewController=null;}
 }
 $('retryAssetPreview').addEventListener('click',()=>loadAssetPreview(true));
-window.addEventListener('pagehide',()=>{coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
+window.addEventListener('pagehide',()=>{originalVideo?.destroy();coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
 function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
 }
 function renderSelectedFile(){
+ originalVideo?.setContext(selectedAsset);
  renderVideoMetadata();
  void coverView?.setContext(selectedAsset);
  workspace?.selection(selectedAsset);
@@ -525,6 +527,7 @@ lock(true);status('Deine Dateien werden geladen …');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},thumbnail:async(f,signal)=>fetchAssetThumbnail(f,(await session()).access_token,signal)});
+ originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner)});
  let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}if(ready)await loadLatest();}catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
