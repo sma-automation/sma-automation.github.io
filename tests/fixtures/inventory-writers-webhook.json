@@ -1,0 +1,153 @@
+{
+  "id": "JlHOooUl0ySzAV8j",
+  "versionId": "c7f4e2c7-a48c-4856-bda6-3b6bff5cb826",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const s=$('Produktzuordnung prüfen').first().json; const rows=$input.all().map(i=>i.json).filter(r=>r.produkt_id); if(rows.length!==1) throw new Error('SMA-Produkt nicht eindeutig.'); const r=rows[0]; if(r.kunde_id!==s.kunde_id || r.produkt_id!==s.produkt_id || r.sku!==s.sku || !Number.isSafeInteger(r.id)) throw new Error('SMA-Produkt passt nicht.'); return [{json:{...s,n8n_produkt_zeile_id:r.id}}];"
+      },
+      "id": "e86cd7c4-d94b-491f-ba70-4bf8d348a6e2",
+      "name": "SMA-Produkt prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json; const s=$('SMA-Produkt prüfen').first().json; if(r.ok!==true || r.n8n_kunde_id!==s.kunde_id || r.sma_produkt_id!==s.produkt_id || !Number.isSafeInteger(r.bestand) || r.bestand<0) throw new Error('Supabase-Ergebnis passt nicht.'); return [{json:{...s,bestand:r.bestand}}];"
+      },
+      "id": "fa718a6b-105b-4c74-947d-c28269e9eec8",
+      "name": "Speicherwert prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $json.n8n_produkt_zeile_id }}"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.kunde_id }}"
+            },
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $json.produkt_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bestand": "={{ $json.bestand }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "bestand",
+              "displayName": "bestand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        784
+      ],
+      "id": "d5a18f28-566c-4d5a-b2cb-a88defb90157",
+      "name": "n8n-Bestand speichern",
+      "notes": "Aktualisiert nur bestand. Alle drei Bedingungen (Zeilen-ID, Kunde, Produkt) müssen übereinstimmen. Eingang ausschließlich aus Bestand auswerten."
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$('Speicherwert prüfen').first().json; const rows=$input.all().map(i=>i.json); if(rows.length!==1 || rows[0].id!==s.n8n_produkt_zeile_id || rows[0].kunde_id!==s.kunde_id || rows[0].produkt_id!==s.produkt_id || rows[0].bestand!==s.bestand) throw new Error('n8n-Speicherung nicht bestätigt.'); return [{json:{ok:true}}];"
+      },
+      "id": "54525d27-357f-48ff-b8c2-07ac00992f47",
+      "name": "Gespeicherten Bestand prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        784
+      ]
+    }
+  ],
+  "connections": {
+    "SMA-Produkt prüfen": {
+      "main": [
+        [
+          {
+            "node": "Supabase-Bestand übernehmen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speicherwert prüfen": {
+      "main": [
+        [
+          {
+            "node": "n8n-Bestand speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "n8n-Bestand speichern": {
+      "main": [
+        [
+          {
+            "node": "Gespeicherten Bestand prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gespeicherten Bestand prüfen": {
+      "main": [
+        [
+          {
+            "node": "Meldung abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

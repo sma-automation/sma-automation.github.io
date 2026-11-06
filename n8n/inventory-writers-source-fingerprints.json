@@ -1,0 +1,64 @@
+{
+  "main": {
+    "workflow_id": "GHBsYQcyt0JLFvRP",
+    "version_id": "68d295c6-c07f-4fdc-8395-528d4a92b3d6",
+    "nodes": {
+      "SMA – Produkt – Bearbeiten – Produkt prüfen": {
+        "type": "n8n-nodes-base.dataTable",
+        "parameters": "dd8d7aa465afbdfc866bb9ea337464a590cd173b0cc3d409b43bcbedd2778366",
+        "connections": "61e5f7cb3c5857f39115f76b57ac15cd91bd296198583e61216dd2f1d048f53e"
+      },
+      "SMA – Produkt – Bearbeiten – Produkt gefunden?": {
+        "type": "n8n-nodes-base.if",
+        "parameters": "4e646e6ebaa7da54c013ae0504d9b09448fbd4bc517d87afb20f0b03a6772033",
+        "connections": "5d638858d9926f9e21c4048925a41f1ac123df753d2ef35070c4baf8206f7f7a"
+      },
+      "SMA – Produkt – Bearbeiten – Speichern": {
+        "type": "n8n-nodes-base.dataTable",
+        "parameters": "38ede7da2d2a9e6daa0dfb6d9a6293359784ad97307525c5103ba04383f9e619",
+        "connections": "ca854141bb6f540d16cf72bc2bd3f79546aacd8eeaad89184ab5cf8aa1dcdbe6"
+      },
+      "SMA – Marktkonto – Initialimport – Shopify Produkt aktualisieren": {
+        "type": "n8n-nodes-base.dataTable",
+        "parameters": "2c719447f495095e50530e52b7ebd5db4f832a03dc5e0a77f4d66f068c499444",
+        "connections": "ab46532547ac927896a6bce552163386d5c5fe8ab1ca1d45022c1e3f10321723"
+      },
+      "SMA – Marktkonto – Initialimport – Digistore24 Produkt aktualisieren": {
+        "type": "n8n-nodes-base.dataTable",
+        "parameters": "cb354ca4e3dbdd64e51e0dc0e62f36bc4c94ef954399ddd97dd9b447093671ab",
+        "connections": "cb738ec6d95afa0c7be68dd0f767bd95459a100e342370e450d9c2786c4c3f20"
+      },
+      "SMA – Produkt – Shopify Sync – Marktzuordnung prüfen": {
+        "type": "n8n-nodes-base.dataTable",
+        "parameters": "a49c572a8a0e28e1358b33bb06d80224a38a90327bae000c4b5b27cba516799a",
+        "connections": "18add84af187f5f979547343c25a8f7621b00d902ffb0418c0815d35d482733c"
+      }
+    }
+  },
+  "webhook": {
+    "workflow_id": "JlHOooUl0ySzAV8j",
+    "version_id": "c7f4e2c7-a48c-4856-bda6-3b6bff5cb826",
+    "nodes": {
+      "SMA-Produkt prüfen": {
+        "type": "n8n-nodes-base.code",
+        "parameters": "e815da8f76bc70d5e6d3807313d9bb48818d358b1c1747fc9c4b58272184ba30",
+        "connections": "de64f17318468bb1e6dcedc099e827228c8043a7d378909dc713c3e8d707d47c"
+      },
+      "Speicherwert prüfen": {
+        "type": "n8n-nodes-base.code",
+        "parameters": "14272a6bd9636c8ff343374ad17e0dc7e29c29f02e01fb354688ad1ba14ae3d2",
+        "connections": "0356b495d243c6665da6e5d24500f31021f36114ab0a12a1033b38a44ded0b90"
+      },
+      "n8n-Bestand speichern": {
+        "type": "n8n-nodes-base.dataTable",
+        "parameters": "fe152960b3459556c69d3845baa1a8d9ada5f661f04eb36378195d0d754a9d71",
+        "connections": "326838e1a9697bda9e14987c9d2fb92acc7e31470e77b67f9d7306013aaabdf5"
+      },
+      "Gespeicherten Bestand prüfen": {
+        "type": "n8n-nodes-base.code",
+        "parameters": "7d0f1abe8df9a829c2a9a0cb39530850ff706c248eacfa7e41ba92425458d6ca",
+        "connections": "45beb9dfa32d3837c5ebb034b57f87ea589d62e23b9b987061b1d131b8cff2b4"
+      }
+    }
+  }
+}

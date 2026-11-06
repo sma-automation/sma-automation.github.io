@@ -3,6 +3,11 @@
 Stand: 6. November 2026. **Abgleich abgeschlossen, privater Kandidat erstellt;
 noch kein Import und keine Veröffentlichung des integrierten Kundenworkflows.**
 
+Der anschließende [gemeinsame Bestandsschutz](SHOP_INVENTORY_WRITERS.md) erweitert
+diesen Basiskandidaten auf 527 Nodes und ergänzt den separaten Bestands-Webhook.
+63 Tests bestehen; der gemeinsame Echtlauf ist wegen der ausgefallenen
+Browserverbindung noch offen.
+
 ## Frische Ausgangsversionen
 
 Die n8n-Versionshistorie bestätigt weiterhin:

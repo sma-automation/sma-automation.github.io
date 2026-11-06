@@ -246,3 +246,10 @@ Quellen: [Shopify-Mengen und Zustände](https://shopify.dev/docs/apps/build/inve
 [n8n-Code-Kontext](https://docs.n8n.io/build/code-in-n8n/use-built-in-shortcuts.md).
 
 Technische Referenz: [n8n DataTable Update-Implementierung](https://github.com/n8n-io/n8n/blob/4b5ea1de9fb9ac55e7e858500d56519603503852/packages/modules/data-table/backend/src/data-table-rows.repository.ts#L323) setzt Filter und Werte in demselben Update und aktualisiert `updatedAt`. Die reale Cloud-Funktion wurde zusätzlich mit dem obigen Schreibkonflikt-Test geprüft.
+
+## Fortsetzung: weitere Schreibwege
+
+Die gemeinsamen Korrekturen für Bestands-Webhook, Produktbearbeitung und erneute
+Importe sind in [SHOP_INVENTORY_WRITERS.md](SHOP_INVENTORY_WRITERS.md) dokumentiert.
+63 Tests bestehen. Der neue gemeinsame Echtlauf ist noch nicht bestätigt; die
+bisherigen echten Nachweise oben betreffen den zuvor geprüften Bestandszweig.
