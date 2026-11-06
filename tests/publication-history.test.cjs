@@ -18,8 +18,30 @@ test('history never labels check success or uncertain completion as public',asyn
 });
 test('history dashboard uses its own read-only endpoint and tears down on all auth paths',()=>{
  const source=fs.readFileSync('app/dashboard.html','utf8'),module=fs.readFileSync('app/assets/publication-history-dashboard.mjs','utf8');
- assert.match(source,/rpc\/sma_publication_history_v1/);assert.equal((source.match(/publicationHistory\?\.destroy\(\)/g)||[]).length,3);
+ assert.match(source,/rpc\/sma_publication_history_v2/);assert.equal((source.match(/publicationHistory\?\.destroy\(\)/g)||[]).length,3);
  assert.doesNotMatch(module,/innerHTML|sma_publication_order|dispatcher|upload\(/);assert.match(module,/textContent/);
  const sql=fs.readFileSync('supabase/sql/publication-history.sql','utf8');assert.doesNotMatch(sql,/\b(insert into|update .* set|delete from|http_post|http_get|publication_order_view_v1)\b/i);
  const migrations=fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('_publication_history_v1.sql'));assert.equal(migrations.length,1);assert.equal(fs.readFileSync('supabase/migrations/'+migrations[0],'utf8'),sql);
+});
+
+const monthly=(entries=[entry()],extra={})=>({...result(entries),version:2,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:entries.length}]:[],...extra});
+test('monthly history validates totals independently of a loaded page and keeps v1 readable',async()=>{
+ const {readPublicationHistoryMonths,readPublicationHistory}=await model;
+ const r=readPublicationHistoryMonths(monthly([entry()],{summary:{orders:40,public_confirmed:2,platforms:['youtube','tiktok']}}));assert.equal(r.summary.orders,40);assert.equal(r.entries.length,1);assert.equal(readPublicationHistory(result()).entries.length,1);
+ assert.equal(readPublicationHistoryMonths(monthly([],{month:null})).month,null);
+});
+test('monthly history rejects malformed counts, shortcuts, filters and unrelated rows',async()=>{
+ const {readPublicationHistoryMonths}=await model;
+ for(const change of [{month:'2026-13'},{month:undefined},{timezone:'UTC'},{summary:{orders:-1,public_confirmed:0,platforms:[]}},{summary:{orders:1,public_confirmed:2,platforms:['youtube']}},{summary:{orders:1,public_confirmed:0,platforms:['tiktok']}},{summary:{orders:5,public_confirmed:0,platforms:['youtube','youtube']}},{months:[{month:'2026-11',orders:0}]},{months:[{month:'2026-11',orders:1},{month:'2026-11',orders:1}]},{months:[{month:'2026-10',orders:1},{month:'2026-11',orders:1}]},{months:[{month:'<script>',orders:1}]}])assert.throws(()=>readPublicationHistoryMonths(monthly([entry()],change)));
+});
+test('monthly client applies the same Vienna winter and DST month boundaries as SQL',async()=>{
+ const {readPublicationHistoryMonths}=await model;
+ assert.equal(readPublicationHistoryMonths(monthly([entry(1,{created_at:'2026-10-31T23:00:00Z'})])).entries.length,1);
+ assert.throws(()=>readPublicationHistoryMonths(monthly([entry(1,{created_at:'2026-10-31T22:59:59Z'})])));
+ assert.equal(readPublicationHistoryMonths(monthly([entry(1,{created_at:'2026-03-31T22:00:00Z'})],{month:'2026-04'})).entries.length,1);
+ assert.throws(()=>readPublicationHistoryMonths(monthly([entry(1,{created_at:'2026-03-31T22:00:00Z'})],{month:'2026-03'})));
+});
+test('monthly source and generated migration match and use only the existing journals',()=>{
+ const sql=fs.readFileSync('supabase/sql/publication-history-months.sql','utf8');assert.doesNotMatch(sql,/\b(insert into|update .* set|delete from|http_post|http_get|publication_order_view_v1)\b/i);
+ const files=fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('_publication_history_months_v1.sql'));assert.equal(files.length,1);assert.equal(fs.readFileSync('supabase/migrations/'+files[0],'utf8'),sql);
 });

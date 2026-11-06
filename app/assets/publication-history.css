@@ -14,3 +14,14 @@
 .sma-publication-history .sma-history-status[data-status=blocked],.sma-publication-history .sma-history-status[data-status=failed],.sma-publication-history .sma-history-status[data-status=uncertain],.sma-publication-history .sma-history-status[data-status=needs_review]{background:#fff3de;color:#84500d}
 .sma-publication-history small{color:#65718a;font-size:12px;line-height:1.6}
 @media(max-width:650px){.sma-publication-history .sma-history-heading{flex-direction:column;gap:8px}.sma-publication-history button{width:100%}}
+#historyMonthSlot.sma-history-months{display:block!important}
+.sma-history-months .sma-history-month-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+.sma-history-months label{display:flex;flex-direction:column;gap:6px;font:inherit;font-size:14px}
+.sma-history-months input,.sma-history-months button{font:inherit;min-height:40px;border:1px solid #c7d3f8;border-radius:9px;padding:9px 13px;background:#fff;color:#3157cd}
+.sma-history-months input{color:inherit;max-width:100%;min-width:0}
+.sma-history-months button{cursor:pointer;background:#edf2ff}
+.sma-history-months button[aria-pressed=true]{background:#3157cd;color:#fff}
+.sma-history-months :is(button,input):focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
+.sma-history-months .sma-history-month-links{display:flex;flex-wrap:wrap;gap:8px}
+.sma-history-months p{font:inherit;font-size:14px;color:#65718a;line-height:1.5;margin:14px 0}
+@media(max-width:650px){.sma-history-months .sma-history-month-controls>*{width:100%}.sma-history-months .sma-history-month-links button{flex:1 1 150px}}

@@ -34,3 +34,22 @@ export function readPublicationHistory(value){
  if(value.has_more?entries.length!==20||!object(value.next)||!uuid(value.next.before_id)||!timestamp(value.next.before_at)||value.next.before_id!==last.id||value.next.before_at!==last.created_at:value.next!==null)throw Error('INVALID_HISTORY');
  return {entries,next:value.has_more?{before_at:value.next.before_at,before_id:value.next.before_id}:null};
 }
+
+export const validHistoryMonth=v=>typeof v==='string'&&/^20\d{2}-(0[1-9]|1[0-2])$/.test(v);
+export const formatHistoryMonth=v=>v===null?'Alle Monate':new Intl.DateTimeFormat('de-AT',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(v+'-01T12:00:00Z'));
+const calendarMonth=value=>{
+ const parts=new Intl.DateTimeFormat('en-GB',{year:'numeric',month:'2-digit',timeZone:'Europe/Vienna'}).formatToParts(new Date(value));
+ return parts.find(p=>p.type==='year').value+'-'+parts.find(p=>p.type==='month').value;
+};
+export function readPublicationHistoryMonths(value){
+ if(!object(value)||value.version!==2||value.timezone!=='Europe/Vienna'||!(value.month===null||validHistoryMonth(value.month)))throw Error('INVALID_HISTORY');
+ const {entries,next}=readPublicationHistory({...value,version:1}),s=value.summary;
+ if(!object(s)||!Number.isSafeInteger(s.orders)||s.orders<entries.length||!Number.isSafeInteger(s.public_confirmed)||s.public_confirmed<0||s.public_confirmed>s.orders||!Array.isArray(s.platforms)||s.platforms.length>4||s.platforms.length>s.orders||new Set(s.platforms).size!==s.platforms.length||s.platforms.some(p=>!Object.hasOwn(historyPlatforms,p)||p==='unknown'))throw Error('INVALID_HISTORY');
+ if(entries.some(e=>(value.month!==null&&calendarMonth(e.created_at)!==value.month)||(e.platform!=='unknown'&&!s.platforms.includes(e.platform))))throw Error('INVALID_HISTORY');
+ if(!Array.isArray(value.months)||value.months.length>12)throw Error('INVALID_HISTORY');
+ const months=value.months.map((m,i)=>{
+  if(!object(m)||!validHistoryMonth(m.month)||!Number.isSafeInteger(m.orders)||m.orders<1||i>0&&value.months[i-1].month<=m.month)throw Error('INVALID_HISTORY');
+  return {month:m.month,orders:m.orders};
+ });
+ return {entries,next,month:value.month,summary:{orders:s.orders,public_confirmed:s.public_confirmed,platforms:[...s.platforms]},months};
+}
