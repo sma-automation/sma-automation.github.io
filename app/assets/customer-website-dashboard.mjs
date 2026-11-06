@@ -8,7 +8,7 @@ export function mountCustomerWebsiteDashboard({page,request,getOwnerId,expectedO
  const title=entry.querySelector('strong'),description=title.nextElementSibling,originalTitle=title.textContent,originalDescription=description.textContent;
  const panel=doc.createElement('section');panel.className='sma-website-site-summary';panel.hidden=true;panel.setAttribute('aria-label','Deine SMA-Webseite');
  panel.innerHTML='<h3>Deine SMA-Webseite</h3><p data-site-state role="status" aria-live="polite"></p><p data-site-address class="sma-website-help" hidden></p><div data-site-actions class="sma-website-actions" hidden><a data-site-edit target="_top" class="sma-website-primary">Webseite bearbeiten</a><a data-site-preview target="_blank" rel="noopener noreferrer">Private Vorschau</a><a data-site-public target="_blank" rel="noopener noreferrer" hidden>Öffentliche Webseite öffnen</a></div><button type="button" data-site-retry hidden>Status erneut laden</button>';
- target.insertBefore(panel,target.querySelector('[data-company-profile-dashboard]'));
+ target.insertBefore(panel,target.querySelector('[data-company-profile-dashboard]')||target.querySelector('.sma-website-intro'));
  const $=selector=>panel.querySelector(selector);
  let disposed=false,blocked=false,generation=0,running=null,queued=false,scheduled=false,subscription;
  const active=()=>page.classList.contains('active')&&!page.hidden&&ownerWindow.document.visibilityState!=='hidden';

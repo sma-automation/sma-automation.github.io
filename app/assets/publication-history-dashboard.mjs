@@ -1,5 +1,6 @@
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=2';
 import {readPublicationHistoryMonths,historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=3';
+import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
 export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
@@ -42,11 +43,14 @@ export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,exp
  const textHistory=requestTexts?mountPublicationTextHistory({doc,after:slot.closest('.card'),request:requestTexts,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  const activityCard=slot.closest('.card'),textCard=page.querySelector('#historyTextCard');
  const switcher=create('div',null,'sma-history-switcher');switcher.setAttribute('role','group');switcher.setAttribute('aria-label','History-Bereich');
+ let chapterTabs;
  if(textCard){
   activityCard.id='historyOrderCard';
   const ordersButton=create('button','Aufträge'),textsButton=create('button','Portaltexte');
-  for(const [button,panel] of [[ordersButton,activityCard],[textsButton,textCard]]){button.type='button';button.setAttribute('aria-controls',panel.id);button.addEventListener('click',()=>{activityCard.hidden=panel!==activityCard;textCard.hidden=panel!==textCard;ordersButton.setAttribute('aria-pressed',String(panel===activityCard));textsButton.setAttribute('aria-pressed',String(panel===textCard));});}
-  textCard.hidden=true;ordersButton.setAttribute('aria-pressed','true');textsButton.setAttribute('aria-pressed','false');switcher.append(ordersButton,textsButton);page.insertBefore(switcher,activityCard);
+  chapterTabs=createChapterTabs({doc,id:'sma-history',list:switcher,entries:[
+   {key:'orders',label:'Aufträge',en:'Orders',button:ordersButton,panel:activityCard},
+   {key:'texts',label:'Portaltexte',en:'Platform texts',button:textsButton,panel:textCard}
+  ]});page.insertBefore(switcher,activityCard);
  }
  const analyticsCard=page.querySelector('#historyAnalyticsSlot')?.closest('.card');
  let analyticsDisclosure;
@@ -112,5 +116,5 @@ export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,exp
  ownerWindow.addEventListener('focus',onFocus);ownerWindow.document.addEventListener('visibilitychange',onVisibility);
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  load();
- return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();textHistory?.destroy();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

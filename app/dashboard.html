@@ -6,10 +6,11 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
-import {mountWebsitePreparation} from './assets/website-domain.mjs?v=14';
+import {mountWebsitePreparation} from './assets/website-domain.mjs?v=15';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
-import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=2';
-import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=6';
+import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
+import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=7';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -20,7 +21,7 @@ const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',t
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
 let optimizerTrigger=null,selectedFileId=null;
 let fileView=null;
-let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,dashboardOwnerId=null;
+let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,dashboardChapters=null,dashboardOwnerId=null;
 function showPublishing(){
  if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
  for(const child of publishingPage.children)child.classList.remove('sma-publishing-hidden');
@@ -33,7 +34,7 @@ function openOptimizer(portal,trigger,restoring=false){
  let preview=[...(optimizerFrames?.children||[])].find(el=>el.dataset.key===frameKey);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','28');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','29');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -60,6 +61,7 @@ function attachOptimizerPage(doc,page){
 // Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
+  dashboardChapters?.destroy();dashboardChapters=null;
   publicationHistory?.destroy();publicationHistory=null;
   customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;
   companyProfileDashboard?.destroy();companyProfileDashboard=null;
@@ -92,7 +94,7 @@ frame.addEventListener('load',()=>{
   if(websitePage&&ownerId){
     const getOwnerId=async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;};
     websitePreparation=mountWebsitePreparation({
-      page:websitePage,getOwnerId,
+      page:websitePage,getOwnerId,chapterNavigation:true,
       setupRequest:async(action,input={})=>{
         const {data,error}=await supabase.auth.getSession();
         if(error||!data?.session||data.session.user.id!==ownerId)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});
@@ -168,6 +170,7 @@ frame.addEventListener('load',()=>{
     const button=doc.createElement('button');button.type='button';button.className='sma-optimize';button.textContent='Optimieren';button.dataset.portal=portal;button.setAttribute('aria-controls','smaOptimizationPage');
     button.addEventListener('click',event=>{event.stopPropagation();openOptimizer(portal,button);});card.append(button);
   }
+  dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=1',location.href).href});
 });
 function attachFileList(doc,page){
  const slot=doc.getElementById('publishingFilesSlot');if(!slot)return null;
@@ -215,7 +218,7 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -230,7 +233,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 
