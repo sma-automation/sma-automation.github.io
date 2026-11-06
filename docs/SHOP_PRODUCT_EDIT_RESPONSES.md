@@ -1,8 +1,9 @@
 # Produktbearbeitung: bestätigte Speicherung und klare Antworten
 
-Stand: 6. November 2026. **74 automatisierte Tests bestanden. Der neue private
-534-Node-Kandidat ist nicht importiert oder veröffentlicht. Der echte äußere
-HTTP-/Anmeldedurchlauf bleibt offen.**
+Stand: 6. November 2026, 10:27 Uhr Europe/Vienna. **78 automatisierte Tests und
+vier echte HTTP-Fälle mit bestehender Kundenauthentifizierung bestanden.** Der
+534-Node-Gesamtkandidat ist nicht importiert oder veröffentlicht; der äußere
+Bearbeitungsweg wurde in einer getrennten, eng begrenzten Testkopie abgenommen.
 
 ## Behobene Lücke im Kandidaten
 
@@ -67,36 +68,78 @@ deaktivierte, doppelte oder gepinnte Quellen werden zurückgewiesen.
 node n8n/patch-inventory-edit-responses.cjs \
   WRITERS_PRIVATE.json NEW_RESPONSES_PRIVATE.json
 
-node --test tests/inventory-edit-responses.test.cjs \
+node n8n/build-inventory-edit-http-qa.cjs \
+  WRITERS_PRIVATE.json NEW_ENDPOINT_PRIVATE.json NEW_CALLER_PRIVATE.json
+
+node --test tests/inventory-edit-http-qa.test.cjs tests/inventory-edit-responses.test.cjs \
   tests/inventory-writers.test.cjs tests/inventory-draft.test.cjs \
   tests/inventory-integration.test.cjs tests/shop-stock.test.cjs
 git diff --check
 ```
 
-**74 Tests bestanden.** Elf zusätzliche Tests führen die erzeugten Code-Nodes,
+**78 Tests bestanden.** Elf Antworttests führen die erzeugten Code-Nodes,
 Ausdrücke und tatsächlichen Verbindungen mit simulierten Data-Table-/HTTP-Antworten
 aus. Sie prüfen Zugangssperren, Produktabgrenzung, 400-/409-Antworten vor Writes,
 Kundenzuordnung, beide Speicherbestätigungen, neueren Shopify-Bestand sowie leere,
-fehlerhafte und fremde Supabase-Rückgaben. Das ist kein echter HTTP-Ende-zu-Ende-Test.
+fehlerhafte und fremde Supabase-Rückgaben. Vier weitere Tests prüfen die Begrenzung
+des HTTP-Prüfaufbaus, unveränderte Ausgangsdaten, die vier Fälle und die getrennte
+Bestätigung beider Speicher. Diese automatisierten Tests sind Simulationen;
+die folgenden vier Fälle wurden zusätzlich tatsächlich über HTTP ausgeführt.
 
-## Offener Live-Test
+## Echter HTTP-Kundenweg bestätigt
 
-Die sichere n8n-Anmeldung wurde übermittelt. Die Zielseite kehrte mit
-`sessionExpired=true` zur Anmeldung zurück; auch ein frischer Tab auf der
-n8n-Zieladresse zeigte die Anmeldung. Daher gab es in dieser Sitzung keinen
-Import, keine neue n8n-Ausführung und keine Veröffentlichung. Der bereits
-dokumentierte 57-Node-Echtlauf bleibt gültig für seinen damaligen Umfang.
+Die erneut angeforderte sichere n8n-Anmeldung war erfolgreich und blieb während
+der Arbeit bestehen. Beide Ausgangsfassungen wurden frisch exportiert:
+511 veröffentlichte Nodes und 515 erhaltene Entwurfs-Nodes, jeweils identische
+Nodes, Verbindungen und Einstellungen zur gesicherten Fassung.
 
-Sobald die n8n-Sitzung wieder nutzbar ist:
+Der Generator erstellt zwei separate, unveröffentlichte Prüfkopien:
 
-1. Aktive und erhaltene Entwurfsversionen frisch exportieren und abgleichen.
-2. Den isolierten äußeren Test-Einstieg mit bestehender Kundenauthentifizierung
-   auf `kunde_3182` und `SMA-TEST-002` begrenzen; Ausführungsdaten nicht speichern.
-3. Ungültigen Zugang, fremdes/unbekanntes Produkt, abgewiesene Mengenänderung und
-   mengenunveränderte Bearbeitung über HTTP prüfen. Antworten und beide Speicher
-   unabhängig kontrollieren. Keine Shopify-Mutation, Bestellung oder Veröffentlichung.
-4. Erst nach diesem Nachweis den integrierten Kundenworkflow und Bestands-Webhook
-   zur Übernahme bereitstellen. Der geschützte 515-Node-Originalentwurf bleibt erhalten.
+- Empfänger `lLeZX1N8wy83psGS`, **21 Nodes**: tatsächlicher Bearbeitungsweg mit
+  bestehendem Kundentoken und Paketprüfung; zusätzliche Einschränkung auf
+  `kunde_3182` und `SMA-TEST-002`. Ein zusätzlicher Guard erlaubt ausschließlich
+  unveränderte Metadaten und den bestätigten Bestand vier. Eindeutiger Testpfad,
+  jeweils nur vorübergehend über „Execute workflow“ erreichbar.
+- Aufrufer `ZdOzmjZINZtIC03U`, **11 Nodes**: ein manueller Einstieg. Er liest den
+  bestehenden Kundentoken intern, prüft zuerst übereinstimmende Ausgangsdaten,
+  ruft den Testpfad auf und liest anschließend beide Speicher erneut. Der
+  Ergebnis-Node gibt nur bereinigte Prüffelder aus. Kein Token wird exportiert,
+  ausgegeben oder in der Dokumentation gespeichert.
+
+| Tatsächlicher HTTP-Fall | Antwort | Nachweis nach dem Aufruf |
+| --- | --- | --- |
+| Absichtlich ungültiger Kundentoken | 403, `ok:false` | Beide Inhalte und Änderungszeitpunkte unverändert |
+| Gültiger Token, unbekannte Produktkennung | 404, `ok:false` | Beide Inhalte und Änderungszeitpunkte unverändert |
+| Gültiger Token, Shopify-Bestand drei statt vier | 409, `SHOPIFY_STOCK_USE_STOCK_ORDER` | Beide Inhalte und Änderungszeitpunkte unverändert |
+| Gültiger Token, unveränderte Produktbearbeitung | 200, `ok:true` | Beide Speicher haben neue Änderungszeitpunkte; Metadaten und Bestand bleiben unverändert |
+
+Die Rückexporte bestätigen die tatsächlich gespeicherten Node-Parameter, Code,
+Zugangsreferenzen, Verbindungen und Einstellungen. UI-Defaults wie ausgelassenes
+`GET` bzw. Code-Modus und leere terminale Verbindungen wurden beim Vergleich
+normalisiert. Beide Kopien: inaktiv, keine Speicherung manueller, erfolgreicher
+oder fehlgeschlagener Ausführungen, keine MCP-Freigabe, 90 Sekunden Timeout.
+Der Aufrufer enthält zuletzt den Fall `success`; der Empfänger wartet nach
+Abschluss nicht mehr auf einen Testaufruf.
+
+Die unabhängige Supabase-Kontrolle um **10:27 Uhr Wiener Zeit** bestätigt:
+vier Stück, 22 abgeschlossene Bestandsmeldungen, null aktive Sperren. Die
+Metadatenbearbeitung wurde um **10:23:45 Uhr** bestätigt; der kanonische
+Shopify-Bestandszeitpunkt bleibt `2026-11-06T01:28:03.067972Z`.
+
+[Bereinigter HTTP-Prüfbericht](evidence/shop-product-edit-http-pr81.json)
+
+![Erfolgreicher authentifizierter HTTP-Prüflauf](evidence/shop-product-edit-http-pr81.png)
+
+## Verbleibende produktive Übernahme
+
+Der äußere Bearbeitungsweg ist jetzt in der isolierten Testkopie geprüft.
+Die Übernahme des vollständigen 534-Node-Kundenworkflows und des geänderten
+42-Node-Bestands-Webhooks steht noch aus. Vor dem Umschalten sind deren dann
+aktuelle Fassungen erneut abzugleichen; der separate Webhook wurde in dieser
+Sitzung nicht verändert. Der geschützte 515-Node-Originalentwurf bleibt erhalten.
+
+Es gab keine Veröffentlichung, Shopify-Mutation, Bestellung, kostenpflichtige
+Änderung oder Änderung der Datenbankrechte. Shopify Payments bleibt im Testmodus.
 
 Der vorhandene Shop-Manager liest über Supabase und nutzt Bestandsaufträge. Er
 ruft diesen älteren n8n-Produktbearbeitungsendpunkt derzeit nicht auf; dieser

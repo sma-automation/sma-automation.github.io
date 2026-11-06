@@ -4,8 +4,9 @@ Stand: 6. November 2026, Europe/Vienna. **63 Tests und gemeinsamer echter n8n-Pr
 bestanden. Keine produktive Übernahme.**
 
 Fortsetzung: [Bestätigte Produktbearbeitung und HTTP-Antworten](SHOP_PRODUCT_EDIT_RESPONSES.md)
-erweitert den privaten Kandidaten auf 534 Nodes. 74 automatisierte Tests bestehen;
-der neue äußere Live-Test ist wegen der aktuell nicht gehaltenen n8n-Anmeldung offen.
+erweitert den privaten Kandidaten auf 534 Nodes. 78 automatisierte Tests und vier
+echte authentifizierte HTTP-Fälle (403, 404, 409, 200) sind inzwischen bestanden.
+Die n8n-Anmeldung ist wieder nutzbar; die produktive Übernahme bleibt offen.
 
 ## Abgeglichene Quellen
 
@@ -112,9 +113,10 @@ Die geänderten Schreibwege sind gemeinsam in der getrennten QA-Kopie geprüft.
 Der vollständige Kundenworkflow (inzwischen 534 Nodes einschließlich der
 [Antwortprüfung](SHOP_PRODUCT_EDIT_RESPONSES.md)) und der 42-Node-Bestands-Webhook
 liegen weiterhin als private Integrationskandidaten vor. Vor ihrer produktiven Übernahme
-folgen der aktuelle Versionsabgleich und die Abnahme des vollständigen
-angemeldeten Kundenablaufs einschließlich seiner Antworten. Der manuelle
-Prüflauf ersetzt keinen Test dieses äußeren Authentifizierungs-/Webhook-Einstiegs.
+folgt der aktuelle Versionsabgleich. Der äußere Bearbeitungsweg einschließlich
+Authentifizierung und Antworten wurde inzwischen zusätzlich über echte
+HTTP-Aufrufe in einer begrenzten Kopie bestätigt; Details und Abgrenzung zur
+Dashboard-UI stehen in der [Antwortprüfung](SHOP_PRODUCT_EDIT_RESPONSES.md).
 
 Die aktiven Workflows, der separate Originalentwurf und Shopify Payments im
 Testmodus bleiben erhalten. Es gab keine Bestellung, Shopify-Mutation,

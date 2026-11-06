@@ -9,8 +9,9 @@ diesen Basiskandidaten auf 527 Nodes und ergänzt den separaten Bestands-Webhook
 Kundenablauf-Abnahme und produktive Übernahme stehen noch aus.
 
 Die anschließende [Antwortprüfung der Produktbearbeitung](SHOP_PRODUCT_EDIT_RESPONSES.md)
-führt zum privaten 534-Node-Kandidaten mit 74 automatisierten Tests. Der äußere
-Live-Durchlauf ist weiterhin offen; die Anmeldung an n8n blieb zuletzt nicht bestehen.
+führt zum privaten 534-Node-Kandidaten mit 78 automatisierten Tests. Vier echte
+HTTP-Fälle des äußeren Bearbeitungswegs sind in der getrennten Testkopie bestätigt;
+die n8n-Anmeldung ist wieder nutzbar. Die produktive Übernahme steht noch aus.
 
 ## Frische Ausgangsversionen
 
@@ -90,12 +91,12 @@ alten Write ab; ein frischer Abruf bestätigt unveränderte Zeilenversion und
 Bestand. Eine leere Antwort endet ausdrücklich als Konflikt und erreicht
 keinen Journalabschluss.
 
-Vor produktiver Übernahme bleiben der frische Abgleich und die gemeinsame
-Absicherung der weiteren Bestands-Writer (separater Bestands-Webhook,
-Produktbearbeitung, Initialimport) sowie die Abnahme des integrierten
-Kundenablaufs offen. Die neue Bedingung schützt den ergänzten Zweig; sie ist
-noch kein Nachweis für alle parallelen Schreibwege. Die manuell geprüfte
-Wiederaufnahme ist keine automatische Reparaturfunktion.
+Der gemeinsame Prüflauf der weiteren Bestands-Writer (separater Bestands-Webhook,
+Produktbearbeitung, Initialimport) und der zusätzliche äußere HTTP-Bearbeitungsweg
+sind inzwischen in getrennten QA-Kopien bestätigt. Vor produktiver Übernahme
+bleiben der erneute Abgleich der dann aktuellen Fassungen und das gezielte
+Umschalten auf die geprüften Kandidaten. Die manuell geprüfte Wiederaufnahme
+ist keine automatische Reparaturfunktion.
 Die aktive Fassung und der separate Originalentwurf bleiben erhalten;
 Shopify Payments bleibt im Testmodus.
 

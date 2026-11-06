@@ -32,14 +32,15 @@
   "settings_unchanged": true,
   "source_authentication_unchanged": true,
   "automated_tests": {
-    "passed": 74,
+    "passed": 78,
     "failed": 0,
     "kind": "Generated workflow code, expressions and routes with in-memory Data Table and HTTP adapters"
   },
-  "live_customer_http_test": false,
+  "live_customer_http_test": true,
   "imported": false,
   "published": false,
-  "blocker": "Secure n8n sign-in submitted; target returned sessionExpired=true. Fresh target-origin tab also showed sign-in.",
+  "blocker": null,
   "protected_original_draft_untouched": true,
-  "shopify_mutations": false
+  "shopify_mutations": false,
+  "live_http_evidence": "shop-product-edit-http-pr81.json"
 }
