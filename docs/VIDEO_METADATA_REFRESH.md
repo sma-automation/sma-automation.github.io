@@ -65,6 +65,6 @@ und unveröffentlichte n8n-Originalentwürfe bleiben erhalten.
 
 ## Nächste getrennte Arbeit
 
-Die Warteanzeige und gezielte Aktualisierung sind abgeschlossen. Als nächster
-Baustein bietet sich die dauerhafte eigene Musikbibliothek an. Die automatische
+Die Warteanzeige und gezielte Aktualisierung sind abgeschlossen. Die dauerhafte
+eigene Musikbibliothek ist in [MUSIC_LIBRARY.md](MUSIC_LIBRARY.md) beschrieben. Die automatische
 Cover-Übergabe an Portale bleibt ein separater Schritt mit Providerprüfung.
