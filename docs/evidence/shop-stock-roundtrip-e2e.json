@@ -1,0 +1,135 @@
+{
+  "checked_at": "2026-11-06T11:21:54.344158+00:00",
+  "scope": "Authenticated customer stock change and automatic inventory synchronization, then restoration",
+  "sku": "SMA-TEST-002",
+  "before": {
+    "orders": 10,
+    "product": {
+      "bestand": 4,
+      "updated_at": "2026-11-06T10:26:58.203+00:00",
+      "inventory_observed_at": "2026-11-06T01:28:03.067972+00:00"
+    },
+    "checked_at": "2026-11-06T11:19:52.835711+00:00",
+    "open_requests": 0,
+    "shopify": {
+      "available": 4,
+      "on_hand": 11,
+      "committed": 7
+    },
+    "receipts_done": 22,
+    "active_locks": 0
+  },
+  "requests": [
+    {
+      "id": "6f5ce8c4-0aaf-450d-a1b5-c95801004c95",
+      "phase": "finished",
+      "status": "applied",
+      "outcome": {
+        "code": "SHOPIFY_CONFIRMED",
+        "status": "applied",
+        "quantity": 3
+      },
+      "quantity": 3,
+      "created_at": "2026-11-06T11:20:32.154187+00:00",
+      "processed_at": "2026-11-06T11:20:36.868021+00:00",
+      "dispatch_attempts": 1
+    },
+    {
+      "id": "188ac5f4-3cf5-4c8b-885c-3231c4e4b559",
+      "phase": "finished",
+      "status": "applied",
+      "outcome": {
+        "code": "SHOPIFY_CONFIRMED",
+        "status": "applied",
+        "quantity": 4
+      },
+      "quantity": 4,
+      "created_at": "2026-11-06T11:21:40.649553+00:00",
+      "processed_at": "2026-11-06T11:21:42.520044+00:00",
+      "dispatch_attempts": 1
+    }
+  ],
+  "inventory_receipts": [
+    {
+      "result": {
+        "ok": true,
+        "row_id": 9,
+        "applied": true,
+        "bestand": 3,
+        "kunde_id": "kunde_20be25c6",
+        "erfasst_am": "2026-11-06T11:20:42.78703+00:00",
+        "n8n_kunde_id": "kunde_3182",
+        "sma_produkt_id": "10c2f5a9-0571-4023-a1d6-df871813e1a7"
+      },
+      "status": "done",
+      "attempts": 1,
+      "delivery_id": "2c8ef07a-81e3-5069-a2c6-7d1f73ea3a74",
+      "received_at": "2026-11-06T11:20:42.796684+00:00",
+      "completed_at": "2026-11-06T11:20:43.691437+00:00"
+    },
+    {
+      "result": {
+        "ok": true,
+        "row_id": 9,
+        "applied": true,
+        "bestand": 4,
+        "kunde_id": "kunde_20be25c6",
+        "erfasst_am": "2026-11-06T11:21:47.622489+00:00",
+        "n8n_kunde_id": "kunde_3182",
+        "sma_produkt_id": "10c2f5a9-0571-4023-a1d6-df871813e1a7"
+      },
+      "status": "done",
+      "attempts": 1,
+      "delivery_id": "cf2eac3e-afac-5a44-ab81-af0644de60e1",
+      "received_at": "2026-11-06T11:21:47.624773+00:00",
+      "completed_at": "2026-11-06T11:21:48.528963+00:00"
+    }
+  ],
+  "after": {
+    "product": {
+      "bestand": 4,
+      "updated_at": "2026-11-06T11:21:48.303754+00:00",
+      "inventory_observed_at": "2026-11-06T11:21:47.622489+00:00"
+    },
+    "shopify": {
+      "available": 4,
+      "on_hand": 11,
+      "committed": 7
+    },
+    "n8n_product_mirror": {
+      "table": "SMA_Produkte",
+      "sku": "SMA-TEST-002",
+      "row_id": 2,
+      "stock": 4,
+      "updated_at": "2026-11-06T11:21:48.345Z",
+      "verification": "direct UI read after filtering by SKU"
+    },
+    "orders": 10,
+    "receipts": {
+      "done": 24
+    },
+    "active_locks": 0,
+    "open_requests": 0
+  },
+  "intermediate_shopify": {
+    "available": 3,
+    "on_hand": 10,
+    "committed": 7
+  },
+  "dashboard": {
+    "reloaded": false,
+    "intermediate_message": "Bestand von Shopify bestätigt: 3 Stück.",
+    "final_message": "Bestand von Shopify bestätigt: 4 Stück.",
+    "final_quantity_input_enabled": true
+  },
+  "limits": {
+    "stock_restored": true,
+    "workflows_changed": false,
+    "code_changed": false,
+    "manual_database_correction": false,
+    "purchases": false,
+    "paid_changes": false,
+    "artificial_duplicate_delivery_tested": false,
+    "preserved_unpublished_draft": true
+  }
+}

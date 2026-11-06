@@ -90,9 +90,11 @@ Der vollständige lokale Repository-Lauf besteht mit **524 Tests**.
 
 Der angemeldete Kundenweg und die neue Bestätigung unveränderter Mengen sind
 abgeschlossen. Dieser Lauf ändert die tatsächlich verfügbare Menge nicht und
-erzeugt daher keinen Nachweis eines neuen Bestands-Webhooks. Als nächster separater
-Prüfschritt bleibt eine kontrollierte Mengenänderung mit anschließender
-Rücksynchronisierung und Wiederherstellung des Ausgangsbestands.
+erzeugt daher keinen Nachweis eines neuen Bestands-Webhooks. Der anschließende
+separate [Mengenänderungstest 4 → 3 → 4](SHOP_STOCK_ROUNDTRIP_E2E.md) ist inzwischen
+ebenfalls abgeschlossen: beide Aufträge und Bestandsmeldungen wurden jeweils
+einmal verarbeitet, beide Speicher und das Dashboard aktualisiert und der
+Ausgangsbestand wiederhergestellt.
 
 Shopify Payments bleibt im Testmodus. Keine Bestellung, Zahlung, Tarifänderung,
 Social-Media-Veröffentlichung oder SQL-Migration. Die beiden PR-81-Workflows und
