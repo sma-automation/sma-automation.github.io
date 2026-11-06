@@ -141,7 +141,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   selectedLabel.append(selectedName, selectedKind);
   selectedRow.append(selectedLabel);
   const editor = make('div', 'workspaceEditor');
-  source.append(selectedRow, editor);
+  source.append(selectedRow);
+  if($('exportCoverPanel'))source.append($('exportCoverPanel'));
+  source.append(editor);
   $('magicActionsSource').hidden = true;
   $('magicActionsText').hidden = false;
   $('sourceSummary').textContent = 'Inhalt ansehen oder eigene Angaben ergänzen';

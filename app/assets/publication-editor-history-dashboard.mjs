@@ -1,6 +1,6 @@
 import {formatHistoryMonth} from './publication-history-model.mjs?v=3';
-import {readPublicationEditorHistory} from './publication-editor-history-model.mjs?v=1';
-import {editorLabels,editorValue} from './media-editor-model.mjs?v=1';
+import {readPublicationEditorHistory} from './publication-editor-history-model.mjs?v=2';
+import {editorLabels,editorValue} from './media-editor-model.mjs?v=3';
 
 // Lifecycle and selected month belong to the parent History view. This reader
 // has independent pagination and never opens the editing or generation routes.

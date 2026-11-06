@@ -1,4 +1,4 @@
-import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=1';
+import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=2';
 import {readPublicationHistoryMonths,historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=3';

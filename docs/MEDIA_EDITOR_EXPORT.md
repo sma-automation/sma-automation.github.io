@@ -12,7 +12,8 @@ Die letzten fünf abgeschlossenen Ergebnisse sind eingeklappt abrufbar.
 
 Umgesetzt: Schnitt, Original/9:16/1:1/16:9, Einpassen/Ausschnitt und Position,
 Texteinblendung, Lautstärke des Originaltons (0 % entfernt die Tonspur), optionales
-Cover aus dem fertig gerenderten Video. Kein zusätzlicher Musiktrack.
+Cover aus dem fertig gerenderten Video. Zusätzliche eigene Musik ist in
+[MUSIC_AND_EXPORT_COVER.md](MUSIC_AND_EXPORT_COVER.md) beschrieben.
 
 V1-Grenzen: MP4 bis 60 s; JPG/PNG/WebP; Quelle und jedes Ergebnis maximal 24 MB;
 Quelle höchstens 4096 Pixel je Seite und 12 MP. Ausgabe H.264/AAC MP4 mit 30 fps
@@ -92,7 +93,7 @@ an der langen Seite. Browser muss während der Verarbeitung geöffnet bleiben.
 
 ## Nächster Schritt
 
-Zusätzliche Musik und eine gezielte Übergabe des erzeugten Covers an die
-Portalvorbereitung separat bearbeiten. Der echte Export und die sichere Ablage
+Zusätzliche Musik und die Cover-Zuordnung zur Portalvorbereitung sind implementiert;
+Prüfstand und nächste Grenzen stehen in [MUSIC_AND_EXPORT_COVER.md](MUSIC_AND_EXPORT_COVER.md). Der echte Export und die sichere Ablage
 sind abgeschlossen. Die abgeschlossene Bestandsstrecke nicht erneut beginnen.
 PR #57/#69, Shopify-Testmodus und geschützte Originalworkflows unverändert lassen.

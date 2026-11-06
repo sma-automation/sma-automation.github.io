@@ -1,7 +1,8 @@
-let supabase;
+import {mountExportCover} from './publication-export-cover.mjs?v=1';
+let supabase,coverView;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=6';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=7';
 import {installOrderReview} from './publication-order.mjs?v=5';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
@@ -148,8 +149,9 @@ async function loadAssetPreview(force=false){
  finally{if(mediaViewController===controller)mediaViewController=null;}
 }
 $('retryAssetPreview').addEventListener('click',()=>loadAssetPreview(true));
-window.addEventListener('pagehide',()=>{clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
+window.addEventListener('pagehide',()=>{coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
 function renderSelectedFile(){
+ void coverView?.setContext(selectedAsset);
  workspace?.selection(selectedAsset);
  $('selectedFileName').textContent=selectedAsset?.name||'';
  $('noSelectedFile').hidden=!!selectedAsset;$('fileDetails').hidden=!selectedAsset;$('fileDetails').open=false;
@@ -504,5 +506,6 @@ lock(true);status('Deine Dateien werden geladen …');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
- await session();let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}if(ready)await loadLatest();}catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
+ supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ const coverOwner=(await session()).user.id;coverView=mountExportCover({doc:document,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},thumbnail:async(f,signal)=>fetchAssetThumbnail(f,(await session()).access_token,signal)});
+ let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}if(ready)await loadLatest();}catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
