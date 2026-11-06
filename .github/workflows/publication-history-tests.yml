@@ -1,10 +1,14 @@
 name: Publication history checks
 on:
   push:
-    branches: [publication-history-v1, publication-history-months, website-v1]
+    branches: [publication-history-v1, publication-history-months, publication-text-history, website-v1]
     paths:
       - app/assets/publication-history*
+      - app/assets/publication-text-history*
       - app/dashboard.html
+      - supabase/sql/publication-text-history.sql
+      - supabase/migrations/*_publication_text_history_v1.sql
+      - tests/*publication-text-history*
       - supabase/sql/publication-history.sql
       - supabase/sql/publication-history-months.sql
       - supabase/migrations/*_publication_history_v1.sql
@@ -34,3 +38,4 @@ jobs:
           node tests/run-publication-history-sql.mjs
           node tests/run-publication-history-months-sql.mjs
           node tests/run-publication-history-dom.mjs
+          node tests/run-publication-text-history-sql.mjs

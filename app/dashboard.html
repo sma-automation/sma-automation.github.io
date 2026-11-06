@@ -9,7 +9,7 @@
 import {mountWebsitePreparation} from './assets/website-domain.mjs?v=14';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=2';
-import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=3';
+import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -66,13 +66,23 @@ frame.addEventListener('load',()=>{
   websitePreparation?.destroy();websitePreparation=null;
   const websitePage=doc?.getElementById('page-website'),ownerId=dashboardOwnerId;
   if(doc&&ownerId)publicationHistory=mountPublicationHistory({doc,expectedOwnerId:ownerId,ownerWindow:window,
-    stylesheetUrl:new URL('./assets/publication-history.css?v=2',location.href).href,
+    stylesheetUrl:new URL('./assets/publication-history.css?v=3',location.href).href,
     getOwnerId:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;},
     watchOwner:callback=>supabase.auth.onAuthStateChange((_event,session)=>callback(session?.user?.id||null)).data.subscription,
     request:async(input)=>{
       const {data,error}=await supabase.auth.getSession();
       if(error||!data?.session||data.session.user.id!==ownerId)throw Error('AUTH_REQUIRED');
       const response=await fetch('https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_history_v2',{
+        method:'POST',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(15000),
+        headers:{'Content-Type':'application/json',apikey:'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW',Authorization:'Bearer '+data.session.access_token},
+        body:JSON.stringify({p_input:input})
+      });
+      if(!response.ok)throw Error('UNAVAILABLE');return response.json();
+    },
+    requestTexts:async(input)=>{
+      const {data,error}=await supabase.auth.getSession();
+      if(error||!data?.session||data.session.user.id!==ownerId)throw Error('AUTH_REQUIRED');
+      const response=await fetch('https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_text_history_v1',{
         method:'POST',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(15000),
         headers:{'Content-Type':'application/json',apikey:'sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW',Authorization:'Bearer '+data.session.access_token},
         body:JSON.stringify({p_input:input})

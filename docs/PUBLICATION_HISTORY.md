@@ -140,11 +140,73 @@ aufträge. Erfolgreiche öffentliche oder private Providerergebnisse wurden hier
 **nur mit isolierten Fixtures** geprüft. Ein echter Upload ist weiterhin eine
 gesonderte Abnahme und wurde nicht gestartet. Medienblocker und Meta bleiben
 separate Themen. Monatskennzahlen und Monatsarchiv sind jetzt an die vorhandenen
-Aufträge angeschlossen. Eine eigenständige Bearbeitungshistorie sowie Analytics
-für Reichweite, Zielgruppen und Plattformresonanz bleiben offen; dazu werden
-keine Werte aus Aufträgen abgeleitet.
+Aufträge angeschlossen. Gespeicherte Portaltext-Stände sind jetzt als erster Teil der
+Bearbeitungshistorie angeschlossen. Ein vollständiges Änderungsjournal für
+Editor-Einstellungen, Zuordnungen und Analyseversuche sowie Analytics für
+Reichweite, Zielgruppen und Plattformresonanz bleiben offen. Die bestehenden
+Magic-Effect-Ergebnisse werden bei Wiederholung überschrieben; sie sind kein
+unveränderliches Ereignisjournal. Aus Aufträgen werden keine Analytics-Werte
+abgeleitet.
 
 Die abgeschlossene Bestandsstrecke wird nicht wiederholt. Shopify-Testmodus,
 zehn Bestellungen, die offenen PRs #57/#69 und der unveröffentlichte
 n8n-Originalentwurf bleiben erhalten. Diese Lieferung enthält keine
 kostenpflichtige Änderung, keinen Kauf und keine Social-Media-Veröffentlichung.
+
+
+## Gespeicherte Portaltexte (2026-11-06)
+
+Die History zeigt zusätzlich den vorhandenen Textverlauf aus
+`sma_private.publication_caption_history_v1`. Jeder Eintrag enthält den damals
+aufgezeichneten Textkörper, das Portal, die Entwurf-ID, die Revision und
+`recorded_at`. Der Text lässt sich aufklappen. Aktuelle Titel oder heutige
+Entwurftexte werden nicht als historische Werte ausgegeben. Eine Revision ist
+ein gespeicherter Stand, kein Beleg, dass jeder Portaltext tatsächlich geändert
+wurde. Früher überschriebene Versionen werden nicht nachträglich rekonstruiert.
+
+- Gemeinsame Monatsauswahl mit den Aufträgen; Textstände werden nach
+  **Erfassung in Europe/Vienna** eingeordnet. „Alle Monate“ umfasst alle
+  zuordenbaren gespeicherten Stände. Die bestehenden Monats-Schnellknöpfe
+  beziehen sich weiterhin auf Monate mit Aufträgen; andere Monate sind über
+  das Monatsfeld auswählbar.
+- Eigene Liste und eigene Seitennavigation (20 Einträge). Die drei
+  Auftragskennzahlen bleiben unverändert und zählen keine Textstände mit.
+- Neuer rein lesender RPC `public.sma_publication_text_history_v1(p_input)`
+  mit stabilem Invoker-Wrapper und privatem Definer-Reader. Authentifizierung,
+  eindeutig zugeordnetes aktives Kundenkonto und bezahlter/Demo-Zugang werden
+  vor jedem Lesen geprüft. `customer_id` des Textverlaufs muss zur Vorschau
+  passen, deren `user_id` wiederum zum angemeldeten Kunden gehört.
+- Kein direkter Tabellenzugriff für Browserrollen. Anonyme und Service-Rollen
+  dürfen den neuen RPC nicht aufrufen. Es werden keine Tokens, aktuellen
+  Fremddaten oder Provider-Rohantworten ausgegeben.
+- Keyset-Cursor: `before_at`, `before_id`, `before_revision`,
+  `before_platform`; alle vier Felder sind gemeinsam erforderlich. Ein Index
+  auf Kunde, Erfassung, Entwurf, Revision und Portal unterstützt die Sortierung.
+- `app/assets/publication-text-history-dashboard.mjs` übernimmt Darstellung
+  und Seitennavigation. Die übergeordnete History steuert Monat, Sichtbarkeit
+  und Abmeldung. Verspätete Antworten werden verworfen, Konto und Leserecht
+  werden vor und nach dem Abruf geprüft. Inhalte werden nur als Text gerendert.
+- Migration: `20261106123906_publication_text_history_v1.sql`; SQL-Quelle:
+  `supabase/sql/publication-text-history.sql`. Die bisherigen History-RPCs v1/v2
+  und Schreibwege bleiben unverändert. Es wird keine neue Aktivität erzeugt.
+
+Validierung:
+
+- **535 Repository-Tests**, **57 zusätzliche Textverlaufs-SQL-Prüfungen**,
+  **20 gemeinsame DOM-Szenarien** bestanden. Die bestehenden **62 + 52**
+  Auftrags-/Monats-SQL-Prüfungen bestehen weiterhin.
+- SQL prüft Kunden-/Elternzuordnung einschließlich verwaister Datensätze,
+  Rollenrechte, gespeicherte statt heutige Texte, Wiener Monatsgrenzen mit
+  Sommerzeit, Seitengrenzen bei gleicher Entwurf-ID/Zeit, ungültige Cursor und
+  unveränderte Quelltabellen. Fixtures ausschließlich lokal in PGlite.
+- Produktiver Leseaufruf unter authentifizierter Kundenrolle, in einer
+  zurückgerollten Transaktion: **November 2026 = 14 Textstände aus acht
+  Entwürfen**, Oktober = 0, alle Monate = 14. Zehn Stände haben Revision 1,
+  vier Stände Revision 2; nicht alle älteren Versionen sind erhalten.
+- Security-Advisors unverändert; keine zusätzliche Warnung.
+
+Zusätzlicher Testaufruf:
+
+```sh
+node tests/run-publication-text-history-sql.mjs
+```

@@ -5,10 +5,10 @@ const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImme
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',...extra});
 const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:2,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
-function fixture({active=true,request=()=>result(),getOwnerId}={}){
+function fixture({active=true,request=()=>result(),getOwnerId,requestTexts}={}){
  const {document:doc,window}=parseHTML('<html><head></head><body><section id="page-history" class="'+(active?'active':'')+'"><div class="grid">'+Array.from({length:3},()=>'<div class="card"><div class="card-title">Old metric</div><div class="big-value">–</div><div class="muted">Old detail</div></div>').join('')+'</div><div class="card"><div class="card-title">Aktivitätsverlauf</div><p>Old intro</p><div id="historyActivitySlot" class="empty-state"></div></div><div class="card"><div class="card-title">Monatsarchiv</div><p>Old archive</p><div id="historyMonthSlot" style="display:flex"></div></div></section></body></html>');
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
- const view=mountPublicationHistory({doc,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
+ const view=mountPublicationHistory({doc,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
  const page=doc.getElementById('page-history');
  return {doc,window,page,view,calls,$:s=>page.querySelector(s),owner(id,notify=true){owner=id;if(notify)callback(id);},focus(){window.dispatchEvent(new window.Event('focus'));},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));},get unsubscribed(){return unsubscribed;}};
 }
@@ -77,5 +77,37 @@ await test('owner loss clears counters and archives together with the list',asyn
 await test('wrong-month responses clear both summary and rows',async()=>{
  const f=fixture({request:()=>result()});await tick();f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();
  assert.equal(f.$('[data-history-metric=orders]').textContent,'–');assert.equal(f.$('ol').children.length,0);assert.match(f.$('[role=status]').textContent,/nicht geladen/);f.view.destroy();
+});
+
+
+const textEntry=(n=1,extra={})=>({preview_id:entry(n).id,revision:1,platform:'tiktok',body:'Saved text with enough detail',recorded_at:'2026-11-06T12:00:00Z',...extra});
+const texts=(entries=[textEntry()],extra={})=>({ok:true,version:1,month:'2026-11',timezone:'Europe/Vienna',total:entries.length,entries,has_more:false,next:null,...extra});
+await test('saved texts are expandable text-only values, independent of order totals',async()=>{
+ const f=fixture({requestTexts:()=>texts([textEntry(1,{body:'<img src=x onerror=alert(1)> A saved body'})])});await tick();
+ assert.match(f.$('#historyTextCard').textContent,/TikTok/);assert.match(f.$('#historyTextCard').textContent,/Version 1/);assert.equal(f.$('#historyTextCard img'),null);assert.equal(f.$('#historyTextCard details').hasAttribute('open'),false);assert.equal(f.$('#historyTextCard a'),null);assert.match(f.$('#historyTextCard .sma-history-saved-text').textContent,/<img/);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyTextCard'),null);
+});
+await test('text month follows the selected order month, including all and empty periods',async()=>{
+ const calls=[],f=fixture({request:i=>result(i.month==='2026-10'?[]:[entry()],null,{month:i.month===undefined?'2026-11':i.month}),requestTexts:i=>{calls.push(i);return texts(i.month==='2026-10'?[]:[textEntry()],{month:i.month});}});await tick();
+ f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();assert.match(f.$('#historyTextCard [role=status]').textContent,/Keine.*Oktober/);
+ button(f,'Alle Monate').click();await tick();assert.match(f.$('#historyTextCard [role=status]').textContent,/Alle Monate/);assert.deepEqual(calls,[{month:'2026-11'},{month:'2026-10'},{month:null}]);f.view.destroy();
+});
+await test('text pagination distinguishes versions and portals of the same preview',async()=>{
+ const entries=Array.from({length:20},(_,i)=>textEntry(1,{revision:i+1})),last=entries.at(-1),next={before_at:last.recorded_at,before_id:last.preview_id,before_revision:20,before_platform:'tiktok'},calls=[];
+ const f=fixture({requestTexts:i=>{calls.push(i);return i.before_id?texts([textEntry(1,{platform:'youtube'})],{total:21}):texts(entries,{total:21,has_more:true,next});}});await tick();button(f,'Weitere Textstände laden').click();await tick();assert.equal(f.$('#historyTextCard ol').children.length,21);assert.deepEqual(calls[1],{month:'2026-11',...next});assert.equal(f.$('#historyActivitySlot ol').children.length,1);f.view.destroy();
+});
+await test('late text results cannot repopulate another month, hidden page or lost owner',async()=>{
+ for(const change of ['month','hidden','owner','destroy']){
+  const gate=deferred(),f=fixture({request:i=>result([],null,{month:i.month||'2026-11'}),requestTexts:i=>i.month==='2026-10'?texts([],{month:i.month}):gate.promise});await tick();
+  if(change==='month'){f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();}
+  if(change==='hidden')f.page.classList.remove('active');if(change==='owner')f.owner('other');if(change==='destroy')f.view.destroy();await tick();gate.resolve(texts());await tick();assert.equal(f.page.querySelectorAll('#historyTextCard li').length,0);if(change==='month')assert.match(f.$('#historyTextCard').textContent,/Oktober/);f.view.destroy();
+ }
+});
+await test('text read owner checks also catch unannounced account switches',async()=>{
+ const gate=deferred(),f=fixture({requestTexts:()=>gate.promise});await tick();f.owner('other',false);gate.resolve(texts());await tick();assert.equal(f.$('#historyTextCard ol').children.length,0);assert.equal(f.$('[data-history-metric=orders]').textContent,'–');assert.equal(button(f,'Textverlauf aktualisieren').disabled,true);f.view.destroy();
+});
+await test('text errors clear rows, preserve the chosen month and permit a read-only retry',async()=>{
+ let response=texts(),f=fixture({requestTexts:()=>response});await tick();
+ for(const invalid of [{ok:false},texts([textEntry()],{month:'2026-10'})]){response=invalid;button(f,'Textverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyTextCard ol').children.length,0);assert.match(f.$('#historyTextCard [role=status]').textContent,/nicht geladen/);assert.equal(button(f,'Textverlauf aktualisieren').disabled,false);}
+ response=texts();button(f,'Textverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyTextCard ol').children.length,1);f.view.destroy();
 });
 console.log(`${passed} history DOM scenarios passed.`);

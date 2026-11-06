@@ -1,6 +1,7 @@
-import {readPublicationHistoryMonths,historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=2';
+import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=1';
+import {readPublicationHistoryMonths,historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=3';
 
-export function mountPublicationHistory({doc,request,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
+export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
  if(!slot||!expectedOwnerId)return {destroy(){}};
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -34,9 +35,11 @@ export function mountPublicationHistory({doc,request,getOwnerId,expectedOwnerId,
   monthButtons=create('div',null,'sma-history-month-links');period=create('p');period.setAttribute('data-history-period','');
   controls.append(label,apply,today,all);monthSlot.replaceChildren(controls,period,monthButtons);
  }
+ const textHistory=requestTexts?mountPublicationTextHistory({doc,after:slot.closest('.card'),request:requestTexts,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  let entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
  const active=()=>!disposed&&!invalidOwner&&page.classList.contains('active')&&ownerWindow.document.visibilityState!=='hidden';
  function clear(text=''){
+  textHistory?.clear();
   generation++;busy=false;entries=[];cursor=null;summary=null;list.replaceChildren();message.textContent=text;more.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';
@@ -77,7 +80,7 @@ export function mountPublicationHistory({doc,request,getOwnerId,expectedOwnerId,
    if(selection!==undefined&&result.month!==selection)throw Error('INVALID_HISTORY');
    if(append&&result.entries.some(e=>entries.some(old=>old.id===e.id)))throw Error('INVALID_HISTORY');
    const combined=append?[...entries,...result.entries]:result.entries;if(combined.length>result.summary.orders)throw Error('INVALID_HISTORY');
-   entries=combined;cursor=result.next;selection=result.month;summary=result.summary;render(result);
+   entries=combined;cursor=result.next;selection=result.month;summary=result.summary;render(result);if(!append)textHistory?.load(result.month);
   }catch{if(current(g))clear('Der Verlauf konnte nicht geladen werden. Bitte erneut aktualisieren.');}
   finally{if(g===generation&&!disposed){busy=false;refresh.disabled=invalidOwner;more.disabled=false;slot.setAttribute('aria-busy','false');}}
  }
@@ -89,5 +92,5 @@ export function mountPublicationHistory({doc,request,getOwnerId,expectedOwnerId,
  ownerWindow.addEventListener('focus',onFocus);ownerWindow.document.addEventListener('visibilitychange',onVisibility);
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  load();
- return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();css.remove();}};
+ return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();textHistory?.destroy();css.remove();}};
 }
