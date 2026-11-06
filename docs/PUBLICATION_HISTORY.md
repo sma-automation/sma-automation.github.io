@@ -1,16 +1,39 @@
 # Veröffentlichungsaufträge in der Dashboard-History
 
-Stand: 6. November 2026. Die bisher leere Aktivitätsfläche erhält die gespeicherten
-Veröffentlichungsaufträge des angemeldeten Kunden. Die Lieferung ergänzt den
+Stand: 6. November 2026. Die History zeigt die gespeicherten
+Veröffentlichungsaufträge des angemeldeten Kunden mit Monatswahl und Kennzahlen. Sie ergänzt den
 bestehenden Dashboard-Frame; die n8n-Dashboardvorlage wird nicht geändert.
 
 ## Kundenablauf
 
 Dashboard → **History** → **Veröffentlichungsaufträge**. Die Liste zeigt Titel,
 Portal, gespeicherten Zielkontonamen, Status sowie Erstellungs- und Änderungszeit.
-Neueste Aufträge stehen oben. **Verlauf aktualisieren** beginnt wieder mit den
-neuesten 20 Einträgen; **Weitere Aufträge laden** ergänzt die nächste Seite.
+Beim Öffnen ist der aktuelle Monat in **Europe/Vienna** ausgewählt. Im
+**Monatsarchiv** oberhalb der Liste kann der Kunde einen beliebigen Monat von
+2000 bis 2099 auswählen, zum aktuellen Monat zurückkehren oder **Alle Monate**
+öffnen. Die zwölf jüngsten Monate mit vorhandenen Aufträgen sind zusätzliche
+Direktknöpfe mit ihrer Auftragszahl; ältere Monate bleiben über die Monatswahl
+erreichbar. Die bisherigen festen Beispielmonate sind entfernt.
+
+Neueste Aufträge stehen oben. **Verlauf aktualisieren** beginnt im gewählten
+Zeitraum wieder mit den neuesten 20 Einträgen; **Weitere Aufträge laden** ergänzt die nächste Seite.
 Leere Listen, Ladefehler und erneute Anmeldung haben eigene Meldungen.
+
+Die drei vorhandenen Kennzahlenkarten zählen den **gesamten gewählten Zeitraum**,
+nicht nur die bereits geladenen Zeilen:
+
+| Kennzahl | Bedeutung |
+| --- | --- |
+| Aufträge | Eigene Aufträge, die im gewählten Monat erstellt wurden, einschließlich abgebrochener Aufträge |
+| Davon öffentlich bestätigt | Diese Aufträge mit passender, bestätigter öffentlicher Providerantwort nach unveränderter v1-Prüfung |
+| Portale in den Aufträgen | Anzahl verschiedener bekannter Portale in diesen Aufträgen, zusätzlich als Namen angezeigt |
+
+Die Monatszuordnung basiert auf **Erstellung**, nicht auf dem späteren
+Veröffentlichungszeitpunkt. „Davon öffentlich bestätigt“ ist damit der heute
+gespeicherte Ergebnisstand dieser Auftragsgruppe, keine Statistik der in diesem
+Monat veröffentlichten Beiträge. Monatsgrenzen und angezeigte Zeitpunkte
+verwenden Wiener Zeit einschließlich Sommerzeit. Die frühere Platzhalterkarte
+„Bearbeitete Inhalte“ wird nicht mit erfundenen Bearbeitungszahlen gefüllt.
 
 „Prüfung abgeschlossen“ bedeutet ausdrücklich noch keine Veröffentlichung.
 Öffentlich bestätigte, private, nicht gelistete und eingeschränkt sichtbare
@@ -20,13 +43,15 @@ der gespeicherte Stand, keine aktuelle Live-Abfrage bei YouTube oder TikTok.
 
 ## Ausschließlich lesender Zugriff
 
-- `public.sma_publication_history_v1(p_input)` ist ein stabiler Invoker-Wrapper.
+- `public.sma_publication_history_v2(p_input)` ist ein stabiler Invoker-Wrapper.
   Nur `authenticated` erhält Ausführungsrecht. Der private Definer prüft
   `auth.uid()`, genau eine Kundenzuordnung und aktiven bezahlten oder Demo-Zugang.
 - Jede Auswahl ist zugleich an `user_id` und `customer_id` gebunden. Der Client
-  kann weder Besitzer noch Kunden auswählen. Keyset-Paginierung verwendet
+  kann weder Besitzer noch Kunden auswählen. Dieselben Grenzen gelten für
+  Kennzahlen und Monatsübersicht. Keyset-Paginierung verwendet
   `created_at` und `id`, mit 20 Einträgen pro Seite und einem Überhangdatensatz.
-- Die Ausgabe beschränkt sich auf sieben Anzeige-Felder. Keine Upload-Session,
+- Jede Auftragszeile enthält weiterhin nur sieben Anzeige-Felder. Die v2-Antwort
+  ergänzt ausgewählten Monat, Zeitzone, Kennzahlen und zwölf Monatsabkürzungen. Keine Upload-Session,
   Token, Kunden-/Benutzerkennung, Freigabekennung oder internen Providerantworten.
   Titel und Kontoname werden im Browser ausschließlich als Text eingesetzt.
 - Der Reader ruft weder die n8n-Auftrags-API noch den vorhandenen Auftrags-
@@ -34,8 +59,10 @@ der gespeicherte Stand, keine aktuelle Live-Abfrage bei YouTube oder TikTok.
   History ungeeignet. Keine Auftragsänderung, Lease, Freigabe, Wiederholung,
   HTTP-Anfrage an ein Portal oder automatische Abfrage im Hintergrund.
 - Verlassen der History, ausgeblendeter Browser, Abmeldung und Kontowechsel
-  entfernen Daten. Besitzerprüfungen vor/nach der Antwort und eine
-  Generationskennung verwerfen verspätete Antworten.
+  entfernen Zeilen, Kennzahlen und Monatsabkürzungen. Besitzerprüfungen vor/nach
+  der Antwort und eine Generationskennung verwerfen verspätete Antworten;
+  auch ein schneller Monatswechsel kann keine alte Seite oder alte Kennzahlen
+  in die neue Auswahl übernehmen.
 
 ## Voraussetzung und Installation
 
@@ -50,8 +77,15 @@ Schema-/Fingerprint-Ausschnitt mit Quellcommit, keinen produktiven Dispatcher.
 Quelle: `supabase/sql/publication-history.sql`. Identische, mit Supabase CLI
 erzeugte Migration: `supabase/migrations/20261106115708_publication_history_v1.sql`.
 Die Migration `publication_history_v1` ist in `bnvnmdxosbnuzedokqgh` angewendet.
-Die drei neuen Funktionen sind additiv; bestehende Funktionen und Tabellen
-werden nicht geändert. Ein Frontend-Rollback kann die neuen Reader ungenutzt
+Die zwei zusätzlichen v2-Funktionen stammen aus
+`supabase/sql/publication-history-months.sql` und der identischen CLI-Migration
+`supabase/migrations/20261106122052_publication_history_months_v1.sql`.
+`publication_history_months_v1` ist ebenfalls im bestehenden Projekt angewendet.
+Die v1-Reader und der bestehende Ergebnisprüfer bleiben unverändert, damit
+bereits geöffnete ältere Dashboardversionen weiter funktionieren. Bestehende
+Tabellen werden nicht geändert. Die vorhandenen Indizes auf Besitzer/Erstellung
+und Provider-Auftrags-ID unterstützen die Leseabfragen.
+Ein Frontend-Rollback kann die neuen Reader ungenutzt
 belassen; es ist kein Daten-Rollback erforderlich.
 
 ## Nachweise
@@ -65,16 +99,26 @@ belassen; es ist kein Daten-Rollback erforderlich.
 - Vor/nach Installation und Live-Lesen bleibt der vollständige Zeilenhash
   aller neun Aufträge identisch (`a19d817047175d3e2fe2315ff5f9b21b`). Weiterhin
   null Provider-Versuche, Ereignisse und Uploadfreigaben sowie zehn Bestellungen.
-- **528 Repository-Tests bestanden.**
+- **532 Repository-Tests bestanden.**
 - **62 isolierte SQL-Prüfungen bestanden:** Kundentrennung, Zugangssperren,
   identische Zeitstempel über Seitengrenzen, Eingabe-/Rechtegrenzen,
   YouTube-/TikTok-Ergebniszuordnung und unveränderte Journale.
-- **8 DOM-Szenarien bestanden:** tatsächliche Textausgabe, Nachladen,
-  Fehler/Wiederholung, Konto-/Seitenwechsel, verspätete Antworten und Teardown.
+- **52 zusätzliche Monats-SQL-Prüfungen bestanden:** Wiener Monatsgrenzen im
+  Winter und nach Sommerzeitumstellung, leere/ältere/alle Monate, Kundentrennung
+  in Aggregaten, konstante Gesamtzahl über Seitengrenzen, bestätigte Ergebnisse
+  und Fingerabdruckänderung, unveränderte Journale sowie v1-Kompatibilität.
+- **14 DOM-Szenarien bestanden:** tatsächliche Textausgabe, Nachladen,
+  Fehler/Wiederholung, Konto-/Seiten-/Monatswechsel, Kennzahlen unabhängig von
+  Seitenlänge, echte Monatsknöpfe, verspätete Antworten und Teardown.
 - Produktiver Aufruf unter `authenticated` mit bestehendem Testkunden:
   `ok:true`, **9 Aufträge**, alle **`cancelled`**, keine weitere Seite.
   Die Rollen-/Claim-Simulation erfolgte in einer zurückgerollten Transaktion;
   es wurden keine Testaufträge eingefügt.
+- Produktiver v2-Leseaufruf unter derselben Rolle: **November 2026 = 9 Aufträge,
+  0 öffentlich bestätigt, 2 Portale (TikTok/YouTube)**. Oktober liefert **0/0/0**;
+  „Alle Monate“ wieder **9/0/2**. Die echte Monatsübersicht enthält ausschließlich
+  November 2026 mit neun Aufträgen. Keine synthetischen Aktivitätsdaten wurden
+  in der produktiven Datenbank angelegt.
 - Security-Advisors unverändert: 37 INFO-Einträge für RLS ohne Policies,
   vier bestehende anonyme und sechs bestehende authentifizierte
   Definer-Warnungen sowie die bestehende Passwortschutz-Warnung.
@@ -85,6 +129,7 @@ npm ci --prefix tests/sql-runtime --ignore-scripts
 npm ci --prefix tests/dom-runtime --ignore-scripts
 node --test tests/*.test.cjs
 node tests/run-publication-history-sql.mjs
+node tests/run-publication-history-months-sql.mjs
 node tests/run-publication-history-dom.mjs
 ```
 
@@ -94,8 +139,10 @@ Die tatsächlichen vorhandenen Aufträge sind abgebrochene Vorbereitungs-/Test-
 aufträge. Erfolgreiche öffentliche oder private Providerergebnisse wurden hier
 **nur mit isolierten Fixtures** geprüft. Ein echter Upload ist weiterhin eine
 gesonderte Abnahme und wurde nicht gestartet. Medienblocker und Meta bleiben
-separate Themen. Die übrigen History-Flächen für Monatskennzahlen,
-Bearbeitungshistorie, Monatsarchiv und Analytics sind weiterhin Platzhalter.
+separate Themen. Monatskennzahlen und Monatsarchiv sind jetzt an die vorhandenen
+Aufträge angeschlossen. Eine eigenständige Bearbeitungshistorie sowie Analytics
+für Reichweite, Zielgruppen und Plattformresonanz bleiben offen; dazu werden
+keine Werte aus Aufträgen abgeleitet.
 
 Die abgeschlossene Bestandsstrecke wird nicht wiederholt. Shopify-Testmodus,
 zehn Bestellungen, die offenen PRs #57/#69 und der unveröffentlichte
