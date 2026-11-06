@@ -5,8 +5,8 @@ noch kein Import und keine Veröffentlichung des integrierten Kundenworkflows.**
 
 Der anschließende [gemeinsame Bestandsschutz](SHOP_INVENTORY_WRITERS.md) erweitert
 diesen Basiskandidaten auf 527 Nodes und ergänzt den separaten Bestands-Webhook.
-63 Tests bestehen; der gemeinsame Echtlauf ist wegen der ausgefallenen
-Browserverbindung noch offen.
+63 Tests und der gemeinsame echte Prüflauf bestehen; die vollständige
+Kundenablauf-Abnahme und produktive Übernahme stehen noch aus.
 
 ## Frische Ausgangsversionen
 

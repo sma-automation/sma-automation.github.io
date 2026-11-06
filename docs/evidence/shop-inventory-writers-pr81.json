@@ -42,8 +42,13 @@
   "tests_passed": 63,
   "qa_nodes": 57,
   "qa_saved_parameters_verified": true,
-  "qa_latest_owner_guard_requires_reimport": true,
-  "combined_live_run_confirmed": false,
-  "browser_block": "Runtime.evaluate timeout, then browser transport request failed",
-  "production_published": false
+  "qa_latest_owner_guard_requires_reimport": false,
+  "combined_live_run_confirmed": true,
+  "production_published": false,
+  "qa_completed_utc": "2026-11-06T01:28:03.959874Z",
+  "delivery_id": "2b56722e-8792-50d2-a5f3-93285c691660",
+  "receipts_done": 22,
+  "active_leases": 0,
+  "stock": 4,
+  "imports_dry_run_only": true
 }

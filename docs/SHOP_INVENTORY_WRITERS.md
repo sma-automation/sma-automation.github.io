@@ -1,8 +1,7 @@
 # Gemeinsamer Bestandsschutz der Schreibwege
 
-Stand: 6. November 2026, Europe/Vienna. **Korrekturen vorbereitet, 63 Tests
-bestanden. Gemeinsamer Echtlauf wegen ausgefallener Browserverbindung noch
-nicht bestätigt. Keine produktive Übernahme.**
+Stand: 6. November 2026, Europe/Vienna. **63 Tests und gemeinsamer echter n8n-Prüflauf
+bestanden. Keine produktive Übernahme.**
 
 ## Abgeglichene Quellen
 
@@ -71,29 +70,46 @@ bestehenden Bestand vier in den Vorher-/Nachher-Ergebnissen nicht verändern.
 Die Digistore24-Vorschau darf hierbei nur simulieren, niemals die Produktart des
 Shopify-Testprodukts speichern.
 
-## Gespeicherter Stand und konkrete Fortsetzung
+## Gemeinsamer Echtlauf bestätigt
 
-Die bestehende unveröffentlichte QA-Arbeitskopie `iVy7hpNBjDLxV1Ro` wurde mit
-57 Nodes ersetzt. Der anschließende Rückexport bestätigt Parameter, Code,
-Zugänge, Verbindungen und Datenschutzeinstellungen (90 Sekunden Timeout,
-keine Speicherung manueller Ausführungen). Der Ausführungsversuch lieferte
-jedoch keinen bestätigten Status: `Runtime.evaluate`/Browserantworten liefen
-in Zeitüberschreitungen; anschließend schlug der Browser-Transport selbst fehl.
-Ein erneutes Laden half nicht. Es wurde kein zweiter Teststart ausgelöst und
-keine erneute Anmeldung durchgeführt, da keine Anmeldewand beobachtet wurde.
+Die bestehende unveröffentlichte QA-Arbeitskopie `iVy7hpNBjDLxV1Ro` enthält die
+aktuelle 57-Node-Fassung einschließlich des Schutzes für Shopify-Produkte mit
+noch fehlender Variantenkennung. Der abschließende Rückexport bestätigt alle
+Parameter, Code, Zugänge, Verbindungen und Datenschutzeinstellungen: 90 Sekunden
+Timeout, keine Speicherung manueller Ausführungen, nicht veröffentlicht.
 
-Die unabhängige Supabase-Abfrage zeigte weiterhin **21 abgeschlossene Meldungen,
-null aktive Sperren und vier Stück**. Die letzte bestätigte Meldung stammt aus
-dem vorherigen erfolgreichen Schreibkonflikttest um 01:43 Uhr Wiener Zeit.
-Das ist kein Nachweis für den neuen gemeinsamen Lauf.
+Der gemeinsame Lauf wurde nach Wiederherstellung der vorübergehend ausgefallenen
+Browserverbindung erfolgreich abgeschlossen. Eine neue Anmeldung war nicht nötig.
+Die n8n-Oberfläche bestätigt `Workflow executed successfully`; der End-Node zeigt:
 
-Bei der abschließenden Codeprüfung wurde der Eigentümerschutz noch auf
-Shopify-Zuordnungen mit Produktkennung, aber ohne Variantenkennung, erweitert.
-**Diese letzte Ergänzung liegt im Repository und im neu erzeugten privaten
-57-Node-Kandidaten; sie muss vor dem Echtlauf erneut in die QA-Kopie übernommen
-werden.** Danach Rückexport vergleichen, den bisherigen Laufstatus prüfen und
-den gemeinsamen Test einmal ausführen. Erst ein bestätigtes gemeinsames
-Ergebnis erlaubt die Kundenablauf-Abnahme und die geplante produktive Übernahme.
+| Prüfung | Ergebnis |
+| --- | --- |
+| Webhook-Prüfungen mit echter Sperre und Supabase-Übernahme | Bestanden. |
+| Bestands-Write mit alter Zeilenversion | Abgewiesen; Bestand und Version bleiben unverändert. |
+| Direkte Änderung eines Shopify-Bestands über Produktbearbeitung | Vor dem Write abgewiesen; Bestandsauftrag erforderlich. |
+| Mengenunveränderte Produktbearbeitung | Gespeichert und bestätigt. |
+| Wiederholung der alten Produktbearbeitung | Abgewiesen; frischer Abruf bestätigt unveränderten Stand. |
+| Shopify-Import mit fiktivem Bestand null | Vorschau erhält Bestand vier. |
+| Digistore24-Import mit fiktivem Bestand null | Vorschau erhält Bestand vier; kein Schreiben der simulierten Produktart. |
+| Journalabschluss und identische Wiederholung | `done`, danach `duplicate` / `done`. |
+
+Supabase-Abschlussprüfung vom **6. November 2026, 02:28 Uhr Wiener Zeit**:
+
+- Testprodukt weiter vier Stück.
+- **22 abgeschlossene Meldungen**, null aktive Sperren.
+- Neue Meldung `2b56722e-8792-50d2-a5f3-93285c691660`: ein Versuch,
+  Erfassung `01:28:03.067972Z`, abgeschlossen `01:28:03.959874Z`.
+
+![Gemeinsamer Schreibschutz-Prüflauf erfolgreich](evidence/shop-inventory-writers-pr81.jpg)
+
+## Verbleibende Übernahme
+
+Die geänderten Schreibwege sind gemeinsam in der getrennten QA-Kopie geprüft.
+Der vollständige 527-Node-Kundenworkflow und der 42-Node-Bestands-Webhook liegen
+weiterhin als private Integrationskandidaten vor. Vor ihrer produktiven Übernahme
+folgen der aktuelle Versionsabgleich und die Abnahme des vollständigen
+angemeldeten Kundenablaufs einschließlich seiner Antworten. Der manuelle
+Prüflauf ersetzt keinen Test dieses äußeren Authentifizierungs-/Webhook-Einstiegs.
 
 Die aktiven Workflows, der separate Originalentwurf und Shopify Payments im
 Testmodus bleiben erhalten. Es gab keine Bestellung, Shopify-Mutation,

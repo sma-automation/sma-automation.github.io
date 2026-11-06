@@ -251,5 +251,6 @@ Technische Referenz: [n8n DataTable Update-Implementierung](https://github.com/n
 
 Die gemeinsamen Korrekturen für Bestands-Webhook, Produktbearbeitung und erneute
 Importe sind in [SHOP_INVENTORY_WRITERS.md](SHOP_INVENTORY_WRITERS.md) dokumentiert.
-63 Tests bestehen. Der neue gemeinsame Echtlauf ist noch nicht bestätigt; die
-bisherigen echten Nachweise oben betreffen den zuvor geprüften Bestandszweig.
+63 Tests und der neue gemeinsame Echtlauf bestehen. Die Nachweise oben betreffen
+den zuvor geprüften Bestandszweig; die neue gemeinsame Prüfung steht in der
+verlinkten Fortsetzung.
