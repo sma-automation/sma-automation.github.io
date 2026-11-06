@@ -30,6 +30,7 @@ on:
       - app/assets/media-music*
       - app/assets/publication-export-cover*
       - tests/*media-music*
+      - tests/run-export-music-cancel-dom.mjs
       - app/assets/media-export*
       - n8n/publishing/*editor-source*
       - supabase/sql/publication-editor-exports.sql
@@ -94,6 +95,7 @@ jobs:
           node tests/run-media-export-sql.mjs
           node tests/run-media-export-dom.mjs
           node tests/run-media-music-dom.mjs
+          node tests/run-export-music-cancel-dom.mjs
           node tests/run-music-library-sql.mjs
           node tests/run-music-library-reservations-sql.mjs
           node tests/run-music-library-dom.mjs

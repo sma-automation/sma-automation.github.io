@@ -91,6 +91,22 @@ an der langen Seite. Browser muss während der Verarbeitung geöffnet bleiben.
 - Beim Rücklesen wurde außerdem die oben beschriebene Drive-Metadatenänderung
   sichtbar. Die Prüfsummenbindung ist im Live-Workflow und im Generator korrigiert.
 
+## Export mit gespeicherter Musik abbrechen (06.11.2026)
+
+„Abbrechen“ erreicht jetzt auch den laufenden Abruf aus der Musikbibliothek.
+Der Editor gibt die Bedienung unmittelbar frei, selbst wenn ein verspäteter Abruf
+seine Antwort noch liefert. Diese Antwort startet weder Originaldatei-Abruf noch
+Verarbeitung. Ein erneuter Export lädt die Musik mit einem neuen Abbruchsignal;
+bereits vollständig geprüfte Musik und die gespeicherten Einstellungen bleiben
+für den nächsten Versuch erhalten. Schließen und Kontowechsel verwerfen ebenfalls
+späte Ergebnisse. Die Modulversionen sind bis zum Dashboard-Einstieg angehoben.
+
+Prüfung: 575 Repository-Tests, 33 bestehende Editor-/Export-/Musik-DOM-Szenarien
+und vier neue integrierte Abbruch-Szenarien bestanden. Der neue Integrationstest
+reproduziert den Fehler auf dem unveränderten Vorgängerstand. Er prüft den echten
+Editor-Aufrufweg mit verzögerten Testdaten; kein Provider- oder Kundenexport wurde
+dafür ausgeführt. Der Test ist in die bestehenden GitHub-Prüfungen aufgenommen.
+
 ## Nächster Schritt
 
 Zusätzliche Musik und die Cover-Zuordnung zur Portalvorbereitung sind implementiert;
