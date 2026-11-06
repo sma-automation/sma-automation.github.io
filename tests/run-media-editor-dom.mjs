@@ -9,12 +9,12 @@ const id=n=>'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),uid=id(91);
 const files=[{id:id(1),name:'Example.mp4',revision:'r1',media_kind:'video',mime_type:'video/mp4',duration_ms:10000,width_px:1080,height_px:1920},{id:id(2),name:'Image.jpg',revision:'r1',media_kind:'image',mime_type:'image/jpeg',duration_ms:null,width_px:1200,height_px:800}];
 const reply=(input,settings=defaults,revision=0)=>({ok:true,version:1,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,revision,settings,saved_at:revision?'2026-11-06T12:00:00Z':null,changed:revision>0});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-function fixture({request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
+function fixture({refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
  const {document:doc,window}=parseHTML(html);Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});
  // Linkedom lacks native select.value setters; model the selected option through attributes.
  for(const select of doc.querySelectorAll('select'))Object.defineProperty(select,'value',{get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value||'';},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
  let owner=uid,serial=100;const calls=[],urls=[],revoked=[],thumbs=[];
- const view=mountMediaEditor({doc,expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
+ const view=mountMediaEditor({doc,expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
  const $=s=>doc.querySelector(s),set=(key,value)=>{$('[name="'+key+'"]').value=value;$('[name="'+key+'"]').dispatchEvent(new window.Event('input',{bubbles:true}));};
  return {doc,window,view,$,calls,urls,revoked,thumbs,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
 }
@@ -56,5 +56,26 @@ await test('visibility and teardown preserve unsaved text for the owner and abor
 await test('dashboard replaces only the inactive optimizer and restores exact original nodes on teardown',()=>{
  const {document:doc}=parseHTML('<section id="sma-content-panel-optimizer"><div class="card"><p>Original</p><button disabled>Content optimieren</button></div></section><p id="sibling">Unchanged</p>');const old=doc.querySelector('button');
  const view=mountMediaEditorEntry({doc,href:'https://example.test/app/media-editor.html'});assert.equal(doc.querySelector('a').href,'https://example.test/app/media-editor.html');assert.match(doc.querySelector('.card').textContent,/Medienexport/);assert.equal(doc.querySelector('#sibling').textContent,'Unchanged');view.destroy();assert.equal(doc.querySelector('button'),old);
+});
+await test('metadata refresh preserves unsaved recipe, enables timing and does not reload or save the draft',async()=>{
+ const pending={...files[0],duration_ms:null,width_px:null,height_px:null};let count=0;
+ const f=fixture({listFiles:()=>({ok:true,files:[pending]}),refreshMetadata:()=>{count++;return {ok:true,files};}});await tick();
+ assert.equal(f.$('#metadataPanel').hidden,false);assert.match(f.$('#metadataStatus').textContent,/Videolänge und Bildgröße/);f.set('overlay_text','Keep this text');f.set('format','9:16');f.$('#refreshMetadata').click();await tick();
+ assert.equal(count,1);assert.equal(f.$('#metadataPanel').hidden,true);assert.equal(f.$('[name=start_ms]').disabled,false);assert.equal(f.$('[name=overlay_text]').value,'Keep this text');assert.equal(f.$('[name=format]').value,'9:16');assert.deepEqual(f.calls.map(c=>c.a),['get']);f.save();await tick();assert.equal(f.calls.at(-1).i.settings.overlay_text,'Keep this text');f.view.destroy();
+});
+await test('pending metadata, rate limiting and changed source retain edits; source change blocks save until reload',async()=>{
+ for(const outcome of ['pending','rate','changed']){
+  const pending={...files[0],duration_ms:null};const f=fixture({listFiles:()=>({ok:true,files:[pending]}),refreshMetadata:()=>{if(outcome==='rate')throw Error('FILE_SYNC_RATE_LIMITED');return {ok:true,files:[outcome==='pending'?pending:{...files[0],revision:'r2'}]};}});await tick();f.set('overlay_text','Unsaved');f.$('#refreshMetadata').click();await tick();assert.equal(f.$('[name=overlay_text]').value,'Unsaved');assert.equal(f.$('#metadataPanel').hidden,false);assert.equal(f.$('#refreshMetadata').disabled,false);
+  assert.match(f.$('#status').textContent,outcome==='pending'?/noch nicht bereitgestellt/:outcome==='rate'?/warte kurz/:/geändert/);
+  if(outcome==='changed'){f.save();await tick();assert.deepEqual(f.calls.map(c=>c.a),['get']);f.$('#reload').click();assert.equal(f.$('#discard').hidden,false);f.$('#confirmDiscard').click();await tick();assert.equal(f.calls.at(-1).i.asset_revision,'r2');assert.equal(f.$('[name=overlay_text]').value,'');}
+  f.view.destroy();
+ }
+});
+await test('only one metadata request runs; owner changes and teardown discard late results and abort work',async()=>{
+ for(const end of ['success','owner','destroy']){
+  const gate=deferred();let count=0,signal;const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],duration_ms:null}]}),refreshMetadata:s=>{count++;signal=s;return gate.promise;}});await tick();f.set('overlay_text','Private');f.$('#refreshMetadata').click();f.$('#refreshMetadata').click();await tick();assert.equal(count,1);assert.equal(f.$('#refreshMetadata').disabled,true);
+  if(end==='owner')f.owner('other');if(end==='destroy')f.view.destroy();if(end!=='success')assert.equal(signal.aborted,true);gate.resolve({ok:true,files});await tick();
+  if(end==='success'){assert.equal(f.$('#metadataPanel').hidden,true);assert.equal(f.$('[name=overlay_text]').value,'Private');}else assert.equal(f.$('#app').hidden,true);f.view.destroy();
+ }
 });
 console.log(`${passed} editor DOM scenarios passed.`);

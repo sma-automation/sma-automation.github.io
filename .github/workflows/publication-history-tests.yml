@@ -10,6 +10,8 @@ on:
       - n8n/publishing/*editor-source*
       - supabase/sql/publication-editor-exports.sql
       - tests/*media-export*
+      - app/assets/media-metadata*
+      - tests/media-metadata*
       - app/assets/media-editor*
       - app/media-editor.html
       - app/assets/publication-editor-history*

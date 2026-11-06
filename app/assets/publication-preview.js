@@ -1,8 +1,9 @@
+import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=1';
 let supabase,coverView;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=7';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=8';
 import {installOrderReview} from './publication-order.mjs?v=5';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
@@ -47,7 +48,7 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
 async function rpc(action,input={},id=null){const {data,error}=await supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 // Read controlled fields directly: FormData omits the disabled fields during a Magic run.
@@ -106,7 +107,7 @@ async function ensureFreshFile(context,force=false){
  const bound=latest.assignments?.find(item=>item.platform===context.platform);
  if((bound?.revision||0)!==context.assignment_revision)throw fileError('ASSIGNMENT_CONFLICT');
  // Do not load a draft or replace form fields during this background refresh.
- assets=catalog.files;selectedAsset=latest;renderFilePicker();fileChanged();status('Dateistand geprüft. Deine Eingaben sind erhalten.');
+ assets=catalog.files;selectedAsset=latest;renderVideoMetadata();renderFilePicker();fileChanged();status('Dateistand geprüft. Deine Eingaben sind erhalten.');
 }
 async function withFreshFile(context,action){
  assertFileContext(context);
@@ -150,7 +151,12 @@ async function loadAssetPreview(force=false){
 }
 $('retryAssetPreview').addEventListener('click',()=>loadAssetPreview(true));
 window.addEventListener('pagehide',()=>{coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
+function renderVideoMetadata(){
+ $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
+ $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
+}
 function renderSelectedFile(){
+ renderVideoMetadata();
  void coverView?.setContext(selectedAsset);
  workspace?.selection(selectedAsset);
  $('selectedFileName').textContent=selectedAsset?.name||'';
@@ -448,6 +454,16 @@ async function refreshFiles(){
  if(busy)return;if(dirty||sourceDirty){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
  lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
 }
+async function refreshVideoMetadata(){
+ if(busy||signedOut||!selectedAsset)return;
+ const context=fileContext();lock(true);$('videoMetadataStatus').textContent='Dateiangaben werden im Kundenordner geprüft …';
+ try{
+  await ensureFreshFile(context,true);assertFileContext(context);renderVideoMetadata();syncMagicButton();
+  status(missingVideoMetadata(selectedAsset).length?'Google Drive hat die fehlenden Dateiangaben noch nicht bereitgestellt. Bitte später erneut aktualisieren. Deine Eingaben bleiben erhalten.':'Dateiangaben aktualisiert. Deine Eingaben bleiben erhalten.');
+ }catch(e){if(!signedOut){status(e.message,true);$('videoMetadataStatus').textContent=e.message;}}
+ finally{lock(false);}
+}
+$('refreshVideoMetadata').addEventListener('click',refreshVideoMetadata);
 $('refreshFiles').addEventListener('click',refreshFiles);
 $('pickerRefresh').addEventListener('click',refreshFiles);
 $('previewForm').addEventListener('input',()=>{sourceDirty=true;attempt=null;});

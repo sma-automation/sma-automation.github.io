@@ -79,9 +79,8 @@ Cover-ID; kein fremdes oder geändertes Bild.
 ## Weiterarbeit
 
 Musik → Export → Kundenordner → Portalvorbereitung mit Cover ist abgeschlossen.
-Bei neu hochgeladenen Videos fehlen
-zum Teil noch Drive-Länge/Bildgröße; der Editor sperrt diese korrekt. Für diese
-Indexierungswartezeit eine sichtbare, gezielte Aktualisierung vorsehen. Danach
-dauerhafte eigene Musikbibliothek und portalspezifische Cover-Übergabe anhand
+Die gezielte Aktualisierung fehlender Drive-Länge/Bildgröße ist in
+[VIDEO_METADATA_REFRESH.md](VIDEO_METADATA_REFRESH.md) umgesetzt und geprüft.
+Als getrennte nächste Erweiterungen dauerhafte eigene Musikbibliothek und portalspezifische Cover-Übergabe anhand
 der tatsächlichen Provider-Fähigkeiten getrennt bearbeiten. Bestandsstrecke abgeschlossen;
 PR #57/#69 separat, Shopify-Testmodus und n8n-Originalentwürfe erhalten.
