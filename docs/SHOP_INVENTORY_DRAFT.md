@@ -67,11 +67,12 @@ Aus dem gesicherten 515-Node-Entwurf entsteht ein Kandidat mit 524 Nodes.
 ## Prüfung und Freigabegrenze
 
 ```sh
-node --test tests/inventory-draft.test.cjs tests/shop-stock.test.cjs
+node --test tests/inventory-integration.test.cjs tests/inventory-draft.test.cjs tests/shop-stock.test.cjs
 git diff --check
 ```
 
-45 Tests bestanden: 35 für Vertrag, Patch und isolierten Prüflauf, zehn vorhandene
+49 Tests bestanden: 35 für Vertrag, Patch und isolierten Prüflauf, vier für die
+gezielte Übernahme und zehn vorhandene
 Dashboard-Bestandstests. Der synthetische Durchlauf führt die tatsächlich
 eingebetteten Code-Nodes und HTTP-Body-Ausdrücke aus. Er prüft unter anderem
 Kunden-/Kontobindung, Doppelaufrufe, belegte/abgelaufene Sperren, zweite Lesung,
@@ -187,10 +188,14 @@ Eine produktive automatische Wiederaufnahme mit dauerhaftem Auftragsbezug und
 eine Absicherung verspäteter Data-Table-Antworten sind nicht Teil dieses QA-Schritts.
 
 Der 524-Node-Kandidat enthält auch ältere, hier nicht abgenommene Änderungen des
-Entwurfs. **Kein vollständiger Austausch des veröffentlichten 511-Node-Workflows.**
-Eine spätere Veröffentlichung benötigt den dann frischen Export, den gezielten
-Vergleich mit der veröffentlichten Version und die Abnahme des gesamten
-übernommenen Bestandszweigs. Der erfolgreiche isolierte Lauf ist kein Nachweis
+Entwurfs. **Kein vollständiger Austausch durch diesen ursprünglichen Kandidaten.**
+Der anschließende [gezielte Abgleich](SHOP_INVENTORY_INTEGRATION.md) ist inzwischen
+abgeschlossen: Ein separater Kandidat baut auf der frisch exportierten
+veröffentlichten Fassung auf und übernimmt nur 13 Bestands-Nodes, eine Verbindung
+und das Weglassen des alten Bestandsfelds in der allgemeinen Produktspiegelung.
+Er wurde noch nicht importiert oder veröffentlicht. Eine spätere Veröffentlichung
+benötigt die Abnahme des gesamten übernommenen Bestandszweigs und bei zwischenzeitlichen
+Änderungen erneut einen frischen Vergleich. Der erfolgreiche isolierte Lauf ist kein Nachweis
 für eine produktive Veröffentlichung des gesamten Kundenworkflows.
 
 Quellen: [Shopify-Mengen und Zustände](https://shopify.dev/docs/apps/build/inventory-management-apps/manage-quantities-states),

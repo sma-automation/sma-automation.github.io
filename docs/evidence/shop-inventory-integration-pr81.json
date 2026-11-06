@@ -1,0 +1,36 @@
+{
+  "workflow_id": "GHBsYQcyt0JLFvRP",
+  "published_version": "68d295c6-c07f-4fdc-8395-528d4a92b3d6",
+  "draft_version": "5927ba8a-b235-42cc-b13f-abf800a3e146",
+  "source_nodes_sha256": "118088d70d71804896d6e7c06f6d5cb73155230e33ba3053ab45757707c0fd64",
+  "source_connections_sha256": "807d4c145390b0f73ac7305bd150c674c1a7a0244e457c5a39de2cc7564081eb",
+  "before_nodes": 511,
+  "after_nodes": 524,
+  "added_nodes": [
+    "SMA – Produkt – Shopify Sync – Bestand abrufen",
+    "SMA – Bestand – Abgleich vorbereiten",
+    "SMA – Bestand – Sperrauftrag",
+    "SMA – Bestand – Sperre anfordern",
+    "SMA – Bestand – Sperre prüfen",
+    "SMA – Bestand – Unter Sperre lesen",
+    "SMA – Produkt – Shopify Sync – Bestand auswerten",
+    "SMA – Supabase – Shopify-Bestand speichern",
+    "SMA – Bestand – Übernahme prüfen",
+    "SMA – Produkt – Shopify Sync – Bestand speichern",
+    "SMA – Bestand – Spiegelung prüfen",
+    "SMA – Bestand – Abgleich abschließen",
+    "SMA – Bestand – Abschluss prüfen"
+  ],
+  "modified_existing_nodes": [
+    "SMA – Supabase – Produkt spiegeln"
+  ],
+  "modified_existing_connections": [
+    "SMA – Produkt – Shopify Sync – Externe Produkt-ID vorhanden?"
+  ],
+  "protected_nodes_unchanged": 510,
+  "product_mutations_unchanged": true,
+  "credentials_unchanged": true,
+  "settings_unchanged": true,
+  "executed": false,
+  "published": false
+}
