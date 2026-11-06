@@ -232,3 +232,8 @@ Validierung: 536 Repository-Tests und 21 History-DOM-Szenarien. Die bestehende
 Seitennavigationsprüfung deckt jetzt fünf sichtbare Zeilen, Vor-/Zurückblättern
 über die 20er-Abrufgrenze, gleichbleibende Gesamtzahlen und zurückgesetzte
 Monatsseiten ab. Keine SQL-, n8n- oder Provideränderung.
+
+Die Monatsauswahl ist standardmäßig eingeklappt und zeigt den gewählten Monat
+mit „Zeitraum ändern“. Nach der Auswahl klappt sie wieder zu. Die Kennzahlen
+und Zeilenabstände sind kompakter, ohne die Schriftfamilie zu ändern. Dadurch
+beginnen die eigentlichen Einträge weiter oben auf der Seite.

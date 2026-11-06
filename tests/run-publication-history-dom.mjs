@@ -54,7 +54,7 @@ await test('monthly totals describe all selected orders, not only the visible pa
  const f=fixture({request:()=>result(entries,next,{summary:{orders:35,public_confirmed:3,platforms:['youtube','tiktok']}})});await tick();
  assert.equal(f.$('[data-history-metric=orders]').textContent,'35');assert.equal(f.$('[data-history-metric=public_confirmed]').textContent,'3');assert.equal(f.$('[data-history-metric=platforms]').textContent,'2');
  assert.match(f.$('[role=status]').textContent,/1–5 von 35/);assert.match(f.$('[data-history-period]').textContent,/November 2026/);assert.match(f.$('small').textContent,/13:00/);
- const cards=[...f.page.children];assert.ok(cards.indexOf(f.$('#historyMonthSlot').parentElement)<cards.indexOf(f.$('#historyActivitySlot').parentElement));f.view.destroy();
+ const cards=[...f.page.children];assert.ok(cards.indexOf(f.$('#historyMonthSlot').closest('.card'))<cards.indexOf(f.$('#historyActivitySlot').parentElement));f.view.destroy();
 });
 await test('empty month, all months and current month use explicit bounded read filters',async()=>{
  const f=fixture({request:input=>input.month==='2026-10'?result([],null,{month:'2026-10'}):result([entry()],null,{month:input.month===null?null:'2026-11'})});await tick();

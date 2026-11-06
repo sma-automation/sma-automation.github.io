@@ -20,13 +20,15 @@ export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,exp
  const metrics=[['Aufträge','Orders','orders'],['Davon öffentlich bestätigt','Publicly confirmed','public_confirmed'],['Portale in den Aufträgen','Platforms in orders','platforms']];
  cards.forEach((card,i)=>{translated(card.querySelector('.card-title'),metrics[i][0],metrics[i][1]);card.querySelector('.big-value')?.setAttribute('data-history-metric',metrics[i][2]);});
  const monthSlot=page.querySelector('#historyMonthSlot');
- let picker,monthButtons,period;
- const chooseMonth=value=>{if(!active())return;selection=value;clear();load();};
+ let picker,monthButtons,period,periodDisclosure,periodHeading;
+ const chooseMonth=value=>{if(!active())return;selection=value;periodDisclosure?.removeAttribute('open');clear();load();};
  if(monthSlot){
   monthSlot.classList.add('sma-history-months');
   const archiveCard=monthSlot.closest('.card'),activityCard=slot.closest('.card');
   if(archiveCard?.parentElement===page&&activityCard?.parentElement===page)page.insertBefore(archiveCard,activityCard);
   if(archiveCard?.querySelector('p'))archiveCard.querySelector('p').hidden=true;
+  if(archiveCard?.querySelector('.card-title'))archiveCard.querySelector('.card-title').hidden=true;
+  periodDisclosure=create('details',null,'sma-history-period-picker');periodHeading=create('summary','Monat auswählen');archiveCard.append(periodDisclosure);periodDisclosure.append(periodHeading,monthSlot);
   const controls=create('div',null,'sma-history-month-controls'),label=create('label','Monat');
   picker=create('input');picker.type='month';picker.min='2000-01';picker.max='2099-12';picker.setAttribute('aria-label','Monat auswählen');label.append(picker);
   const apply=create('button','Monat anzeigen'),all=create('button','Alle Monate'),today=create('button','Aktueller Monat');
@@ -56,7 +58,7 @@ export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,exp
   textHistory?.clear();
   generation++;busy=false;entries=[];cursor=null;summary=null;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
-  monthButtons?.replaceChildren();if(period)period.textContent='';
+  monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
  }
  function invalidateOwner(){invalidOwner=true;clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
  const current=g=>g===generation&&active();
@@ -68,6 +70,7 @@ export function mountPublicationHistory({doc,request,requestTexts,getOwnerId,exp
   cards.forEach((card,i)=>{const v=card.querySelector('.big-value');if(v)v.textContent=String(values[i]);const detail=i===2?(summary.platforms.map(p=>historyPlatforms[p]).join(' · ')||'Noch keine Portale'):i===1?'Bestätigter Stand dieser Aufträge':label;translated(card.querySelector('.muted'),detail,detail);});
   if(picker)picker.value=selection||'';
   if(period)period.textContent=label+' · nach Erstellungsmonat · Wiener Zeit';
+  if(periodHeading)periodHeading.textContent=label+' · Zeitraum ändern';
   if(monthButtons){monthButtons.replaceChildren();for(const m of result.months){const b=create('button',formatHistoryMonth(m.month)+' · '+m.orders);b.type='button';b.setAttribute('aria-pressed',String(selection===m.month));b.addEventListener('click',()=>chooseMonth(m.month));monthButtons.append(b);}}
   list.replaceChildren();
   for(const entry of entries.slice(pageNumber*pageSize,(pageNumber+1)*pageSize)){
