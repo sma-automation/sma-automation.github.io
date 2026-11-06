@@ -53,6 +53,17 @@ Alle 15 Editor-DOM-Szenarien und 578 Repository-Tests bestanden; Export- und
 Musik-Prüfungen ebenfalls erfolgreich. Keine neue Speicherung privater Angaben
 im Browser, kein automatischer Save und keine Backendänderung.
 
+Der native Warndialog erschien in der anschließenden automatisierten Chrome-Probe
+nicht; eine erfolgreiche native Dialogabnahme wird deshalb nicht behauptet.
+Der Rückweg **← Dashboard** erhält zusätzlich eine eigene Bestätigung innerhalb
+des vorhandenen Hinweisfelds. **Weiter bearbeiten** erhält alle Eingaben;
+**Verwerfen und zurück** verlässt die Seite ohne Speichern. Solange ein
+Speichervorgang läuft, ist Verwerfen gesperrt. Erfolgreiches Speichern, Neuladen
+des gespeicherten Stands, Kundenwechsel und Schließen entfernen veraltete
+Rückkehrentscheidungen. Neue-Tab-/Fenster-Klicks behalten ihr normales Verhalten.
+Vier zusätzliche DOM-Szenarien prüfen diesen unabhängigen Schutz, einschließlich
+fehlgeschlagener Navigation. Damit bestehen 19 Editor-DOM-Szenarien.
+
 Dashboard → **History** → **Bearbeitungen** zeigt je fünf Speicherstände mit
 aufklappbaren Vorher-/Nachher-Werten, Zeit und Entwurfversion. Gemeinsame Monatswahl
 in Europe/Vienna, 20 Einträge pro Serverabruf, unabhängige Vor-/Zurückseiten.
