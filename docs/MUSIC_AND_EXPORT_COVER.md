@@ -81,6 +81,7 @@ Cover-ID; kein fremdes oder geändertes Bild.
 Musik → Export → Kundenordner → Portalvorbereitung mit Cover ist abgeschlossen.
 Die gezielte Aktualisierung fehlender Drive-Länge/Bildgröße ist in
 [VIDEO_METADATA_REFRESH.md](VIDEO_METADATA_REFRESH.md) umgesetzt und geprüft.
-Als getrennte nächste Erweiterungen dauerhafte eigene Musikbibliothek und portalspezifische Cover-Übergabe anhand
-der tatsächlichen Provider-Fähigkeiten getrennt bearbeiten. Bestandsstrecke abgeschlossen;
+Die dauerhafte eigene Musikbibliothek folgt in [MUSIC_LIBRARY.md](MUSIC_LIBRARY.md).
+Portalspezifische Cover-Übergabe anhand der tatsächlichen Provider-Fähigkeiten
+separat bearbeiten. Bestandsstrecke abgeschlossen;
 PR #57/#69 separat, Shopify-Testmodus und n8n-Originalentwürfe erhalten.
