@@ -21,10 +21,15 @@ ergänzt eine ausdrücklich gewählte, auftragsgebundene Kundenselbstauskunft f�
 die fehlende vollständige visuelle/semantische Prüfung. Technische Nachweise,
 Portaltextvergleich und gesonderte Veröffentlichungsfreigabe bleiben nötig.
 Keine echte persönliche Bestätigung wurde durch die Umsetzung abgegeben.
-**Nächster Kernschritt:** persönliche Prüfung eines ausgewählten echten Videos
-und ausdrückliche Auftragsfreigabe; danach die gesondert genehmigte echte
-Provider-/Coverabnahme. Die automatische Videoprüfung (`VIDEO_PLAN_REQUIRED`)
-bleibt unverfügbar; der persönliche Nachweis ist kein Maschinenbefund.
+**Fortsetzung am 07.11.2026:** Die Assistenzsichtung des 10-s-Originals ist
+abgeschlossen. Der vorhandene 3-s-Coverexport wurde separat lokal dekodiert und
+gesichtet; er benötigt eigenen Portaltext und eigene gespeicherte Nachweise.
+Konkreter Testtext, Dateibindung, Prüfgrenzen und Reihenfolge:
+[PROVIDER_COVER_ACCEPTANCE.md](../../docs/PROVIDER_COVER_ACCEPTANCE.md).
+Persönliche Kundenerklärung, ausdrückliche Auftragsfreigabe und gesonderte
+Provider-/Covergenehmigung fehlen weiterhin. Die automatische Sightengine-
+Videoprüfung (`VIDEO_PLAN_REQUIRED`) bleibt unverfügbar; die Assistenzsichtung
+und der persönliche Nachweis sind keine automatischen Vollprüfungen.
 Der konkrete [Videoprüfschritt](../../docs/VIDEO_REVIEW_NEXT_STEP.md) wurde
 am 06.11.2026 wegen der Vorgabe ohne zusätzliche Kosten zurückgestellt.
 Sightengine bleibt kostenlos; keine ausstehende Buchungsentscheidung und kein

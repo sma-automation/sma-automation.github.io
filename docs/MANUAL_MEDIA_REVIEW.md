@@ -89,8 +89,11 @@ Provider-/Coverversuche an. PR #57 und #69 bleiben separat offen.
   und die weiterhin nötige Operatorfreigabe sind abgedeckt.
 - Keine echte Kundenselbstauskunft oder Veröffentlichung wurde ausgeführt.
 
-Nächster Kernschritt: ein ausgewähltes echtes Video vollständig persönlich
-prüfen und den zugehörigen Auftrag ausdrücklich freigeben. Anschließend ist
-die echte YouTube-/TikTok-Provider- und Coverabnahme weiterhin gesondert zu
-genehmigen. Zusätzliche Analysewerkzeuge bleiben bis zur Finanzierung vertagt;
-diese Selbstauskunft darf nicht als automatische Vollanalyse beworben werden.
+Die Assistenzsichtung des vorhandenen 10-s-Originals ist seit PR #117 erledigt;
+sie ist keine persönliche Kundenerklärung. Die konkrete Vorbereitung der
+Provider-/Coverabnahme samt separat geprüftem 3-s-Export, passendem Testtext und
+noch fehlenden Nachweisen steht in
+[PROVIDER_COVER_ACCEPTANCE.md](PROVIDER_COVER_ACCEPTANCE.md).
+Der Kurzexport braucht eigene gebundene Nachweise; eine Uploadfreigabe allein
+genügt dafür noch nicht. Zusätzliche Analysewerkzeuge bleiben bis zur Finanzierung
+vertagt; die Selbstauskunft darf nicht als automatische Vollanalyse beworben werden.
