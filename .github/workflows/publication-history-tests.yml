@@ -3,6 +3,11 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - n8n/publishing/*provider-cover*
+      - tests/*provider-cover*
+      - tests/sql-runtime/provider-cover-pr57-journal.sql
+      - supabase/sql/publication-provider-cover.sql
+      - supabase/migrations/*_publication_provider_cover_v1.sql
       - app/assets/music-library*
       - tests/*music-library*
       - supabase/sql/music-library.sql
@@ -74,3 +79,4 @@ jobs:
           node tests/run-media-music-dom.mjs
           node tests/run-music-library-sql.mjs
           node tests/run-music-library-dom.mjs
+          node tests/run-provider-cover-sql.mjs

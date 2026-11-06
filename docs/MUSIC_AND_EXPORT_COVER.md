@@ -37,9 +37,10 @@ Cover-ID; kein fremdes oder geändertes Bild.
 - Bestehender Export/Upload bleibt maßgeblich; Ablage in **02 Verarbeitung**.
   Musikoriginal wird nicht zusätzlich in Drive gespeichert. Keine neue Musik-
   Bibliothek, Lizenzkatalog- oder n8n-Verbindung behauptet.
-- **Die automatische Cover-Übertragung an YouTube/TikTok/Meta ist noch nicht
-  angebunden.** Die Oberfläche kennzeichnet die Vorbereitung. Keine Änderung
-  an Aufträgen, Freigaben oder Provider-Publishing. Keine Social-Veröffentlichung.
+- Zum Prüfstand von PR #96 war die automatische Cover-Übertragung noch nicht
+  angebunden. Der spätere YouTube-/TikTok-Anschluss ist in
+  [PORTAL_COVER_HANDOFF.md](PORTAL_COVER_HANDOFF.md) dokumentiert; Meta bleibt offen.
+  Keine Social-Veröffentlichung während dieser Prüfungen.
 
 ## Prüfstand
 
@@ -82,6 +83,6 @@ Musik → Export → Kundenordner → Portalvorbereitung mit Cover ist abgeschlo
 Die gezielte Aktualisierung fehlender Drive-Länge/Bildgröße ist in
 [VIDEO_METADATA_REFRESH.md](VIDEO_METADATA_REFRESH.md) umgesetzt und geprüft.
 Die dauerhafte eigene Musikbibliothek folgt in [MUSIC_LIBRARY.md](MUSIC_LIBRARY.md).
-Portalspezifische Cover-Übergabe anhand der tatsächlichen Provider-Fähigkeiten
-separat bearbeiten. Bestandsstrecke abgeschlossen;
+Portalspezifische Cover-Übergabe und ihr Prüfstand folgen in
+[PORTAL_COVER_HANDOFF.md](PORTAL_COVER_HANDOFF.md). Bestandsstrecke abgeschlossen;
 PR #57/#69 separat, Shopify-Testmodus und n8n-Originalentwürfe erhalten.

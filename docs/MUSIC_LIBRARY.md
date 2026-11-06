@@ -89,7 +89,9 @@ dauerhaft gespeichert. Im Dashboard bleiben die Kapitel **Tracks** und
 ## Weiterarbeit
 
 Die eigene Musikbibliothek einschließlich erneutem Öffnen und Export ist abgeschlossen.
-Die portalspezifische automatische Cover-Übergabe bleibt separat offen.
+Die portalspezifische Cover-Übergabe für YouTube/TikTok ist technisch angeschlossen;
+Prüfstand und verbleibende echte Providerbestätigung stehen in
+[PORTAL_COVER_HANDOFF.md](PORTAL_COVER_HANDOFF.md).
 Bestandsstrecke abgeschlossen; PR #57/#69 separat offen. Shopify-Testmodus
 und unveröffentlichte n8n-Originalentwürfe erhalten. Keine Tarifänderung,
 kein Kauf und keine Social-Media-Veröffentlichung.
