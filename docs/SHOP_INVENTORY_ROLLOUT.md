@@ -88,11 +88,12 @@ Die vorherige 21-Node-Empfängerkopie bleibt inaktiv und wartet auf keinen Testa
 
 ## Grenzen und Fortsetzung
 
-Dieser Schritt ist abgeschlossen. Die nächste technische Fortsetzung kann den
-Kundenweg im vorhandenen Shop-Manager mit Bestandsauftrag und anschließender
-Bestandsanzeige prüfen. Der Shop-Manager verwendet Supabase und Bestandsaufträge;
-er ruft den hier zusätzlich geprüften älteren Bearbeitungsendpunkt nicht auf.
-Eine neue Dashboard-UI-Abnahme wird deshalb nicht behauptet.
+Dieser Schritt ist abgeschlossen. Der anschließende Kundenweg im vorhandenen
+Shop-Manager ist inzwischen für einen unveränderten Bestand geprüft:
+[Bestandsauftrag und bestätigte Dashboard-Anzeige](SHOP_STOCK_REQUEST_E2E.md).
+Der Shop-Manager verwendet Supabase und Bestandsaufträge; er ruft den hier
+zusätzlich geprüften älteren Bearbeitungsendpunkt nicht auf. Die UI-Abnahme und
+die dabei gefundene Bestätigungskorrektur sind im separaten Bericht dokumentiert.
 
 Die Aktivierung des Bestands-Webhooks ist durch Exportabgleich bestätigt.
 Seine geänderten Prüf-Nodes wurden zuvor im gemeinsamen echten QA-Lauf ausgeführt;
