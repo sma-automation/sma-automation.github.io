@@ -145,11 +145,13 @@ Bearbeitungshistorie angeschlossen. Der Dateiverlauf ergänzt jetzt gespeicherte
 Datei-/Portalzuordnungen ab seiner Installation. Neue Bearbeitungsentwürfe mit eigenem Änderungsjournal sind jetzt ergänzt
 (siehe `MEDIA_EDITOR_DRAFTS.md`). Der zuvor angenommene vollständige Editor war
 im aktuellen System nicht vorhanden; Content Optimizer war ein Platzhalter.
-Medienexport, zusätzliche Musik, ein Analysejournal sowie Analytics für
-Reichweite, Zielgruppen und Plattformresonanz bleiben offen. Die bestehenden
-Magic-Effect-Ergebnisse werden bei Wiederholung überschrieben; sie sind kein
-unveränderliches Ereignisjournal. Aus Aufträgen werden keine Analytics-Werte
-abgeleitet.
+Medienexport und eigene Musik sind inzwischen angeschlossen (siehe
+[MEDIA_EDITOR_EXPORT.md](MEDIA_EDITOR_EXPORT.md) und [MUSIC_LIBRARY.md](MUSIC_LIBRARY.md)).
+Der [Analyseverlauf](PUBLICATION_ANALYSIS_HISTORY.md) ergänzt neue Magic-Effect-
+Versuche mit einem separaten Ereignisjournal ab seiner Installation. Frühere
+überschriebene Versuche werden nicht rekonstruiert. Analytics für Reichweite,
+Zielgruppen und Plattformresonanz bleiben offen; aus Aufträgen oder Analysen
+werden keine solchen Werte abgeleitet.
 
 Die abgeschlossene Bestandsstrecke wird nicht wiederholt. Shopify-Testmodus,
 zehn Bestellungen, die offenen PRs #57/#69 und der unveröffentlichte

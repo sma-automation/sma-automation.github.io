@@ -1,3 +1,4 @@
+import {mountPublicationAnalysisHistory} from './publication-analysis-history-dashboard.mjs?v=1';
 import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
@@ -5,7 +6,7 @@ import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} f
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=1';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
-export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
+export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
  if(!slot||!expectedOwnerId)return {destroy(){}};
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -46,16 +47,18 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  const textHistory=requestTexts?mountPublicationTextHistory({doc,after:slot.closest('.card'),request:requestTexts,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  const assignmentHistory=requestAssignments?mountPublicationAssignmentHistory({doc,after:page.querySelector('#historyTextCard')||slot.closest('.card'),request:requestAssignments,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  const editorHistory=requestEditors?mountPublicationEditorHistory({doc,after:page.querySelector('#historyAssignmentCard')||page.querySelector('#historyTextCard')||slot.closest('.card'),request:requestEditors,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
- const activityCard=slot.closest('.card'),textCard=page.querySelector('#historyTextCard'),assignmentCard=page.querySelector('#historyAssignmentCard'),editorCard=page.querySelector('#historyEditorCard');
+ const analysisHistory=requestAnalyses?mountPublicationAnalysisHistory({doc,after:page.querySelector('#historyEditorCard')||page.querySelector('#historyAssignmentCard')||page.querySelector('#historyTextCard')||slot.closest('.card'),request:requestAnalyses,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
+ const activityCard=slot.closest('.card'),textCard=page.querySelector('#historyTextCard'),assignmentCard=page.querySelector('#historyAssignmentCard'),editorCard=page.querySelector('#historyEditorCard'),analysisCard=page.querySelector('#historyAnalysisCard');
  const switcher=create('div',null,'sma-history-switcher');switcher.setAttribute('role','group');switcher.setAttribute('aria-label','History-Bereich');
  let chapterTabs;
- if(textCard||assignmentCard||editorCard){
+ if(textCard||assignmentCard||editorCard||analysisCard){
   activityCard.id='historyOrderCard';
   chapterTabs=createChapterTabs({doc,id:'sma-history',list:switcher,entries:[
    {key:'orders',label:'Aufträge',en:'Orders',panel:activityCard},
    ...(textCard?[{key:'texts',label:'Portaltexte',en:'Platform texts',panel:textCard}]:[]),
    ...(assignmentCard?[{key:'assignments',label:'Dateiverlauf',en:'File history',panel:assignmentCard}]:[]),
-   ...(editorCard?[{key:'edits',label:'Bearbeitungen',en:'Editing drafts',panel:editorCard}]:[])
+   ...(editorCard?[{key:'edits',label:'Bearbeitungen',en:'Editing drafts',panel:editorCard}]:[]),
+   ...(analysisCard?[{key:'analyses',label:'Analysen',en:'Analyses',panel:analysisCard}]:[])
   ]});page.insertBefore(switcher,activityCard);
  }
  const analyticsCard=page.querySelector('#historyAnalyticsSlot')?.closest('.card');
@@ -65,7 +68,7 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  let pageNumber=0,lastResult=null,entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
  const active=()=>!disposed&&!invalidOwner&&page.classList.contains('active')&&ownerWindow.document.visibilityState!=='hidden';
  function clear(text=''){
-  textHistory?.clear();assignmentHistory?.clear();editorHistory?.clear();
+  textHistory?.clear();assignmentHistory?.clear();editorHistory?.clear();analysisHistory?.clear();
   generation++;busy=false;entries=[];cursor=null;summary=null;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
@@ -114,7 +117,7 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    if(selection!==undefined&&result.month!==selection)throw Error('INVALID_HISTORY');
    if(append&&result.entries.some(e=>entries.some(old=>old.id===e.id)))throw Error('INVALID_HISTORY');
    const combined=append?[...entries,...result.entries]:result.entries;if(combined.length>result.summary.orders)throw Error('INVALID_HISTORY');
-   entries=combined;cursor=result.next;pageNumber=Math.min(pageNumber+(append?1:0),Math.max(0,Math.ceil(entries.length/pageSize)-1));selection=result.month;summary=result.summary;render(result);if(!append){textHistory?.load(result.month);assignmentHistory?.load(result.month);editorHistory?.load(result.month);}
+   entries=combined;cursor=result.next;pageNumber=Math.min(pageNumber+(append?1:0),Math.max(0,Math.ceil(entries.length/pageSize)-1));selection=result.month;summary=result.summary;render(result);if(!append){textHistory?.load(result.month);assignmentHistory?.load(result.month);editorHistory?.load(result.month);analysisHistory?.load(result.month);}
   }catch{if(current(g))clear('Der Verlauf konnte nicht geladen werden. Bitte erneut aktualisieren.');}
   finally{if(g===generation&&!disposed){busy=false;refresh.disabled=invalidOwner;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;slot.setAttribute('aria-busy','false');}}
  }
@@ -127,5 +130,5 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  ownerWindow.addEventListener('focus',onFocus);ownerWindow.document.addEventListener('visibilitychange',onVisibility);
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  load();
- return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

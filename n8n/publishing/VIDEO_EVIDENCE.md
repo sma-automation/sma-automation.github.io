@@ -87,3 +87,12 @@ Die [getrennte Übergabeprüfung](PUBLISHER_HANDOFF.md) gleicht den ausgewählte
 ## Publisher-Arbeitskopie – 3. November 2026
 
 Die [Portaltext-Anbindung](PUBLISHER_INTEGRATION.md) ergänzt eine separate unveröffentlichte n8n-Arbeitskopie `JZwPbzCpgIByxk94`. Ihr neuer interner Weg lädt die gespeicherte Auswahl über die Übergabeprüfung und bildet Titel/Caption auf YouTube-, Instagram-, Facebook- und TikTok-Textfelder ab. Die Textparameter der vorhandenen Publisher-Nodes sind in der Kopie angepasst. Alle Upload-Nodes bleiben deaktiviert und ohne Verbindung zu diesem neuen Weg. 250 Node-Tests bestehen. Der genaue Live-Prüfstand und die noch fehlende Freigabe-/Ausführungsverbindung stehen in der Integrationsdokumentation; dies ist keine produktive Veröffentlichung aus dem Dashboard.
+
+
+## Analyseverlauf – 6. November 2026
+
+Der [separate Analyseverlauf](../../docs/PUBLICATION_ANALYSIS_HISTORY.md) ergänzt
+neue Foto-/Video-Versuche um ein privates Start-/Abschlussjournal und eine reine
+Leseansicht unter History → Analysen. Start-/Abschluss-RPCs und n8n-Workflows
+bleiben unverändert. Kein rückwirkender Ersatz früherer Ergebnisse und kein
+neuer Anbieterlauf zur Abnahme; `can_publish:false` bleibt erhalten.
