@@ -16,10 +16,15 @@ und erneutem echtem Vergleich abgeschlossen: beide aktuellen Bindungen
 Editor bearbeitbar. Bereitstellung und Nachweis:
 [PORTAL_TEXT_CORRECTIONS.md](../../docs/PORTAL_TEXT_CORRECTIONS.md).
 
-**Nächster Kernschritt:** vollständige visuelle und semantische Medienprüfung
-vervollständigen; `VIDEO_PLAN_REQUIRED` bleibt offen. Der bestandene
-Portaltextvergleich ersetzt diese Prüfung nicht. Echte Provider-/Coverabnahme
-und Veröffentlichung benötigen weiterhin ausdrückliche Freigabe.
+**Persönlicher Prüfweg:** [MANUAL_MEDIA_REVIEW.md](../../docs/MANUAL_MEDIA_REVIEW.md)
+ergänzt eine ausdrücklich gewählte, auftragsgebundene Kundenselbstauskunft für
+die fehlende vollständige visuelle/semantische Prüfung. Technische Nachweise,
+Portaltextvergleich und gesonderte Veröffentlichungsfreigabe bleiben nötig.
+Keine echte persönliche Bestätigung wurde durch die Umsetzung abgegeben.
+**Nächster Kernschritt:** persönliche Prüfung eines ausgewählten echten Videos
+und ausdrückliche Auftragsfreigabe; danach die gesondert genehmigte echte
+Provider-/Coverabnahme. Die automatische Videoprüfung (`VIDEO_PLAN_REQUIRED`)
+bleibt unverfügbar; der persönliche Nachweis ist kein Maschinenbefund.
 Der konkrete [Videoprüfschritt](../../docs/VIDEO_REVIEW_NEXT_STEP.md) wurde
 am 06.11.2026 wegen der Vorgabe ohne zusätzliche Kosten zurückgestellt.
 Sightengine bleibt kostenlos; keine ausstehende Buchungsentscheidung und kein

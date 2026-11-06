@@ -3,6 +3,11 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - app/assets/publication-order.mjs
+      - tests/*publication-manual-review*
+      - tests/sql-runtime/manual-review-live-baseline.json
+      - supabase/sql/publication-manual-review.sql
+      - supabase/migrations/*_publication_manual_media_review_v1.sql
       - app/assets/publication-analysis-history*
       - tests/*publication-analysis-history*
       - supabase/sql/publication-analysis-history.sql
@@ -89,6 +94,8 @@ jobs:
       - name: Test histories, editor drafts and regressions
         run: |
           node --test tests/*.test.cjs
+          node tests/run-publication-manual-review-sql.mjs
+          node tests/run-publication-manual-review-dom.mjs
           node tests/run-publication-text-edits-sql.mjs
           node tests/run-publication-text-edits-dom.mjs
           node tests/run-publication-history-sql.mjs

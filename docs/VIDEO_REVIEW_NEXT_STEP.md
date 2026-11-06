@@ -1,5 +1,12 @@
 # Nächster Schritt: visuelle Videoprüfung
 
+## Ergänzung: persönlicher Prüfweg
+
+Am 06.11.2026 wurde der kostenfreie, auftragsgebundene
+[persönliche Prüfweg](MANUAL_MEDIA_REVIEW.md) technisch umgesetzt. Er ersetzt
+keinen automatischen Befund und erteilt keine Providerfreigabe. Die unten
+dokumentierte zusätzliche automatische Videoprüfung bleibt zurückgestellt.
+
 Stand: 06.11.2026, nach PR #106/#107. Die konkreten YouTube-/TikTok-Textfragen
 sind abgeschlossen. Dieser Nachtrag betrifft nur die noch fehlende visuelle
 Sicherheitsprüfung; keine erneute Bestandsprüfung.
