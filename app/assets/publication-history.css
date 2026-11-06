@@ -30,3 +30,29 @@
 #historyTextCard summary{cursor:pointer;color:#3157cd;font:inherit;padding:6px 0}
 #historyTextCard summary:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
 #historyTextCard .sma-history-saved-text{white-space:pre-wrap}
+
+/* Short lists: one area at a time, five rows and details on demand. */
+#page-history [hidden]{display:none!important}
+.sma-history-switcher{display:flex;gap:8px;margin:16px 0}
+.sma-history-switcher button{font:inherit;font-weight:500;border:1px solid #c7d3f8;border-radius:9px;padding:10px 20px;background:#edf2ff;color:#3157cd;cursor:pointer}
+.sma-history-switcher button[aria-pressed=true]{background:#3157cd;color:#fff}
+.sma-history-switcher button:focus-visible,.sma-history-list summary:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
+.sma-publication-history .sma-history-list{margin-bottom:10px}
+.sma-publication-history .sma-history-list li{padding:10px 0}
+.sma-history-list details{margin:0!important}
+.sma-history-list summary{cursor:pointer;padding:4px 0!important;list-style:none;color:inherit!important}
+.sma-history-list summary::-webkit-details-marker{display:none}
+.sma-history-list summary .sma-history-heading strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
+.sma-history-list summary .sma-history-heading::before{content:'▸';color:#3157cd;flex-shrink:0}
+.sma-history-list details[open] summary .sma-history-heading::before{content:'▾'}
+.sma-history-list summary .sma-history-heading strong{flex:1}
+.sma-history-list details[open] summary strong{-webkit-line-clamp:unset}
+.sma-history-list summary small{display:block;margin:4px 0 0 24px}
+.sma-history-pagination{display:flex;justify-content:space-between;gap:12px}
+.sma-history-months details{font:inherit;font-size:13px;color:#65718a;margin-top:8px}
+.sma-history-months details summary{cursor:pointer}
+.sma-history-months .sma-history-month-links{margin-top:10px}
+.sma-history-months p{margin:8px 0}
+.sma-history-analytics{margin-top:16px;color:#65718a;font:inherit;font-size:14px}
+.sma-history-analytics>summary{cursor:pointer;padding:10px 0}
+@media(max-width:650px){.sma-history-switcher button{flex:1}.sma-publication-history .sma-history-heading{flex-direction:row;flex-wrap:wrap;gap:6px}.sma-history-heading .sma-history-status{font-size:11px}.sma-history-pagination button{width:auto;flex:1}}

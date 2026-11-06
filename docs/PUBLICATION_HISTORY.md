@@ -210,3 +210,25 @@ Zusätzlicher Testaufruf:
 ```sh
 node tests/run-publication-text-history-sql.mjs
 ```
+
+
+## Kompakte Ansicht (2026-11-06, nach PR #88)
+
+Auf Wunsch des Nutzers werden Aufträge und Portaltexte über zwei Schaltflächen
+umgeschaltet und nicht mehr untereinander angezeigt. Je Bereich sind höchstens
+**fünf Einträge pro Bildschirmseite** sichtbar; „Zurück“/„Weiter“ ersetzt die
+bisherige anwachsende Liste. Die zugrunde liegenden RPCs liefern weiterhin
+20 Datensätze pro Abruf. Bereits geladene Seiten sind ohne weitere Anfrage
+zugänglich; am Ende des Puffers wird mit dem unveränderten Keyset-Cursor
+nachgeladen. Die Gesamtzahlen beziehen sich weiterhin auf den ganzen Monat.
+
+Einträge sind kompakte Zeilen. Ein Klick öffnet Statusdetails beziehungsweise
+den gespeicherten Text. Monats-Schnellknöpfe und der Analytics-Platzhalter sind
+standardmäßig eingeklappt. Monatswechsel und Aktualisieren setzen die Listen
+auf Seite 1 zurück; der Bereichswechsel erhält die jeweils gewählte Seite.
+Sichtbarkeit, Abmeldung und verspätete Antworten bleiben wie bisher abgesichert.
+
+Validierung: 536 Repository-Tests und 21 History-DOM-Szenarien. Die bestehende
+Seitennavigationsprüfung deckt jetzt fünf sichtbare Zeilen, Vor-/Zurückblättern
+über die 20er-Abrufgrenze, gleichbleibende Gesamtzahlen und zurückgesetzte
+Monatsseiten ab. Keine SQL-, n8n- oder Provideränderung.

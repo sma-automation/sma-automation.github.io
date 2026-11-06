@@ -89,3 +89,18 @@ fulfillment, stock, refunds or checkout settings for this change.
 
 Rollback: revert the dashboard and n8n additions first; the nullable column and
 compatible ingestion functions may safely remain. Do not drop customer data.
+
+
+## Compact dashboard lists (2026-11-06)
+
+Products and orders are now separate switchable sections in the same shop
+frame. Orders use five rows per server page, with the existing total count and
+previous/next navigation. Products retain their existing ten-row page size.
+Payment, fulfillment and explicit test-order labels remain visible in compact
+rows. Switching sections keeps the current page and unsaved product inputs;
+it does not submit edits or change any order or stock data. Existing read-only
+refresh, owner filters and RLS are unchanged.
+
+Validation: the repository suite (536 tests) includes the existing order-page,
+stale-response, refresh and test-classification checks adjusted for five-row
+pages, plus preservation of unsaved product input when switching sections.
