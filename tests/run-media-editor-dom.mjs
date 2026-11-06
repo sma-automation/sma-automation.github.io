@@ -9,17 +9,40 @@ const id=n=>'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),uid=id(91);
 const files=[{id:id(1),name:'Example.mp4',revision:'r1',media_kind:'video',mime_type:'video/mp4',duration_ms:10000,width_px:1080,height_px:1920},{id:id(2),name:'Image.jpg',revision:'r1',media_kind:'image',mime_type:'image/jpeg',duration_ms:null,width_px:1200,height_px:800}];
 const reply=(input,settings=defaults,revision=0)=>({ok:true,version:1,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,revision,settings,saved_at:revision?'2026-11-06T12:00:00Z':null,changed:revision>0});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-function fixture({refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
+function fixture({navigate=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
  const {document:doc,window}=parseHTML(html);Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});
  // Linkedom lacks native select.value setters; model the selected option through attributes.
  for(const select of doc.querySelectorAll('select'))Object.defineProperty(select,'value',{get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value||'';},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
- let owner=uid,serial=100;const calls=[],urls=[],revoked=[],thumbs=[];
- const view=mountMediaEditor({doc,expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
+ let owner=uid,serial=100;const calls=[],urls=[],revoked=[],thumbs=[],navigations=[];
+ const view=mountMediaEditor({doc,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
  const $=s=>doc.querySelector(s),set=(key,value)=>{$('[name="'+key+'"]').value=value;$('[name="'+key+'"]').dispatchEvent(new window.Event('input',{bubbles:true}));};
- return {doc,window,view,$,calls,urls,revoked,thumbs,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
+ return {doc,window,view,$,calls,urls,revoked,thumbs,navigations,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
 }
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 const leave=f=>{const event=new f.window.Event('beforeunload',{cancelable:true});f.window.dispatchEvent(event);return event;};
+const back=(f,extra={})=>{const event=new f.window.Event('click',{cancelable:true,bubbles:true});Object.assign(event,extra);f.$('#backDashboard').dispatchEvent(event);return event;};
+await test('Dashboard return requires an in-page discard decision and keeping edits never navigates or saves',async()=>{
+ const f=fixture();await tick();assert.equal(back(f).defaultPrevented,false);f.set('overlay_text','Keep this edit');
+ assert.equal(back(f).defaultPrevented,true);assert.equal(f.$('#discard').hidden,false);assert.match(f.$('#discardMessage').textContent,/Dashboard/);assert.equal(f.$('#confirmDiscard').textContent,'Verwerfen und zurück');
+ f.$('#keepEditing').click();assert.equal(f.$('#discard').hidden,true);assert.equal(f.$('[name=overlay_text]').value,'Keep this edit');assert.deepEqual(f.navigations,[]);assert.equal(leave(f).defaultPrevented,true);
+ back(f);f.$('#confirmDiscard').click();assert.deepEqual(f.navigations,[f.$('#backDashboard').href]);assert.equal(leave(f).defaultPrevented,false);assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();
+});
+await test('pending save blocks Dashboard discard; successful save clears stale leave intent',async()=>{
+ const gate=deferred();let pending;const f=fixture({request:(a,i)=>{if(a==='get')return reply(i);pending=i;return gate.promise;}});await tick();f.set('overlay_text','Save this');back(f);f.save();await tick();
+ assert.equal(back(f).defaultPrevented,true);f.$('#confirmDiscard').click();assert.deepEqual(f.navigations,[]);assert.equal(f.$('[name=overlay_text]').value,'Save this');
+ gate.resolve(reply(pending,pending.settings,1));await tick();assert.equal(f.$('#discard').hidden,true);f.$('#confirmDiscard').click();assert.deepEqual(f.navigations,[]);assert.equal(back(f).defaultPrevented,false);f.view.destroy();
+});
+await test('discarding to reload replaces any pending Dashboard intent; new-tab clicks retain normal behavior',async()=>{
+ const f=fixture();await tick();f.set('format','9:16');
+ for(const extra of [{ctrlKey:true},{metaKey:true},{shiftKey:true},{altKey:true},{button:1}])assert.equal(back(f,extra).defaultPrevented,false);
+ assert.equal(f.$('#discard').hidden,true);back(f);f.$('#reload').click();assert.equal(f.$('#confirmDiscard').textContent,'Verwerfen und laden');f.$('#confirmDiscard').click();await tick();
+ assert.deepEqual(f.navigations,[]);assert.equal(f.$('[name=format]').value,'original');assert.equal(f.$('#discard').hidden,true);assert.equal(leave(f).defaultPrevented,false);f.view.destroy();
+});
+await test('failed navigation keeps edits; owner loss and teardown clear pending Dashboard decisions',async()=>{
+ const f=fixture({navigate:()=>{throw Error('navigation failed');}});await tick();f.set('overlay_text','Retain after failure');back(f);f.$('#confirmDiscard').click();
+ assert.equal(f.$('[name=overlay_text]').value,'Retain after failure');assert.equal(leave(f).defaultPrevented,true);assert.equal(f.$('#discard').hidden,false);f.view.destroy();
+ for(const end of ['owner','destroy']){const g=fixture();await tick();g.set('overlay_text','Private');back(g);if(end==='owner')g.owner('other');else g.view.destroy();g.$('#confirmDiscard').click();assert.deepEqual(g.navigations,[]);assert.equal(g.$('#discard').hidden,true);assert.equal(leave(g).defaultPrevented,false);g.view.destroy();}
+});
 await test('leaving warns only for unsaved edits and retains them until a save response confirms success',async()=>{
  const gate=deferred();let pending;
  const f=fixture({request:(a,i)=>{if(a==='get')return reply(i);pending=i;return gate.promise;}});await tick();
