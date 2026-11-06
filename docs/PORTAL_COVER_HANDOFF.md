@@ -1,6 +1,6 @@
 # Portalbezogene Cover-Übergabe
 
-Stand: 06.11.2026. Baut auf [MUSIC_AND_EXPORT_COVER.md](MUSIC_AND_EXPORT_COVER.md)
+Stand: 06.11.2026; PR #102 zusammengeführt und live. Baut auf [MUSIC_AND_EXPORT_COVER.md](MUSIC_AND_EXPORT_COVER.md)
 und [MUSIC_LIBRARY.md](MUSIC_LIBRARY.md) auf.
 
 ## Verhalten
@@ -91,6 +91,24 @@ und Sperren sind geprüft; eine tatsächliche YouTube-/TikTok-Bestätigung steht
 bis zu einer separat autorisierten Veröffentlichung noch aus. Der Coverstatus
 wird intern geführt; eine eigene Anzeige dieses Ergebnisses in der History ist
 noch offen.
+
+## Bereitstellung und angemeldete Anzeige
+
+- Feature-Commit `4aead286dd6e826417c8aa4d317f7102b245820c`, Merge
+  `fa7ae3673576adadea3a2f647a6810a1acb2e83c` auf `website-v1`.
+  Beide PR-Prüfungen erfolgreich; zusätzliche History-Prüfung nach dem Merge
+  ebenfalls erfolgreich. Pages Run `42283109609`, Deployment-Job
+  `128117163030` erfolgreich.
+- Vorhandenen Export im angemeldeten Portal geöffnet: **Inhalt und Ziel** →
+  eingeklapptes **Cover aus deinem Export**. Für YouTube und TikTok jeweils
+  passender neuer Hinweis; Bild vollständig geladen (Vorschau 124 × 220),
+  gespeicherter Zeitpunkt eine Sekunde. Kapitelwechsel funktioniert unverändert.
+- Der ältere Export hat im Dateikatalog weiterhin keine Drive-Videolänge und
+  Bildgröße; die vorhandene Warnung und Magic-Effect-Sperre bleiben sichtbar.
+  Die Coverbindung nutzt die geprüften abgeschlossenen Exportdaten mit 3000 ms.
+  Diese Anzeigeprüfung hat keine Dateiangaben, Texte oder Aufträge verändert.
+- Abschlussabfrage weiterhin 9 Aufträge, 0 Operatorfreigaben, 0 Provider- und
+  0 Coverversuche. PR #57 und #69 nochmals als offen und ungemergt bestätigt.
 
 ## Providergrundlagen
 
