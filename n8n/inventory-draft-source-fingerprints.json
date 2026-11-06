@@ -1,0 +1,28 @@
+{
+  "workflow_id": "GHBsYQcyt0JLFvRP",
+  "parameters": {
+    "SMA – Produkt – Shopify Sync – Bestand abrufen": "5920d0f81153c1436e2983df96355b190d7d703f2deb4a80a26fa4a886babc8d",
+    "SMA – Produkt – Shopify Sync – Bestand auswerten": "e062cdfee54389c1dabbd43d1a16cb90c7f24f7d70a312e961f138b22918c090",
+    "SMA – Produkt – Shopify Sync – Bestand speichern": "fe152960b3459556c69d3845baa1a8d9ada5f661f04eb36378195d0d754a9d71",
+    "SMA – Supabase – Shopify-Bestand speichern": "561e3310026f62cc5805559eb988b3188acd0e87309c219d6849169c7f2c6201"
+  },
+  "connections": {
+    "SMA – Produkt – Shopify Sync – Bestand abrufen": "9454025c5b26276d90f371b9c902349d3fc0a94ae056e5cab67812f5fcf00ce3",
+    "SMA – Produkt – Shopify Sync – Bestand auswerten": "1803b3a634a9072c077d60dd9569777cd8497266c712f6787be4b50dfc8d6626",
+    "SMA – Produkt – Shopify Sync – Bestand speichern": "db73f1c974e4dbd9cbdabd58b333b5e8250f170e43199822674166410c942602",
+    "SMA – Supabase – Shopify-Bestand speichern": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "SMA – Produkt – Shopify Sync – Externe Produkt-ID vorhanden?": "9611d8ddb32ed1a8a7be2a422eca392ce119e24b53148a5f6605fdb84dc32ee9"
+  },
+  "types": {
+    "SMA – Produkt – Shopify Sync – Bestand abrufen": "n8n-nodes-base.httpRequest",
+    "SMA – Produkt – Shopify Sync – Bestand auswerten": "n8n-nodes-base.code",
+    "SMA – Produkt – Shopify Sync – Bestand speichern": "n8n-nodes-base.dataTable",
+    "SMA – Supabase – Shopify-Bestand speichern": "n8n-nodes-base.httpRequest"
+  },
+  "incoming": {
+    "SMA – Produkt – Shopify Sync – Bestand abrufen": "be95741750f2e46fc66ec96a8689f350db1112c75b101cfe698f8d698d7f6ada",
+    "SMA – Produkt – Shopify Sync – Bestand auswerten": "da7d74bf2f51c03843ae5ff44df3ae46c823e0cde736680a1fcc0bd2ab3bd3a1",
+    "SMA – Produkt – Shopify Sync – Bestand speichern": "e03f9429e99bb48a4aa8552ff28b639afe66eabac71039573ed80cddedab22ae",
+    "SMA – Supabase – Shopify-Bestand speichern": "debdd6e3414e2277d1b64bef37b217a991915311bc8a6c6cbcef0feaeb92148f"
+  }
+}

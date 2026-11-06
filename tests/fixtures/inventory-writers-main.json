@@ -1,0 +1,651 @@
+{
+  "id": "GHBsYQcyt0JLFvRP",
+  "versionId": "5927ba8a-b235-42cc-b13f-abf800a3e146",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.produkt_id }}"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Kunde prüfen').first().json.kunde_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -3632,
+        -5088
+      ],
+      "id": "f2f11437-3c7c-4242-b151-e4d619fab9a9",
+      "name": "SMA – Produkt – Bearbeiten – Produkt prüfen",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dd84d848-5ffb-412d-9cff-43aa292000a7",
+              "leftValue": "={{ !!$json.produkt_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3408,
+        -5088
+      ],
+      "id": "d88c34d3-364c-4508-b854-e5f9c96b4a9f",
+      "name": "SMA – Produkt – Bearbeiten – Produkt gefunden?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_id }}"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Kunde prüfen').first().json.kunde_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "aktiv": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.aktiv ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.aktiv }}",
+            "produkt_name": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.produkt_name ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_name }}",
+            "produkt_typ": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.produkt_typ ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_typ }}",
+            "beschreibung": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.beschreibung ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.beschreibung }}",
+            "sku": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.sku ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.sku }}",
+            "preis": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.preis !== undefined ? Number($('SMA – Produkt – Bearbeiten – Webhook').first().json.body.preis) : $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.preis }}",
+            "waehrung": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.waehrung ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.waehrung }}",
+            "bestand": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.bestand !== undefined ? Number($('SMA – Produkt – Bearbeiten – Webhook').first().json.body.bestand) : $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.bestand }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "kunde_id",
+              "displayName": "kunde_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_id",
+              "displayName": "produkt_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_name",
+              "displayName": "produkt_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "produkt_typ",
+              "displayName": "produkt_typ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "beschreibung",
+              "displayName": "beschreibung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "sku",
+              "displayName": "sku",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "preis",
+              "displayName": "preis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "waehrung",
+              "displayName": "waehrung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bestand",
+              "displayName": "bestand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aktiv",
+              "displayName": "aktiv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -3184,
+        -5184
+      ],
+      "id": "2b39a925-94f1-4e86-884e-985c42980254",
+      "name": "SMA – Produkt – Bearbeiten – Speichern"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.produkt.kunde_id }}"
+            },
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $json.produkt.produkt_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "aktiv": "={{ $json.produkt.aktiv === true }}",
+            "produkt_name": "={{ $json.produkt.produkt_name }}",
+            "produkt_typ": "={{ $json.produkt.produkt_typ }}",
+            "beschreibung": "={{ $json.produkt.beschreibung }}",
+            "sku": "={{ $json.produkt.sku }}",
+            "preis": "={{ Number($json.produkt.preis || 0) }}",
+            "waehrung": "={{ $json.produkt.waehrung || 'EUR' }}",
+            "bestand": "={{ Number($json.produkt.bestand || 0) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "kunde_id",
+              "displayName": "kunde_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_id",
+              "displayName": "produkt_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_name",
+              "displayName": "produkt_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "produkt_typ",
+              "displayName": "produkt_typ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "beschreibung",
+              "displayName": "beschreibung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "sku",
+              "displayName": "sku",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "preis",
+              "displayName": "preis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "waehrung",
+              "displayName": "waehrung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bestand",
+              "displayName": "bestand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aktiv",
+              "displayName": "aktiv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        13072,
+        -7008
+      ],
+      "id": "c2dfd7a7-88c0-4a19-8385-c21336bcf2eb",
+      "name": "SMA – Marktkonto – Initialimport – Shopify Produkt aktualisieren"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.produkt.kunde_id }}"
+            },
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $json.produkt.produkt_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "aktiv": "={{ $json.produkt.roh_daten?.active === true || String($json.produkt.roh_daten?.status ?? '').toLowerCase() === 'active' }}",
+            "produkt_name": "={{ $json.produkt.produkt_name }}",
+            "produkt_typ": "digistore24",
+            "beschreibung": "={{ $json.produkt.roh_daten?.description ?? $json.produkt.roh_daten?.product_description ?? '' }}",
+            "sku": "={{ $json.produkt.roh_daten?.sku ?? '' }}",
+            "preis": "={{ Number($json.produkt.roh_daten?.price ?? $json.produkt.roh_daten?.product_price ?? 0) }}",
+            "waehrung": "={{ $json.produkt.roh_daten?.currency ?? 'EUR' }}",
+            "bestand": "={{ Number($json.produkt.roh_daten?.stock ?? $json.produkt.roh_daten?.inventory ?? 0) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "kunde_id",
+              "displayName": "kunde_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_id",
+              "displayName": "produkt_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_name",
+              "displayName": "produkt_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "produkt_typ",
+              "displayName": "produkt_typ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "beschreibung",
+              "displayName": "beschreibung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "sku",
+              "displayName": "sku",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "preis",
+              "displayName": "preis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "waehrung",
+              "displayName": "waehrung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bestand",
+              "displayName": "bestand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aktiv",
+              "displayName": "aktiv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        12208,
+        -6224
+      ],
+      "id": "1a1a9d1e-2fb1-47c4-9cde-7f3b51144347",
+      "name": "SMA – Marktkonto – Initialimport – Digistore24 Produkt aktualisieren"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Jb6FkNxGMsZXJ1GB",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkt_Maerkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/Jb6FkNxGMsZXJ1GB"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('SMA – Produkt – Shopify Sync – Kunde prüfen').first().json.kunde_id }}"
+            },
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $('SMA – Produkt – Shopify Sync – Produkt prüfen').first().json.produkt_id }}"
+            },
+            {
+              "keyName": "markt",
+              "keyValue": "shopify"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        -5824
+      ],
+      "id": "85058358-2592-4a8a-bb39-9fff9e643e04",
+      "name": "SMA – Produkt – Shopify Sync – Marktzuordnung prüfen",
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "SMA – Produkt – Bearbeiten – Produkt gefunden?": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Produkt nicht gefunden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Produkt prüfen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Produkt gefunden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Speichern": {
+      "main": [
+        [
+          {
+            "node": "SMA – Supabase – Bearbeitung spiegeln",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SMA – Produkt – Bearbeiten – Erfolgreich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Marktkonto – Initialimport – Shopify Produkt aktualisieren": {
+      "main": [
+        [
+          {
+            "node": "SMA – Marktkonto – Initialimport – Shopify Marktzuordnung aktualisieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Marktkonto – Initialimport – Digistore24 Produkt aktualisieren": {
+      "main": [
+        [
+          {
+            "node": "SMA – Marktkonto – Initialimport – Digistore24 Marktzuordnung aktualisieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Shopify Sync – Marktzuordnung prüfen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Shopify Sync – Marktzuordnung gefunden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

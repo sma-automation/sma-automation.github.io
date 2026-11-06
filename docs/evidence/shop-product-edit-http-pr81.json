@@ -1,0 +1,89 @@
+{
+  "date": "2026-11-06",
+  "receiver_workflow_id": "lLeZX1N8wy83psGS",
+  "receiver_nodes": 21,
+  "caller_workflow_id": "ZdOzmjZINZtIC03U",
+  "caller_nodes": 11,
+  "real_http_test": true,
+  "source_authentication_preserved": true,
+  "scope": "kunde_3182 / SMA-TEST-002; unchanged metadata and quantity only",
+  "published": false,
+  "parameters_credentials_connections_verified": true,
+  "execution_data_saved": false,
+  "timeout_seconds": 90,
+  "cases": [
+    {
+      "ok": true,
+      "case": "invalid",
+      "http_status": 403,
+      "response_ok": false,
+      "response_code": null,
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "published": false,
+      "shopify_write": false
+    },
+    {
+      "ok": true,
+      "case": "unknown",
+      "http_status": 404,
+      "response_ok": false,
+      "response_code": null,
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "published": false,
+      "shopify_write": false
+    },
+    {
+      "ok": true,
+      "case": "stock",
+      "http_status": 409,
+      "response_ok": false,
+      "response_code": "SHOPIFY_STOCK_USE_STOCK_ORDER",
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "published": false,
+      "shopify_write": false
+    },
+    {
+      "ok": true,
+      "case": "success",
+      "http_status": 200,
+      "response_ok": true,
+      "response_code": null,
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "published": false,
+      "shopify_write": false
+    }
+  ],
+  "source_versions": {
+    "published": "68d295c6-c07f-4fdc-8395-528d4a92b3d6",
+    "published_nodes": 511,
+    "draft": "5927ba8a-b235-42cc-b13f-abf800a3e146",
+    "draft_nodes": 515,
+    "fresh_exports_matched": true
+  },
+  "supabase": {
+    "checked_at": "2026-11-06T09:27:01.26196+00:00",
+    "bestand": 4,
+    "updated_at": "2026-11-06T09:23:45.826+00:00",
+    "shopify_bestand_erfasst_am": "2026-11-06T01:28:03.067972+00:00",
+    "receipts_done": 22,
+    "active_leases": 0
+  },
+  "tests_passed": 78,
+  "full_candidate_imported": false,
+  "production_changed": false,
+  "shopify_mutations": false,
+  "purchases": false,
+  "paid_changes": false
+}

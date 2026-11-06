@@ -1,0 +1,116 @@
+{
+  "checked_at": "2026-11-06T10:31:08.064849Z",
+  "status": "published_and_production_http_verified",
+  "automated_tests_passed": 78,
+  "main": {
+    "workflow_id": "GHBsYQcyt0JLFvRP",
+    "active": true,
+    "active_version": "4356cd9c-ecef-4ab0-bdaa-2ed093792379",
+    "nodes": 534,
+    "original_nodes": 511,
+    "original_node_and_webhook_ids_preserved": true,
+    "functionally_unchanged_original_nodes": 506,
+    "modified_original_nodes": 5,
+    "added_nodes": 23,
+    "tested_candidate_parameters_connections_match": true,
+    "active_export_equals_verified_saved_export": true,
+    "settings_preserved": true
+  },
+  "inventory_webhook": {
+    "workflow_id": "JlHOooUl0ySzAV8j",
+    "active": true,
+    "active_version": "ba4e6069-d0da-4f0c-a67e-000fcac00a62",
+    "nodes": 42,
+    "modified_nodes": 4,
+    "original_node_and_webhook_ids_preserved": true,
+    "connections_settings_preserved": true,
+    "active_export_equals_verified_saved_export": true,
+    "new_shopify_event_generated_after_rollout": false
+  },
+  "original_draft_backup": {
+    "workflow_id": "jmdriq3t3UywYnxR",
+    "active": false,
+    "nodes": 515,
+    "duplicate_generated_identity_changes": {
+      "node_ids": 515,
+      "webhook_ids": 45,
+      "webhook_paths": 30
+    },
+    "other_node_configuration_connections_settings_preserved": true
+  },
+  "production_http": [
+    {
+      "ok": true,
+      "case": "invalid",
+      "http_status": 403,
+      "response_ok": false,
+      "response_code": null,
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "endpoint_published": true,
+      "qa_workflow_published": false,
+      "shopify_write": false
+    },
+    {
+      "ok": true,
+      "case": "unknown",
+      "http_status": 404,
+      "response_ok": false,
+      "response_code": null,
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "endpoint_published": true,
+      "qa_workflow_published": false,
+      "shopify_write": false
+    },
+    {
+      "ok": true,
+      "case": "stock",
+      "http_status": 409,
+      "response_ok": false,
+      "response_code": "SHOPIFY_STOCK_USE_STOCK_ORDER",
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "endpoint_published": true,
+      "qa_workflow_published": false,
+      "shopify_write": false
+    },
+    {
+      "ok": true,
+      "case": "success",
+      "http_status": 200,
+      "response_ok": true,
+      "response_code": null,
+      "sku": "SMA-TEST-002",
+      "bestand": 4,
+      "product_unchanged": true,
+      "canonical_unchanged": true,
+      "endpoint_published": true,
+      "qa_workflow_published": false,
+      "shopify_write": false
+    }
+  ],
+  "database": {
+    "checked_at": "2026-11-06T10:31:08.064849Z",
+    "bestand": 4,
+    "updated_at": "2026-11-06T10:26:58.203Z",
+    "shopify_bestand_erfasst_am": "2026-11-06T01:28:03.067972Z",
+    "receipts_done": 22,
+    "active_leases": 0
+  },
+  "scope": {
+    "shopify_mutations": false,
+    "purchases": false,
+    "social_posts": false,
+    "paid_changes": false,
+    "schema_or_permissions_changed": false,
+    "shopify_test_mode_preserved": true,
+    "new_dashboard_ui_acceptance": false
+  }
+}

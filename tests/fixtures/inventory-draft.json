@@ -1,0 +1,301 @@
+{
+  "id": "GHBsYQcyt0JLFvRP",
+  "name": "Synthetic graph fixture",
+  "active": false,
+  "versionId": "fixture-version",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ (() => {\n  const konto = $('SMA – Produkt – Shopify Sync – Marktkonto prüfen').first().json;\n  const raw = String(konto.shop_url || konto.shop_domain || '').trim();\n  const base = /^https?:\\/\\//i.test(raw) ? raw : 'https://' + raw;\n  return base.replace(/\\/+$/, '') + '/admin/api/2026-07/graphql.json';\n})() }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $('SMA – Produkt – Shopify Sync – Access Token holen').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  query: `query SMABestandPruefen($variantId: ID!) {\n  currentAppInstallation {\n    accessScopes {\n      handle\n    }\n  }\n  productVariant(id: $variantId) {\n    id\n    sku\n    product {\n      id\n      title\n    }\n    inventoryItem {\n      id\n      tracked\n      inventoryLevels(first: 20) {\n        nodes {\n          location {\n            id\n            name\n            isActive\n            fulfillsOnlineOrders\n          }\n          quantities(names: [\"available\", \"on_hand\", \"committed\"]) {\n            name\n            quantity\n          }\n        }\n        pageInfo {\n          hasNextPage\n          endCursor\n        }\n      }\n    }\n  }\n}`,\n  variables: {\n    variantId: $('SMA – Produkt – Shopify Sync – Marktzuordnung prüfen').first().json.externe_variant_id\n  }\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        4448,
+        -6272
+      ],
+      "name": "SMA – Produkt – Shopify Sync – Bestand abrufen",
+      "id": "fixture-0",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fixture-only",
+          "name": "Fixture credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mode: Run Once for All Items; Language: JavaScript.\n// Bereitet einen geprueften Bestandswert vor. Schreibt selbst keine Daten.\nconst fail = (message) => { throw new Error(`Bestandsabgleich: ${message}`); };\nconst single = (items, label) => {\n  if (!Array.isArray(items) || items.length !== 1 || !items[0]?.json) {\n    fail(`${label} muss genau einen Datensatz liefern.`);\n  }\n  return items[0].json;\n};\n\nconst product = single(\n  $('SMA – Produkt – Shopify Sync – Produkt prüfen').all(),\n  'Produkt prüfen'\n);\nconst mapping = single(\n  $('SMA – Produkt – Shopify Sync – Marktzuordnung prüfen').all(),\n  'Marktzuordnung prüfen'\n);\nconst response = single($input.all(), 'Bestand abrufen');\n\nif (!product.kunde_id || !product.produkt_id || !Number.isSafeInteger(product.id)) {\n  fail('Kunden-, Produkt- oder Tabellenzeilen-ID fehlt.');\n}\n\nif (\n  mapping.markt !== 'shopify' ||\n  mapping.kunde_id !== product.kunde_id ||\n  mapping.produkt_id !== product.produkt_id ||\n  !mapping.markt_konto_id\n) {\n  fail('Marktzuordnung passt nicht zum Kunden und Produkt.');\n}\n\nif (\n  response.errors !== undefined &&\n  (!Array.isArray(response.errors) || response.errors.length > 0)\n) {\n  fail('Shopify hat einen GraphQL-Fehler geliefert.');\n}\n\nconst variant = response.data?.productVariant;\nif (\n  !variant ||\n  !variant.id ||\n  variant.id !== mapping.externe_variant_id ||\n  !variant.product?.id ||\n  variant.product.id !== mapping.externe_produkt_id\n) {\n  fail('Shopify-Produkt oder Variante passt nicht zur Marktzuordnung.');\n}\n\nconst inventory = variant.inventoryItem;\nif (!inventory?.id || inventory.tracked !== true) {\n  fail('Bestandsverfolgung ist nicht aktiv. Bestand wird nicht übernommen.');\n}\n\nconst levels = inventory.inventoryLevels;\nif (!Array.isArray(levels?.nodes) || levels.pageInfo?.hasNextPage !== false) {\n  fail('Standortliste fehlt oder ist unvollständig.');\n}\n\nconst seen = new Set();\nconst locations = [];\n\nfor (const level of levels.nodes) {\n  const location = level?.location;\n  if (\n    !location?.id ||\n    seen.has(location.id) ||\n    typeof location.isActive !== 'boolean' ||\n    typeof location.fulfillsOnlineOrders !== 'boolean'\n  ) {\n    fail('Standortdaten fehlen oder sind doppelt vorhanden.');\n  }\n\n  seen.add(location.id);\n  if (!location.isActive || !location.fulfillsOnlineOrders) continue;\n\n  const quantity = (name) => {\n    const matches = Array.isArray(level.quantities)\n      ? level.quantities.filter(q => q?.name === name)\n      : [];\n\n    if (matches.length !== 1 || !Number.isSafeInteger(matches[0].quantity)) {\n      fail(`Ungültige oder fehlende Menge: ${name}.`);\n    }\n    return matches[0].quantity;\n  };\n\n  locations.push({\n    location_id: location.id,\n    name: location.name || '',\n    available: quantity('available'),\n    on_hand: quantity('on_hand'),\n    committed: quantity('committed'),\n  });\n}\n\nif (locations.length === 0) {\n  fail('Kein aktiver Standort für Online-Bestellungen vorhanden.');\n}\n\nconst sum = (field) => {\n  const value = locations.reduce((total, location) => total + location[field], 0);\n  if (!Number.isSafeInteger(value)) {\n    fail('Bestandssumme liegt außerhalb des gültigen Zahlenbereichs.');\n  }\n  return value;\n};\n\nconst available = sum('available');\n\nreturn [{\n  json: {\n    kunde_id: product.kunde_id,\n    produkt_id: product.produkt_id,\n    n8n_produkt_zeile_id: product.id,\n    markt: 'shopify',\n    markt_konto_id: mapping.markt_konto_id,\n    externe_produkt_id: variant.product.id,\n    externe_variant_id: variant.id,\n    inventory_item_id: inventory.id,\n    tracked: true,\n    bestand: Math.max(0, available),\n    shopify_verfuegbar_roh: available,\n    shopify_lagerbestand: sum('on_hand'),\n    shopify_gebunden: sum('committed'),\n    standorte: locations,\n    ausgewertet_am: new Date().toISOString(),\n  },\n  pairedItem: { item: 0 },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4720,
+        -6352
+      ],
+      "name": "SMA – Produkt – Shopify Sync – Bestand auswerten",
+      "id": "fixture-1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fixture-only",
+          "name": "Fixture credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $json.n8n_produkt_zeile_id }}"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.kunde_id }}"
+            },
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $json.produkt_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bestand": "={{ $json.bestand }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "bestand",
+              "displayName": "bestand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        4864,
+        -6352
+      ],
+      "name": "SMA – Produkt – Shopify Sync – Bestand speichern",
+      "id": "fixture-2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fixture-only",
+          "name": "Fixture credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_shopify_bestand_uebernehmen_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => {\n const items = $('SMA – Produkt – Shopify Sync – Bestand auswerten').all();\n if (items.length !== 1) throw new Error('Bestandsabgleich: genau eine Auswertung erforderlich.');\n const s = items[0].json;\n const r = $json;\n if (r.id !== s.n8n_produkt_zeile_id || r.kunde_id !== s.kunde_id || r.produkt_id !== s.produkt_id || r.bestand !== s.bestand || s.tracked !== true) throw new Error('Bestandsabgleich: gespeicherte Produktzeile passt nicht zur Auswertung.');\n return { p_n8n_kunde_id: s.kunde_id, p_produkt_id: s.produkt_id, p_markt_konto_id: s.markt_konto_id, p_variant_id: s.externe_variant_id, p_bestand: s.bestand, p_erfasst_am: s.ausgewertet_am };\n})() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        5088,
+        -6336
+      ],
+      "name": "SMA – Supabase – Shopify-Bestand speichern",
+      "id": "fixture-3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fixture-only",
+          "name": "Fixture credential"
+        }
+      }
+    },
+    {
+      "id": "fixture-4",
+      "name": "SMA – Produkt – Shopify Sync – Externe Produkt-ID vorhanden?",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-5",
+      "name": "SMA – Produkt – Shopify Sync – Produkt aktualisieren",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-6",
+      "name": "SMA – Produkt – Shopify Sync – Produkt erstellen",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-7",
+      "name": "Unrelated protected node",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-8",
+      "name": "SMA – Produkt – Shopify Sync – Produkt prüfen",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-9",
+      "name": "SMA – Produkt – Shopify Sync – Marktzuordnung prüfen",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-10",
+      "name": "SMA – Produkt – Shopify Sync – Marktkonto prüfen",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "SMA – Produkt – Shopify Sync – Externe Produkt-ID vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Shopify Sync – Produkt aktualisieren",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SMA – Produkt – Shopify Sync – Bestand abrufen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMA – Produkt – Shopify Sync – Produkt erstellen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Shopify Sync – Bestand abrufen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Shopify Sync – Bestand auswerten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Shopify Sync – Bestand auswerten": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Shopify Sync – Bestand speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Shopify Sync – Bestand speichern": {
+      "main": [
+        [
+          {
+            "node": "SMA – Supabase – Shopify-Bestand speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
