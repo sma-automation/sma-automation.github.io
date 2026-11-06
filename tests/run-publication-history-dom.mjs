@@ -86,6 +86,20 @@ await test('wrong-month responses clear both summary and rows',async()=>{
 
 const textEntry=(n=1,extra={})=>({preview_id:entry(n).id,revision:1,platform:'tiktok',body:'Saved text with enough detail',recorded_at:'2026-11-06T12:00:00Z',...extra});
 const texts=(entries=[textEntry()],extra={})=>({ok:true,version:1,month:'2026-11',timezone:'Europe/Vienna',total:entries.length,entries,has_more:false,next:null,...extra});
+await test('historical tags show only inside details and distinguish unknown from explicitly empty snapshots',async()=>{
+ const f=fixture({requestTexts:()=>texts([textEntry(1,{hashtags:['Café','Welt_1','界']}),textEntry(2,{hashtags:[]}),textEntry(3,{hashtags:null}),textEntry(4)])});await tick();
+ const rows=[...f.$('#historyTextCard ol').children];assert.equal(rows.length,4);
+ assert.match(rows[0].textContent,/Hashtags: #Café #Welt_1 #界/);assert.match(rows[1].textContent,/Hashtags: Keine gespeichert/);
+ for(const row of rows.slice(2))assert.match(row.textContent,/Hashtags: Für diesen Textstand nicht erfasst/);
+ for(const row of rows){assert.equal(row.querySelector('details').hasAttribute('open'),false);assert.doesNotMatch(row.querySelector('summary').textContent,/Hashtags:/);}
+ assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();
+});
+await test('invalid historical tags clear the text page without injecting markup; valid refresh recovers',async()=>{
+ let response=texts([textEntry(1,{hashtags:['Good']})]);const f=fixture({requestTexts:()=>response});await tick();
+ response=texts([textEntry(1,{hashtags:['<img src=x onerror=bad()>']})]);button(f,'Textverlauf aktualisieren').click();await tick();
+ assert.equal(f.$('#historyTextCard ol').children.length,0);assert.equal(f.$('#historyTextCard img'),null);assert.match(f.$('#historyTextCard [role=status]').textContent,/nicht geladen/);
+ response=texts([textEntry(1,{hashtags:[]})]);button(f,'Textverlauf aktualisieren').click();await tick();assert.match(f.$('#historyTextCard ol').textContent,/Keine gespeichert/);f.view.destroy();
+});
 await test('saved texts are expandable text-only values, independent of order totals',async()=>{
  const f=fixture({requestTexts:()=>texts([textEntry(1,{body:'<img src=x onerror=alert(1)> A saved body'})])});await tick();
  assert.match(f.$('#historyTextCard').textContent,/TikTok/);assert.match(f.$('#historyTextCard').textContent,/Version 1/);assert.equal(f.$('#historyTextCard img'),null);assert.equal(f.$('#historyTextCard details').hasAttribute('open'),false);assert.equal(f.$('#historyTextCard a'),null);assert.match(f.$('#historyTextCard .sma-history-saved-text').textContent,/<img/);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyTextCard'),null);

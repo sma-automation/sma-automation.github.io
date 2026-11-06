@@ -1,4 +1,4 @@
-import {readPublicationTextHistory,textHistoryKey,historyPlatforms,formatHistoryMonth} from './publication-history-model.mjs?v=3';
+import {readPublicationTextHistory,textHistoryKey,historyPlatforms,formatHistoryMonth} from './publication-history-model.mjs?v=4';
 
 // Lifecycle and selected month belong to the parent History view. This reader
 // has independent pagination and never opens the editing or generation routes.
@@ -21,7 +21,8 @@ export function mountPublicationTextHistory({doc,after,request,getOwnerId,expect
    const title=e.body.replace(/\s+/g,' ').trim();top.append(create('strong',title.length>90?title.slice(0,90)+'…':title),create('span',historyPlatforms[e.platform],'sma-history-status'));
    const meta=create('small','Version '+e.revision+' · '+format(e.recorded_at));
    const details=create('details'),summary=create('summary'),body=create('p',e.body,'sma-history-saved-text'),reference=create('small','Entwurf: '+e.preview_id);
-   summary.setAttribute('aria-label','Gespeicherten Text ansehen');summary.append(top,meta);details.append(summary,body,reference);row.append(details);list.append(row);
+   const hashtags=create('p',e.hashtags===null?'Hashtags: Für diesen Textstand nicht erfasst.':e.hashtags.length?'Hashtags: '+e.hashtags.map(tag=>'#'+tag).join(' '):'Hashtags: Keine gespeichert.','sma-history-saved-text');
+   summary.setAttribute('aria-label','Gespeicherten Text ansehen');summary.append(top,meta);details.append(summary,body,hashtags,reference);row.append(details);list.append(row);
   }
   message.textContent=entries.length?(pageNumber*pageSize+1)+'–'+Math.min((pageNumber+1)*pageSize,entries.length)+' von '+total+' Textständen · Seite '+(pageNumber+1)+' von '+Math.ceil(total/pageSize)+' · '+formatHistoryMonth(month)+'.':'Keine gespeicherten Textstände für '+formatHistoryMonth(month)+' vorhanden.';
   nav.hidden=!entries.length;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
