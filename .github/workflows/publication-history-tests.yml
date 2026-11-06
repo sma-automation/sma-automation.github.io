@@ -3,6 +3,10 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - app/assets/publication-analysis-history*
+      - tests/*publication-analysis-history*
+      - supabase/sql/publication-analysis-history.sql
+      - supabase/migrations/*_publication_analysis_history_v1.sql
       - app/assets/publication-hashtags.mjs
       - app/assets/publication-preview.js
       - app/publication-preview.html
@@ -94,6 +98,7 @@ jobs:
           node tests/run-publication-text-history-hashtags-sql.mjs
           node tests/run-publication-assignment-history-sql.mjs
           node tests/run-publication-editor-history-sql.mjs
+          node tests/run-publication-analysis-history-sql.mjs
           node tests/run-media-editor-dom.mjs
           node tests/run-media-export-sql.mjs
           node tests/run-media-export-dom.mjs

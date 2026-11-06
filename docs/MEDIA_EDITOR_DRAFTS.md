@@ -149,8 +149,9 @@ Keine neue Warnung; beide öffentlichen neuen Wrapper sind Invoker.
    Nachweis einer funktionierenden Editor-Musikauswahl.
 3. Fertige Medienvariante erst nach eigener Prüfung und Freigabe in die vorhandene
    Veröffentlichungsstrecke aufnehmen. Speichern eines Entwurfs ist keine Freigabe.
-4. Magic-Effect-Analyseversuche brauchen separat ein eigenes Journal; bestehende
-   Ergebnisse werden bei Wiederholung überschrieben.
+4. Das separate [Analysejournal](PUBLICATION_ANALYSIS_HISTORY.md) erfasst neue
+   Magic-Effect-Versuche ab Installation; frühere überschriebene Versuche bleiben
+   unbekannt.
 
 Bestandsprüfung abgeschlossen, nicht erneut beginnen. Shopify-Testmodus bleibt
 aktiv; PR #57/#69 und der unveröffentlichte n8n-Originalentwurf bleiben separat.
