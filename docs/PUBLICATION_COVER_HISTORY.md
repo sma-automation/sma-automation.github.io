@@ -94,3 +94,12 @@ Keine Änderungen an n8n-Workflows, Providerfreigaben oder Schreibfunktionen.
 Die echte Coverbestätigung durch YouTube/TikTok bleibt bis zu einer ausdrücklich
 autorisierten Veröffentlichung offen. Bestandsprüfung abgeschlossen; PR #57/#69,
 Shopify-Testmodus und unveröffentlichte n8n-Originalentwürfe bleiben erhalten.
+
+## Fortsetzung nach der Cover-History
+
+[PORTAL_TEXT_CORRECTIONS.md](PORTAL_TEXT_CORRECTIONS.md) dokumentiert den
+anschließenden Kernschritt: Hashtags im Editor bearbeitbar, beide vorhandenen
+YouTube-/TikTok-Entwürfe korrigiert und erneut ohne Textfragen abgeglichen.
+PR #106 ist live. Die vollständige Medienprüfung bleibt offen; eine echte
+Provider-/Coverbestätigung wurde nicht ausgelöst. Die neun Aufträge sind
+unverändert, PR #57/#69 bleiben separat offen.

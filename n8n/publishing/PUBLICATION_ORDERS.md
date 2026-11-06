@@ -1,5 +1,32 @@
 # Dashboard-Auftrag und gebundene Freigabe
 
+## Aktueller Anschlussstand – 6. November 2026
+
+Die folgenden Abschnitte dokumentieren die historischen Schritte vom
+3. November. Ihre damaligen offenen Punkte sind durch spätere Arbeiten teilweise
+erledigt: Interner Inhaltsabgleich, Providerjournal und Dispatcher sind laut
+dem weiterhin separat offenen [PR #57](https://github.com/sma-automation/sma-automation.github.io/pull/57)
+technisch angeschlossen. Coverübergabe und History-Anzeige sind in
+[PORTAL_COVER_HANDOFF.md](../../docs/PORTAL_COVER_HANDOFF.md) und
+[PUBLICATION_COVER_HISTORY.md](../../docs/PUBLICATION_COVER_HISTORY.md) dokumentiert.
+
+Die konkreten YouTube-/TikTok-Textfragen sind nach gespeicherten Korrekturen
+und erneutem echtem Vergleich abgeschlossen: beide aktuellen Bindungen
+`consistent_with_evidence`, ohne Rückfragen. Hashtags sind über den normalen
+Editor bearbeitbar. Bereitstellung und Nachweis:
+[PORTAL_TEXT_CORRECTIONS.md](../../docs/PORTAL_TEXT_CORRECTIONS.md).
+
+**Nächster Kernschritt:** vollständige visuelle und semantische Medienprüfung
+vervollständigen; `VIDEO_PLAN_REQUIRED` bleibt offen. Der bestandene
+Portaltextvergleich ersetzt diese Prüfung nicht. Echte Provider-/Coverabnahme
+und Veröffentlichung benötigen weiterhin ausdrückliche Freigabe.
+Alle 9 Aufträge unverändert; 0 Operatorfreigaben, Provider- und Coverversuche.
+Bestandsprüfung abgeschlossen. PR #57/#69 separat offen, unveröffentlichte
+n8n-Originalentwürfe und Shopify-Testmodus erhalten; keine kostenpflichtigen
+Änderungen freigegeben.
+
+## Historischer Ausgangsstand – 3. November 2026
+
 Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Die getrennten Medienbestätigungen aus #53 sind veröffentlicht und im echten TikTok-Vorbereitungsdialog geprüft.
 
 Stand: 3. November 2026. Diese Erweiterung verbindet den angemeldeten Dashboard-Benutzer, seine konkrete Datei-/Textversion, das tatsächliche n8n-Zielkonto und seine ausdrückliche Freigabe mit der vorhandenen Publisher-Arbeitskopie. Der Ausführungsweg endet weiterhin bei einer protokollierten Prüfung: **kein Provider-Upload und kein Social-Media-Posting**.
