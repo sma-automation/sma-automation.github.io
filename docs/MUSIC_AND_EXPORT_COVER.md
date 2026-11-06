@@ -1,6 +1,6 @@
 # Eigene Musik und Cover-Zuordnung
 
-Stand: 06.11.2026; baut auf dem abgeschlossenen Medienexport (PR #94/#95) auf.
+Stand: 06.11.2026; PR #96 zusammengeführt und live. Baut auf dem abgeschlossenen Medienexport (PR #94/#95) auf.
 
 ## Kundenablauf
 
@@ -51,13 +51,37 @@ Cover-ID; kein fremdes oder geändertes Bild.
   326023 Bytes; Cover erzeugt. Heruntergeladene Audiospur nativ dekodiert:
   Amplituden bei 0,3 s: 440 Hz 0,12439, 880 Hz 0,03125. Bei 2,2 s:
   Originalton 0,12455, Musik 0. Kürzerer Track endet ohne Videoabbruch.
+- Zweiter Browser-WASM-Test: Originalton 0 %, Musikstart 0,5 s. Bei 0,3 s
+  ist nur 880 Hz vorhanden (0,03121); bei 1,3 s beide Testfrequenzen 0.
+  Die MP4 bleibt exakt 3 s lang.
+- GitHub Pages: erster Bereitstellungsversuch mit transientem Providerfehler;
+  erneuter Deploy desselben geprüften Commits erfolgreich.
 - Supabase-Migration installiert. Security-Advisor unverändert gegenüber vorher:
   41 INFO, bestehende Warnungen 4/6/1; keine neue Warnung.
 
+- Angemeldeter Live-Durchlauf erfolgreich: bestehendes Video → Entwurf mit
+  3-s-Schnitt, Cover bei 1 s und WAV bei 25 % → Browserexport → Kundenordner →
+  direkte YouTube-Vorbereitung. Genau ein abgeschlossener Export
+  `283abd16-3b72-4224-ab66-81b30afdab13` und genau zwei abgeschlossene Uploads.
+  MP4 938425 Bytes, SHA-256
+  `863f7af8215231381a0431b7ab4d6b831a974f92001eace2a8e45f24f51592ed`;
+  PNG-Cover 465264 Bytes, SHA-256
+  `0c85f685e4332544c080b5c9fe6375b74b06f50568f1f98fcb2538647ece7d7b`.
+- Erneutes Öffnen des Entwurfs zeigt die gespeicherte Musik und fordert die
+  lokale Datei erneut an. Ausgangseinstellungen anschließend vollständig
+  wiederhergestellt (Version 2); Originalrevision/Prüfsumme unverändert.
+  Das abgeschlossene Ergebnis behält sein damaliges Musik-/Cover-Rezept.
+- Cover in **Inhalt und Ziel** aufgeklappt: authentifizierte Bildvorschau geladen,
+  passend zum exportierten Video und bei Sekunde 1. Kein neuer Beitragstext,
+  kein Auftrag und kein Posting ausgelöst. Das neutrale zusätzliche Testvideo
+  `SMA-Musik-Cover-Techniktest.mp4` bleibt als technische Testdatei erhalten.
+
 ## Weiterarbeit
 
-Nach Live-Übernahme den angemeldeten Ablauf Musik → Export → Kundenordner →
-Portalvorbereitung mit Cover prüfen und hier ergänzen. Danach dauerhafte eigene
-Musikbibliothek und portalspezifische Cover-Übergabe anhand der tatsächlichen
-Provider-Fähigkeiten getrennt bearbeiten. Bestandsstrecke abgeschlossen;
+Musik → Export → Kundenordner → Portalvorbereitung mit Cover ist abgeschlossen.
+Bei neu hochgeladenen Videos fehlen
+zum Teil noch Drive-Länge/Bildgröße; der Editor sperrt diese korrekt. Für diese
+Indexierungswartezeit eine sichtbare, gezielte Aktualisierung vorsehen. Danach
+dauerhafte eigene Musikbibliothek und portalspezifische Cover-Übergabe anhand
+der tatsächlichen Provider-Fähigkeiten getrennt bearbeiten. Bestandsstrecke abgeschlossen;
 PR #57/#69 separat, Shopify-Testmodus und n8n-Originalentwürfe erhalten.
