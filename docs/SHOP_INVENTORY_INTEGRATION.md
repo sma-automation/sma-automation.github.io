@@ -1,17 +1,19 @@
 # Gezielte Übernahme des Bestandszweigs
 
-Stand: 6. November 2026. **Abgleich abgeschlossen, privater Kandidat erstellt;
-noch kein Import und keine Veröffentlichung des integrierten Kundenworkflows.**
+Aktueller Stand: 6. November 2026. **Produktive Übernahme abgeschlossen.**
+Der [Rolloutbericht](SHOP_INVENTORY_ROLLOUT.md) dokumentiert die aktiven Fassungen
+mit 534 bzw. 42 Nodes. Die folgenden Abschnitte beschreiben die vorherige
+Erstellung des Basiskandidaten und ihre damaligen Prüfergebnisse.
 
 Der anschließende [gemeinsame Bestandsschutz](SHOP_INVENTORY_WRITERS.md) erweitert
 diesen Basiskandidaten auf 527 Nodes und ergänzt den separaten Bestands-Webhook.
-63 Tests und der gemeinsame echte Prüflauf bestehen; die vollständige
-Kundenablauf-Abnahme und produktive Übernahme stehen noch aus.
+63 Tests und der gemeinsame echte Prüflauf bestehen.
 
 Die anschließende [Antwortprüfung der Produktbearbeitung](SHOP_PRODUCT_EDIT_RESPONSES.md)
 führt zum privaten 534-Node-Kandidaten mit 78 automatisierten Tests. Vier echte
 HTTP-Fälle des äußeren Bearbeitungswegs sind in der getrennten Testkopie bestätigt;
-die n8n-Anmeldung ist wieder nutzbar. Die produktive Übernahme steht noch aus.
+die n8n-Anmeldung ist wieder nutzbar. Dieselben vier Fälle wurden nach der
+Übernahme auch am aktiven Hauptworkflow erfolgreich ausgeführt.
 
 ## Frische Ausgangsversionen
 
@@ -83,7 +85,7 @@ keine zusätzlichen Produktmutationen. Die bisherigen echten Normallauf-,
 Abbruch-, Sperr- und Wiederaufnahmenachweise stehen in
 [SHOP_INVENTORY_DRAFT.md](SHOP_INVENTORY_DRAFT.md).
 
-## Verbleibender Schritt
+## Fortsetzung bis zur produktiven Übernahme
 
 Die gezielte Kandidatenerstellung enthält jetzt auch den `updatedAt`-Vergleich
 im Tabellen-Update. Der echte 30-Node-Prüflauf weist einen erneut gesendeten
@@ -93,11 +95,11 @@ keinen Journalabschluss.
 
 Der gemeinsame Prüflauf der weiteren Bestands-Writer (separater Bestands-Webhook,
 Produktbearbeitung, Initialimport) und der zusätzliche äußere HTTP-Bearbeitungsweg
-sind inzwischen in getrennten QA-Kopien bestätigt. Vor produktiver Übernahme
-bleiben der erneute Abgleich der dann aktuellen Fassungen und das gezielte
-Umschalten auf die geprüften Kandidaten. Die manuell geprüfte Wiederaufnahme
-ist keine automatische Reparaturfunktion.
-Die aktive Fassung und der separate Originalentwurf bleiben erhalten;
+sind in getrennten QA-Kopien bestätigt. Der erneute Versionsabgleich und das
+gezielte Umschalten auf die geprüften Kandidaten sind inzwischen abgeschlossen;
+siehe [Rolloutbericht](SHOP_INVENTORY_ROLLOUT.md). Die manuell geprüfte
+Wiederaufnahme ist keine automatische Reparaturfunktion.
+Der Originalentwurf bleibt als separate inaktive Sicherung erhalten;
 Shopify Payments bleibt im Testmodus.
 
 Referenz zur bestehenden Upsert-Schnittstelle:

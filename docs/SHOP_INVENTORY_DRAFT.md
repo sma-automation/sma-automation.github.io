@@ -1,5 +1,10 @@
 # Shopify-Bestandsentwurf: Übernahme vor Spiegelung
 
+Aktuelle Fortsetzung: [Produktiver Rollout abgeschlossen](SHOP_INVENTORY_ROLLOUT.md).
+Die folgenden Angaben dokumentieren den früheren isolierten Prüfstand. Der alte
+524-Node-Gesamtkandidat wurde nicht veröffentlicht; produktiv ist die gezielt
+aus der 511-Node-Basis erstellte und weiter abgesicherte 534-Node-Fassung.
+
 Stand: 6. November 2026 (Europe/Vienna). **Echter n8n-Normallauf sowie Abbruch,
 HTTP-Timeout, Wiederaufnahme und Ablehnung eines veralteten Tabellen-Writes bestanden; Kandidat weiterhin unveröffentlicht.** Der laufende Bestandsworkflow und der
 erhaltene 515-Node-Entwurf wurden nicht verändert. Im Prüflauf wurden für

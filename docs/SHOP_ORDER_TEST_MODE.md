@@ -1,5 +1,10 @@
 # Shopify test-order classification
 
+Subsequent deployment (2026-11-06): [inventory rollout](SHOP_INVENTORY_ROLLOUT.md)
+preserves the order/test-status nodes and documents the new active main-workflow
+version and separate inactive backup of the 515-node draft. The results below
+remain the historical order-classification verification.
+
 Status: backend deployed and verified; dashboard release tracked in PR #80
 (2026-11-05, UTC).
 

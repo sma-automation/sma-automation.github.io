@@ -1,9 +1,11 @@
 # Produktbearbeitung: bestätigte Speicherung und klare Antworten
 
-Stand: 6. November 2026, 10:27 Uhr Europe/Vienna. **78 automatisierte Tests und
-vier echte HTTP-Fälle mit bestehender Kundenauthentifizierung bestanden.** Der
-534-Node-Gesamtkandidat ist nicht importiert oder veröffentlicht; der äußere
-Bearbeitungsweg wurde in einer getrennten, eng begrenzten Testkopie abgenommen.
+Stand: 6. November 2026, 11:31 Uhr Europe/Vienna. **Produktiv übernommen.**
+78 automatisierte Tests sowie die vier authentifizierten HTTP-Fälle sind bestanden:
+zuerst in der begrenzten Testkopie, anschließend am veröffentlichten Hauptworkflow.
+Der Kundenworkflow mit 534 Nodes und der Bestands-Webhook mit 42 Nodes sind aktiv.
+Versionen, Originalentwurf-Sicherung und Abschlussnachweise stehen im
+[Rolloutbericht](SHOP_INVENTORY_ROLLOUT.md).
 
 ## Behobene Lücke im Kandidaten
 
@@ -86,7 +88,7 @@ des HTTP-Prüfaufbaus, unveränderte Ausgangsdaten, die vier Fälle und die getr
 Bestätigung beider Speicher. Diese automatisierten Tests sind Simulationen;
 die folgenden vier Fälle wurden zusätzlich tatsächlich über HTTP ausgeführt.
 
-## Echter HTTP-Kundenweg bestätigt
+## Vorherige Abnahme in der begrenzten HTTP-Testkopie
 
 Die erneut angeforderte sichere n8n-Anmeldung war erfolgreich und blieb während
 der Arbeit bestehen. Beide Ausgangsfassungen wurden frisch exportiert:
@@ -130,16 +132,24 @@ Shopify-Bestandszeitpunkt bleibt `2026-11-06T01:28:03.067972Z`.
 
 ![Erfolgreicher authentifizierter HTTP-Prüflauf](evidence/shop-product-edit-http-pr81.png)
 
-## Verbleibende produktive Übernahme
+## Produktive Übernahme abgeschlossen
 
-Der äußere Bearbeitungsweg ist jetzt in der isolierten Testkopie geprüft.
-Die Übernahme des vollständigen 534-Node-Kundenworkflows und des geänderten
-42-Node-Bestands-Webhooks steht noch aus. Vor dem Umschalten sind deren dann
-aktuelle Fassungen erneut abzugleichen; der separate Webhook wurde in dieser
-Sitzung nicht verändert. Der geschützte 515-Node-Originalentwurf bleibt erhalten.
+Nach dem erneuten Versionsabgleich wurden beide Workflows gezielt aktualisiert
+und veröffentlicht. Alle ursprünglichen Node- und Webhook-IDs bleiben erhalten.
+Die Rückexporte der aktiven Versionen stimmen mit den vor der Veröffentlichung
+geprüften Fassungen überein. Der 515-Node-Originalentwurf ist als separate,
+inaktive Sicherung erhalten; die beim Duplizieren isolierten Webhook-Pfade sind
+im [Rolloutbericht](SHOP_INVENTORY_ROLLOUT.md) beschrieben.
 
-Es gab keine Veröffentlichung, Shopify-Mutation, Bestellung, kostenpflichtige
-Änderung oder Änderung der Datenbankrechte. Shopify Payments bleibt im Testmodus.
+Die vier HTTP-Fälle wurden am produktiven Endpunkt wiederholt: 403, 404, 409
+und 200. Beide Speicher bestätigen unveränderte Inhalte und Bestand vier;
+bei den negativen Fällen bleiben auch die Änderungszeitpunkte unverändert.
+Supabase bestätigt nach dem Erfolgsfall um 11:31 Uhr Wiener Zeit weiterhin
+22 abgeschlossene Meldungen und null aktive Sperren.
+
+Es gab keine Shopify-Mutation, Bestellung, Social-Media-Veröffentlichung,
+kostenpflichtige Änderung oder Änderung der Datenbankrechte.
+Shopify Payments bleibt im Testmodus.
 
 Der vorhandene Shop-Manager liest über Supabase und nutzt Bestandsaufträge. Er
 ruft diesen älteren n8n-Produktbearbeitungsendpunkt derzeit nicht auf; dieser

@@ -1,12 +1,17 @@
 # Gemeinsamer Bestandsschutz der Schreibwege
 
-Stand: 6. November 2026, Europe/Vienna. **63 Tests und gemeinsamer echter n8n-Prüflauf
-bestanden. Keine produktive Übernahme.**
+Aktueller Stand: 6. November 2026, Europe/Vienna. **Produktiv übernommen:**
+Kundenworkflow mit 534 Nodes und Bestands-Webhook mit 42 Nodes sind aktiv.
+Der [Rolloutbericht](SHOP_INVENTORY_ROLLOUT.md) enthält die aktiven Versionen,
+Sicherung und vier erfolgreichen HTTP-Fälle am produktiven Endpunkt.
+
+Die folgenden Abschnitte dokumentieren die vorherige Abnahme der Schreibwege:
+63 Tests und gemeinsamer echter n8n-Prüflauf bestanden.
 
 Fortsetzung: [Bestätigte Produktbearbeitung und HTTP-Antworten](SHOP_PRODUCT_EDIT_RESPONSES.md)
 erweitert den privaten Kandidaten auf 534 Nodes. 78 automatisierte Tests und vier
 echte authentifizierte HTTP-Fälle (403, 404, 409, 200) sind inzwischen bestanden.
-Die n8n-Anmeldung ist wieder nutzbar; die produktive Übernahme bleibt offen.
+Die anschließende produktive Übernahme ist im Rolloutbericht abgeschlossen.
 
 ## Abgeglichene Quellen
 
@@ -107,17 +112,14 @@ Supabase-Abschlussprüfung vom **6. November 2026, 02:28 Uhr Wiener Zeit**:
 
 ![Gemeinsamer Schreibschutz-Prüflauf erfolgreich](evidence/shop-inventory-writers-pr81.jpg)
 
-## Verbleibende Übernahme
+## Anschließende Übernahme
 
-Die geänderten Schreibwege sind gemeinsam in der getrennten QA-Kopie geprüft.
-Der vollständige Kundenworkflow (inzwischen 534 Nodes einschließlich der
-[Antwortprüfung](SHOP_PRODUCT_EDIT_RESPONSES.md)) und der 42-Node-Bestands-Webhook
-liegen weiterhin als private Integrationskandidaten vor. Vor ihrer produktiven Übernahme
-folgt der aktuelle Versionsabgleich. Der äußere Bearbeitungsweg einschließlich
-Authentifizierung und Antworten wurde inzwischen zusätzlich über echte
-HTTP-Aufrufe in einer begrenzten Kopie bestätigt; Details und Abgrenzung zur
-Dashboard-UI stehen in der [Antwortprüfung](SHOP_PRODUCT_EDIT_RESPONSES.md).
+Der vollständige Kundenworkflow mit 534 Nodes einschließlich der
+[Antwortprüfung](SHOP_PRODUCT_EDIT_RESPONSES.md) und der 42-Node-Bestands-Webhook
+wurden nach frischem Abgleich veröffentlicht. Vier echte HTTP-Fälle bestätigen
+zusätzlich den aktiven Bearbeitungsweg. Details und Abgrenzung zur Dashboard-UI
+stehen im [Rolloutbericht](SHOP_INVENTORY_ROLLOUT.md).
 
-Die aktiven Workflows, der separate Originalentwurf und Shopify Payments im
-Testmodus bleiben erhalten. Es gab keine Bestellung, Shopify-Mutation,
+Der Originalentwurf bleibt als separate inaktive Sicherung erhalten;
+Shopify Payments bleibt im Testmodus. Es gab keine Bestellung, Shopify-Mutation,
 kostenpflichtige Änderung oder Änderung der Datenbankrechte.
