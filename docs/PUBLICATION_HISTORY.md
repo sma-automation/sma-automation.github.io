@@ -159,6 +159,10 @@ kostenpflichtige Änderung, keinen Kauf und keine Social-Media-Veröffentlichung
 
 ## Gespeicherte Portaltexte (2026-11-06)
 
+Nachtrag: [Hashtags im gespeicherten Textverlauf](PUBLICATION_TEXT_HASHTAG_HISTORY.md)
+ergänzt neue Textstände um ihre damaligen Tags. Historische Einträge ohne diese
+Erfassung bleiben ausdrücklich unbekannt.
+
 Die History zeigt zusätzlich den vorhandenen Textverlauf aus
 `sma_private.publication_caption_history_v1`. Jeder Eintrag enthält den damals
 aufgezeichneten Textkörper, das Portal, die Entwurf-ID, die Revision und

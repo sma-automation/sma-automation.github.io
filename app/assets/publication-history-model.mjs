@@ -60,7 +60,9 @@ export function readPublicationTextHistory(value){
  const seen=new Set();
  const entries=value.entries.map(e=>{
   if(!object(e)||!uuid(e.preview_id)||!Number.isSafeInteger(e.revision)||e.revision<1||e.revision>2147483647||!Object.hasOwn(historyPlatforms,e.platform)||e.platform==='unknown'||typeof e.body!=='string'||[...e.body].length<10||[...e.body].length>1200||!timestamp(e.recorded_at)||value.month!==null&&calendarMonth(e.recorded_at)!==value.month||seen.has(textHistoryKey(e)))throw Error('INVALID_HISTORY');
-  seen.add(textHistoryKey(e));return {preview_id:e.preview_id,revision:e.revision,platform:e.platform,body:e.body,recorded_at:e.recorded_at};
+  const hashtags=e.hashtags??null;
+  if(hashtags!==null&&(!Array.isArray(hashtags)||hashtags.length>3||hashtags.some(tag=>typeof tag!=='string'||[...tag].length<1||[...tag].length>50||!/^[_\p{L}\p{N}]+$/u.test(tag)||tag!==tag.normalize('NFC'))||new Set(hashtags.map(tag=>tag.toLocaleLowerCase('de'))).size!==hashtags.length))throw Error('INVALID_HISTORY');
+  seen.add(textHistoryKey(e));return {preview_id:e.preview_id,revision:e.revision,platform:e.platform,body:e.body,hashtags:hashtags===null?null:[...hashtags],recorded_at:e.recorded_at};
  });
  const last=entries.at(-1),next=last?{before_at:last.recorded_at,before_id:last.preview_id,before_revision:last.revision,before_platform:last.platform}:null;
  if(value.has_more?entries.length!==20||value.total<=entries.length||!object(value.next)||Object.keys(next).some(k=>value.next[k]!==next[k]):value.next!==null)throw Error('INVALID_HISTORY');

@@ -57,8 +57,10 @@ Inhaltsabgleich aus dem separat offenen PR #57 muss die neue Bindung erneut
 bewerten. Alte Rückfragen werden nicht nachträglich als bestanden markiert.
 `VIDEO_PLAN_REQUIRED`, vollständige Medienprüfung und die ausdrücklich
 freizugebende echte Provider-/Coverabnahme bleiben getrennte Voraussetzungen.
-Das bestehende Text-/Dateijournal speichert Textkörper und Revisionswechsel,
-keinen vollständigen historischen Hashtag-Snapshot.
+Das Text-/Dateijournal speichert Textkörper und Revisionswechsel. Die
+[Hashtag-Ergänzung im Textverlauf](PUBLICATION_TEXT_HASHTAG_HISTORY.md) hält
+Tags ab ihrer Installation für neue Textstände fest; ältere Einträge bleiben
+ohne nachträglich erfundenen Hashtag-Snapshot.
 
 Keine Wiederholung der Bestandsprüfung. PR #57/#69 separat offen,
 Shopify-Testmodus und unveröffentlichte n8n-Originalentwürfe erhalten.
