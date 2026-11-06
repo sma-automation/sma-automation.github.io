@@ -64,3 +64,7 @@
 .sma-history-period-picker>summary:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
 .sma-history-period-picker[open]>summary{margin-bottom:12px}
 .sma-publication-history .sma-history-list li{padding:8px 0}
+.sma-history-cover-status{display:inline-block;margin-left:10px;overflow-wrap:anywhere}
+.sma-history-cover-status[data-cover-status=complete]{color:#206341}
+.sma-history-cover-status:is([data-cover-status=failed],[data-cover-status=uncertain],[data-cover-status=needs_review],[data-cover-status=permission_required],[data-cover-status=blocked]){color:#84500d}
+@media(max-width:650px){.sma-history-cover-status{display:block;margin-left:0}}

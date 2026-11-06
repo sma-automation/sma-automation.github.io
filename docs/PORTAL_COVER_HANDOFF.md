@@ -88,9 +88,9 @@ freigegebenen Auftrag fortsetzen. Es wurde kein Zeitplan/Poller ergänzt.
 
 **Kein echter Provider-Coveraufruf wurde ausgelöst.** Die technische Anbindung
 und Sperren sind geprüft; eine tatsächliche YouTube-/TikTok-Bestätigung steht
-bis zu einer separat autorisierten Veröffentlichung noch aus. Der Coverstatus
-wird intern geführt; eine eigene Anzeige dieses Ergebnisses in der History ist
-noch offen.
+bis zu einer separat autorisierten Veröffentlichung noch aus. Die ergänzte
+Anzeige des Coverstatus in der History ist in
+[PUBLICATION_COVER_HISTORY.md](PUBLICATION_COVER_HISTORY.md) dokumentiert.
 
 ## Bereitstellung und angemeldete Anzeige
 
