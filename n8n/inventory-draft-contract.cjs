@@ -35,6 +35,7 @@ function inventoryVariant(response, job) {
 }
 function inventoryPrepare({product, mapping, account, response, workflowId, executionId}, crypto) {
   if (!inventoryText(product?.kunde_id) || !inventoryText(product?.produkt_id) || !Number.isSafeInteger(product.id) || product.id <= 0) inventoryFail('PRODUCT_IDENTITY');
+  if (typeof product.updatedAt !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(product.updatedAt) || !Number.isFinite(Date.parse(product.updatedAt))) inventoryFail('PRODUCT_VERSION_REQUIRED');
   if (mapping?.markt !== 'shopify' || mapping.kunde_id !== product.kunde_id || mapping.produkt_id !== product.produkt_id || !inventoryText(mapping.markt_konto_id)) inventoryFail('MAPPING_MISMATCH');
   if (account?.markt !== 'shopify' || account.kunde_id !== product.kunde_id || account.markt_konto_id !== mapping.markt_konto_id) inventoryFail('ACCOUNT_MISMATCH');
   const raw = String(account.shop_url || account.shop_domain || '').trim();
@@ -55,6 +56,9 @@ function inventoryPrepare({product, mapping, account, response, workflowId, exec
   const hex = bytes.toString('hex');
   job.delivery_id = [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
   job.payload_hash = hash;
+  // A fresh retry must keep its delivery identity even if the table changed.
+  // Carry the version outside the immutable delivery hash.
+  job.n8n_produkt_updated_at = product.updatedAt;
   return job;
 }
 function inventoryBody(action, job, extra = {}) {
@@ -95,6 +99,8 @@ function inventoryEvaluate(response, job, now = Date.now()) {
 }
 function inventoryCanonical(response, job, now = Date.now()) {
   inventoryLease(job, now);
+  // Ensure our write cannot reuse the observed millisecond as its new version.
+  if (!Number.isFinite(Date.parse(job.n8n_produkt_updated_at)) || now <= Date.parse(job.n8n_produkt_updated_at)) inventoryFail('PRODUCT_VERSION_NOT_OLDER');
   if (response?.ok !== true || response.applied !== true || response.n8n_kunde_id !== job.kunde_id || response.sma_produkt_id !== job.produkt_id ||
       !inventoryText(response.kunde_id) || !Number.isSafeInteger(response.row_id) || response.row_id <= 0 ||
       response.bestand !== job.bestand || Date.parse(response.erfasst_am) !== Date.parse(job.read_started_at)) inventoryFail('CANONICAL_WRITE_NOT_CONFIRMED');
@@ -102,7 +108,9 @@ function inventoryCanonical(response, job, now = Date.now()) {
 }
 function inventoryMirror(row, job, now = Date.now()) {
   inventoryLease(job, now, 110000);
+  if (!row || Object.keys(row).length === 0) inventoryFail('MIRROR_CONFLICT_RESTART_REQUIRED');
   if (row?.id !== job.n8n_produkt_zeile_id || row.kunde_id !== job.kunde_id || row.produkt_id !== job.produkt_id || row.bestand !== job.bestand) inventoryFail('MIRROR_NOT_CONFIRMED');
+  if (!Number.isFinite(Date.parse(row.updatedAt)) || Date.parse(row.updatedAt) <= Date.parse(job.n8n_produkt_updated_at)) inventoryFail('MIRROR_VERSION_NOT_CONFIRMED');
   return inventoryBody('finish', job, {p_lease_id: job.lease_id});
 }
 function inventoryDone(response, job) {

@@ -18,7 +18,7 @@ function qaFixture(){
 }
 test('isolated QA has only a manual entry and commits only after its scope guard',()=>{
  const source=qaFixture(),before=structuredClone(source),qa=buildInventoryQA(source);
- assert.deepEqual(source,before);assert.equal(qa.active,false);assert.equal(qa.nodes.length,26);
+ assert.deepEqual(source,before);assert.equal(qa.active,false);assert.equal(qa.nodes.length,30);
  assert.equal(qa.nodes.filter(n=>n.type==='n8n-nodes-base.manualTrigger').length,1);
  assert.equal(qa.nodes.some(n=>/webhook|scheduleTrigger|executeWorkflowTrigger/.test(n.type)),false);
  assert.equal(qa.nodes.some(n=>/Produkt aktualisieren|Produkt erstellen/.test(n.name)),false);
@@ -42,7 +42,7 @@ test('real QA guard rejects changes to its product scope or confirmed quantity a
  for(const r of [{ok:false,action:'duplicate',status:'done'},{ok:true,action:'process',status:'done'},{ok:true,action:'duplicate',status:'processing'}])assert.throws(()=>finish(r),/QA_DUPLICATE_NOT_CONFIRMED/);
 });
 function fixture(){
-  const product={id:1,kunde_id:'n8n-customer',produkt_id:'product'};
+  const product={id:1,kunde_id:'n8n-customer',produkt_id:'product',updatedAt:new Date(now-1000).toISOString()};
   const mapping={markt:'shopify',kunde_id:product.kunde_id,produkt_id:product.produkt_id,
     markt_konto_id:'account',externe_variant_id:gid('ProductVariant'),externe_produkt_id:gid('Product')};
   const account={markt:'shopify',kunde_id:product.kunde_id,markt_konto_id:'account',shop_url:'https://fixture.myshopify.com/'};
@@ -151,7 +151,7 @@ test('rejected, stale, ambiguous or mismatched database results cannot reach the
  assert.throws(()=>inventoryCanonical([result],job,now));
 });
 test('mirror must match the accepted row and quantity before finishing',()=>{
- const {job,result}=ready(),canonical=inventoryCanonical(result,job,now),row={id:1,kunde_id:job.kunde_id,produkt_id:job.produkt_id,bestand:4};
+ const {job,result}=ready(),canonical=inventoryCanonical(result,job,now),row={id:1,kunde_id:job.kunde_id,produkt_id:job.produkt_id,bestand:4,updatedAt:new Date(now).toISOString()};
  for(const patch of [{id:9},{kunde_id:'other'},{produkt_id:'other'},{bestand:5}])assert.throws(()=>inventoryMirror({...row,...patch},canonical,now));
  assert.equal(inventoryMirror(row,canonical,now).p_action,'finish');
  assert.throws(()=>inventoryMirror(row,canonical,now+110000));
@@ -199,7 +199,7 @@ test('all embedded code nodes parse and the real n8n snippets execute end to end
  run(N.prepare,f.response);run('SMA – Bestand – Sperrauftrag',refs[N.prepare]);
  run(N.claimed,{ok:true,action:'process',lease_id:leaseId,read_started_at:new Date(now).toISOString()});
  run(N.evaluate,f.response);const result=accepted(refs[N.evaluate]);run(N.canonical,result);
- run(N.finishBody,{id:1,kunde_id:f.product.kunde_id,produkt_id:f.product.produkt_id,bestand:4});
+ run(N.finishBody,{id:1,kunde_id:f.product.kunde_id,produkt_id:f.product.produkt_id,bestand:4,updatedAt:new Date(now).toISOString()});
  const body=(name,json)=>JSON.parse(JSON.stringify(vm.runInNewContext(w.nodes.find(n=>n.name===name).parameters.jsonBody.slice(3,-2),{$json:json})));
  assert.deepEqual(body(N.claim,refs['SMA – Bestand – Sperrauftrag']),inventoryBody('claim',refs[N.prepare]));
  assert.deepEqual(body(N.commit,refs[N.evaluate]),inventoryBody('commit',refs[N.evaluate],{
@@ -215,4 +215,46 @@ test('unexpected source changes, pinning and repeated patching fail closed',()=>
   const w=structuredClone(graph);change(w);assert.throws(()=>patchInventoryDraft(w));
  }
  assert.throws(()=>patchInventoryDraft(patchInventoryDraft(graph)));
+});
+
+test('row versions are required but are not part of the immutable delivery identity',()=>{
+ const f=fixture(),first=prepare(f);
+ for(const updatedAt of [undefined,null,42,'2026-11-06','invalid']){
+  const bad=structuredClone(f);bad.product.updatedAt=updatedAt;
+  assert.throws(()=>prepare(bad),/PRODUCT_VERSION_REQUIRED/);
+ }
+ f.product.updatedAt=new Date(now).toISOString();
+ const retry=prepare(f);
+ assert.equal(retry.delivery_id,first.delivery_id);assert.equal(retry.payload_hash,first.payload_hash);
+ assert.notEqual(retry.n8n_produkt_updated_at,first.n8n_produkt_updated_at);
+});
+test('a mirror conflict or unchanged row version cannot complete the journal',()=>{
+ const {job,result}=ready(),canonical=inventoryCanonical(result,job,now);
+ assert.throws(()=>inventoryMirror({},canonical,now),/MIRROR_CONFLICT_RESTART_REQUIRED/);
+ const row={id:1,kunde_id:job.kunde_id,produkt_id:job.produkt_id,bestand:4};
+ for(const updatedAt of [undefined,job.n8n_produkt_updated_at,new Date(now-2000).toISOString()])
+  assert.throws(()=>inventoryMirror({...row,updatedAt},canonical,now),/MIRROR_VERSION_NOT_CONFIRMED/);
+ assert.throws(()=>inventoryCanonical(result,{...job,n8n_produkt_updated_at:new Date(now).toISOString()},now),/PRODUCT_VERSION_NOT_OLDER/);
+});
+test('the actual mirror node sends the observed version in its all-conditions update',()=>{
+ const w=patchInventoryDraft(graph),mirror=w.nodes.find(n=>n.name===N.mirror);
+ assert.equal(mirror.parameters.matchType,'allConditions');
+ assert.equal(mirror.alwaysOutputData,true);assert.equal(mirror.retryOnFail,false);
+ const filters=mirror.parameters.filters.conditions;
+ assert.equal(filters.length,4);
+ const job=ready().job;
+ const resolved=filters.map(c=>({key:c.keyName||'id',condition:c.condition||'eq',value:vm.runInNewContext(c.keyValue.slice(3,-2),{$json:job})}));
+ assert.deepEqual(resolved,[{key:'id',condition:'eq',value:1},{key:'kunde_id',condition:'eq',value:job.kunde_id},{key:'produkt_id',condition:'eq',value:job.produkt_id},{key:'updatedAt',condition:'eq',value:job.n8n_produkt_updated_at}]);
+});
+test('QA rejects an accepted stale write and verifies the persisted version after rejection',()=>{
+ const qa=buildInventoryQA(qaFixture());
+ const written={id:1,kunde_id:'customer',produkt_id:'product',bestand:4,updatedAt:new Date(now).toISOString()};
+ const run=(name,items)=>vm.runInNewContext('(function(){'+qa.nodes.find(n=>n.name===name).parameters.jsCode+'})()',{
+  $input:{all:()=>items},$:n=>({first:()=>({json:n===N.mirror?written:{}})})});
+ assert.throws(()=>run('QA – Schreibkonflikt prüfen',[{json:written}]),/QA_STALE_WRITE_NOT_REJECTED/);
+ assert.throws(()=>run('QA – Schreibkonflikt prüfen',[]),/QA_STALE_WRITE_NOT_REJECTED/);
+ assert.equal(run('QA – Schreibkonflikt prüfen',[{json:{}}]).length,1);
+ assert.equal(run('QA – Zeilenversion prüfen',[{json:written}])[0].json.bestand,4);
+ for(const patch of [{bestand:3},{updatedAt:new Date(now+1).toISOString()},{kunde_id:'other'}])
+  assert.throws(()=>run('QA – Zeilenversion prüfen',[{json:{...written,...patch}}]),/QA_MIRROR_CHANGED_AFTER_REJECTION/);
 });

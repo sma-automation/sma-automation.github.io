@@ -31,11 +31,30 @@ function buildInventoryQA(source,{caseId=null,fault='none'}={}){
   `const confirmed=inventoryCanonical(input,one(inventoryNames.evaluate));\nif(one('${context.name}').body.qa_fault==='after_commit')throw new Error('QA_EXPECTED_AFTER_COMMIT');\nreturn output(confirmed);`);
  const repeat=structuredClone(byName.get(N.claim));repeat.id=crypto.randomUUID();repeat.name='QA – Gleiche Meldung wiederholen';
  repeat.parameters.jsonBody=`={{ $('SMA – Bestand – Sperrauftrag').first().json }}`;
+ // Replay the exact stale mirror request after a successful update. Quantity
+ // stays four even if a provider regression ignored the version predicate.
+ const stale=structuredClone(byName.get(N.mirror));stale.id=crypto.randomUUID();stale.name='QA – Alten Schreibversuch wiederholen';
+ for(const c of stale.parameters.filters.conditions)c.keyValue=c.keyValue.replace('$json',`$('${N.canonical}').first().json`);
+ stale.parameters.columns.value.bestand=`={{ $('${N.canonical}').first().json.bestand }}`;
+ const rejected=code('QA – Schreibkonflikt prüfen',`const rows=$input.all();
+ if(rows.length!==1||Object.keys(rows[0].json).length!==0)throw new Error('QA_STALE_WRITE_NOT_REJECTED');
+ return [{json:$('${N.canonical}').first().json}];`);
+ const check=structuredClone(byName.get(N.product));check.id=crypto.randomUUID();check.name='QA – Spiegelung erneut lesen';
+ // Read exactly the row whose successful update was just returned.
+ check.parameters.filters=structuredClone(byName.get(N.mirror).parameters.filters);
+ check.parameters.filters.conditions=check.parameters.filters.conditions.filter(c=>c.keyName!=='updatedAt');
+ check.parameters.matchType='allConditions';check.alwaysOutputData=true;
+ const unchanged=code('QA – Zeilenversion prüfen',`const rows=$input.all(), written=$('${N.mirror}').first().json;
+ if(rows.length!==1)throw new Error('QA_MIRROR_ROW_COUNT');
+ const row=rows[0].json;
+ for(const key of ['id','kunde_id','produkt_id','bestand','updatedAt'])if(row[key]!==written[key])throw new Error('QA_MIRROR_CHANGED_AFTER_REJECTION');
+ return [{json:row}];`);
  const verify=code('QA – Ergebnis',`const r=$input.first().json;
  if(r.ok!==true||r.action!=='duplicate'||r.status!=='done')throw new Error('QA_DUPLICATE_NOT_CONFIRMED');
- return [{json:{ok:true,sku:'SMA-TEST-002',bestand:4,canonical_first:true,mirror_confirmed:true,journal_done:true,duplicate_ignored:true,shopify_write:false,published:false}}];`);
- nodes.push(repeat,verify);
+ return [{json:{ok:true,sku:'SMA-TEST-002',bestand:4,canonical_first:true,mirror_confirmed:true,stale_write_rejected:true,mirror_version_unchanged:true,journal_done:true,duplicate_ignored:true,shopify_write:false,published:false}}];`);
+ nodes.push(stale,rejected,check,unchanged,repeat,verify);
  const chain=[trigger.name,context.name,customer.name,...existing.slice(0,existing.indexOf(N.commit)),guard.name,...existing.slice(existing.indexOf(N.commit)),repeat.name,verify.name];
+ chain.splice(chain.indexOf(N.finishBody),0,stale.name,rejected.name,check.name,unchanged.name);
  const connections={};
  chain.forEach((name,i)=>{
   const node=nodes.find(n=>n.name===name);node.position=[(i%7)*260,Math.floor(i/7)*240];

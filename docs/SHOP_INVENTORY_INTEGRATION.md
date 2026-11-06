@@ -60,7 +60,7 @@ node --test tests/inventory-integration.test.cjs tests/inventory-draft.test.cjs 
 git diff --check
 ```
 
-**49 Tests bestanden.** Die zusätzlichen Integrationstests prüfen die Auswahl
+**53 Tests bestanden.** Die zusätzlichen Integrationstests prüfen die Auswahl
 der tatsächlichen veröffentlichten Version, unveränderte bestehende Nodes,
 unveränderte Zugänge/Einstellungen, unveränderte Produktmutationen, den gezielten
 Verbindungswechsel und den Abbruch bei abweichenden Abhängigkeiten oder
@@ -75,10 +75,18 @@ Abbruch-, Sperr- und Wiederaufnahmenachweise stehen in
 
 ## Verbleibender Schritt
 
-Die gezielte Kandidatenerstellung ist abgeschlossen. Vor einer produktiven
-Übernahme bleiben die Abnahme des integrierten Kundenablaufs und die konkrete
-Behandlung unklarer oder verspäteter Data-Table-Schreibantworten offen.
-Die manuell geprüfte Wiederaufnahme ist keine automatische Reparaturfunktion.
+Die gezielte Kandidatenerstellung enthält jetzt auch den `updatedAt`-Vergleich
+im Tabellen-Update. Der echte 30-Node-Prüflauf weist einen erneut gesendeten
+alten Write ab; ein frischer Abruf bestätigt unveränderte Zeilenversion und
+Bestand. Eine leere Antwort endet ausdrücklich als Konflikt und erreicht
+keinen Journalabschluss.
+
+Vor produktiver Übernahme bleiben der frische Abgleich und die gemeinsame
+Absicherung der weiteren Bestands-Writer (separater Bestands-Webhook,
+Produktbearbeitung, Initialimport) sowie die Abnahme des integrierten
+Kundenablaufs offen. Die neue Bedingung schützt den ergänzten Zweig; sie ist
+noch kein Nachweis für alle parallelen Schreibwege. Die manuell geprüfte
+Wiederaufnahme ist keine automatische Reparaturfunktion.
 Die aktive Fassung und der separate Originalentwurf bleiben erhalten;
 Shopify Payments bleibt im Testmodus.
 

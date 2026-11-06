@@ -63,7 +63,10 @@ function patchInventoryDraft(source) {
   const chain=[N.read,N.prepare,'SMA – Bestand – Sperrauftrag',N.claim,N.claimed,N.reread,N.evaluate,N.commit,N.canonical,N.mirror,N.finishBody,N.finish,N.done];
   // Only the stock side-branch changes. The product update sibling stays intact.
   for (let i=0;i<chain.length;i++) w.connections[chain[i]]={main:[i+1<chain.length?[{node:chain[i+1],type:'main',index:0}]:[]]};
-  const mirror=nodes.get(N.mirror);mirror.onError='stopWorkflow';mirror.continueOnFail=false;mirror.alwaysOutputData=false;mirror.retryOnFail=false;
+  const mirror=nodes.get(N.mirror);mirror.onError='stopWorkflow';mirror.continueOnFail=false;mirror.alwaysOutputData=true;mirror.retryOnFail=false;
+  // This predicate belongs to the UPDATE itself, never a separate preflight read.
+  // Empty output is passed to the guard so a conflict cannot look successful.
+  mirror.parameters.filters.conditions.push({keyName:'updatedAt',condition:'eq',keyValue:'={{ $json.n8n_produkt_updated_at }}'});
   for(const name of [N.prepare,N.claimed,N.evaluate,N.canonical,N.finishBody,N.done,'SMA – Bestand – Sperrauftrag']){
     const n=nodes.get(name);n.onError='stopWorkflow';n.continueOnFail=false;n.alwaysOutputData=false;n.retryOnFail=false;
   }

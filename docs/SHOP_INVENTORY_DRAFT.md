@@ -1,11 +1,11 @@
 # Shopify-Bestandsentwurf: Übernahme vor Spiegelung
 
 Stand: 6. November 2026 (Europe/Vienna). **Echter n8n-Normallauf sowie Abbruch,
-HTTP-Timeout und Wiederaufnahme bestanden; Kandidat weiterhin unveröffentlicht.** Der laufende Bestandsworkflow und der
+HTTP-Timeout, Wiederaufnahme und Ablehnung eines veralteten Tabellen-Writes bestanden; Kandidat weiterhin unveröffentlicht.** Der laufende Bestandsworkflow und der
 erhaltene 515-Node-Entwurf wurden nicht verändert. Im Prüflauf wurden für
 SMA-TEST-002 dieselben vier Stück in Supabase und n8n bestätigt. Einschließlich
-beider Wiederaufnahmetests wurden drei Journalmeldungen ergänzt; alle 20
-Meldungen sind abgeschlossen. Shopify Payments bleibt im Testmodus.
+der Wiederaufnahme- und Schreibkonflikttests wurden vier Journalmeldungen ergänzt;
+alle 21 Meldungen sind abgeschlossen. Shopify Payments bleibt im Testmodus.
 
 ## Ausgangslage
 
@@ -48,8 +48,11 @@ aus. Der private Gesamtexport mit Zugangskonfiguration gehört nicht ins Reposit
    verwendet den serverseitigen Zeitpunkt des Sperrbeginns. Der Rückgabewert
    muss die aktuelle Übernahme, Kunden-/Produktzuordnung, Menge und Zeit bestätigen.
    `applied:false`, Fehler und unklare Antworten erreichen die n8n-Tabelle nicht.
-6. Danach wird ausschließlich die bereits dreifach gefilterte n8n-Produktzeile
-   geändert. Erst ihre passende Rückmeldung erlaubt `finish` im Journal.
+6. Danach wird ausschließlich die nach Zeilen-ID, Kunde, Produkt und zuvor
+   gelesener `updatedAt`-Version gefilterte n8n-Produktzeile geändert. Ein anderer
+   Writer macht die alte Schreibbedingung ungültig. Eine leere Antwort bricht
+   ausdrücklich mit `MIRROR_CONFLICT_RESTART_REQUIRED` ab. Erst eine passende
+   Rückmeldung mit neuerer Zeilenversion erlaubt `finish` im Journal.
    Nur ein bestätigtes Journalergebnis wird als Abschluss ausgegeben.
 
 Die Shopify-Abfrage bleibt unverändert und wird zweimal benutzt. Es gibt keine
@@ -71,7 +74,7 @@ node --test tests/inventory-integration.test.cjs tests/inventory-draft.test.cjs 
 git diff --check
 ```
 
-49 Tests bestanden: 35 für Vertrag, Patch und isolierten Prüflauf, vier für die
+53 Tests bestanden: 39 für Vertrag, Patch und isolierten Prüflauf, vier für die
 gezielte Übernahme und zehn vorhandene
 Dashboard-Bestandstests. Der synthetische Durchlauf führt die tatsächlich
 eingebetteten Code-Nodes und HTTP-Body-Ausdrücke aus. Er prüft unter anderem
@@ -173,19 +176,59 @@ den normalen QA-Generator. Der Workflow bleibt manuell und unveröffentlicht.
 
 ![Erfolgreicher Abschluss nach Zeitüberschreitung und Wiederaufnahme](evidence/shop-inventory-recovered-pr81.jpg)
 
+## Veralteter Schreibversuch: echter Nachweis
+
+Der Tabellen-Update enthält jetzt vier UND-Bedingungen: Zeilen-ID, Kunde,
+Produkt und die am Anfang gelesene `updatedAt`-Version. Der Vergleich gehört
+zum Update selbst. Fehlende oder ungültige Versionswerte werden vor dem Claim
+abgelehnt. Die Zeilenversion ist bewusst **kein Teil der Lieferkennung**, damit
+ein vollständiger Neustart mit derselben Ausführungs- bzw. QA-Fallkennung nach
+einem Konflikt weiterhin denselben Journaleintrag verwenden kann. Ein bloßes Wiederholen des fehlgeschlagenen Spiegel-Nodes ist
+keine Wiederaufnahme.
+
+Die getrennte QA-Kopie enthält jetzt **30 Nodes**. Nach dem bestätigten ersten
+Tabellen-Update führt sie denselben Schreibversuch mit der alten Version erneut
+aus. Der Mengenwert bleibt auch im negativen Test bei vier Stück. Das zweite
+Update muss leer zurückkommen; danach wird die Zeile neu gelesen und mit der
+ersten Antwort verglichen. Bereits eine veränderte `updatedAt`-Version würde
+den Test scheitern lassen, auch wenn der Bestand weiterhin vier ist.
+
+Echter Lauf am 6. November 2026, **00:43:05–00:43:06 UTC**:
+
+- Supabase bestätigt vier Stück mit Erfassungszeit `00:43:05.345541Z`.
+- Erstes Tabellen-Update bestätigt; der folgende alte Write liefert keine Zeile.
+- Frischer Tabellenabruf bestätigt unveränderte Zeilenversion und vier Stück.
+- Journal `8134d00a-dc7c-5d9a-8e94-f684bb25ad20`: `done`, ein Versuch;
+  erneuter Claim `duplicate` / `done`.
+- Abschlussabfrage: **21 Meldungen `done`, null aktive Sperren**.
+
+Der Rückexport wurde vor Ausführung gegen alle 30 generierten Nodes geprüft:
+Parameter, Zugänge, Verbindungen und Datenschutzeinstellungen stimmen überein.
+Die Oberfläche entfernt explizite Standardwerte (`eq`, `runOnceForAllItems`,
+`stopWorkflow`, `continueOnFail:false`); der Vergleich normalisiert nur diese
+bekannten Defaults. Manuelle Ausführungen werden weiterhin nicht gespeichert,
+der Timeout beträgt 90 Sekunden und der Workflow bleibt unveröffentlicht.
+
+![Veralteter Write abgewiesen; Zeilenversion unverändert](evidence/shop-inventory-stale-write-pr81.jpg)
+
 ## Noch offene Freigabegrenze
 
-Supabase und n8n Data Tables sind keine gemeinsame Transaktion. Ein Ausfall nach
-dem Commit kann eine vorübergehend abweichende Spiegelung hinterlassen. Ein
-verspäteter externer Tabellenaufruf über das Sperrende hinaus ist durch die lokalen
-Tests und die beiden kontrollierten Echtläufe nicht ausgeschlossen. Die geprüften
-Abbrüche und Wiederaufnahmen sind abgeschlossen; ein unbekanntes Ergebnis darf
-nicht durch blindes Wiederholen eines alten Tabellen-Writes repariert werden.
-Eine neue vollständige Ausführung muss einen frischen Shopify-Wert lesen.
-Die Sperre koordiniert diesen Zweig mit dem bestehenden Bestands-Webhook;
-separate manuelle Bestandsaufträge werden durch diesen Patch nicht umgebaut.
-Eine produktive automatische Wiederaufnahme mit dauerhaftem Auftragsbezug und
-eine Absicherung verspäteter Data-Table-Antworten sind nicht Teil dieses QA-Schritts.
+Die neue Schreibbedingung verhindert, dass **dieser Zweig** eine inzwischen
+veränderte n8n-Zeile mit seinem alten Stand überschreibt. Sie ist keine verteilte
+Transaktion: Gewinnt der ältere Write zuerst, muss der neuere Vorgang nach einem
+Konflikt vollständig neu starten. Bei unklarer Antwort bleibt das Journal offen;
+es wird kein Erfolg ausgegeben und kein alter Tabellen-Write blind wiederholt.
+Die Wiederaufnahme vom Trigger mit frischer Shopify-Lesung ist geprüft, eine
+automatische Reparaturschleife ist nicht implementiert.
+
+Vor produktiver Integration sind die weiteren Writer gemeinsam abzugleichen.
+Der vorhandene private Export des separaten Bestands-Webhooks
+(`JlHOooUl0ySzAV8j`) hat beim Node `n8n-Bestand speichern` noch ausschließlich
+die drei Identitätsfilter. Er wird durch diesen Patch nicht mitgeändert.
+Auch Produktbearbeitung und Shopify-Initialimport enthalten eigene
+Data-Table-Bestandsupdates. Ein globaler Schutz aller Writer ist deshalb noch
+nicht nachgewiesen; der nächste konkrete Schritt ist der frische Abgleich und
+die gemeinsame Absicherung dieser Schreibwege vor der Kundenablauf-Abnahme.
 
 Der 524-Node-Kandidat enthält auch ältere, hier nicht abgenommene Änderungen des
 Entwurfs. **Kein vollständiger Austausch durch diesen ursprünglichen Kandidaten.**
@@ -201,3 +244,5 @@ für eine produktive Veröffentlichung des gesamten Kundenworkflows.
 Quellen: [Shopify-Mengen und Zustände](https://shopify.dev/docs/apps/build/inventory-management-apps/manage-quantities-states),
 [InventoryLevel 2026-07](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/InventoryLevel),
 [n8n-Code-Kontext](https://docs.n8n.io/build/code-in-n8n/use-built-in-shortcuts.md).
+
+Technische Referenz: [n8n DataTable Update-Implementierung](https://github.com/n8n-io/n8n/blob/4b5ea1de9fb9ac55e7e858500d56519603503852/packages/modules/data-table/backend/src/data-table-rows.repository.ts#L323) setzt Filter und Werte in demselben Update und aktualisiert `updatedAt`. Die reale Cloud-Funktion wurde zusätzlich mit dem obigen Schreibkonflikt-Test geprüft.
