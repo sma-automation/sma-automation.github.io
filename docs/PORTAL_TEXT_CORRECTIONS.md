@@ -109,3 +109,8 @@ Textfragen dieser beiden Entwürfe sind abgeschlossen und müssen nicht erneut
 bearbeitet werden. Kostenpflichtige Änderungen sind nicht freigegeben.
 Echte Provider-/Coverbestätigung bleibt anschließend eine getrennte Abnahme
 mit ausdrücklicher Freigabe; bisher fand kein Upload oder Posting statt.
+
+Der anschließende [Videoprüfschritt](VIDEO_REVIEW_NEXT_STEP.md) ist konkret
+eingegrenzt: Der vorhandene kostenlose Sightengine-Tarif unterstützt kein Video.
+Die dokumentierte Vorbereitung verändert keine Sperre und benötigt vor einem
+echten Video-Anbieterlauf eine Kostenentscheidung.
