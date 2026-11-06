@@ -5,10 +5,10 @@ const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImme
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',...extra});
 const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:2,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
-function fixture({active=true,request=()=>result(),getOwnerId,requestTexts}={}){
+function fixture({active=true,request=()=>result(),getOwnerId,requestTexts,requestAssignments}={}){
  const {document:doc,window}=parseHTML('<html><head></head><body><section id="page-history" class="'+(active?'active':'')+'"><div class="grid">'+Array.from({length:3},()=>'<div class="card"><div class="card-title">Old metric</div><div class="big-value">–</div><div class="muted">Old detail</div></div>').join('')+'</div><div class="card"><div class="card-title">Aktivitätsverlauf</div><p>Old intro</p><div id="historyActivitySlot" class="empty-state"></div></div><div class="card"><div class="card-title">Monatsarchiv</div><p>Old archive</p><div id="historyMonthSlot" style="display:flex"></div></div></section></body></html>');
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
- const view=mountPublicationHistory({doc,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
+ const view=mountPublicationHistory({doc,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
  const page=doc.getElementById('page-history');
  return {doc,window,page,view,calls,$:s=>page.querySelector(s),owner(id,notify=true){owner=id;if(notify)callback(id);},focus(){window.dispatchEvent(new window.Event('focus'));},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));},get unsubscribed(){return unsubscribed;}};
 }
@@ -126,4 +126,33 @@ await test('history switches show one list, retain its page, and reset pages on 
  button(f,'Aufträge').click();assert.equal(f.$('#historyOrderCard').hidden,false);assert.equal(f.$('#historyTextCard').hidden,true);assert.match(f.$('#historyActivitySlot [role=status]').textContent,/6–9/);
  button(f,'Alle Monate').click();await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/1–5/);assert.match(f.$('#historyTextCard [role=status]').textContent,/1–5/);f.view.destroy();
 });
+const assignmentEntry=(n=1,extra={})=>({id:entry(n).id,asset_id:entry(91).id,preview_id:entry(92).id,preview_revision:2,assignment_revision:3,asset_revision:'r1',platform:'youtube',file_name:'Original filename.mp4',title:'Saved title',body:'Saved body',event_kind:'baseline',recorded_at:'2026-11-06T12:00:00Z',source_updated_at:'2026-10-04T09:00:00Z',...extra});
+const assignments=(entries=[assignmentEntry()],extra={})=>({ok:true,version:1,month:'2026-11',timezone:'Europe/Vienna',total:entries.length,entries,has_more:false,next:null,...extra});
+await test('file history is a third chapter with truthful baseline, literal saved text and independent totals',async()=>{
+ const f=fixture({requestTexts:()=>texts(),requestAssignments:()=>assignments([assignmentEntry(1,{file_name:'<img src=x onerror=alert(1)>',body:'<script>alert(1)</script>'})])});await tick();
+ assert.equal(f.page.querySelectorAll('[role=tab]').length,3);button(f,'Dateiverlauf').click();const card=f.$('#historyAssignmentCard');assert.equal(card.hidden,false);assert.equal(f.$('#historyTextCard').hidden,true);assert.equal(f.$('#historyOrderCard').hidden,true);
+ assert.match(card.textContent,/Übernommener Stand/);assert.match(card.textContent,/Frühere Änderungen sind nicht enthalten/);assert.match(card.textContent,/Zuletzt gespeichert: 04.10.2026/);assert.match(card.textContent,/<script>/);assert.equal(card.querySelector('script,img,a'),null);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyAssignmentCard'),null);
+});
+await test('file pages buffer twenty, display five and preserve their page when switching chapters',async()=>{
+ const rows=Array.from({length:20},(_,i)=>assignmentEntry(i)),next={before_at:rows.at(-1).recorded_at,before_id:rows.at(-1).id},calls=[];
+ const f=fixture({request:i=>result([] ,null,{month:i.month===undefined?'2026-11':i.month}),requestAssignments:i=>{calls.push(i);return i.month===null?assignments([],{month:null}):i.before_id?assignments([assignmentEntry(21)],{total:21}):assignments(rows,{total:21,has_more:true,next});}});await tick();button(f,'Dateiverlauf').click();
+ for(let page=1;page<=5;page++){assert.equal(f.$('#historyAssignmentCard ol').children.length,page===5?1:5);assert.match(f.$('#historyAssignmentCard [role=status]').textContent,new RegExp('Seite '+page+' von 5'));if(page<5){f.$('[aria-label="Weitere Dateistände"]').click();await tick();}}
+ assert.deepEqual(calls,[{month:'2026-11'},{month:'2026-11',...next}]);f.$('[aria-label="Vorherige Dateistände"]').click();button(f,'Aufträge').click();button(f,'Dateiverlauf').click();assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/16–20/);
+ button(f,'Alle Monate').click();await tick();assert.equal(f.$('#historyAssignmentCard ol').children.length,0);assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/Alle Monate/);f.view.destroy();
+});
+await test('file history discards old-month responses and clears on leaving, visibility loss and owner loss',async()=>{
+ const gate=deferred(),f=fixture({request:i=>result([] ,null,{month:i.month||'2026-11'}),requestAssignments:i=>i.month==='2026-10'?assignments([],{month:'2026-10'}):gate.promise});await tick();
+ f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();gate.resolve(assignments());await tick();assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/Oktober/);assert.equal(f.$('#historyAssignmentCard ol').children.length,0);f.view.destroy();
+ for(const change of ['leave','hidden','owner']){const g=fixture({requestAssignments:()=>assignments()});await tick();assert.equal(g.$('#historyAssignmentCard ol').children.length,1);if(change==='leave')g.page.classList.remove('active');if(change==='hidden')g.visibility('hidden');if(change==='owner')g.owner('other');await tick();assert.equal(g.$('#historyAssignmentCard ol').children.length,0);assert.equal(button(g,'Dateiverlauf aktualisieren').disabled,true);g.view.destroy();}
+});
+await test('file history verifies the owner after an async read and rejects a late response after teardown',async()=>{
+ for(const action of ['owner','destroy']){const gate=deferred(),f=fixture({requestAssignments:()=>gate.promise});await tick();if(action==='owner')f.owner('other',false);else f.view.destroy();gate.resolve(assignments());await tick();assert.equal(f.$('#historyAssignmentCard ol')?.children.length||0,0);f.view.destroy();}
+});
+await test('file history errors, wrong-month replies and duplicate next batches clear data with retry available',async()=>{
+ let response=assignments();const f=fixture({requestAssignments:()=>{if(response instanceof Error)throw response;return response;}});await tick();
+ for(const bad of [Error('offline'),{ok:false,code:'ACCESS_INACTIVE'},assignments([],{month:'2026-10'})]){response=bad;button(f,'Dateiverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyAssignmentCard ol').children.length,0);assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/nicht geladen/);assert.equal(button(f,'Dateiverlauf aktualisieren').disabled,false);}
+ response=assignments();button(f,'Dateiverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyAssignmentCard ol').children.length,1);f.view.destroy();
+ const rows=Array.from({length:20},(_,i)=>assignmentEntry(i)),next={before_at:rows.at(-1).recorded_at,before_id:rows.at(-1).id};const g=fixture({requestAssignments:i=>i.before_id?assignments([rows[0]],{total:21}):assignments(rows,{total:21,has_more:true,next})});await tick();for(let n=0;n<4;n++){g.$('[aria-label="Weitere Dateistände"]').click();await tick();}assert.equal(g.$('#historyAssignmentCard ol').children.length,0);assert.match(g.$('#historyAssignmentCard [role=status]').textContent,/nicht geladen/);g.view.destroy();
+});
+
 console.log(`${passed} history DOM scenarios passed.`);

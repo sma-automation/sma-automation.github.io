@@ -29,7 +29,7 @@
 #historyTextCard details{margin-top:8px;overflow-wrap:anywhere}
 #historyTextCard summary{cursor:pointer;color:#3157cd;font:inherit;padding:6px 0}
 #historyTextCard summary:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
-#historyTextCard .sma-history-saved-text{white-space:pre-wrap}
+.sma-publication-history .sma-history-saved-text{white-space:pre-wrap}
 
 /* Short lists: one area at a time, five rows and details on demand. */
 #page-history [hidden]{display:none!important}
