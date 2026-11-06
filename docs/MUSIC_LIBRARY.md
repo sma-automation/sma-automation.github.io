@@ -31,8 +31,10 @@ dauerhaft gespeichert. Im Dashboard bleiben die Kapitel **Tracks** und
   endgültiger Storage-Größe und MIME. Storage prüft in der Vorprüfung
   `contentLength`, danach `size`; der Binär-Upload liefert eine eindeutige Länge.
 - Identische Bytes werden pro Kunde dedupliziert. Wiederholung nach unterbrochener
-  Antwort kann dasselbe Objekt fertigstellen. Reservierungen zählen zur Quote;
-  V1 bereinigt abgebrochene Reservierungen noch nicht automatisch.
+  Antwort kann dasselbe Objekt fertigstellen. Reservierungen zählen zur Quote.
+  Beim nächsten gültigen Uploadstart werden eigene, mehr als 24 Stunden alte
+  Reservierungen ohne Storage-Objekt automatisch freigegeben. Vorhandene Objekte
+  und fertige Tracks bleiben erhalten; Einzelheiten im folgenden Nachtrag.
 - Der Server prüft Storage-Metadaten, nicht den Audioinhalt oder dessen Hash.
   Der Client verifiziert Größe und SHA-256 vor Anhören/Verwenden/Export;
   FFmpeg prüft beim Export die wirklichen Audiodaten.
@@ -95,3 +97,69 @@ Prüfstand und verbleibende echte Providerbestätigung stehen in
 Bestandsstrecke abgeschlossen; PR #57/#69 separat offen. Shopify-Testmodus
 und unveröffentlichte n8n-Originalentwürfe erhalten. Keine Tarifänderung,
 kein Kauf und keine Social-Media-Veröffentlichung.
+
+## Leere Uploadreservierungen – 6. November 2026
+
+Eine abgebrochene Übertragung konnte bisher dauerhaft einen der 100 Plätze bzw.
+einen Teil der 100 MB reservieren. Der bestehende authentifizierte `prepare`-RPC
+bereinigt jetzt nach Eingabe-/Kundenprüfung und unter der vorhandenen Kundensperre
+nur Einträge mit `status=pending`, die **mehr als 24 Stunden** alt sind und für
+deren exakten Pfad **kein** Objekt im Bucket `sma-musik` vorhanden ist. Die Quote
+wird anschließend neu geprüft. Keine zusätzliche Aktion oder Zeitsteuerung nötig.
+
+- Einzige betroffene Einträge: eigene leere Reservierungen der aktuellen
+  Kundenzuordnung. Fertige Tracks, Playlist, fremde Kunden, aktuelle Uploads und
+  jede vorhandene Storage-Zeile bleiben erhalten. Auch abweichende/unvollständige
+  Objektmetadaten führen ausdrücklich nicht zum Löschen einer Reservierung.
+- Ein vorhandenes Objekt ohne gespeicherte Abschlussantwort kann weiterhin über
+  denselben unveränderlichen Pfad fertiggestellt werden. Ein leerer alter Versuch
+  kann mit einer neuen Reservierung erneut gestartet werden.
+- Der Storage-Schreibcheck nimmt dieselbe transaktionale Kundensperre wie der
+  RPC. Seine Volatilität ist jetzt `VOLATILE`, damit er nach dem Warten den
+  aktuellen Datenstand liest. Kommt der Upload zuerst, bleibt die Reservierung;
+  kommt die Bereinigung zuerst, wird der verspätete ungebundene Upload abgewiesen.
+  Danach kann der normale Uploadweg neu reservieren. Reine Leseprüfungen nehmen
+  diese Sperre nicht.
+- Keine Storage-Metadaten oder Audiodateien werden gelöscht oder verändert.
+  Keine neuen Funktionen, Tabellen, Rechte, öffentlichen Endpunkte oder Dienste.
+  Oberfläche, Schrift, Kapitel, Paginierung und vorhandene n8n-Entwürfe unverändert.
+
+Quelle: `supabase/sql/music-library-reservations.sql`; identische Migration
+`20261106205215_music_empty_reservations_v1.sql`. Sie ersetzt ausschließlich die
+beiden vorhandenen privaten Funktionen und führt selbst keine Bereinigung aus.
+Die bisherigen ACLs, UID-/Kundenprüfungen und leeren Suchpfade bleiben erhalten.
+
+Prüfung: 575 Repository-Tests, 54 neue SQL-Fälle und 61 vorhandene
+Musikbibliothek-SQL-Fälle bestanden.
+Darunter beide Quotengrenzen, exakte Altersgrenze, Wiederholung, Kundenisolation,
+inaktiver Zugang, unveränderte Objekte und Rollenrechte. Drei echte parallele
+PostgreSQL-18.6-Szenarien mit getrennten Verbindungen bestanden: Upload zuerst,
+Bereinigung zuerst und anschließende Wiederaufnahme. Alle Daten hierfür waren
+synthetisch und lokal. CI prüft die Parallelfälle zusätzlich mit PostgreSQL 17.6.
+
+Reproduktion:
+
+```sh
+node tests/run-music-library-reservations-sql.mjs
+node tests/run-music-library-sql.mjs
+npm ci --prefix tests/postgres-runtime --ignore-scripts
+# Nur eine leere lokale Datenbank sma_music_reservation_test verwenden:
+SMA_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:55439/sma_music_reservation_test node tests/run-music-library-concurrency.mjs
+```
+
+Der native Test verweigert fremde Hosts, andere Datenbanknamen und bereits
+vorhandene SMA-Testschema-Daten. Produktionsdatenbanken sind kein Testziel.
+Primärgrundlagen: [Storage-Schema nur lesend verwenden](https://supabase.com/docs/guides/storage/schema/design)
+und [PostgreSQL-Volatilität und aktuelle Snapshots](https://www.postgresql.org/docs/current/xfunc-volatility.html).
+
+Die Migration ist im bestehenden Projekt installiert. Vor dem Austausch wurden
+beide bisherigen Funktionshashes atomar geprüft; die anschließende Katalogabfrage
+bestätigt den neuen Quellstand und unveränderte ACLs/Suchpfade. Der anonyme
+RPC-Aufruf bleibt `AUTH_REQUIRED`, Security-Advisor-Kategorien unverändert.
+Vor/nach: ein fertiger Track, keine offenen Reservierungen, ein Storage-Objekt;
+Registerdigest `d3e0fad05f5720b8c6301664f331c5d1` und Objektdigest
+`176e814873bb0f97a48a31dab64bae9e` unverändert. Es wurde kein echter Track
+angelegt, geändert oder gelöscht. Die Bereinigungsfälle wurden nur lokal geprüft.
+Alle neun Veröffentlichungsaufträge behalten Digest
+`a19d817047175d3e2fe2315ff5f9b21b`; weiterhin null Operatorfreigaben,
+Provider- und Coverversuche. Keine Änderung an Tarifen, Shopify oder n8n.

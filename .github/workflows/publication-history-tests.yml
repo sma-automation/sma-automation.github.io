@@ -21,6 +21,10 @@ on:
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - app/assets/music-library*
       - tests/*music-library*
+      - tests/sql-runtime/music-library-fixture.sql
+      - tests/postgres-runtime/**
+      - supabase/sql/music-library-reservations.sql
+      - supabase/migrations/*_music_empty_reservations_v1.sql
       - supabase/sql/music-library.sql
       - supabase/migrations/*_music_library_v1.sql
       - app/assets/media-music*
@@ -91,6 +95,34 @@ jobs:
           node tests/run-media-export-dom.mjs
           node tests/run-media-music-dom.mjs
           node tests/run-music-library-sql.mjs
+          node tests/run-music-library-reservations-sql.mjs
           node tests/run-music-library-dom.mjs
           node tests/run-provider-cover-sql.mjs
           node tests/run-publication-cover-history-sql.mjs
+  music-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: sma_music_reservation_test
+        ports:
+          - 55439:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 6
+    steps:
+      - name: Fetch exact public source
+        run: |
+          git init .
+          git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install pinned PostgreSQL test client
+        run: npm ci --prefix tests/postgres-runtime --ignore-scripts
+      - name: Test concurrent upload and reservation cleanup
+        run: node tests/run-music-library-concurrency.mjs
