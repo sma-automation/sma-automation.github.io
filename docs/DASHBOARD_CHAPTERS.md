@@ -12,7 +12,7 @@ Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf alle zwöl
 | Social Media | YouTube · TikTok · Instagram · Facebook |
 | Content | Meine Dateien · Content Optimizer · Magic Effect |
 | Musikbibliothek | Tracks · Meine Playlist |
-| History | Aufträge · Portaltexte · Dateiverlauf |
+| History | Aufträge · Portaltexte · Dateiverlauf · Bearbeitungen |
 | Einstellungen | Kundenkonto · Firmendaten · Paket & Credits · Schnittstellen |
 | Tutorials | Schnellstart · Anleitungen · Hilfe |
 | 24/7 Verkäufer | Beratung · Produkte & Content |
@@ -39,3 +39,13 @@ Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf alle zwöl
 - CI: `.github/workflows/dashboard-chapter-tests.yml`.
 
 Die Bestandsstrecke wird hierfür nicht erneut geprüft. Keine Bestellungen, Bestände, n8n-Workflows, Shopify-Modi oder Veröffentlichungsaufträge werden geändert. PR #57 und #69 bleiben separat.
+
+
+## Ergänzung: Bearbeitungsentwurf
+
+Content → Content Optimizer öffnet jetzt einen separaten **Bearbeitungsentwurf**.
+Nur die bisher deaktivierte Platzhalterkarte wird ersetzt; äußeres Content-Kapitel,
+Magic Effect und Veröffentlichung bleiben erhalten. Der Entwurf verwendet die
+freigegebenen feinen Kapitelreiter für Format & Ausschnitt, Schnitt & Cover, Text
+und Ton. Vorschau und gespeicherte Einstellungen sind verfügbar; Medienexport
+und zusätzliche Musik sind noch offen. Details: `MEDIA_EDITOR_DRAFTS.md`.
