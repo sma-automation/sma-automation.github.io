@@ -1,6 +1,6 @@
 # Cover-Status in der History
 
-Stand: 06.11.2026. Ergänzt [PORTAL_COVER_HANDOFF.md](PORTAL_COVER_HANDOFF.md).
+Stand: 06.11.2026; PR #104 zusammengeführt und live. Ergänzt [PORTAL_COVER_HANDOFF.md](PORTAL_COVER_HANDOFF.md).
 
 ## Kundenansicht
 
@@ -72,6 +72,24 @@ Keine Änderungen an n8n-Workflows, Providerfreigaben oder Schreibfunktionen.
   Security-Advisor-Kategorien vor/nach unverändert.
 - Ausgangsstand: 9 Aufträge, 0 Operatorfreigaben, 0 Provider- und Coverversuche.
   Auftragsdigest `a19d817047175d3e2fe2315ff5f9b21b` für den Abschlussvergleich.
+
+## Bereitstellung und Live-Prüfung
+
+- Feature `6927a85e327d1783c170842133d56c0d29cf67ae`, Merge
+  `070354cb0821b7381bb48b0db756104c710ba8b9` auf `website-v1`.
+  Beide PR-Prüfungen und die History-Prüfung nach dem Merge erfolgreich.
+  Pages Run `42285156918`, Deployment-Job `128124146476` erfolgreich.
+- Bestehendes angemeldetes Dashboard neu geladen: History → Aufträge zeigt
+  weiterhin 9 Aufträge, 0 öffentlich bestätigt, 2 Portale. Erster Bildschirm
+  1–5, zweiter 6–9; zurück zur ersten Seite erfolgreich. Kapitelwechsel
+  Portaltexte → Aufträge erfolgreich, Details standardmäßig eingeklappt.
+- Die bestehenden abgebrochenen Aufträge zeigen korrekt **Cover: Noch nicht
+  festgehalten**, da kein Cover-Snapshot vorliegt. Aufgeklappt erscheint die
+  Erklärung ohne Versandaktion. Keine künstliche Erfolgsanzeige angelegt.
+- Abschlussabfrage: weiterhin 9 Aufträge, 0 Operatorfreigaben, 0 Provider- und
+  Coverversuche; Auftragsdigest unverändert `a19d817047175d3e2fe2315ff5f9b21b`.
+- PR #57/#69 erneut als offen und ungemergt bestätigt. Keine n8n-Änderung in
+  diesem Arbeitsschritt und keine Social-Veröffentlichung.
 
 Die echte Coverbestätigung durch YouTube/TikTok bleibt bis zu einer ausdrücklich
 autorisierten Veröffentlichung offen. Bestandsprüfung abgeschlossen; PR #57/#69,
