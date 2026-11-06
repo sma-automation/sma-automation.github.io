@@ -63,3 +63,49 @@ keinen vollständigen historischen Hashtag-Snapshot.
 Keine Wiederholung der Bestandsprüfung. PR #57/#69 separat offen,
 Shopify-Testmodus und unveröffentlichte n8n-Originalentwürfe erhalten.
 Keine Operatorfreigabe, kein Provider-/Coverversuch und keine Social-Veröffentlichung.
+
+## Bereitstellung und echte Textabnahme
+
+- [PR #106](https://github.com/sma-automation/sma-automation.github.io/pull/106)
+  zusammengeführt auf `website-v1`: Feature
+  `e676520a24b198a7c4e28d86a09417b567562bd9`, Merge
+  `51365493252ec53d27cfb2d6433984bd26b131cb`.
+  Beide PR-Prüfungen und die History-Prüfung nach dem Merge erfolgreich.
+  Pages-Lauf `42287648694` erfolgreich; neue Eingabefelder live geprüft.
+- Die beiden vorhandenen YouTube-/TikTok-Entwürfe wurden über den angemeldeten
+  Editor gespeichert und nach Neuladen erneut geprüft. Aussagen zur nicht
+  eindeutig belegten Mechanik wurden auf beobachtbare Handlungen begrenzt;
+  nicht belegte Orts-/Reise-Hashtags entfernt. Der gebundene Shop-Link blieb
+  erhalten. Es entstand je eine neue Textrevision, kein neuer Auftrag.
+- Ein separater unveröffentlichter Vier-Knoten-Prüfworkflow
+  `kfz4pubGtwSwzyHV` ruft den bestehenden Vergleich `1qMj37a5gXlrbCWd` je
+  aktueller Kanalbindung auf. Er enthält keine Providerknoten und keine
+  kopierten Beitragstexte. Nach dem UI-Import wurden die Einstellungen gesetzt
+  und per Export geprüft: keine Speicherung erfolgreicher, fehlgeschlagener
+  oder manueller Ausführungsdaten, kein Fortschrittsprotokoll, nur derselbe
+  Eigentümer, MCP aus, Laufzeitlimit 450 Sekunden, keine angehefteten Daten.
+  Die flüchtige Ergebnisanzeige wurde anschließend geleert.
+- Echter erneuter Abgleich am **06.11.2026**: TikTok **21:27:55 MEZ**,
+  YouTube **21:28:03 MEZ**. Beide `consistent_with_evidence`, leere
+  Rückfragenliste, aktuelle Versionsbindung und keine offene Lease.
+  Die Medienprojektion bestätigt für beide `PORTAL_TEXT_COMPARISON=pass`.
+  Alte Vergleichsergebnisse und alte Auftragsbindungen wurden nicht verändert.
+- Dies bestätigt nur den Vergleich mit den vorhandenen Video-Beobachtungen,
+  Bildtexten und gegebenenfalls Transkripten. `CONTENT_REVIEW_PENDING` und
+  `SEMANTIC_REVIEW_PENDING` bleiben offen; die vollständige visuelle und
+  semantische Medienprüfung ist damit nicht ersetzt. Der separate
+  Sightengine-Blocker `VIDEO_PLAN_REQUIRED` bleibt bestehen.
+  `can_upload` und `can_publish` bleiben `false`.
+- Abschlussabfrage: **9 Aufträge unverändert**, Digest
+  `a19d817047175d3e2fe2315ff5f9b21b`; **0 Operatorfreigaben, 0 Provider-
+  und 0 Coverversuche**. PR #57/#69 sind weiterhin offen und ungemergt.
+  Unveröffentlichte n8n-Originalentwürfe und Shopify-Testmodus erhalten.
+
+## Nächster offener Kernschritt
+
+Die vollständige Medienprüfung für den gebundenen Dateistand vervollständigen,
+einschließlich der noch offenen visuellen Sicherheitsprüfung. Die konkreten
+Textfragen dieser beiden Entwürfe sind abgeschlossen und müssen nicht erneut
+bearbeitet werden. Kostenpflichtige Änderungen sind nicht freigegeben.
+Echte Provider-/Coverbestätigung bleibt anschließend eine getrennte Abnahme
+mit ausdrücklicher Freigabe; bisher fand kein Upload oder Posting statt.
