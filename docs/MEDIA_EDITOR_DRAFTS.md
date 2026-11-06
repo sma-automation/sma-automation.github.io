@@ -31,6 +31,28 @@ Kapitelwechsel bewahren ungespeicherte Angaben. Ein Datewechsel mit ungespeicher
 bewusste Verwerfen. Authentifizierungswechsel löschen Felder und Vorschaubild.
 Vorschaudaten bleiben im Speicher; alte Blob-URLs werden freigegeben.
 
+### Schutz beim Verlassen des Editors (06.11.2026)
+
+Ungespeicherte Einstellungen einschließlich Musik aktivieren jetzt die native
+Browserwarnung beim Verlassen, Neuladen oder Schließen. Die Warnung bleibt während
+eines laufenden Speicherversuchs und nach einem Fehler oder Versionskonflikt aktiv.
+Erst eine gültige erfolgreiche Speicherantwort oder bewusstes Verwerfen entfernt
+sie. Unveränderte Entwürfe und reine Kapitelwechsel aktivieren keinen Listener;
+Abmeldung, Kundenwechsel und Abbau der Ansicht entfernen ihn vollständig.
+
+Das ist ein Schutz vor versehentlichem Verlassen, keine automatische Speicherung.
+Text und Verfügbarkeit des Dialogs bestimmt der Browser. Erzwungenes Beenden,
+insbesondere auf Mobilgeräten, lässt sich damit nicht zuverlässig abfangen.
+**Entwurf speichern** bleibt der Weg zur dauerhaften Sicherung. Grundlage:
+[Browserereignis beforeunload](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event).
+
+Prüfung: vier neue DOM-Szenarien für Warnung/Erhalt, ausstehende und fehlgeschlagene
+Speicherung, bewusstes Verwerfen, Eigentümerwechsel sowie Musik-/Metadatenänderung.
+Der erste neue Test reproduziert die fehlende Warnung auf dem Vorgängerstand.
+Alle 15 Editor-DOM-Szenarien und 578 Repository-Tests bestanden; Export- und
+Musik-Prüfungen ebenfalls erfolgreich. Keine neue Speicherung privater Angaben
+im Browser, kein automatischer Save und keine Backendänderung.
+
 Dashboard → **History** → **Bearbeitungen** zeigt je fünf Speicherstände mit
 aufklappbaren Vorher-/Nachher-Werten, Zeit und Entwurfversion. Gemeinsame Monatswahl
 in Europe/Vienna, 20 Einträge pro Serverabruf, unabhängige Vor-/Zurückseiten.

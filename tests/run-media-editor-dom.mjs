@@ -19,6 +19,38 @@ function fixture({refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.setti
  return {doc,window,view,$,calls,urls,revoked,thumbs,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
 }
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
+const leave=f=>{const event=new f.window.Event('beforeunload',{cancelable:true});f.window.dispatchEvent(event);return event;};
+await test('leaving warns only for unsaved edits and retains them until a save response confirms success',async()=>{
+ const gate=deferred();let pending;
+ const f=fixture({request:(a,i)=>{if(a==='get')return reply(i);pending=i;return gate.promise;}});await tick();
+ assert.equal(leave(f).defaultPrevented,false);f.tab('Text');assert.equal(leave(f).defaultPrevented,false);f.set('overlay_text','Keep this edit');
+ for(let n=0;n<2;n++){const event=leave(f);assert.equal(event.defaultPrevented,true);assert.equal(event.returnValue,true);assert.equal(f.$('[name=overlay_text]').value,'Keep this edit');}
+ assert.deepEqual(f.calls.map(x=>x.a),['get']);f.save();await tick();assert.equal(leave(f).defaultPrevented,true);
+ gate.resolve(reply(pending,pending.settings,1));await tick();assert.equal(leave(f).defaultPrevented,false);assert.equal(f.$('[name=overlay_text]').value,'Keep this edit');f.view.destroy();
+});
+await test('invalid settings, failed saves and revision conflicts keep the navigation warning active',async()=>{
+ for(const failure of ['offline','conflict','invalid']){
+  const f=fixture({request:(a,i)=>{if(a==='get')return reply(i);if(failure==='offline')throw Error('offline');return {ok:false,code:'REVISION_CONFLICT'};}});await tick();
+  f.set('overlay_text',failure==='invalid'?'x'.repeat(161):'Keep my changes');f.save();await tick();
+  assert.equal(leave(f).defaultPrevented,true);assert.equal(f.$('[name=overlay_text]').value,failure==='invalid'?'x'.repeat(161):'Keep my changes');
+  assert.equal(f.calls.filter(c=>c.a==='save').length,failure==='invalid'?0:1);f.view.destroy();assert.equal(leave(f).defaultPrevented,false);
+ }
+});
+await test('keeping edits retains the warning; explicit discard, owner loss and teardown remove it',async()=>{
+ for(const end of ['discard','owner','destroy']){
+  const f=fixture();await tick();f.set('format','9:16');f.$('#reload').click();f.$('#keepEditing').click();assert.equal(leave(f).defaultPrevented,true);
+  if(end==='discard'){f.$('#reload').click();f.$('#confirmDiscard').click();await tick();assert.equal(f.$('[name=format]').value,'original');}
+  if(end==='owner')f.owner('other');if(end==='destroy')f.view.destroy();
+  assert.equal(leave(f).defaultPrevented,false);f.view.destroy();
+ }
+});
+await test('music edits and metadata refresh preserve the warning without saving the recipe',async()=>{
+ const music={name:'Test.wav',sha256:'a'.repeat(64),size_bytes:16,mime_type:'audio/wav',volume:25,start_ms:0};
+ const f=fixture({request:(a,i)=>reply(i,{...defaults,music},1),refreshMetadata:()=>({ok:true,files})});await tick();
+ assert.equal(leave(f).defaultPrevented,false);f.$('#musicVolume').value='38';f.$('#musicVolume').dispatchEvent(new f.window.Event('input',{bubbles:true}));assert.equal(leave(f).defaultPrevented,true);
+ f.$('#refreshMetadata').click();await tick();f.visibility('hidden');assert.equal(leave(f).defaultPrevented,true);f.visibility('visible');await tick();
+ assert.equal(leave(f).defaultPrevented,true);assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();assert.equal(leave(f).defaultPrevented,false);
+});
 await test('opening is read-only and exact chapter switching retains unsaved settings and safe preview text',async()=>{
  const f=fixture();await tick();assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('#editor').hidden,false);assert.equal(f.$('#image').hidden,false);
  f.set('format','9:16');f.set('fit','cover');f.set('position_x','75');f.tab('Text');f.set('overlay_text','<img src=x onerror=bad()>');f.tab('Format & Ausschnitt');

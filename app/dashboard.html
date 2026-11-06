@@ -195,7 +195,7 @@ frame.addEventListener('load',()=>{
   }
   dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=1',location.href).href});
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
-  mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=6',location.href).href});
+  mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=7',location.href).href});
 });
 function attachFileList(doc,page){
  const slot=doc.getElementById('publishingFilesSlot');if(!slot)return null;
