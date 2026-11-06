@@ -66,12 +66,24 @@ Videoframes, keine Tonprüfung und keine vollständige semantische Abnahme**.
 ein visuell unauffälliges Ergebnis entfernt werden. Der bereits bestandene
 Portaltextvergleich bleibt ebenfalls eine getrennte Aussage.
 
-## Entscheidungspunkt
+## Betriebsentscheidung: keine zusätzlichen Kosten
 
-Ohne neue Kostenfreigabe bleibt dieser konkrete Video-Anbieterweg gesperrt.
+Am 06.11.2026 wurde der kostenpflichtige Videoweg ausdrücklich zurückgestellt.
+Es gibt keine Kostenfreigabe und keine ausstehende Buchungsentscheidung.
+Sightengine bleibt im vorhandenen kostenlosen Tarif. Keine neuen Abonnements,
+kein bezahlter Ersatzdienst und keine Serverbuchung für diesen Prüfschritt.
+Die Vorbereitungen oben gelten nur für eine spätere ausdrücklich neu beauftragte
+Aktivierung; weitere Aufforderungen zum Tarifwechsel sind kein nächster Arbeitsschritt.
+
+Dieser konkrete Video-Anbieterweg bleibt daher gesperrt.
 Eine Freigabe für Medienanalyse ist außerdem keine Freigabe für Social-Media-
 Veröffentlichungen. Alle neun Veröffentlichungsaufträge, Operatorfreigaben,
 Provider-/Coverversuche, Shopify-Testmodus und PR #57/#69 bleiben unberührt.
+
+Die vorhandenen Funktionen für private Entwürfe, Textkorrekturen, Medieneditor,
+Musikbibliothek und Export können weiter genutzt werden. Abgeschlossene Bereiche
+nicht erneut prüfen oder als unfertig behandeln. Der fehlende automatische
+Videonachweis darf nicht durch einen erfundenen Erfolgsstatus ersetzt werden.
 
 Primärquellen, am 06.11.2026 gelesen:
 
