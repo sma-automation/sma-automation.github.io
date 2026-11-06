@@ -25,3 +25,8 @@
 .sma-history-months .sma-history-month-links{display:flex;flex-wrap:wrap;gap:8px}
 .sma-history-months p{font:inherit;font-size:14px;color:#65718a;line-height:1.5;margin:14px 0}
 @media(max-width:650px){.sma-history-months .sma-history-month-controls>*{width:100%}.sma-history-months .sma-history-month-links button{flex:1 1 150px}}
+
+#historyTextCard details{margin-top:8px;overflow-wrap:anywhere}
+#historyTextCard summary{cursor:pointer;color:#3157cd;font:inherit;padding:6px 0}
+#historyTextCard summary:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
+#historyTextCard .sma-history-saved-text{white-space:pre-wrap}
