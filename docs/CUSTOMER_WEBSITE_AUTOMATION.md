@@ -44,7 +44,38 @@ Der [Bootstrap-Lauf, Versuch 2](https://github.com/sma-automation/sma-automation
 
 IONOS-/Cloudflare-Zugangsdaten liegen verschlüsselt in Vault. Ein separates zufälliges Token authentifiziert den Worker. Kunden erhalten keinen dieser Werte. Der einmalige Bootstrap-Workflow wurde nach Erfolg entfernt; Lauf und Quellstand bleiben in der GitHub-Historie. Bei vorhandener Konfiguration wird eine erneute Installation abgewiesen.
 
-**Betriebsgrenzen:** Der vorhandene Cloudflare-Token wurde mit Ablaufdatum **12. November 2026** eingerichtet. Für weitere Neueinrichtungen muss der Betreiber ihn vorher erneuern. Bestehende statische Seiten/DNS-Einträge werden durch Ablauf nicht automatisch gelöscht. Die Projektgrenzen des kostenlosen Pages-Kontos gelten weiterhin. Der bisherige öffentliche Renderer bleibt auf `noindex`; SEO-Freigabe ist eine separate Veröffentlichungsentscheidung.
+**Betriebsgrenzen:** Der vorhandene Cloudflare-Token wurde am **6. November 2026** im Cloudflare-Dashboard bis **6. November 2027, 23:59:59 Uhr Europe/Vienna** verlängert. Die anschließende Prüfung mit dem bereits in Supabase Vault gespeicherten Schlüssel bestätigt das neue Ablaufdatum und den bestehenden Pages-Zugriff; ein Schlüsselaustausch war nicht erforderlich. Vor diesem neuen Termin ist die nächste Verlängerung nötig. Eine automatische Vorwarnung ist noch nicht eingerichtet. Bestehende statische Seiten/DNS-Einträge werden durch Ablauf nicht automatisch gelöscht. Die Projektgrenzen des kostenlosen Pages-Kontos gelten weiterhin. Der bisherige öffentliche Renderer bleibt auf `noindex`; SEO-Freigabe ist eine separate Veröffentlichungsentscheidung.
+
+## Cloudflare-Verlängerung – 6. November 2026
+
+Der Betreiber bearbeitete den vorhandenen Token **SMA-Cloudflare-Zugriffspruefung**,
+wählte **1 Jahr** und bestätigte **Token aktualisieren**. Die Zusammenfassung
+zeigte den 6. November 2027; die anschließende Cloudflare-Meldung bestätigte die
+Aktualisierung. Die sichtbare Berechtigung bleibt **Cloudflare Pages: Bearbeiten**
+für das vorhandene Konto.
+
+Um **11:45:13 UTC / 12:45:13 Wiener Zeit** wurden zwei reine GET-Anfragen direkt
+aus Supabase mit dem bestehenden Vault-Schlüssel an Cloudflare ausgeführt.
+Der Schlüssel wurde nur serverseitig in den Authorization-Header übernommen;
+weder Schlüssel noch vollständige Providerantworten wurden als Prüfergebnis ausgegeben.
+
+| Lesende Prüfung | Ergebnis |
+| --- | --- |
+| `GET /user/tokens/verify` | HTTP 200, `success:true`, `status:active`, `expires_on:2027-11-06T22:59:59Z` |
+| Bestehende Pages-Domain `seite-4-f931c608.sma-automation.com` im zugeordneten Projekt | HTTP 200, `success:true`, exakter Domainname, `status:active` |
+| Einrichtungsauftrag vor/nach den Anfragen | Vollständiger Zeilenhash identisch; `phase:active`, `blocked:false` |
+| Zugeordneter Webseitenstand vor/nach den Anfragen | Vollständiger Zeilenhash identisch; keine Inhaltsänderung oder Veröffentlichung |
+
+Damit sind die verlängerte Gültigkeit des tatsächlich von SMA gespeicherten
+Schlüssels und dessen lesender Pages-Zugriff bestätigt. Es wurde kein neuer
+Einrichtungsauftrag gestartet; der frühere Hosting-/DNS-/HTTPS-Durchlauf wird
+nicht wiederholt. Keine Änderung an Vault-Inhalt, Schema, Workflows, Hosting,
+DNS oder Tarif. Die einzigen zusätzlichen Laufzeitdatensätze sind die zwei
+HTTP-Prüfanfragen und ihre Antworten in der bestehenden `pg_net`-Diagnose.
+
+Nur dieser Betriebsnachweis und das Ablaufdatum wurden im Repository ergänzt.
+Der unveränderte Code-Prüfstand bleibt bei 524 bestandenen Tests aus PR #82;
+für diese Dokumentationsänderung wurde keine neue vollständige Testserie gestartet.
 
 ## Prüfungen
 
