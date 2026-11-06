@@ -142,6 +142,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   selectedRow.append(selectedLabel);
   const editor = make('div', 'workspaceEditor');
   source.append(selectedRow);
+  if($('videoMetadataPanel'))source.append($('videoMetadataPanel'));
   if($('exportCoverPanel'))source.append($('exportCoverPanel'));
   source.append(editor);
   $('magicActionsSource').hidden = true;

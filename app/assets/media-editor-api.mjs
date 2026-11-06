@@ -1,3 +1,4 @@
+import {refreshMediaCatalog} from './media-metadata.mjs?v=1';
 import {fetchAssetThumbnail} from './asset-thumbnail.mjs?v=1';
 import {transferDeviceFile} from './device-upload.mjs?v=1';
 import {sha256,EXPORT_MAX_BYTES} from './media-export-model.mjs?v=1';
@@ -10,6 +11,7 @@ export async function watchOwner(callback){return (await auth()).auth.onAuthStat
 async function rpc(name,body,owner){const s=await session(owner);const response=await fetch(origin+'/rest/v1/rpc/'+name,{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+s.access_token},body:JSON.stringify(body)});if(!response.ok)throw Error(response.status===401?'AUTH_REQUIRED':'UNAVAILABLE');return response.json();}
 export const editorRequest=(action,input,owner)=>rpc('sma_publication_editor_v1',{p_action:action,p_input:input},owner);
 export const editorFiles=owner=>rpc('sma_publication_files_v1',{p_action:'list'},owner);
+export async function editorRefreshFiles(owner,signal){await refreshMediaCatalog({getSession:()=>session(owner),owner,signal});signal?.throwIfAborted();const result=await editorFiles(owner);await session(owner);signal?.throwIfAborted();return result;}
 export async function editorThumbnail(file,signal,owner){return fetchAssetThumbnail(file,(await session(owner)).access_token,signal);}
 export const exportRequest=(action,input,owner)=>rpc('sma_publication_editor_export_v1',{p_action:action,p_input:input},owner);
 export async function editorSource(file,signal,owner){
