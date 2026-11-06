@@ -133,6 +133,18 @@ h2{margin:0 0 14px;font-size:22px}
 body.gallery-open{overflow:hidden}
 @media(max-width:1000px){.product-media{width:116px}}
 @media(max-width:650px){.product-media{width:104px}.gallery-modal{padding:15px}.gallery-main{min-height:200px;height:35vh}}
+/* Independent compact sections keep product editing and order pages intact. */
+.shop-sections{display:flex;gap:8px;margin-top:16px}
+.shop-sections button{font:inherit;font-weight:500;padding:10px 20px;border:1px solid #c7d3f8;border-radius:9px;background:#edf2ff;color:var(--blue);cursor:pointer}
+.shop-sections button[aria-pressed=true]{background:var(--blue);color:white}
+.shop-sections button:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
+.section[hidden]{display:none!important}
+#bestellListe{gap:8px}
+.order-item{padding:10px 12px;align-items:center}
+.order-item .item-title{font-size:16px;margin-bottom:3px}
+.order-item .amount{font-size:18px;margin-top:0}
+.order-item .badges{margin-top:5px;gap:5px}
+@media(max-width:650px){.shop-sections button{flex:1}.order-item{display:flex;gap:10px}.order-item .amount{font-size:16px}.order-item .badge{font-size:10px}}
 </style>
 <style>.main{margin-left:0;width:100%}.content{padding:0}.section{margin-top:16px}.app{display:block}.card{box-shadow:none}body{background:#f4f6f9}</style></head>
 <body>
@@ -153,6 +165,10 @@ body.gallery-open{overflow:hidden}
     <div class="content">
 
 
+      <div class="shop-sections" role="group" aria-label="Shop-Bereich">
+        <button type="button" id="showProducts" aria-controls="shop" aria-pressed="true">Produkte</button>
+        <button type="button" id="showOrders" aria-controls="bestellungen" aria-pressed="false">Bestellungen</button>
+      </div>
       <section id="shop" class="section card">
         <h2>Shop &amp; Produkte</h2>
         <p id="checkoutTestLink" class="hidden" style="margin:0 0 16px"><a class="btn" href="checkout-test.html" target="_top">Checkout V2 testen</a></p>
@@ -160,7 +176,7 @@ body.gallery-open{overflow:hidden}
         <nav id="produktPagination" class="pagination" aria-label="Produktseiten"></nav>
       </section>
 
-      <section id="bestellungen" class="section card">
+      <section id="bestellungen" class="section card" hidden>
         <h2>Bestellungen</h2>
         <p id="bestellStatus" class="item-meta" role="status" aria-live="polite">Bestellungen werden automatisch aktualisiert.</p>
         <div id="bestellListe" class="list"></div>
@@ -208,6 +224,7 @@ const BUCKET = 'sma-produktbilder';
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
 const PAGE_SIZE = 10;
+const ORDER_PAGE_SIZE = 5;
 const IMAGE_TYPES = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const euro = new Intl.NumberFormat('de-DE', {style:'currency',currency:'EUR'});
@@ -813,7 +830,7 @@ function renderOrders(orders){
   list.replaceChildren();
   if(!orders.length){list.innerHTML='<div class="empty">Noch keine Bestellungen vorhanden.</div>';return;}
   for(const order of orders){
-    const item=document.createElement('article');item.className='item';
+    const item=document.createElement('article');item.className='item order-item';
     const body=document.createElement('div');
     const title=document.createElement('div');title.className='item-title';title.textContent=order.bestellnummer||'Bestellung';
     const meta=document.createElement('div');meta.className='item-meta';
@@ -848,12 +865,12 @@ function showLoading(elementId,message){
   const notice=document.createElement('div');notice.className='empty';notice.textContent=message;
   element.append(notice);
 }
-function renderPagination(elementId,state,word,loadPage){
+function renderPagination(elementId,state,word,loadPage,pageSize=PAGE_SIZE){
   const nav=document.getElementById(elementId);nav.replaceChildren();
-  const totalPages=Math.max(1,Math.ceil(state.total/PAGE_SIZE));
+  const totalPages=Math.max(1,Math.ceil(state.total/pageSize));
   if(state.total===0)return;
-  const start=(state.page-1)*PAGE_SIZE+1;
-  const end=Math.min(state.page*PAGE_SIZE,state.total);
+  const start=(state.page-1)*pageSize+1;
+  const end=Math.min(state.page*pageSize,state.total);
   const summary=document.createElement('div');summary.className='pagination-summary';
   summary.textContent=start+'–'+end+' von '+state.total+' '+word;
   nav.append(summary);
@@ -932,7 +949,7 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
   const request=++state.request;
   const userId=currentUserId;
   const page=Number.isFinite(requestedPage)?Math.max(1,Math.floor(requestedPage)):1;
-  const from=(page-1)*PAGE_SIZE;
+  const from=(page-1)*ORDER_PAGE_SIZE;
   clearTimeout(orderRefreshTimer);orderRefreshTimer=null;
   orderRefreshController?.abort();
   const controller=new AbortController();orderRefreshController=controller;
@@ -949,17 +966,17 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
       .select(BESTELL_FELDER,{count:'exact'})
       .eq('user_id',userId)
       .order('erstellt_am',{ascending:false}).order('id',{ascending:false})
-      .range(from,from+PAGE_SIZE-1).abortSignal(controller.signal);
+      .range(from,from+ORDER_PAGE_SIZE-1).abortSignal(controller.signal);
     if(!isCurrent())return;
     if(error)throw error;
-    const total=count??0,maxPage=Math.max(1,Math.ceil(total/PAGE_SIZE));
+    const total=count??0,maxPage=Math.max(1,Math.ceil(total/ORDER_PAGE_SIZE));
     if(page>maxPage){orderPageLoading=false;await loadOrdersPage(maxPage,{background});return;}
     const rows=data||[],signature=JSON.stringify([page,total,rows]);
     const paginationChanged=!background||state.total!==total||state.page!==page;
     state.total=total;state.page=page;
     if(signature!==orderSignature){renderOrders(rows);orderSignature=signature;}
     document.getElementById('bestellCount').textContent=total;
-    if(paginationChanged)renderPagination('bestellPagination',state,'Bestellungen',loadOrdersPage);
+    if(paginationChanged)renderPagination('bestellPagination',state,'Bestellungen',loadOrdersPage,ORDER_PAGE_SIZE);
     orderRefreshFailures=0;setOrderStatus();
   }catch(error){
     if(isCurrent()){
@@ -974,6 +991,16 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
     }
   }
 }
+
+function selectShopSection(section){
+  const orders=section==='orders';
+  document.getElementById('shop').hidden=orders;
+  document.getElementById('bestellungen').hidden=!orders;
+  document.getElementById('showProducts').setAttribute('aria-pressed',String(!orders));
+  document.getElementById('showOrders').setAttribute('aria-pressed',String(orders));
+}
+document.getElementById('showProducts').addEventListener('click',()=>selectShopSection('products'));
+document.getElementById('showOrders').addEventListener('click',()=>selectShopSection('orders'));
 
 if(window.self===window.top){window.location.replace('dashboard.html#shop');}
 const {data:sessionData,error:sessionError}=await supabase.auth.getSession();
@@ -994,7 +1021,7 @@ if(sessionError||!session){
       currentUserId=session.user.id;
       currentCustomerId=kunde.kunde_id;
       if(kunde.shop_slug==='sma-testkunde')document.getElementById('checkoutTestLink').classList.remove('hidden');
-      // Produkte und Bestellungen unabhängig und serverseitig mit je zehn Einträgen laden.
+      // Produkte mit zehn, Bestellungen mit fünf Einträgen je Seite laden.
       await Promise.all([loadProductsPage(1),loadOrdersPage(1)]);
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');

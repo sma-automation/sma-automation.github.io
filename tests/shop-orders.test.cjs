@@ -97,7 +97,7 @@ test('scheduled refresh discovers a new order in an initially empty list and upd
   assert.equal(badges[0].textContent,'Erstattet');assert.equal(badges[1].textContent,'In Bearbeitung');
   assert.ok(h.queries.every(q=>q.table==='sma_bestellungen'&&q.operation==='select'));
   assert.ok(h.queries.every(q=>q.filters.some(([k,v])=>k==='user_id'&&v==='owner')));
-  assert.deepEqual(h.queries[0].range,[0,9]);
+  assert.deepEqual(h.queries[0].range,[0,4]);
   assert.deepEqual(h.queries[0].orderBy.map(([key])=>key),['erstellt_am','id']);
 });
 
@@ -115,7 +115,7 @@ test('page navigation aborts an older poll and stale results cannot replace the 
   const old=deferred();h.respond(()=>old.promise);const first=poll(h);await flush();
   const stale=h.queries.at(-1);await poll(h);assert.equal(h.queries.length,2);
   h.respond(()=>response([order(3)],21));await h.api.loadOrdersPage(2);
-  assert.equal(stale.signal.aborted,true);assert.deepEqual(h.queries.at(-1).range,[10,19]);
+  assert.equal(stale.signal.aborted,true);assert.deepEqual(h.queries.at(-1).range,[5,9]);
   old.resolve(response([order(99)],22));await first;
   assert.equal(h.api.state().page,2);assert.equal(list(h).children[0].children[0].children[0].textContent,'#1003');
   assert.equal(h.api.state().loading,false);assert.equal(h.timers.size,1);
@@ -137,7 +137,7 @@ test('failed first load retries the requested page and restores its pagination',
   assert.equal(h.api.state().requested,2);assert.match(status(h),/erneut geladen/);
   h.respond(()=>response([order(2)],15));await nextTimer(h).fn();
   assert.equal(h.api.state().page,2);assert.equal(h.api.state().total,15);
-  assert.equal(h.nodes.get('bestellPagination').children[0].textContent,'11–15 von 15 Bestellungen');
+  assert.equal(h.nodes.get('bestellPagination').children[0].textContent,'6–10 von 15 Bestellungen');
 });
 
 test('visibility and pagehide cancel pending reads; returning or reconnecting resumes without a reload',async()=>{
@@ -154,10 +154,10 @@ test('visibility and pagehide cancel pending reads; returning or reconnecting re
 });
 
 test('when the last page disappears polling selects the last remaining page',async()=>{
-  const h=harness();h.api.init();h.respond(()=>response([order(1)],21));await h.api.loadOrdersPage(3);
-  h.respond(q=>response(q.range[0]===20?[]:[order(2)],11));await poll(h);
-  assert.equal(h.api.state().page,2);assert.equal(h.api.state().requested,2);assert.equal(h.api.state().total,11);
-  assert.deepEqual(h.queries.at(-1).range,[10,19]);assert.equal(h.timers.size,1);
+  const h=harness();h.api.init();h.respond(()=>response([order(1)],11));await h.api.loadOrdersPage(3);
+  h.respond(q=>response(q.range[0]===10?[]:[order(2)],6));await poll(h);
+  assert.equal(h.api.state().page,2);assert.equal(h.api.state().requested,2);assert.equal(h.api.state().total,6);
+  assert.deepEqual(h.queries.at(-1).range,[5,9]);assert.equal(h.timers.size,1);
 });
 
 test('a timed-out read does not leave refresh blocked and keeps the last confirmed list',async()=>{
@@ -167,4 +167,12 @@ test('a timed-out read does not leave refresh blocked and keeps the last confirm
   const pending=poll(h);await flush();
   const timeout=[...h.timers.values()].find(t=>t.delay===10000);assert.ok(timeout);timeout.fn();await pending;
   assert.equal(list(h).children[0],row);assert.equal(h.api.state().loading,false);assert.equal(nextTimer(h).delay,30000);
+});
+
+
+test('shop section switches preserve loaded orders and unsaved product inputs',async()=>{
+ const h=harness();h.api.init();h.respond(()=>response([order()],10));await h.api.loadOrdersPage(2);
+ const row=list(h).children[0],queries=h.queries.length,input=new Element('input');input.value='4';h.document.getElementById('shop').append(input);
+ h.nodes.get('showOrders').events.click();assert.equal(h.nodes.get('shop').hidden,true);assert.equal(h.nodes.get('bestellungen').hidden,false);assert.equal(h.nodes.get('showOrders')['aria-pressed'],'true');
+ h.nodes.get('showProducts').events.click();assert.equal(h.nodes.get('shop').hidden,false);assert.equal(h.nodes.get('bestellungen').hidden,true);assert.equal(input.value,'4');assert.equal(list(h).children[0],row);assert.equal(h.api.state().page,2);assert.equal(h.queries.length,queries);
 });
