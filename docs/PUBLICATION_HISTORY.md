@@ -142,8 +142,10 @@ gesonderte Abnahme und wurde nicht gestartet. Medienblocker und Meta bleiben
 separate Themen. Monatskennzahlen und Monatsarchiv sind jetzt an die vorhandenen
 Aufträge angeschlossen. Gespeicherte Portaltext-Stände sind jetzt als erster Teil der
 Bearbeitungshistorie angeschlossen. Der Dateiverlauf ergänzt jetzt gespeicherte
-Datei-/Portalzuordnungen ab seiner Installation. Ein Änderungsjournal für
-Editor-Einstellungen und Analyseversuche sowie Analytics für
+Datei-/Portalzuordnungen ab seiner Installation. Neue Bearbeitungsentwürfe mit eigenem Änderungsjournal sind jetzt ergänzt
+(siehe `MEDIA_EDITOR_DRAFTS.md`). Der zuvor angenommene vollständige Editor war
+im aktuellen System nicht vorhanden; Content Optimizer war ein Platzhalter.
+Medienexport, zusätzliche Musik, ein Analysejournal sowie Analytics für
 Reichweite, Zielgruppen und Plattformresonanz bleiben offen. Die bestehenden
 Magic-Effect-Ergebnisse werden bei Wiederholung überschrieben; sie sind kein
 unveränderliches Ereignisjournal. Aus Aufträgen werden keine Analytics-Werte
@@ -326,3 +328,17 @@ Security-Advisors: weiterhin vier anonyme und sechs authentifizierte bestehende
 Definer-Warnungen sowie die bestehende Passwortschutz-Warnung. Eine zusätzliche
 INFO-Meldung (jetzt 38) betrifft die absichtlich policylose, direkt gesperrte
 private Journaltabelle. Keine zusätzliche Sicherheitswarnung.
+
+
+## Bearbeitungsentwürfe (2026-11-06)
+
+Das vierte Kapitel **Bearbeitungen** zeigt tatsächlich gespeicherte Änderungen
+an Format, Bildausschnitt, Schnitt-/Cover-Zeitpunkten, Texteinblendung und
+Originalton. Vorher-/Nachher-Werte, Datei und Entwurfversion stehen in aufklappbaren
+Details. Fünf Zeilen pro Bildschirmseite, unabhängige Navigation und gemeinsame
+Wiener Monatsauswahl. Die Auftragskennzahlen bleiben Auftragskennzahlen.
+
+Es gibt keine erfundenen Altbestände: Der bisherige Content Optimizer enthielt
+keine funktionierende Entwurfsspeicherung. Das neue Journal beginnt mit der ersten
+bewussten Änderung. Einstellungen sind noch keine exportierte Mediendatei.
+Technik, Zugriff, Grenzen und Prüfungen: [MEDIA_EDITOR_DRAFTS.md](MEDIA_EDITOR_DRAFTS.md).

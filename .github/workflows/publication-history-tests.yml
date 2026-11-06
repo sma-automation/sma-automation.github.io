@@ -3,6 +3,13 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - app/assets/media-editor*
+      - app/media-editor.html
+      - app/assets/publication-editor-history*
+      - supabase/sql/publication-editor-history.sql
+      - supabase/migrations/*_publication_editor_history_v1.sql
+      - tests/*media-editor*
+      - tests/*publication-editor-history*
       - app/assets/publication-history*
       - app/assets/publication-text-history*
       - app/assets/publication-assignment-history*
@@ -39,7 +46,7 @@ jobs:
         run: |
           npm ci --prefix tests/sql-runtime --ignore-scripts
           npm ci --prefix tests/dom-runtime --ignore-scripts
-      - name: Test read-only history and regressions
+      - name: Test histories, editor drafts and regressions
         run: |
           node --test tests/*.test.cjs
           node tests/run-publication-history-sql.mjs
@@ -47,3 +54,5 @@ jobs:
           node tests/run-publication-history-dom.mjs
           node tests/run-publication-text-history-sql.mjs
           node tests/run-publication-assignment-history-sql.mjs
+          node tests/run-publication-editor-history-sql.mjs
+          node tests/run-media-editor-dom.mjs
