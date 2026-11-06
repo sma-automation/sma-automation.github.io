@@ -3,7 +3,9 @@ const {createHash}=require('crypto');
 function editorSourceMetadata(file,context,folders){
  if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');
  const revision=context.asset_revision;
- const same=revision.startsWith('sha256:')?revision==='sha256:'+file.sha256Checksum+':'+file.version:revision.startsWith('md5:')?revision==='md5:'+file.md5Checksum+':'+file.version:revision==='version:'+file.version;
+ // Drive can finish indexing metadata after upload without changing file bytes.
+ // Keep the requested catalogue revision bound by both owner checks; bind bytes by checksum.
+ const same=revision.startsWith('sha256:')?revision.split(':')[1]===file.sha256Checksum:revision.startsWith('md5:')?revision.split(':')[1]===file.md5Checksum:revision==='version:'+file.version;
  if(!same)throw Error('FILE_CHANGED');
  const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;
  if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');

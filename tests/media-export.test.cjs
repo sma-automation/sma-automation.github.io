@@ -1,11 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto');
 const {editorSourceMetadata,editorSourceBytes}=require('../n8n/publishing/editor-source.cjs');
 const defaults={format:'original',fit:'contain',position_x:50,position_y:50,start_ms:0,end_ms:null,cover_ms:null,overlay_text:'',overlay_position:'bottom',audio_volume:100};
-test('source proxy requires exact owner folder, checksum plus Drive version and checks actual bytes',()=>{
+test('source proxy binds owner folder and actual checksum while allowing Drive metadata indexing',()=>{
  const bytes=Buffer.concat([Buffer.from([0,0,0,12]),Buffer.from('ftypisomfixture')]),hash=crypto.createHash('sha256').update(bytes).digest('hex'),md5=crypto.createHash('md5').update(bytes).digest('hex');
  const context={ok:true,drive_file_id:'fixture-drive',asset_id:'fixture-asset',asset_revision:'sha256:'+hash+':4',mime_type:'video/mp4',media_kind:'video',size_bytes:bytes.length},file={id:context.drive_file_id,mimeType:context.mime_type,size:bytes.length,version:'4',trashed:false,capabilities:{canDownload:true},parents:['folder'],sha256Checksum:hash,md5Checksum:md5};
  const meta=editorSourceMetadata(file,context,['folder']);const result=editorSourceBytes(bytes,context,meta);assert.equal(result.sha256,hash);assert.equal(result.data_base64,bytes.toString('base64'));assert.equal(result.can_publish,false);assert.equal(result.drive_file_id,undefined);
- for(const change of [{id:'wrong'},{parents:['foreign']},{trashed:true},{size:24000001},{capabilities:{canDownload:false}},{mimeType:'video/quicktime'},{version:'5'},{sha256Checksum:'a'.repeat(64)}])assert.throws(()=>editorSourceMetadata({...file,...change},context,['folder']));
+ for(const change of [{id:'wrong'},{parents:['foreign']},{trashed:true},{size:24000001},{capabilities:{canDownload:false}},{mimeType:'video/quicktime'},{sha256Checksum:'a'.repeat(64)}])assert.throws(()=>editorSourceMetadata({...file,...change},context,['folder']));
+ assert.deepEqual(editorSourceMetadata({...file,version:'5'},context,['folder']),meta);
+ assert.throws(()=>editorSourceMetadata({...file,version:'5'},{...context,asset_revision:'version:4'},['folder']),/FILE_CHANGED/);
  assert.throws(()=>editorSourceBytes(Buffer.alloc(bytes.length),context,meta));assert.throws(()=>editorSourceBytes(bytes,context,{...meta,md5:'a'.repeat(32)}));
  assert.deepEqual(editorSourceMetadata(file,{...context,asset_revision:'md5:'+md5+':4'},['folder']),meta);
 });
@@ -27,4 +29,12 @@ test('workflow proxy is read-only, uses existing folder gates, and retains no ex
  for(const n of w.nodes.filter(n=>n.type==='n8n-nodes-base.httpRequest'&&n.parameters.nodeCredentialType==='googleDriveOAuth2Api'))assert.equal(n.parameters.method||'GET','GET');
  assert.equal(w.nodes.filter(n=>n.name==='Eigentümer erneut prüfen').length,1);assert.equal(w.nodes.filter(n=>n.name==='Unveränderte Quelle bestätigen').length,1);
  assert.equal(fs.readFileSync('supabase/sql/publication-editor-exports.sql','utf8'),fs.readFileSync('supabase/migrations/20261106165123_publication_editor_exports_v1.sql','utf8'));
+});
+test('embedded binary reader runs with n8n global helpers and no bound this',async()=>{
+ const bytes=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),Buffer.alloc(12)]),hash=crypto.createHash('sha256').update(bytes).digest('hex');
+ const context={ok:true,asset_id:'own-asset',asset_revision:'sha256:'+hash+':3',mime_type:'image/png',media_kind:'image'};
+ const code=JSON.parse(fs.readFileSync('n8n/publishing/editor-source-workflow.json','utf8')).nodes.find(n=>n.name==='Originalbytes prüfen').parameters.jsCode;
+ const sandbox={require,Buffer,helpers:{getBinaryDataBuffer:async(index,key)=>{assert.equal(index,0);assert.equal(key,'data');return bytes;}},$:(name)=>({first:()=>({json:name==='Eigene Datei prüfen'?context:{sha256:hash,md5:null,size_bytes:bytes.length}})})};
+ const run=require('node:vm').runInNewContext('(async function(){'+code+'\n})()',sandbox);
+ const result=await run;assert.equal(result[0].json.sha256,hash);assert.equal(result[0].json.data_base64,bytes.toString('base64'));assert.equal(result[0].json.can_publish,false);
 });
