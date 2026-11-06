@@ -16,7 +16,7 @@ export function readEditorState(r,file){
 }
 export function readEditorFiles(r){
  if(!object(r)||r.ok!==true||!Array.isArray(r.files)||r.files.length>1000)throw Error(r?.code||'UNAVAILABLE');
- const ids=new Set();return r.files.map(f=>{if(!object(f)||!editorUUID(f.id)||ids.has(f.id)||typeof f.name!=='string'||Array.from(f.name).length>500||typeof f.revision!=='string'||!f.revision||f.revision.length>250||!['image','video'].includes(f.media_kind)||f.duration_ms!==null&&(!Number.isSafeInteger(f.duration_ms)||f.duration_ms<0)||[f.width_px,f.height_px].some(n=>n!==null&&(!Number.isInteger(n)||n<=0)))throw Error('UNAVAILABLE');ids.add(f.id);return Object.fromEntries(['id','name','revision','media_kind','mime_type','duration_ms','width_px','height_px'].map(k=>[k,f[k]]));});
+ const ids=new Set();return r.files.map(f=>{if(!object(f)||!editorUUID(f.id)||ids.has(f.id)||typeof f.name!=='string'||Array.from(f.name).length>500||typeof f.revision!=='string'||!f.revision||f.revision.length>250||!['image','video'].includes(f.media_kind)||f.duration_ms!==null&&(!Number.isSafeInteger(f.duration_ms)||f.duration_ms<0)||[f.width_px,f.height_px].some(n=>n!==null&&(!Number.isInteger(n)||n<=0))||f.size_bytes!==undefined&&(!Number.isSafeInteger(f.size_bytes)||f.size_bytes<0))throw Error('UNAVAILABLE');ids.add(f.id);return Object.fromEntries(['id','name','revision','media_kind','mime_type','duration_ms','width_px','height_px',...(f.size_bytes!==undefined?['size_bytes']:[])].map(k=>[k,f[k]]));});
 }
 export function editorValue(key,v){
  if(key.endsWith('_ms'))return v===null?(key==='end_ms'?'Dateiende':'Nicht gewählt'):(v/1000).toLocaleString('de-AT',{maximumFractionDigits:3})+' s';

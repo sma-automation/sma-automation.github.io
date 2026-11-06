@@ -122,3 +122,5 @@ Keine neue Warnung; beide öffentlichen neuen Wrapper sind Invoker.
 Bestandsprüfung abgeschlossen, nicht erneut beginnen. Shopify-Testmodus bleibt
 aktiv; PR #57/#69 und der unveröffentlichte n8n-Originalentwurf bleiben separat.
 Keine Tarifänderung, kein Kauf und keine Social-Media-Veröffentlichung.
+
+Weiterführung: [Echter Medienexport V1](MEDIA_EDITOR_EXPORT.md). Der dort dokumentierte Stand ergänzt die Entwurfsfunktion um gerenderte Dateien.

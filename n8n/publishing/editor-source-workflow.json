@@ -1,0 +1,777 @@
+{
+  "name": "SMA – Medienexport – Eigene Quelldatei V1",
+  "nodes": [
+    {
+      "id": "ca08e9ba-67fb-4dea-b1f7-f497ae6fbe16",
+      "name": "Exportquelle",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-publication-editor-source-v1",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://sma-automation.com"
+        }
+      },
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "26717427-a27f-414a-aa0a-6d0541684978"
+    },
+    {
+      "id": "eecd5f8a-659e-4c68-8c44-51e287d53538",
+      "name": "Anfrage prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\n// Only authenticated, owner-scoped file identities enter this workflow.\nfunction previewRequest(item){\n const auth=item?.headers?.authorization,b=item?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||typeof b!=='object'||Object.keys(b).some(k=>!['asset_id','asset_revision'].includes(k))||!/^\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12}$/.test(b.asset_id||'')||typeof b.asset_revision!=='string'||b.asset_revision.length<1||b.asset_revision.length>250)return {ok:false,code:'INVALID_INPUT'};\n return {ok:true,auth,input:{p_asset_id:b.asset_id,p_revision:b.asset_revision}};\n}\nfunction previewMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p)))throw Error('FILE_UNAVAILABLE');\n // Drive can update metadata after an upload; the checksum still binds the bytes.\n const revision=context.asset_revision;\n const unchanged=revision.startsWith('sha256:')?revision.split(':')[1]===file.sha256Checksum:revision.startsWith('md5:')?revision.split(':')[1]===file.md5Checksum:revision==='version:'+file.version;\n if(!unchanged)throw Error('FILE_CHANGED');\n if(typeof file.thumbnailLink!=='string'||!/^https:\\/\\/lh[3-6]\\.googleusercontent\\.com\\/[A-Za-z0-9_\\-=/]+$/.test(file.thumbnailLink)||file.thumbnailLink.length>4000)throw Error('PREVIEW_UNAVAILABLE');\n return {url:file.thumbnailLink};\n}\nfunction previewImage(bytes,context){\n if(!bytes||bytes.length<12||bytes.length>2000000)throw Error('PREVIEW_UNAVAILABLE');\n const mime=bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'image/png':bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP'?'image/webp':null;\n if(!mime)throw Error('PREVIEW_UNAVAILABLE');\n return {ok:true,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:mime,image_base64:bytes.toString('base64'),can_publish:false};\n}\n\nreturn [{json:previewRequest($input.first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "c081c06f-e373-425f-807f-7c8c77f347f3",
+      "name": "Anfrage gültig?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f980aa78-96a0-47ef-835f-02dd3a4ed3c1",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "9ba4a0ae-38c8-4f5a-83b2-ec41d7262de4",
+      "name": "Eigene Datei prüfen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_editor_source_v1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth }}"
+            }
+          ]
+        },
+        "jsonBody": "={{ $json.input }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "3ab66e42-dd16-49e6-ad17-4a5a4aa3b9a1",
+      "name": "Datei verfügbar?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c4eeb403-8c44-473f-9968-152e4f659adb",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "3f253acc-bb94-46f6-9b59-2b489b55b4c8",
+      "name": "Kundenordner zuordnen",
+      "type": "n8n-nodes-base.dataTable",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "typeVersion": 1,
+      "position": [
+        1100,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1e9c16a8-2923-489e-8ac3-a461a1f42807",
+      "name": "Ordner prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Eigene Datei prüfen').first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5162f766-db22-4ff3-9da5-d4ba27d929dd",
+      "name": "Dateimetadaten lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Eigene Datei prüfen\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,parents,trashed,version,size,md5Checksum,sha256Checksum,capabilities(canDownload)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5f4a8a83-1b7c-4af4-bce0-d626e24887b4",
+      "name": "Dateistand prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst {createHash}=require('crypto');\nfunction editorSourceMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');\n const revision=context.asset_revision;\n const same=revision.startsWith('sha256:')?revision==='sha256:'+file.sha256Checksum+':'+file.version:revision.startsWith('md5:')?revision==='md5:'+file.md5Checksum+':'+file.version:revision==='version:'+file.version;\n if(!same)throw Error('FILE_CHANGED');\n const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;\n if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');\n return {sha256,md5,size_bytes:Number(file.size)};\n}\nfunction editorSourceBytes(bytes,context,metadata){\n if(!Buffer.isBuffer(bytes)||bytes.length<12||bytes.length>24000000||bytes.length!==metadata.size_bytes)throw Error('SOURCE_UNVERIFIED');\n const sha256=createHash('sha256').update(bytes).digest('hex');\n if(metadata.sha256&&sha256!==metadata.sha256||metadata.md5&&createHash('md5').update(bytes).digest('hex')!==metadata.md5)throw Error('FILE_CHANGED');\n const magic=context.mime_type==='video/mp4'?bytes.toString('ascii',4,8)==='ftyp':context.mime_type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:context.mime_type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):context.mime_type==='image/webp'?bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP':false;\n if(!magic)throw Error('SOURCE_UNVERIFIED');\n return {ok:true,can_publish:false,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:context.mime_type,size_bytes:bytes.length,sha256,data_base64:bytes.toString('base64')};\n}\n\nreturn [{json:editorSourceMetadata($input.first().json,$('Eigene Datei prüfen').first().json,$('Ordner prüfen').first().json.folders)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5262de34-72bc-43b3-9309-cab00f1c6cb3",
+      "name": "Originaldatei laden",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Eigene Datei prüfen\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "alt",
+              "value": "media"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d1528f0c-e4c2-4550-9263-48b59751a20a",
+      "name": "Originalbytes prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst {createHash}=require('crypto');\nfunction editorSourceMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');\n const revision=context.asset_revision;\n const same=revision.startsWith('sha256:')?revision==='sha256:'+file.sha256Checksum+':'+file.version:revision.startsWith('md5:')?revision==='md5:'+file.md5Checksum+':'+file.version:revision==='version:'+file.version;\n if(!same)throw Error('FILE_CHANGED');\n const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;\n if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');\n return {sha256,md5,size_bytes:Number(file.size)};\n}\nfunction editorSourceBytes(bytes,context,metadata){\n if(!Buffer.isBuffer(bytes)||bytes.length<12||bytes.length>24000000||bytes.length!==metadata.size_bytes)throw Error('SOURCE_UNVERIFIED');\n const sha256=createHash('sha256').update(bytes).digest('hex');\n if(metadata.sha256&&sha256!==metadata.sha256||metadata.md5&&createHash('md5').update(bytes).digest('hex')!==metadata.md5)throw Error('FILE_CHANGED');\n const magic=context.mime_type==='video/mp4'?bytes.toString('ascii',4,8)==='ftyp':context.mime_type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:context.mime_type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):context.mime_type==='image/webp'?bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP':false;\n if(!magic)throw Error('SOURCE_UNVERIFIED');\n return {ok:true,can_publish:false,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:context.mime_type,size_bytes:bytes.length,sha256,data_base64:bytes.toString('base64')};\n}\n\nconst bytes=await this.helpers.getBinaryDataBuffer(0,'data');return [{json:editorSourceBytes(bytes,$('Eigene Datei prüfen').first().json,$('Dateistand prüfen').first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "23f9d109-99dd-4dfa-ab2b-a909e4c1e0cf",
+      "name": "Dateistand erneut lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Eigene Datei prüfen\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,parents,trashed,version,size,md5Checksum,sha256Checksum,capabilities(canDownload)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "e41285bc-c286-43bd-a350-1551f5d82edb",
+      "name": "Unveränderte Quelle bestätigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst {createHash}=require('crypto');\nfunction editorSourceMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');\n const revision=context.asset_revision;\n const same=revision.startsWith('sha256:')?revision==='sha256:'+file.sha256Checksum+':'+file.version:revision.startsWith('md5:')?revision==='md5:'+file.md5Checksum+':'+file.version:revision==='version:'+file.version;\n if(!same)throw Error('FILE_CHANGED');\n const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;\n if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');\n return {sha256,md5,size_bytes:Number(file.size)};\n}\nfunction editorSourceBytes(bytes,context,metadata){\n if(!Buffer.isBuffer(bytes)||bytes.length<12||bytes.length>24000000||bytes.length!==metadata.size_bytes)throw Error('SOURCE_UNVERIFIED');\n const sha256=createHash('sha256').update(bytes).digest('hex');\n if(metadata.sha256&&sha256!==metadata.sha256||metadata.md5&&createHash('md5').update(bytes).digest('hex')!==metadata.md5)throw Error('FILE_CHANGED');\n const magic=context.mime_type==='video/mp4'?bytes.toString('ascii',4,8)==='ftyp':context.mime_type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:context.mime_type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):context.mime_type==='image/webp'?bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP':false;\n if(!magic)throw Error('SOURCE_UNVERIFIED');\n return {ok:true,can_publish:false,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:context.mime_type,size_bytes:bytes.length,sha256,data_base64:bytes.toString('base64')};\n}\n\nconst after=editorSourceMetadata($input.first().json,$('Eigene Datei prüfen').first().json,$('Ordner prüfen').first().json.folders),before=$('Dateistand prüfen').first().json;if(JSON.stringify(after)!==JSON.stringify(before))throw Error('FILE_CHANGED');return [{json:{ok:true}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5acb6d22-229d-4337-b656-0ba480935dec",
+      "name": "Eigentümer erneut prüfen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_editor_source_v1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Anfrage prüfen').first().json.auth }}"
+            }
+          ]
+        },
+        "jsonBody": "={{ $('Anfrage prüfen').first().json.input }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ce8e8b88-08b6-47fc-8e3d-f249a97ef9df",
+      "name": "Quellantwort binden",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const r=$input.first().json,b=$('Eigene Datei prüfen').first().json;if(r.ok!==true||r.asset_id!==b.asset_id||r.asset_revision!==b.asset_revision||r.drive_file_id!==b.drive_file_id||r.n8n_kunde_id!==b.n8n_kunde_id||r.kunde_email!==b.kunde_email)throw Error('FILE_UNAVAILABLE');return [{json:$('Originalbytes prüfen').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3080,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "2fe4314d-0e4d-4a9b-aa1b-49416f5fb848",
+      "name": "Quellfehler",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "return [{json:{ok:false,code:'SOURCE_UNAVAILABLE',can_publish:false}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2860,
+        400
+      ]
+    },
+    {
+      "id": "76178d05-170a-4348-acd5-52a5e29bbbe5",
+      "name": "Antwort bereinigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const r=$input.first().json;return [{json:r.ok===true?r:{ok:false,code:['AUTH_REQUIRED','INVALID_INPUT','FILE_UNAVAILABLE','FILE_CHANGED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','EXPORT_UNSUPPORTED','FOLDER_UNAVAILABLE'].includes(r.code)?r.code:'SOURCE_UNAVAILABLE',can_publish:false}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3300,
+        0
+      ]
+    },
+    {
+      "id": "e2bfe3b9-0fff-4804-abc4-d2229fd9cbfe",
+      "name": "Quellantwort",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "private, no-store"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://sma-automation.com"
+              },
+              {
+                "name": "Vary",
+                "value": "Origin"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.5,
+      "position": [
+        3520,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Exportquelle": {
+      "main": [
+        [
+          {
+            "node": "Anfrage prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfrage prüfen": {
+      "main": [
+        [
+          {
+            "node": "Anfrage gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfrage gültig?": {
+      "main": [
+        [
+          {
+            "node": "Eigene Datei prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Antwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eigene Datei prüfen": {
+      "main": [
+        [
+          {
+            "node": "Datei verfügbar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei verfügbar?": {
+      "main": [
+        [
+          {
+            "node": "Kundenordner zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Antwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenordner zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Ordner prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dateimetadaten lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateimetadaten lesen": {
+      "main": [
+        [
+          {
+            "node": "Dateistand prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand prüfen": {
+      "main": [
+        [
+          {
+            "node": "Originaldatei laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Originaldatei laden": {
+      "main": [
+        [
+          {
+            "node": "Originalbytes prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Originalbytes prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dateistand erneut lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand erneut lesen": {
+      "main": [
+        [
+          {
+            "node": "Unveränderte Quelle bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unveränderte Quelle bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Eigentümer erneut prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eigentümer erneut prüfen": {
+      "main": [
+        [
+          {
+            "node": "Quellantwort binden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quellantwort binden": {
+      "main": [
+        [
+          {
+            "node": "Antwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quellfehler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Antwort bereinigen": {
+      "main": [
+        [
+          {
+            "node": "Quellantwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quellfehler": {
+      "main": [
+        [
+          {
+            "node": "Antwort bereinigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 180,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "active": false
+}
