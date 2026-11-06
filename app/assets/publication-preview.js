@@ -1,3 +1,4 @@
+import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=2';
 let supabase,coverView;
@@ -19,6 +20,7 @@ const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publicatio
 const magicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-magic-effect-v1';
 const reviewEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-content-review-v1';
 Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
+messages.INVALID_HASHTAGS=hashtagMessage;
 const fileEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1';
 Object.assign(messages,{FILE_UNAVAILABLE:'Diese Datei ist nicht mehr im zugeordneten Kundenordner verfügbar.',FILE_CHANGED:'Die Datei wurde geändert. Aktualisiere die Dateiliste und erstelle einen neuen passenden Text.',FILE_REFRESH_REQUIRED:'Bitte aktualisiere zuerst die Dateiliste.',ASSIGNMENT_CHANGED:'Der zugeordnete Text wurde außerhalb dieser Datei geändert. Bitte erstelle einen neuen Text für die Datei.',ASSIGNMENT_CONFLICT:'Die Zuordnung wurde inzwischen geändert. Lade den gespeicherten Text erneut.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.',FILE_SYNC_UNAVAILABLE:'Die Dateiliste konnte nicht aktualisiert werden. Bitte versuche es erneut.',FILE_SYNC_RUNNING:'Die Dateiliste wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_RATE_LIMITED:'Bitte warte kurz, bevor du die Dateien erneut aktualisierst.',FILE_CATALOG_TOO_LARGE:'Der Kundenordner enthält mehr Dateien als diese Ansicht vollständig laden kann.',FILE_METADATA_INVALID:'Die Dateiinformationen sind unvollständig. Bitte prüfe die Dateien im Kundenordner.',PORTAL_REQUIRES_VIDEO:'Für dieses Portal wird derzeit eine Videodatei benötigt.',TEXT_ALREADY_ASSIGNED:'Dieser Text gehört bereits zu einer anderen Datei. Bitte erstelle einen eigenen Text.',FILE_FORMAT_MISMATCH:'Die Textvorbereitung passt nicht zur ausgewählten Dateiart.'});
 const params=new URLSearchParams(location.search);
@@ -33,7 +35,8 @@ if(selectedPortal){
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
  getPreview:()=>{
   const draft=current?.preview?.drafts.find(d=>d.platform===selectedPortal);
-  return {draft:draft?{...draft,title:$(selectedPortal+'-title').value,body:$(selectedPortal+'-body').value,shop_url:current.preview.shop_url}:null,
+  let hashtags=[];try{hashtags=parseHashtags($(selectedPortal+'-hashtags')?.value||'');}catch{}
+  return {draft:draft?{...draft,hashtags,title:$(selectedPortal+'-title').value,body:$(selectedPortal+'-body').value,shop_url:current.preview.shop_url}:null,
    facts:selectedMediaFacts,source:$('source_text').value,language:$('language').value,
    draftStatus:draft?(dirty?'Aktuelle, noch nicht gespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet'):''};
  },
@@ -59,7 +62,7 @@ function sourceInput(){
 }
 function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=input[k]||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
 function syncMedia(){if(selectedAsset){$('media_kind').value=selectedAsset.media_kind;$('media_kind').disabled=true;}else{$('media_kind').disabled=false;}if(selectedPortal){for(const c of document.querySelectorAll('[name=platforms]'))c.checked=c.value===selectedPortal;if(selectedPortal==='youtube'){$('media_kind').value='video';$('media_kind').disabled=true;}}const yt=document.querySelector('[name=platforms][value=youtube]');yt.disabled=$('media_kind').value==='image';if(yt.disabled)yt.checked=false;}
-function caption(d,body){return [body.trim(),d.hashtags.map(x=>'#'+x).join(' '),(current.preview.language==='en'?'🛒 Visit our shop: ':'🛒 Zum Shop: ')+current.preview.shop_url].filter(Boolean).join('\n\n');}
+function caption(d,body,tags=d.hashtags){return [body.trim(),tags.map(x=>'#'+x).join(' '),(current.preview.language==='en'?'🛒 Visit our shop: ':'🛒 Zum Shop: ')+current.preview.shop_url].filter(Boolean).join('\n\n');}
 function render(data){
  if(signedOut)throw Error(messages.AUTH_REQUIRED);
  if(data.status!=='completed'||!data.preview||data.preview.can_publish!==false)throw Error(errorText(data));
@@ -70,10 +73,10 @@ function render(data){
  if(!visibleDrafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
  for(const d of visibleDrafts){const card=document.createElement('article');card.className='card draft';card.dataset.platform=d.platform;const h=document.createElement('h3');h.textContent=names[d.platform];card.append(h);
   for(const [key,label,max] of [['title','Titel / Einstieg',80],['body','Beitragstext',1200]]){const box=document.createElement('div');box.className='field';const l=document.createElement('label');l.htmlFor=d.platform+'-'+key;l.textContent=label;const control=document.createElement(key==='body'?'textarea':'input');control.id=l.htmlFor;control.dataset.field=key;control.maxLength=max;control.value=d[key];control.required=true;box.append(l,control);card.append(box);}
-  const tags=document.createElement('p');tags.className='tags';tags.textContent=d.hashtags.map(x=>'#'+x).join(' ');card.append(tags);
+  const tags=addHashtagField(document,card,d.platform,d.hashtags);
   const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
   if(d.review_notes.length){const notes=document.createElement('ul');notes.className='note';for(const text of d.review_notes){const li=document.createElement('li');li.textContent=text;notes.append(li);}card.append(notes);}
-  card.addEventListener('input',()=>{full.textContent=caption(d,card.querySelector('textarea').value);dirty=true;$('saveStatus').textContent='Ungespeicherte Änderungen';});$('drafts').append(card);
+  card.addEventListener('input',()=>{dirty=true;$('saveStatus').textContent='Ungespeicherte Änderungen';try{full.textContent=caption(d,card.querySelector('textarea').value,parseHashtags(tags.value));tags.setCustomValidity('');}catch(e){tags.setCustomValidity(e.message);full.textContent=e.message;}});$('drafts').append(card);
  }
  dirty=false;if(selectedAsset){assignmentRevision=data.assignment_revision??assignmentRevision;selectedAsset.assignments=(selectedAsset.assignments||[]).filter(a=>a.platform!==selectedPortal).concat([{platform:selectedPortal,revision:assignmentRevision,status:'assigned'}]);}$('result').hidden=false;workspace?.textAvailable(true);$('saveStatus').textContent=selectedAsset?'Dieser Datei und diesem Portal zugeordnet':'Textvorlage gespeichert';if(selectedPortal&&!workspace)$('sourcePanel').open=false;
 }
@@ -499,14 +502,14 @@ $('previewForm').addEventListener('submit',event=>{event.preventDefault();return
 
 $('save').addEventListener('click',async()=>{
  if(busy||signedOut||!current)return;
- const edits=[...$('drafts').children].map(card=>({platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),body:card.querySelector('[data-field=body]').value.trim()}));
+ let edits;try{edits=[...$('drafts').children].map(card=>({platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),body:card.querySelector('[data-field=body]').value.trim(),hashtags:parseHashtags(card.querySelector('[data-field=hashtags]').value)}));}catch(e){status(e.message,true);return;}
  const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});
  if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}
  const context=selectedAsset?fileContext():null;
  lock(true);$('saveStatus').textContent='Wird gespeichert …';
  try{
   await ensureFreshFile(context);
-  const result=context?await withFreshFile(context,()=>fileRpc('save',{...context,title:edits[0].title,body:edits[0].body})):await rpc('save',{revision:current.revision,drafts},current.id);
+  const result=context?await withFreshFile(context,()=>fileRpc('save',{...context,title:edits[0].title,body:edits[0].body,hashtags:edits[0].hashtags})):await rpc('save',{revision:current.revision,drafts},current.id);
   render(result);if(context)fileChanged();status('Änderungen gespeichert. Der Shop-Link ist weiterhin enthalten.');
  }catch(e){if(!signedOut){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}}finally{lock(false);syncMedia();}
 });
