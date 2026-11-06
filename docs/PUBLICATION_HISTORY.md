@@ -342,3 +342,11 @@ Es gibt keine erfundenen Altbestände: Der bisherige Content Optimizer enthielt
 keine funktionierende Entwurfsspeicherung. Das neue Journal beginnt mit der ersten
 bewussten Änderung. Einstellungen sind noch keine exportierte Mediendatei.
 Technik, Zugriff, Grenzen und Prüfungen: [MEDIA_EDITOR_DRAFTS.md](MEDIA_EDITOR_DRAFTS.md).
+
+## Cover-Status (2026-11-06)
+
+Aufträge zeigen zusätzlich einen eigenen Cover-Status. Details bleiben eingeklappt;
+Kapitel und fünf Zeilen pro Seite sind unverändert. Der neue reine Lesezugriff
+unterscheidet fehlenden Nachweis, ausstehende Übergabe, YouTube-Bestätigung,
+TikTok-Bildzeitpunkt und unklare/abgelehnte Ergebnisse. Er startet keinen Versand.
+Prüfstand: [PUBLICATION_COVER_HISTORY.md](PUBLICATION_COVER_HISTORY.md).

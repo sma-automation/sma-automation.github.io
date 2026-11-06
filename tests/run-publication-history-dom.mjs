@@ -3,8 +3,8 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 import {mountPublicationHistory} from '../app/assets/publication-history-dashboard.mjs';
 const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
-const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',...extra});
-const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:2,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
+const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',cover:{status:'not_recorded',updated_at:null},...extra});
+const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:3,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
 function fixture({active=true,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors}={}){
  const {document:doc,window}=parseHTML('<html><head></head><body><section id="page-history" class="'+(active?'active':'')+'"><div class="grid">'+Array.from({length:3},()=>'<div class="card"><div class="card-title">Old metric</div><div class="big-value">–</div><div class="muted">Old detail</div></div>').join('')+'</div><div class="card"><div class="card-title">Aktivitätsverlauf</div><p>Old intro</p><div id="historyActivitySlot" class="empty-state"></div></div><div class="card"><div class="card-title">Monatsarchiv</div><p>Old archive</p><div id="historyMonthSlot" style="display:flex"></div></div></section></body></html>');
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
@@ -172,4 +172,18 @@ await test('editing history rejects wrong-month results and duplicate cursor bat
  const rows=Array.from({length:20},(_,n)=>editEntry(n)),next={before_at:rows.at(-1).recorded_at,before_id:rows.at(-1).id};const g=fixture({requestEditors:i=>i.before_id?edits([rows[0]],{total:21}):edits(rows,{total:21,has_more:true,next})});await tick();for(let n=0;n<4;n++){g.$('[aria-label="Weitere Bearbeitungsstände"]').click();await tick();}assert.equal(g.$('#historyEditorCard ol').children.length,0);assert.match(g.$('#historyEditorCard [role=status]').textContent,/nicht geladen/);g.view.destroy();
 });
 
+await test('cover status stays visible on compact rows; detail is collapsed and no publishing action exists',async()=>{
+ const f=fixture({request:()=>result([entry(1,{status:'private_complete',cover:{status:'complete',updated_at:'2026-11-06T12:02:00Z'}})])});await tick();
+ assert.match(f.$('summary .sma-history-cover-status').textContent,/Cover: Übertragung bestätigt/);assert.equal(f.$('ol details').hasAttribute('open'),false);
+ assert.match(f.$('.sma-history-cover-detail').textContent,/nicht die öffentliche Sichtbarkeit/);assert.match(f.$('ol').textContent,/Cover-Stand: 06.11.2026, 13:02/);
+ assert.equal(f.$('ol button,ol a'),null);assert.equal(f.$('[data-history-metric=public_confirmed]').textContent,'0');f.view.destroy();
+});
+await test('uncertain cover never promotes the completed video or offers a retry',async()=>{
+ const f=fixture({request:()=>result([entry(1,{status:'private_complete',cover:{status:'uncertain',updated_at:'2026-11-06T12:02:00Z'}})])});await tick();
+ assert.match(f.$('.sma-history-status').textContent,/Privat abgeschlossen/);assert.match(f.$('.sma-history-cover-status').textContent,/Ergebnis unklar/);assert.match(f.$('.sma-history-cover-detail').textContent,/nicht automatisch erneut/);assert.equal(f.$('ol button'),null);f.view.destroy();
+});
+await test('missing or forged cover status fails closed and owner loss removes the cover together with its order',async()=>{
+ for(const cover of [null,{status:'complete',updated_at:null},{status:'<img src=x>',updated_at:'2026-11-06T12:02:00Z'}]){const f=fixture({request:()=>result([entry(1,{cover})])});await tick();assert.equal(f.$('ol').children.length,0);assert.match(f.$('[role=status]').textContent,/nicht geladen/);f.view.destroy();}
+ const f=fixture();await tick();assert.match(f.$('.sma-history-cover-status').textContent,/Noch nicht festgehalten/);f.owner('other');assert.equal(f.$('.sma-history-cover-status'),null);f.view.destroy();
+});
 console.log(`${passed} history DOM scenarios passed.`);

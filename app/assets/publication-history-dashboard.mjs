@@ -1,7 +1,8 @@
 import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=2';
-import {readPublicationHistoryMonths,historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=3';
+import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=3';
+import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=1';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
 export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
@@ -87,10 +88,15 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    const name=create('strong',entry.title||'Beitrag'),status=create('span',historyStatuses[entry.status][0],'sma-history-status');
    status.dataset.status=entry.status;heading.append(name,status);
    const meta=create('small',historyPlatforms[entry.platform]+' · '+format(entry.created_at));
+   const cover=create('span','Cover: '+historyCoverStatuses[entry.cover.status][0],'sma-history-cover-status');
+   cover.dataset.coverStatus=entry.cover.status;meta.append(cover);
    const details=create('details'),toggle=create('summary');toggle.append(heading,meta);
    const detail=create('p',historyStatuses[entry.status][1]);
    const dates=create('small','Erstellt: '+format(entry.created_at)+' · Stand: '+format(entry.updated_at));
-   details.append(toggle,create('p',entry.target_name||'Zielkonto nicht gespeichert'),detail,dates);row.append(details);list.append(row);
+   const coverDetail=create('p',historyCoverStatuses[entry.cover.status][1],'sma-history-cover-detail');
+   details.append(toggle,create('p',entry.target_name||'Zielkonto nicht gespeichert'),detail,dates,coverDetail);
+   if(entry.cover.updated_at)details.append(create('small','Cover-Stand: '+format(entry.cover.updated_at)));
+   row.append(details);list.append(row);
   }
   message.textContent=entries.length?(pageNumber*pageSize+1)+'–'+Math.min((pageNumber+1)*pageSize,entries.length)+' von '+summary.orders+' Aufträgen · Seite '+(pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';
   nav.hidden=!entries.length;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
@@ -104,7 +110,7 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    const before=await getOwnerId();if(!current(g))return;if(before!==expectedOwnerId){invalidateOwner();return;}
    const response=await request(input);if(!current(g))return;
    const after=await getOwnerId();if(!current(g))return;if(after!==expectedOwnerId){invalidateOwner();return;}
-   const result=readPublicationHistoryMonths(response);
+   const result=readPublicationCoverHistory(response);
    if(selection!==undefined&&result.month!==selection)throw Error('INVALID_HISTORY');
    if(append&&result.entries.some(e=>entries.some(old=>old.id===e.id)))throw Error('INVALID_HISTORY');
    const combined=append?[...entries,...result.entries]:result.entries;if(combined.length>result.summary.orders)throw Error('INVALID_HISTORY');

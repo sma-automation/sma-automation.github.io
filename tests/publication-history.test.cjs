@@ -18,7 +18,7 @@ test('history never labels check success or uncertain completion as public',asyn
 });
 test('history dashboard uses its own read-only endpoint and tears down on all auth paths',()=>{
  const source=fs.readFileSync('app/dashboard.html','utf8'),module=fs.readFileSync('app/assets/publication-history-dashboard.mjs','utf8');
- assert.match(source,/rpc\/sma_publication_history_v2/);assert.equal((source.match(/publicationHistory\?\.destroy\(\)/g)||[]).length,3);
+ assert.match(source,/rpc\/sma_publication_history_v3/);assert.equal((source.match(/publicationHistory\?\.destroy\(\)/g)||[]).length,3);
  assert.doesNotMatch(module,/innerHTML|sma_publication_order|dispatcher|upload\(/);assert.match(module,/textContent/);
  const sql=fs.readFileSync('supabase/sql/publication-history.sql','utf8');assert.doesNotMatch(sql,/\b(insert into|update .* set|delete from|http_post|http_get|publication_order_view_v1)\b/i);
  const migrations=fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('_publication_history_v1.sql'));assert.equal(migrations.length,1);assert.equal(fs.readFileSync('supabase/migrations/'+migrations[0],'utf8'),sql);
