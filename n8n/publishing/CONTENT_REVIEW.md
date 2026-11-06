@@ -1,5 +1,10 @@
 # Dateiversionsgebundene visuelle Sicherheitsprüfung
 
+Ergänzung 06.11.2026: Für geeignete konkrete YouTube-/TikTok-Aufträge gibt es
+einen [persönlichen Prüfweg](../../docs/MANUAL_MEDIA_REVIEW.md). Dieser speichert
+eine ausdrückliche Kundenselbstauskunft getrennt vom automatischen Befund.
+Sightengine-Video bleibt deaktiviert; Auffälligkeiten lassen sich nicht übergehen.
+
 Stand 2026-11-01. **Aktiv: Bildprüfung. Videoanalyse ist serverseitig gesperrt (`VIDEO_PLAN_REQUIRED`), weil der echte Diensttest fehlenden Zugriff im kostenlosen Sightengine-Tarif meldet. Kein Tarif wurde geändert.** Ergänzt die technische Medienvorprüfung und die Datei-/Portaltextzuordnung. Kein Veröffentlichungsadapter und keine automatische Freigabe.
 
 ## Ablauf und Grenzen

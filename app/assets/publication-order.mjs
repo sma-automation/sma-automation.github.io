@@ -16,6 +16,7 @@ const errors = {
   FILE_REFRESH_REQUIRED:'Bitte aktualisiere die Dateiliste und versuche es erneut.',
   FINAL_APPROVAL_REQUIRED:'Bitte bestätige den angezeigten Auftrag ausdrücklich.',
   MEDIA_CONFIRMATION_REQUIRED:'Bitte bestätige die Prüfung von Inhalt, Medienrechten und Musik für diesen Auftrag erneut.',
+  HUMAN_REVIEW_UNAVAILABLE:'Die persönliche Prüfung passt nicht mehr zum aktuellen Stand oder eine andere Prüfung ist offen. Lade den Auftrag erneut.',
   ORDER_RUNNING:'Dieser Auftrag wird bereits geprüft. Lade den Status erneut.',
   ORDER_NOT_PREPARED:'Die Vorbereitung ist abgelaufen. Öffne die Freigabe erneut.',
   DUPLICATE_PUBLICATION:'Für diese Datei und dieses Zielkonto existiert bereits ein freigegebener Auftrag.',
@@ -24,12 +25,22 @@ const errors = {
 };
 export function orderError(code) { return errors[code] || 'Die Auftragsprüfung konnte nicht abgeschlossen werden. Du kannst denselben Auftrag erneut prüfen.'; }
 export const approvalPolicy='media-consent-2026-11-03.1';
+export const humanReviewPolicy='human-video-2026-11-06.1';
+export function humanReviewAvailable(order) {
+  return order?.state==='prepared'&&!order.check_error&&['youtube','tiktok'].includes(order.binding?.platform)&&
+    order.human_review_option?.policy_version===humanReviewPolicy&&/^[a-f0-9]{64}$/.test(order.human_review_option?.source_fingerprint||'');
+}
 export function reviewConfirmation(order,values) {
   const tiktok=order?.binding?.platform==='tiktok',branded=tiktok&&order?.choices?.brand_content_toggle===true;
   if(order?.approval_policy!==approvalPolicy||!['youtube','tiktok','instagram','facebook'].includes(order?.binding?.platform)||
     !['content_checked','media_rights','music_rights'].every(k=>values?.[k]===true)||
     (tiktok&&values?.tiktok_music_terms!==true)||(branded&&values?.tiktok_branded_terms!==true))throw Error(orderError('MEDIA_CONFIRMATION_REQUIRED'));
-  return {policy_version:approvalPolicy,content_checked:true,media_rights:true,music_rights:true,tiktok_music_terms:tiktok,tiktok_branded_terms:branded};
+  const result={policy_version:approvalPolicy,content_checked:true,media_rights:true,music_rights:true,tiktok_music_terms:tiktok,tiktok_branded_terms:branded};
+  if(values.human_review_enabled===true){
+    if(!humanReviewAvailable(order)||!['full_playback','visual_clear','speech_text_checked','claims_match'].every(k=>values[k]===true))throw Error(orderError('HUMAN_REVIEW_UNAVAILABLE'));
+    result.human_review={policy_version:humanReviewPolicy,source_fingerprint:order.human_review_option.source_fingerprint,full_playback:true,visual_clear:true,speech_text_checked:true,claims_match:true};
+  }
+  return result;
 }
 
 // Reuse the exact request ID after a lost response. A different selection gets
@@ -84,7 +95,15 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     if(key.startsWith('tiktok_')){const link=make('a',key==='tiktok_music_terms'?'TikTok Music Usage Confirmation':'TikTok Branded Content Policy');link.href=key==='tiktok_music_terms'?'https://www.tiktok.com/legal/page/global/music-usage-confirmation/en':'https://www.tiktok.com/legal/page/global/bc-policy/en';link.target='_blank';link.rel='noopener noreferrer';label.append(link,doc.createTextNode(' zu.'));}
     reviewFields.set(key,input);reviewControls.append(label);
   }
-  reviewControls.append(make('p','Diese Bestätigungen ersetzen keine automatische Medienprüfung. Offene Prüfungen bleiben gesperrt.'));
+  reviewControls.append(make('p','Rechtebestätigungen sind keine automatische Medienprüfung. Eine persönliche Inhaltsprüfung wird, falls verfügbar und ausdrücklich gewählt, gesondert dokumentiert.'));
+  const humanControls=make('fieldset'),humanFields=new Map(),humanEnabled=make('input'),humanLabel=make('label'),humanChecklist=make('div');
+  humanControls.id='order-human-review';humanControls.hidden=true;humanControls.append(make('legend','Persönliche Inhaltsprüfung'));
+  humanControls.append(make('p','Du kannst die fehlende vollständige Inhaltsprüfung selbst durchführen. Prüfe die angezeigte Datei vollständig und gleiche sie mit dem gespeicherten Beitrag ab. Deine Bestätigung gilt nur für diesen Auftrag. Gemeldete Auffälligkeiten und technische Fehler lassen sich hiermit nicht übergehen.'));
+  humanEnabled.type='checkbox';humanEnabled.id='order-human-enabled';humanLabel.append(humanEnabled,doc.createTextNode(' Ich wähle die dokumentierte persönliche Prüfung.'));humanControls.append(humanLabel);
+  for(const [key,text] of [['full_playback','Ich habe das gesamte Video einschließlich Ton bis zum Ende angesehen.'],['visual_clear','Ich habe alle Szenen geprüft: keine Nacktheit oder sexualisierten Inhalte, Gewalt, Waffen, drastischen Verletzungen, Hasssymbole, Drogen oder Selbstverletzung. Bei Unsicherheit bestätige ich nicht.'],['speech_text_checked','Ich habe Sprache, Musiktext und Einblendungen geprüft; sie enthalten keine der genannten problematischen Inhalte.'],['claims_match','Titel und Beitragstext passen zum Video. Enthaltene Aussagen und Versprechen habe ich auf Richtigkeit geprüft.']]){
+    const label=make('label'),input=make('input');input.type='checkbox';input.id='order-human-'+key;label.append(input,doc.createTextNode(' '+text));humanFields.set(key,input);humanChecklist.append(label);
+  }
+  humanControls.append(humanChecklist,make('p','Dies ist deine eigene Prüfung, kein automatisches Prüfergebnis und keine Garantie für die Annahme durch das Portal. Gespeichert wird sie erst zusammen mit deiner gesonderten Veröffentlichungsfreigabe.'));
   const consentLabel=make('label'),consent=make('input');consent.type='checkbox';
   consent.id='order-final-consent';
   consentLabel.append(consent,doc.createTextNode(' Ich habe Zielkonto, Beitrag, Rechte und Kennzeichnungen geprüft und gebe diesen Auftrag zur Veröffentlichung frei.'));
@@ -92,7 +111,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   const statusButton=make('button','Status erneut laden');statusButton.type='button';statusButton.className='secondary';statusButton.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,statusButton,close);
-  dialog.append(title,intro,controls,details,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
+  dialog.append(title,intro,controls,details,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
   const style=make('style');style.textContent='#publicationOrderDialog{width:min(650px,calc(100vw - 24px));max-height:min(720px,calc(100dvh - 24px));top:12px;bottom:auto;margin:0 auto;overflow:auto;border:1px solid #dfe5ef;border-radius:14px;padding:24px;color:#17233b}#publicationOrderDialog::backdrop{background:#17233b66}#publicationOrderDialog label{margin:14px 0 8px}#publicationOrderDialog input[type=checkbox]{margin-right:8px}#publicationOrderDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;background:#f5f7fc;padding:14px;border-radius:10px}#publicationOrderDialog select{margin-bottom:14px}#preparePublicationOrder{margin-top:12px}';doc.head.append(style);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
   const fields=new Map();let commercial=null,commercialNotice=null;
@@ -132,12 +151,13 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
       syncCommercial();
     } else select('visibility','Sichtbarkeit',[['public','Öffentlich']]);
   }
-  function reviewValues(){return Object.fromEntries([...reviewFields].map(([k,e])=>[k,e.checked]));}
+  function reviewValues(){return {...Object.fromEntries([...reviewFields,...humanFields].map(([k,e])=>[k,e.checked])),human_review_enabled:humanEnabled.checked};}
   function reviewReady(){try{reviewConfirmation(order,reviewValues());return !order.check_error;}catch{return false;}}
-  function setWorking(value){working=value;controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');syncCommercial();close.disabled=value;consent.disabled=value;for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared';statusButton.disabled=value;approve.disabled=value||order?.state!=='prepared'||!consent.checked||!reviewReady();}
+  function setWorking(value){working=value;controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');syncCommercial();close.disabled=value;consent.disabled=value;for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared';humanEnabled.disabled=value||!humanReviewAvailable(order);humanChecklist.hidden=!humanEnabled.checked;for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);statusButton.disabled=value;approve.disabled=value||order?.state!=='prepared'||!consent.checked||!reviewReady();}
   function showOrder(r) {
     if(!r.binding||Object.entries(context.binding).some(([k,v])=>r.binding[k]!==v))throw Error(orderError('ORDER_CHANGED'));
     order=r;details.replaceChildren();consent.checked=false;consentLabel.hidden=r.state!=='prepared';controls.hidden=true;
+    humanControls.hidden=!humanReviewAvailable(r);humanEnabled.checked=false;for(const input of humanFields.values())input.checked=false;
     reviewControls.hidden=r.state!=='prepared';for(const [key,input] of reviewFields){input.checked=false;input.parentElement.hidden=key==='tiktok_music_terms'?context.binding.platform!=='tiktok':key==='tiktok_branded_terms'?context.binding.platform!=='tiktok'||r.choices?.brand_content_toggle!==true:false;}
     details.append(make('p','Datei: '+context.name),make('p','Zielkonto: '+(r.account_check?.display_name||r.target?.name||'Noch nicht zugeordnet')+(r.target?.id?' · '+r.target.id:'')));
     const decisionLabels={visibility:'Sichtbarkeit',made_for_kids:'Speziell für Kinder',contains_synthetic_media:'Synthetische Inhalte',disable_comment:'Kommentare deaktiviert',disable_duet:'Duette deaktiviert',disable_stitch:'Stitch deaktiviert',brand_content_toggle:'Werbung für Dritte',brand_organic_toggle:'Eigene Marke'};
@@ -145,6 +165,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     const decisions=make('ul');for(const [key,value] of Object.entries(r.choices||{}))if(decisionLabels[key])decisions.append(make('li',decisionLabels[key]+': '+(key==='visibility'?visibilityLabels[value]||value:value?'Ja':'Nein')));details.append(decisions);
     details.append(make('h3',r.draft?.title||'Gespeicherter Beitrag'),make('pre',r.draft?.caption||r.draft?.body||''));
     const media=r.media_check;
+    if(media?.human_review?.method==='customer_attestation')details.append(make('p','Persönliche Inhaltsprüfung für diesen Stand dokumentiert. Die automatische Video-Sicherheitsprüfung wurde dadurch nicht durchgeführt.'));
     if(media?.asset_id===context.binding.asset_id&&media?.asset_revision===context.binding.asset_revision&&Array.isArray(media.checks)){
       const open=media.checks.filter(x=>x.status!=='pass'&&x.code!=='PUBLICATION_APPROVAL_PENDING');
       if(open.length){details.append(make('h3','Offene Medienprüfungen'));const list=make('ul');for(const check of open)list.append(make('li',check.message));details.append(list);}
@@ -154,6 +175,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     statusButton.hidden=r.state==='cancelled';
     if(r.state==='cancelled')notice.textContent='Dieser Auftrag wurde storniert und kann nicht mehr freigegeben werden. Schließe dieses Fenster und bereite bei Bedarf einen neuen Auftrag vor.';
     else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
+    else if(r.state==='checked')notice.textContent='Die Auftragsprüfung ist abgeschlossen. Eine Veröffentlichung wurde damit nicht bestätigt.';
     else if(r.approved_at)notice.textContent='Deine Freigabe ist gespeichert. Es wurde nichts veröffentlicht. '+(r.state==='checking'?'Die Prüfung läuft noch.':'Die Veröffentlichung bleibt wegen offener Prüfungen gesperrt.');
     else notice.textContent='Der Auftrag ist vorbereitet; die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
@@ -167,7 +189,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     finally{if(generation===epoch)setWorking(false);}
   }
   button.addEventListener('click',async()=>{
-    const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;for(const input of reviewFields.values())input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Zielkonto wird beim Portal geprüft …';dialog.showModal();onOpen();setWorking(true);
+    const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;humanControls.hidden=true;humanEnabled.checked=false;for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Zielkonto wird beim Portal geprüft …';dialog.showModal();onOpen();setWorking(true);
     try{
       context=getContext();const platform=context.binding.platform;
       const verified=['youtube','tiktok'].includes(platform)?await client.account(platform):null;
@@ -183,6 +205,8 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     const choices=Object.fromEntries([...fields].map(([k,e])=>[k,k==='visibility'?e.value:e.type==='checkbox'?(e.dataset.invert==='true'?!e.checked:e.checked):e.value==='true']));return run(async()=>{await refresh();unchanged();return client.prepare(context.binding,choices);});});
   consent.addEventListener('change',()=>setWorking(working));
   for(const input of reviewFields.values())input.addEventListener('change',()=>setWorking(working));
+  humanEnabled.addEventListener('change',()=>{for(const input of humanFields.values())input.checked=false;consent.checked=false;setWorking(working);});
+  for(const input of humanFields.values())input.addEventListener('change',()=>setWorking(working));
   approve.addEventListener('click',()=>run(()=>client.approve(order,consent.checked,reviewValues())));
   statusButton.addEventListener('click',()=>run(()=>client.get(order.id)));
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
