@@ -1,0 +1,794 @@
+{
+  "id": "LeeH7IigyGRRUuxS",
+  "nodes": [
+    {
+      "id": "15ae77c8-ab16-4e1b-931e-0af246accb4b",
+      "name": "Bestandswunsch",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b91ec511-2cf8-4b76-a348-6e6a7066c15d",
+      "name": "Meldung prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "1558af4e-058f-4418-b1b1-a2db03cf0c51",
+      "name": "Auftrag beanspruchen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        560,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_bestandsauftrag_worker_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'claim',p_id:$json.request_id,p_token:$json.token} }}",
+        "options": {
+          "timeout": 12000
+        }
+      }
+    },
+    {
+      "id": "f4e6abe2-02b5-4b87-ad4f-090cab2d88f2",
+      "name": "Auftrag vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "92da3d0d-1a59-48fe-b972-c5f21d12bbb8",
+      "name": "Konto laden",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "e64ee35c-e78d-41bc-bb4b-54b5bff7c405",
+      "name": "Konto prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "95ceaf97-16f4-48b8-b47c-1f887b545d60",
+      "name": "Konto prüfen – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        288
+      ],
+      "id": "3772228e-019c-4d29-a500-e356d4319010",
+      "name": "Credential laden",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "0a64f13a-f8c9-4192-9239-64fb29d20520",
+      "name": "Credential prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        288
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "16870b1f-085d-46c8-b80a-d833d9931fa3",
+      "name": "Credential prüfen – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        560,
+        288
+      ],
+      "parameters": {}
+    },
+    {
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        848,
+        288
+      ],
+      "id": "a87e514b-a72c-4ea4-a618-094e5089871e",
+      "name": "Credential entschlüsseln",
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "176c2fcd-4e1d-4b83-b1e9-3cc2db102801",
+      "name": "Access Token holen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        288
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "8f9043ac-cb3a-4ad0-872e-de78eb87ef11",
+      "name": "Token prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        288
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "46223cf4-8094-4cc2-b437-0f2228fedf12",
+      "name": "Token prüfen – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        288
+      ],
+      "parameters": {}
+    },
+    {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        560
+      ],
+      "id": "68c0364b-2a4e-4a9a-85af-d0cac0b658ec",
+      "name": "Produktzuordnung laden",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "9052fd9f-06ac-45fc-8625-0044353605c4",
+      "name": "Zuordnung prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        560
+      ],
+      "parameters": {
+        "jsCode": "try { const c=$('Auftrag beanspruchen').first().json;const a=$input.all().map(x=>x.json).filter(x=>x.produkt_id);if(a.length!==1)throw Error('PRODUCT_MAPPING');const p=a[0];const gid=(s,t)=>String(s).startsWith('gid://')?String(s):'gid://shopify/'+t+'/'+s;if(p.kunde_id!==c.kunde_id||p.produkt_id!==c.produkt_id||p.markt_konto_id!==c.markt_konto_id||gid(p.externe_variant_id,'ProductVariant')!==c.variant_id||p.sync_aktiv!==true)throw Error('PRODUCT_MAPPING');return [{json:{...p,product_gid:gid(p.externe_produkt_id,'Product'),ok:true}}]; } catch(e) { return [{json:{ok:false,code:String(e.message)}}]; }"
+      }
+    },
+    {
+      "id": "85693ddf-cc23-4c07-ab90-12cdbe84f258",
+      "name": "Zuordnung prüfen – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        560,
+        560
+      ],
+      "parameters": {}
+    },
+    {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        848,
+        560
+      ],
+      "id": "89f2c13b-b622-44ab-ab83-b1e129c7136b",
+      "name": "SMA-Produkt laden",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "01a47af8-e562-4ecf-afa6-3ee2fc445852",
+      "name": "SMA-Produkt prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        560
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "f7646b60-6eba-4346-8e85-30918e723843",
+      "name": "SMA-Produkt prüfen – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        560
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "8c18fea4-7480-408e-a96e-64e20418dcef",
+      "name": "Shopify-Bestand lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1680,
+        560
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://' + $('Auftrag beanspruchen').first().json.shop_domain + '/admin/api/2026-07/graphql.json' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $('Access Token holen').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ query: 'query StockRequestSnapshot($id:ID!) { productVariant(id:$id) { id sku product { id } inventoryItem { id sku tracked variants(first:2) { nodes { id } pageInfo { hasNextPage } } inventoryLevels(first:250) { nodes { location { id isActive fulfillsOnlineOrders } quantities(names:[\"available\"]) { name quantity } } pageInfo { hasNextPage endCursor } } } } }', variables: { id: $('Auftrag beanspruchen').first().json.variant_id } }) }}",
+        "options": {
+          "timeout": 12000
+        }
+      }
+    },
+    {
+      "id": "c85cb338-5544-4a5c-9f40-25abf794b0f4",
+      "name": "Änderung vorbereiten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        848
+      ],
+      "parameters": {
+        "jsCode": "try { const c=$('Auftrag beanspruchen').first().json; const j=$json; if(j.error||j.errors?.length)throw Error('SHOPIFY_READ');const v=j.data?.productVariant;const m=$('Zuordnung prüfen').first().json;const item=v?.inventoryItem;if(!v||v.id!==c.variant_id||v.product?.id!==m.product_gid||v.sku!==c.sku||item?.sku!==c.sku)throw Error('SHOPIFY_PRODUCT_MAPPING');if(item.tracked!==true)throw Error('TRACKING_DISABLED');if(item.variants?.pageInfo?.hasNextPage!==false||item.variants.nodes.length!==1||item.variants.nodes[0].id!==v.id)throw Error('SHARED_INVENTORY_ITEM');if(item.inventoryLevels?.pageInfo?.hasNextPage!==false)throw Error('INCOMPLETE_LOCATIONS');const a=item.inventoryLevels.nodes.filter(x=>x.location?.isActive===true&&x.location?.fulfillsOnlineOrders===true);if(a.length!==1)throw Error('LOCATION_SELECTION_REQUIRED');const q=a[0].quantities.filter(x=>x.name==='available');if(q.length!==1||!Number.isSafeInteger(q[0].quantity))throw Error('INVALID_SHOPIFY_QUANTITY');if(!Number.isSafeInteger(c.quantity)||c.quantity<0||c.quantity>1000000)throw Error('INVALID_REQUEST_QUANTITY');const snapshot={quantity:c.quantity,from_quantity:q[0].quantity,inventory_item_id:item.id,location_id:a[0].location.id,variant_id:v.id,read_at:new Date().toISOString()};return [{json:{ok:true,...snapshot,input:{name:'available',reason:'correction',referenceDocumentUri:'gid://sma/Bestandsauftrag/'+c.request_id,quantities:[{inventoryItemId:item.id,locationId:a[0].location.id,quantity:c.quantity,changeFromQuantity:q[0].quantity}]}}}]; } catch(e) { return [{json:{ok:false,code:String(e.message)}}]; }"
+      }
+    },
+    {
+      "id": "e92b93bf-0545-4c7c-a26e-c95d297e7974",
+      "name": "Änderung vorbereiten – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        848
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "64ef556b-8a05-44dd-99ec-e5906b5d0d3c",
+      "name": "Auftrag vorbereiten",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        560,
+        848
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    },
+    {
+      "id": "385c742d-0058-4467-9a9f-aa48c7713340",
+      "name": "Vorbereitung prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        848
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "6207054b-52c4-468a-95b2-3f93dcb1a77c",
+      "name": "Vorbereitung prüfen – gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        848
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "cb71ede3-2139-4b2d-a386-b20d186c3b92",
+      "name": "Shopify-Bestand setzen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1408,
+        848
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://' + $('Auftrag beanspruchen').first().json.shop_domain + '/admin/api/2026-07/graphql.json' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $('Access Token holen').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ query: 'mutation CustomerStockSet($input:InventorySetQuantitiesInput!,$key:String!) { inventorySetQuantities(input:$input) @idempotent(key:$key) { inventoryAdjustmentGroup { createdAt } userErrors { code field message } } }', variables: { input: $('Änderung vorbereiten').first().json.input, key: $('Auftrag beanspruchen').first().json.request_id } }) }}",
+        "options": {
+          "timeout": 12000
+        }
+      }
+    },
+    {
+      "id": "8c8c217a-0d91-41b6-b1ed-59604f4e2ecc",
+      "name": "Shopify-Ergebnis prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        848
+      ],
+      "parameters": {
+        "jsCode": "const j=$json;if(j.error||j.errors?.length)return [{json:{status:'unknown',code:'SHOPIFY_RESPONSE_UNCERTAIN'}}];const r=j.data?.inventorySetQuantities;if(!r)return [{json:{status:'unknown',code:'SHOPIFY_RESPONSE_MISSING'}}];if(r.userErrors?.length)return [{json:{status:'failed',code:'SHOPIFY_REJECTED',errors:r.userErrors.map(x=>({code:x.code,message:x.message}))}}];if(!r.inventoryAdjustmentGroup)return [{json:{status:'unknown',code:'SHOPIFY_CONFIRMATION_MISSING'}}];return [{json:{status:'applied',code:'SHOPIFY_CONFIRMED',quantity:$('Auftrag beanspruchen').first().json.quantity}}];"
+      }
+    },
+    {
+      "id": "467e9d1e-e6fc-4f60-bbf9-d5de97926bb8",
+      "name": "Auftrag abschließen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        0,
+        1120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_bestandsauftrag_worker_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_action:'finish',p_id:$('Auftrag beanspruchen').first().json.request_id,p_lease:$('Auftrag beanspruchen').first().json.lease_id,p_result:$json} }}",
+        "options": {
+          "timeout": 12000
+        }
+      }
+    },
+    {
+      "id": "bb2c4106-270e-417c-99fd-ef7b2b099e10",
+      "name": "Fehler abschließen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        1120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Bestandswunsch": {
+      "main": [
+        [
+          {
+            "node": "Meldung prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meldung prüfen": {
+      "main": [
+        [
+          {
+            "node": "Auftrag beanspruchen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftrag beanspruchen": {
+      "main": [
+        [
+          {
+            "node": "Auftrag vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftrag vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Konto laden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Konto laden": {
+      "main": [
+        [
+          {
+            "node": "Konto prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Konto prüfen": {
+      "main": [
+        [
+          {
+            "node": "Konto prüfen – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Konto prüfen – gültig?": {
+      "main": [
+        [
+          {
+            "node": "Credential laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential laden": {
+      "main": [
+        [
+          {
+            "node": "Credential prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential prüfen": {
+      "main": [
+        [
+          {
+            "node": "Credential prüfen – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential prüfen – gültig?": {
+      "main": [
+        [
+          {
+            "node": "Credential entschlüsseln",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credential entschlüsseln": {
+      "main": [
+        [
+          {
+            "node": "Access Token holen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Access Token holen": {
+      "main": [
+        [
+          {
+            "node": "Token prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token prüfen": {
+      "main": [
+        [
+          {
+            "node": "Token prüfen – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token prüfen – gültig?": {
+      "main": [
+        [
+          {
+            "node": "Produktzuordnung laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Produktzuordnung laden": {
+      "main": [
+        [
+          {
+            "node": "Zuordnung prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zuordnung prüfen": {
+      "main": [
+        [
+          {
+            "node": "Zuordnung prüfen – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zuordnung prüfen – gültig?": {
+      "main": [
+        [
+          {
+            "node": "SMA-Produkt laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA-Produkt laden": {
+      "main": [
+        [
+          {
+            "node": "SMA-Produkt prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA-Produkt prüfen": {
+      "main": [
+        [
+          {
+            "node": "SMA-Produkt prüfen – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA-Produkt prüfen – gültig?": {
+      "main": [
+        [
+          {
+            "node": "Shopify-Bestand lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify-Bestand lesen": {
+      "main": [
+        [
+          {
+            "node": "Änderung vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Änderung vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Änderung vorbereiten – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Änderung vorbereiten – gültig?": {
+      "main": [
+        [
+          {
+            "node": "Auftrag vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftrag vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Vorbereitung prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vorbereitung prüfen": {
+      "main": [
+        [
+          {
+            "node": "Vorbereitung prüfen – gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vorbereitung prüfen – gültig?": {
+      "main": [
+        [
+          {
+            "node": "Shopify-Bestand setzen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fehler abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify-Bestand setzen": {
+      "main": [
+        [
+          {
+            "node": "Shopify-Ergebnis prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify-Ergebnis prüfen": {
+      "main": [
+        [
+          {
+            "node": "Auftrag abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120,
+    "availableInMCP": false
+  },
+  "pinData": {}
+}

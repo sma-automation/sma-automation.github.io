@@ -1,0 +1,83 @@
+{
+  "checked_at": "2026-11-06T11:12:11.551097Z",
+  "scope": "unchanged quantity through authenticated customer shop UI",
+  "sku": "SMA-TEST-002",
+  "workflow": {
+    "id": "LeeH7IigyGRRUuxS",
+    "nodes": 31,
+    "active": true,
+    "active_version_id": "d602ccc4-4f13-416b-bb8d-15d1b7d6462b",
+    "nodes_sha256": "e2d93d23b1a1030fab69c0d8e238d15669746864895fe0e4b723becec62eaeb0",
+    "connections_sha256": "22789487d83492acb1be6e597fed5e2b2e018729f458a32666569f5ca426e63a",
+    "settings_sha256": "d5d65f77afd55890b79b29d4541d1198b7c8f99bdccd8e3da003929f28cdc260",
+    "published_export_matches_checked_draft": true,
+    "original_node_and_webhook_ids_preserved": true,
+    "changed_existing_nodes": [
+      "Shopify-Ergebnis prüfen"
+    ],
+    "added_nodes": [
+      "Shopify-Bestand nachlesen"
+    ]
+  },
+  "before": {
+    "available": 4,
+    "on_hand": 11,
+    "committed": 7,
+    "orders": 10,
+    "open_requests": 0
+  },
+  "initial_request": {
+    "id": "21cf9021-d271-41d0-8d04-49e13116ce97",
+    "created_at": "2026-11-06T10:55:15.193913Z",
+    "requested_quantity": 4,
+    "dispatch_attempts": 1,
+    "initial_outcome": "SHOPIFY_CONFIRMATION_MISSING",
+    "closed_at": "2026-11-06T11:11:34.633894Z",
+    "final_status": "failed",
+    "review": "UNCHANGED_QUANTITY_VERIFIED",
+    "mutation_retried": false,
+    "success_fabricated": false
+  },
+  "successful_request": {
+    "id": "d0fc27aa-5659-4e20-b230-9b3093a5eebd",
+    "created_at": "2026-11-06T11:12:09.342295Z",
+    "processed_at": "2026-11-06T11:12:11.551097Z",
+    "dispatch_attempts": 1,
+    "status": "applied",
+    "phase": "finished",
+    "code": "SHOPIFY_UNCHANGED_CONFIRMED",
+    "confirmation": "readback",
+    "quantity": 4,
+    "unchanged": true
+  },
+  "after": {
+    "available": 4,
+    "on_hand": 11,
+    "committed": 7,
+    "canonical_stock": 4,
+    "canonical_updated_at": "2026-11-06T10:26:58.203Z",
+    "canonical_inventory_observed_at": "2026-11-06T01:28:03.067972Z",
+    "open_requests": 0,
+    "orders": 10,
+    "request_totals": {
+      "applied": 10,
+      "failed": 4
+    },
+    "ui_message": "Bestand von Shopify bestätigt: 4 Stück."
+  },
+  "tests": {
+    "new_contract_tests": 13,
+    "existing_shop_stock_tests": 10,
+    "full_repository_tests": 524,
+    "passed": 524,
+    "failed": 0
+  },
+  "limits": {
+    "actual_quantity_change_tested": false,
+    "new_inventory_event_verified": false,
+    "orders_created": false,
+    "paid_changes": false,
+    "social_publication": false,
+    "original_unpublished_draft_modified": false
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "workflow_id": "LeeH7IigyGRRUuxS",
+  "source_version": "1f30317b-6eb6-45a0-a1ec-920709f50ba2",
+  "nodes": {
+    "Auftrag beanspruchen": {
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": "1bece51a836d060a0680fc10a59cec5b1532c27d906bb1b48bcbd5d678944244",
+      "runtime": "9367344ce04e6cbfdeef6ce32b6be647f2fbee31b8ab3333a820c5da67052512",
+      "connections": "48a168381639b0a4754d18da56a132df7d852339ffad58539f4a64d79af05b5b"
+    },
+    "Zuordnung prüfen": {
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": "cfd3ae94adf36e80d11cc1d09147d3c888aa22d6c58a99768bdb100fce031c72",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8",
+      "connections": "41e927736711a07f07147634f4e3f3f752b021ca05bcd6c3fab44c2035ac3d2e"
+    },
+    "Shopify-Bestand lesen": {
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": "3a505ac6588f0542615c89ae72f28b4261c52b77fe96b1c12e9cf85ea67f9d8c",
+      "runtime": "9367344ce04e6cbfdeef6ce32b6be647f2fbee31b8ab3333a820c5da67052512",
+      "connections": "c4f38c5adf9bbc6d3f05f9ff563b89c7456c8ba2ecb4212ca090754776e0dfef"
+    },
+    "Änderung vorbereiten": {
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": "7f7269e04e20efd69393ddc9ae18d79a688cafc67b2b3c377b03ec7f806b614e",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8",
+      "connections": "93ae9021592305c7b4cf43686be0f22bcdd7618bcaa56316192fc23ff3b282ee"
+    },
+    "Shopify-Bestand setzen": {
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": "b585308b550445141866dbdef6095bdcb3566c3ae4dd3dc1942d64a09a1b0c72",
+      "runtime": "9367344ce04e6cbfdeef6ce32b6be647f2fbee31b8ab3333a820c5da67052512",
+      "connections": "7f331df13dcd27c87302616329aab70c46c247112560916a2e7251a103235131"
+    },
+    "Shopify-Ergebnis prüfen": {
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": "15d64cf7f96f8f6efc7d9fe952315a1270081a7b56bbba81a28b3685c9de561b",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8",
+      "connections": "5c91e592d33f905c53975ff54eaf761f04108656a1f41e116d93e20894cfaf31"
+    },
+    "Auftrag abschließen": {
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": "2700fd165bb538d4efe3f6a15de2c70b9d1db2e8897327aa1d1bba5f98170a77",
+      "runtime": "9367344ce04e6cbfdeef6ce32b6be647f2fbee31b8ab3333a820c5da67052512",
+      "connections": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    }
+  }
+}
