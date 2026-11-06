@@ -56,6 +56,15 @@ belassen; es ist kein Daten-Rollback erforderlich.
 
 ## Nachweise
 
+- [PR #85](https://github.com/sma-automation/sma-automation.github.io/pull/85)
+  ist in `website-v1` zusammengeführt. GitHub-Prüfungen und Pages-Bereitstellung
+  sind erfolgreich. Im bestehenden angemeldeten Dashboard erscheinen alle
+  neun Aufträge mit „Abgebrochen“. „Verlauf aktualisieren“ lädt erneut genau
+  neun Einträge. Die geerbte Zentrierung der bisherigen leeren Fläche wird
+  durch Entfernen ihrer Platzhalterklasse aufgehoben.
+- Vor/nach Installation und Live-Lesen bleibt der vollständige Zeilenhash
+  aller neun Aufträge identisch (`a19d817047175d3e2fe2315ff5f9b21b`). Weiterhin
+  null Provider-Versuche, Ereignisse und Uploadfreigaben sowie zehn Bestellungen.
 - **528 Repository-Tests bestanden.**
 - **62 isolierte SQL-Prüfungen bestanden:** Kundentrennung, Zugangssperren,
   identische Zeitstempel über Seitengrenzen, Eingabe-/Rechtegrenzen,

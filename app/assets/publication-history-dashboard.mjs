@@ -9,7 +9,7 @@ export function mountPublicationHistory({doc,request,getOwnerId,expectedOwnerId,
  function translated(el,de,en){if(el){el.textContent=de;el.setAttribute('data-de',de);el.setAttribute('data-en',en);}}
  translated(title,'Veröffentlichungsaufträge','Publication orders');
  translated(intro,'Deine Aufträge mit dem zuletzt gespeicherten Status. Aktualisieren lädt ausschließlich den Verlauf.','Your orders and their latest recorded status. Refresh only reads the history.');
- slot.classList.add('sma-publication-history');
+ slot.classList.remove('empty-state');slot.classList.add('sma-publication-history');
  const toolbar=create('div',null,'sma-history-toolbar'),refresh=create('button','Verlauf aktualisieren'),message=create('p');
  refresh.type='button';message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const list=create('ol',null,'sma-history-list'),more=create('button','Weitere Aufträge laden');more.type='button';more.hidden=true;
