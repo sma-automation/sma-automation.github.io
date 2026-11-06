@@ -20,6 +20,10 @@ Editor bearbeitbar. Bereitstellung und Nachweis:
 vervollständigen; `VIDEO_PLAN_REQUIRED` bleibt offen. Der bestandene
 Portaltextvergleich ersetzt diese Prüfung nicht. Echte Provider-/Coverabnahme
 und Veröffentlichung benötigen weiterhin ausdrückliche Freigabe.
+Der konkrete [nächste Videoprüfschritt](../../docs/VIDEO_REVIEW_NEXT_STEP.md)
+benötigt eine Kostenentscheidung: Der kostenlose Sightengine-Tarif unterstützt
+keine Videoverarbeitung. Technischer Anschluss, drei bestehende Sperren,
+Abnahmeablauf und die davon getrennte semantische Prüfung sind dort festgehalten.
 Alle 9 Aufträge unverändert; 0 Operatorfreigaben, Provider- und Coverversuche.
 Bestandsprüfung abgeschlossen. PR #57/#69 separat offen, unveröffentlichte
 n8n-Originalentwürfe und Shopify-Testmodus erhalten; keine kostenpflichtigen
