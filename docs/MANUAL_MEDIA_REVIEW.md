@@ -7,6 +7,16 @@ Analyseergebnis noch eine unabhängige Prüfung oder Annahmegarantie des Portals
 
 ## Bedienung
 
+In **Datei → Ausgewählte Datei ansehen → Beitragsvorschau** steht für unterstützte
+Videos **Originalvideo laden** zur Verfügung. Bereits gespeicherte Videos hatten
+zuvor ausschließlich ein Vorschaubild. Der neue Player lädt auf ausdrücklichen
+Klick die unveränderte Originaldatei über den vorhandenen Editor-Quellweg:
+Eigentümer, Kundenordner, Dateistand, Größe und Prüfsumme werden geprüft.
+MP4 bis 24 MB/60 Sekunden; native Wiedergabesteuerung, kein automatisches Abspielen.
+Es wird weder ein Export noch eine Analyse oder Prüfbestätigung angelegt.
+Datei-/Kontowechsel brechen laufende Abrufe ab und entfernen geladene Videodaten.
+Zusätzlich zu den unten genannten Prüfungen: 60 Originalvideo-DOM-Prüfungen.
+
 Im vorbereiteten YouTube-/TikTok-Auftrag erscheint **Persönliche Inhaltsprüfung**,
 wenn die Voraussetzungen erfüllt sind. Nichts ist vorausgewählt. Der Kunde muss
 die vollständige konkrete Datei selbst ansehen und vier Aussagen bestätigen:
