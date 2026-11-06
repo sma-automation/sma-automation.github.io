@@ -1,4 +1,4 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=2';
+import {mountMediaEditor} from './media-editor-view.mjs?v=3';
 import {getOwnerId,watchOwner,editorRequest,editorFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=2';
 const owner=await getOwnerId();let view,subscription;
 if(!owner){document.getElementById('status').textContent='Bitte melde dich bei SMA an.';document.getElementById('login').hidden=false;}

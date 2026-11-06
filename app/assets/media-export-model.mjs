@@ -1,4 +1,4 @@
-import {readEditorSettings,editorUUID,editorTimestamp} from './media-editor-model.mjs?v=2';
+import {readEditorSettings,editorUUID,editorTimestamp} from './media-editor-model.mjs?v=3';
 export const EXPORT_MAX_BYTES=24000000;
 export const EXPORT_RENDERER='sma-browser-export-v1';
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -15,9 +15,15 @@ export function exportPlan(file,settings){
 export function exportArguments(plan,hasAudio=false){
  const p=plan,s=p.settings,geometry=`scale=${p.scaledWidth}:${p.scaledHeight}:flags=lanczos,`+(p.fit==='contain'?`pad=${p.width}:${p.height}:${p.x}:${p.y}:color=0xe8ecf5`:`crop=${p.width}:${p.height}:${p.x}:${p.y}`)+',setsar=1';
  const video=p.media_kind==='video',time=video?`trim=start=${s.start_ms/1000}:duration=${p.duration_ms/1000},setpts=PTS-STARTPTS,`:'';
- const args=['-hide_banner','-v','error','-xerror','-err_detect','explode','-i','source','-i','overlay.png','-filter_complex',`[0:v:0]${time}${geometry}[base];[base][1:v:0]overlay=0:0:eof_action=repeat[v]`,'-map','[v]','-map_metadata','-1','-map_chapters','-1','-threads','1'];
+ const music=video?s.music:null,original=video&&hasAudio&&s.audio_volume>0,extra=!!music&&music.volume>0;
+ let filters=`[0:v:0]${time}${geometry}[base];[base][1:v:0]overlay=0:0:eof_action=repeat[v]`;
+ const audio=(start,volume)=>`atrim=start=${start/1000}:duration=${p.duration_ms/1000},asetpts=PTS-STARTPTS,volume=${volume/100},apad,atrim=duration=${p.duration_ms/1000}`;
+ if(original)filters+=`;[0:a:0]${audio(s.start_ms,s.audio_volume)}[original]`;
+ if(extra)filters+=`;[2:a:0]${audio(music.start_ms,music.volume)}[music]`;
+ if(original&&extra)filters+=';[original][music]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=0[a]';
+ const args=['-hide_banner','-v','error','-xerror','-err_detect','explode','-i','source','-i','overlay.png',...(music?['-i','music']:[]),'-filter_complex',filters,'-map','[v]','-map_metadata','-1','-map_chapters','-1','-threads','1'];
  if(video){
-  if(hasAudio&&s.audio_volume>0)args.push('-map','0:a:0','-af',`atrim=start=${s.start_ms/1000}:duration=${p.duration_ms/1000},asetpts=PTS-STARTPTS,volume=${s.audio_volume/100}`,'-c:a','aac','-b:a','128k');else args.push('-an');
+  if(original||extra)args.push('-map',original&&extra?'[a]':original?'[original]':'[music]','-c:a','aac','-b:a','128k');else args.push('-an');
   args.push('-t',String(p.duration_ms/1000),'-r','30','-c:v','libx264','-preset','ultrafast','-crf','23','-pix_fmt','yuv420p','-movflags','+faststart','result.mp4');
  }else args.push('-frames:v','1','-an','-c:v','png','result.png');
  return args;
@@ -32,7 +38,7 @@ export function verifyMediaProbe(probe,file,{outputPlan=null,hasAudio=false}={})
  if(file.media_kind==='video'){
   const expected=outputPlan?.duration_ms??file.duration_ms;
   if(!Number.isFinite(duration)||duration<=0||duration>60500||Math.abs(duration-expected)>250)throw Error('MEDIA_INVALID');
-  if(outputPlan&&(v.codec_name!=='h264'||v.pix_fmt!=='yuv420p'||as.length!==(hasAudio&&outputPlan.settings.audio_volume>0?1:0)))throw Error('MEDIA_INVALID');
+  if(outputPlan&&(v.codec_name!=='h264'||v.pix_fmt!=='yuv420p'||as.length!==((hasAudio&&outputPlan.settings.audio_volume>0||outputPlan.settings.music?.volume>0)?1:0)))throw Error('MEDIA_INVALID');
  }
  if(outputPlan&&file.media_kind==='image'&&v.codec_name!=='png')throw Error('MEDIA_INVALID');
  return {hasAudio:as.length===1,width,height,duration_ms:Math.round(duration)};

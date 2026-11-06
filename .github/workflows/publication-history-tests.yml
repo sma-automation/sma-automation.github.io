@@ -3,6 +3,9 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - app/assets/media-music*
+      - app/assets/publication-export-cover*
+      - tests/*media-music*
       - app/assets/media-export*
       - n8n/publishing/*editor-source*
       - supabase/sql/publication-editor-exports.sql
@@ -62,3 +65,4 @@ jobs:
           node tests/run-media-editor-dom.mjs
           node tests/run-media-export-sql.mjs
           node tests/run-media-export-dom.mjs
+          node tests/run-media-music-dom.mjs
