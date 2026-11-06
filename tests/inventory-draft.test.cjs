@@ -52,6 +52,42 @@ function fixture(){
     }],pageInfo:{hasNextPage:false}}}}}};
   return {product,mapping,account,response,workflowId:'workflow',executionId:'1'};
 }
+test('QA fault configuration is explicit and invalid case identities are rejected',()=>{
+ const source=qaFixture(),caseId='00000000-0000-4000-8000-000000000002';
+ for(const options of [{fault:'after_commit'},{caseId:'x'},{caseId,fault:'unknown'}])assert.throws(()=>buildInventoryQA(source,options));
+ const qa=buildInventoryQA(source,{caseId,fault:'timeout_read'});
+ assert.equal(qa.settings.executionTimeout,90);
+ assert.equal(qa.nodes.find(n=>n.name===N.reread).parameters.options.timeout,1);
+ assert.equal(qa.nodes.find(n=>n.name===N.read).parameters.options.timeout,15000);
+ assert.equal(buildInventoryQA(source,{caseId}).nodes.find(n=>n.name===N.reread).parameters.options.timeout,15000);
+ for(const node of qa.nodes.filter(n=>n.type==='n8n-nodes-base.code'))new vm.Script('(async function(){'+node.parameters.jsCode+'})()');
+});
+test('QA retries keep one delivery identity across executions and still require a fresh claim',async()=>{
+ const f=fixture(),caseId='00000000-0000-4000-8000-000000000002';
+ const qa=buildInventoryQA(qaFixture(),{caseId}),refs={
+  [N.product]:f.product,[N.mapping]:f.mapping,[N.account]:f.account,
+  'SMA – Produkt – Shopify Sync – Webhook':{body:{qa_case_id:caseId,qa_fault:'none'}}};
+ const run=id=>vm.runInNewContext('(async function(){'+qa.nodes.find(n=>n.name===N.prepare).parameters.jsCode+'})()',{
+  require,Buffer,$workflow:{id:'qa'},$execution:{id},$:n=>({all:()=>[{json:refs[n]}]}),$input:{all:()=>[{json:f.response}]}});
+ const first=(await run('one'))[0].json,second=(await run('two'))[0].json;
+ assert.equal(first.delivery_id,second.delivery_id);
+ refs['SMA – Produkt – Shopify Sync – Webhook'].body.qa_case_id=null;
+ assert.notEqual((await run('one'))[0].json.delivery_id,(await run('two'))[0].json.delivery_id);
+});
+test('QA fault hooks run only after valid claim/commit and recovery restores normal flow',async()=>{
+ const {job,result}=ready(),caseId='00000000-0000-4000-8000-000000000002';
+ const qa=buildInventoryQA(qaFixture(),{caseId,fault:'after_commit'});
+ const ctx={body:{qa_case_id:caseId,qa_fault:'after_commit'}},refs={[N.prepare]:prepare(fixture()),[N.evaluate]:job,'SMA – Produkt – Shopify Sync – Webhook':ctx};
+ class Clock extends Date{static now(){return now;}}
+ const run=(name,input)=>vm.runInNewContext('(async function(){'+qa.nodes.find(n=>n.name===name).parameters.jsCode+'})()',{
+  Date:Clock,$:n=>({all:()=>[{json:refs[n]}]}),$input:{all:()=>[{json:input}]}});
+ await assert.rejects(run(N.canonical,result),/QA_EXPECTED_AFTER_COMMIT/);
+ await assert.rejects(run(N.canonical,{...result,applied:false}),/CANONICAL_WRITE_NOT_CONFIRMED/);
+ ctx.body.qa_fault='none';assert.equal((await run(N.canonical,result))[0].json.bestand,4);
+ await assert.rejects(run(N.claimed,{ok:false,action:'busy'}),/LEASE_NOT_ACQUIRED/);
+ assert.equal((await run(N.claimed,{ok:true,action:'duplicate',status:'done'})).length,0);
+ assert.equal((await run(N.claimed,{ok:true,action:'process',lease_id:leaseId,read_started_at:new Date(now).toISOString()}))[0].json.lease_id,leaseId);
+});
 const prepare=f=>inventoryPrepare(f,crypto);
 const claimed=job=>inventoryClaim({ok:true,action:'process',lease_id:leaseId,read_started_at:new Date(now).toISOString()},job,now);
 function accepted(job){return {ok:true,applied:true,row_id:9,kunde_id:'canonical-customer',n8n_kunde_id:job.kunde_id,

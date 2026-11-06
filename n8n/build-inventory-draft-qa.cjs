@@ -4,11 +4,13 @@ const fs=require('node:fs');
 const crypto=require('node:crypto');
 const {patchInventoryDraft}=require('./patch-inventory-draft.cjs');
 const {inventoryNames:N}=require('./inventory-draft-contract.cjs');
-function buildInventoryQA(source){
+function buildInventoryQA(source,{caseId=null,fault='none'}={}){
+ if(caseId!==null&&!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(caseId))throw new Error('QA_CASE_ID_INVALID');
+ if(!['none','after_commit','timeout_read'].includes(fault)||fault!=='none'&&!caseId)throw new Error('QA_FAULT_INVALID');
  const candidate=patchInventoryDraft(source),byName=new Map(candidate.nodes.map(n=>[n.name,n]));
  const prefix='SMA – Produkt – Shopify Sync – ';
  const code=(name,jsCode)=>({id:crypto.randomUUID(),name,type:'n8n-nodes-base.code',typeVersion:2,parameters:{mode:'runOnceForAllItems',jsCode},position:[0,0]});
- const context=code(prefix+'Webhook',`return [{json:{body:{produkt_id:'10c2f5a9-0571-4023-a1d6-df871813e1a7'}}}];`);
+ const context=code(prefix+'Webhook',`return [{json:{body:${JSON.stringify({produkt_id:'10c2f5a9-0571-4023-a1d6-df871813e1a7',qa_case_id:caseId,qa_fault:fault})}}}];`);
  const customer=code(N.product.replace('Produkt prüfen','Kunde prüfen'),`return [{json:{kunde_id:'kunde_3182'}}];`);
  const guard=code('QA – Nur bestätigten Testbestand übernehmen',`const s=$input.first().json;
  const p=$('${N.product}').first().json;
@@ -20,6 +22,13 @@ function buildInventoryQA(source){
  const nodes=[trigger,context,customer,...existing.map(name=>{
   if(!byName.has(name))throw new Error('Source node missing');return structuredClone(byName.get(name));
  }),guard];
+ // QA-only stable identity allows replay from the beginning after lease expiry.
+ // It never resumes at an old mirror write; both Shopify reads run again.
+ const qaNode=name=>nodes.find(n=>n.name===name);
+ qaNode(N.prepare).parameters.jsCode=qaNode(N.prepare).parameters.jsCode.replace('executionId:$execution.id',`executionId:one('${context.name}').body.qa_case_id||$execution.id`);
+ qaNode(N.canonical).parameters.jsCode=qaNode(N.canonical).parameters.jsCode.replace(
+  'return output(inventoryCanonical(input,one(inventoryNames.evaluate)));',
+  `const confirmed=inventoryCanonical(input,one(inventoryNames.evaluate));\nif(one('${context.name}').body.qa_fault==='after_commit')throw new Error('QA_EXPECTED_AFTER_COMMIT');\nreturn output(confirmed);`);
  const repeat=structuredClone(byName.get(N.claim));repeat.id=crypto.randomUUID();repeat.name='QA – Gleiche Meldung wiederholen';
  repeat.parameters.jsonBody=`={{ $('SMA – Bestand – Sperrauftrag').first().json }}`;
  const verify=code('QA – Ergebnis',`const r=$input.first().json;
@@ -38,7 +47,7 @@ function buildInventoryQA(source){
   if(node.type==='n8n-nodes-base.httpRequest'){
    const params=node.parameters;
    if(params.jsonBody&&/\bmutation\b/.test(params.jsonBody))throw new Error('Shopify writes forbidden in QA');
-   params.options={...params.options,timeout:15000};
+   params.options={...params.options,timeout:fault==='timeout_read'&&node.name===N.reread?1:15000};
   }
  }
  // n8n's UI import may ignore settings. Verify them in Workflow Settings BEFORE execution.
@@ -47,8 +56,8 @@ function buildInventoryQA(source){
 }
 module.exports={buildInventoryQA};
 if(require.main===module){
- const [input,output]=process.argv.slice(2);if(!input||!output)throw new Error('SOURCE.json NEW_PRIVATE_QA.json required');
- const qa=buildInventoryQA(JSON.parse(fs.readFileSync(input,'utf8')));
+ const [input,output,caseId=null,fault='none']=process.argv.slice(2);if(!input||!output)throw new Error('SOURCE.json NEW_PRIVATE_QA.json [CASE_UUID FAULT] required');
+ const qa=buildInventoryQA(JSON.parse(fs.readFileSync(input,'utf8')),{caseId,fault});
  fs.writeFileSync(output,JSON.stringify(qa,null,2)+'\n',{flag:'wx',mode:0o600});
  console.log(JSON.stringify({nodes:qa.nodes.length,active:false,manual_only:true,shopify_mutations:0}));
 }

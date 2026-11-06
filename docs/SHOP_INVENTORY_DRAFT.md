@@ -1,10 +1,11 @@
 # Shopify-Bestandsentwurf: Übernahme vor Spiegelung
 
-Stand: 6. November 2026 (Europe/Vienna). **Separater manueller n8n-Prüflauf bestanden;
-Kandidat weiterhin unveröffentlicht.** Der laufende Bestandsworkflow und der
+Stand: 6. November 2026 (Europe/Vienna). **Echter n8n-Normallauf sowie Abbruch,
+HTTP-Timeout und Wiederaufnahme bestanden; Kandidat weiterhin unveröffentlicht.** Der laufende Bestandsworkflow und der
 erhaltene 515-Node-Entwurf wurden nicht verändert. Im Prüflauf wurden für
-SMA-TEST-002 dieselben vier Stück in Supabase und n8n bestätigt und genau eine
-Journalmeldung ergänzt. Shopify Payments bleibt im Testmodus.
+SMA-TEST-002 dieselben vier Stück in Supabase und n8n bestätigt. Einschließlich
+beider Wiederaufnahmetests wurden drei Journalmeldungen ergänzt; alle 20
+Meldungen sind abgeschlossen. Shopify Payments bleibt im Testmodus.
 
 ## Ausgangslage
 
@@ -70,7 +71,7 @@ node --test tests/inventory-draft.test.cjs tests/shop-stock.test.cjs
 git diff --check
 ```
 
-42 Tests bestanden: 32 für Vertrag, Patch und isolierten Prüflauf, zehn vorhandene
+45 Tests bestanden: 35 für Vertrag, Patch und isolierten Prüflauf, zehn vorhandene
 Dashboard-Bestandstests. Der synthetische Durchlauf führt die tatsächlich
 eingebetteten Code-Nodes und HTTP-Body-Ausdrücke aus. Er prüft unter anderem
 Kunden-/Kontobindung, Doppelaufrufe, belegte/abgelaufene Sperren, zweite Lesung,
@@ -128,17 +129,62 @@ kontrollieren; die JSON-Angaben allein reichen dafür nicht aus.
 
 ![n8n-Abschluss mit vier Stück und erkanntem Doppelaufruf](evidence/shop-inventory-qa-pr81.jpg)
 
+## Abbruch, Sperre und Wiederaufnahme
+
+Der QA-Generator unterstützt ausdrücklich begrenzte Fehlerfälle:
+`after_commit` bricht nach bestätigter Supabase-Übernahme vor der n8n-Spiegelung
+ab; `timeout_read` setzt ausschließlich beim zweiten Shopify-Abruf das HTTP-Zeitlimit
+auf eine Millisekunde. Ohne Fehlerfall bleiben alle HTTP-Zeitlimits bei 15 Sekunden.
+Der Workflow-Timeout bleibt 90 Sekunden. Fehlerfälle benötigen eine eigene UUID
+als `caseId`; ungültige Einstellungen werden zurückgewiesen.
+
+Für denselben QA-Fall bleibt die interne Lieferkennung über neue Ausführungen
+gleich. Die Wiederaufnahme startet **am manuellen Trigger**, nimmt eine neue
+Sperre und liest Shopify neu. Sie setzt nicht bei einem alten Tabellen-Write fort.
+Das ist eine manuell geprüfte Wiederaufnahme, keine neu eingebaute automatische
+Fehlerbehebung im produktiven Workflow. Der Produktionspatch erhält keine
+Fehlerschalter und keine feste QA-Kennung.
+
+Echter Test am 6. November 2026 (alle folgenden Zeiten UTC):
+
+| Prüffall | Beobachtung |
+| --- | --- |
+| Abbruch nach Commit, 00:03:01 | `QA_EXPECTED_AFTER_COMMIT`; n8n-Spiegelung und `finish` werden nicht ausgeführt. Journal `processing`, Versuch 1, Supabase `applied:true`, Bestand vier. |
+| Sofortiger Neustart | `LEASE_NOT_ACQUIRED`; keine erneute Übernahme, kein weiterer Journalversuch. |
+| Wiederaufnahme nach Sperrablauf, 00:05:22 | Derselbe Journaleintrag wird mit Versuch 2 abgeschlossen; neuer Erfassungszeitpunkt `00:05:22.334673Z`, passende Spiegelung, anschließend `duplicate` / `done`. |
+| HTTP-Timeout, 00:07:11 | Zweiter Shopify-Abruf endet mit `ECONNABORTED`, `timeout of 1ms exceeded`. Journal ohne Commit-Ergebnis; Supabase-Erfassungszeit bleibt `00:05:22.334673Z`. |
+| Wiederaufnahme nach HTTP-Timeout, 00:09:17 | Normaler HTTP-Timeout von 15 Sekunden wiederhergestellt; derselbe Vorgang endet nach frischer Lesung im zweiten Versuch erfolgreich, anschließend `duplicate` / `done`. |
+
+Zwischenstände wurden über die n8n-Ausgabe und unabhängige SQL-Abfragen
+kontrolliert. Es werden keine Sperren per SQL gelöscht oder künstlich vorzeitig
+freigegeben. Beide Fehlerfälle beziehen sich ausschließlich auf SMA-TEST-002.
+
+Abschlusskontrolle: beide Fälle `done`, jeweils `attempts:2`, insgesamt 20
+abgeschlossene Meldungen und keine laufende Sperre. Supabase bestätigt weiterhin
+vier Stück und `2026-11-06T00:09:16.805255Z` als letzten Erfassungszeitpunkt.
+Die Fehlerauslösung und feste Fallkennung wurden danach ausgeschaltet; der
+gespeicherte QA-Workflow verwendet wieder die normale Ausführungskennung und
+15 Sekunden HTTP-Timeout. Ein frischer Rückexport bestätigt alle 26 Node-Parameter,
+Zugangsreferenzen, Verbindungen und die gespeicherten Laufzeiteinstellungen gegen
+den normalen QA-Generator. Der Workflow bleibt manuell und unveröffentlicht.
+
+![Kontrollierter Abbruch vor der n8n-Spiegelung](evidence/shop-inventory-after-commit-pr81.jpg)
+
+![Erfolgreicher Abschluss nach Zeitüberschreitung und Wiederaufnahme](evidence/shop-inventory-recovered-pr81.jpg)
+
 ## Noch offene Freigabegrenze
 
 Supabase und n8n Data Tables sind keine gemeinsame Transaktion. Ein Ausfall nach
 dem Commit kann eine vorübergehend abweichende Spiegelung hinterlassen. Ein
 verspäteter externer Tabellenaufruf über das Sperrende hinaus ist durch die lokalen
-Tests nicht ausgeschlossen. Vor Veröffentlichung müssen Timeout, Teilfehler und
-Wiederaufnahme im echten n8n-Lauf geprüft werden; ein unbekanntes Ergebnis darf
+Tests und die beiden kontrollierten Echtläufe nicht ausgeschlossen. Die geprüften
+Abbrüche und Wiederaufnahmen sind abgeschlossen; ein unbekanntes Ergebnis darf
 nicht durch blindes Wiederholen eines alten Tabellen-Writes repariert werden.
 Eine neue vollständige Ausführung muss einen frischen Shopify-Wert lesen.
 Die Sperre koordiniert diesen Zweig mit dem bestehenden Bestands-Webhook;
 separate manuelle Bestandsaufträge werden durch diesen Patch nicht umgebaut.
+Eine produktive automatische Wiederaufnahme mit dauerhaftem Auftragsbezug und
+eine Absicherung verspäteter Data-Table-Antworten sind nicht Teil dieses QA-Schritts.
 
 Der 524-Node-Kandidat enthält auch ältere, hier nicht abgenommene Änderungen des
 Entwurfs. **Kein vollständiger Austausch des veröffentlichten 511-Node-Workflows.**
