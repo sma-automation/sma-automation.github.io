@@ -8,6 +8,10 @@ diesen Basiskandidaten auf 527 Nodes und ergänzt den separaten Bestands-Webhook
 63 Tests und der gemeinsame echte Prüflauf bestehen; die vollständige
 Kundenablauf-Abnahme und produktive Übernahme stehen noch aus.
 
+Die anschließende [Antwortprüfung der Produktbearbeitung](SHOP_PRODUCT_EDIT_RESPONSES.md)
+führt zum privaten 534-Node-Kandidaten mit 74 automatisierten Tests. Der äußere
+Live-Durchlauf ist weiterhin offen; die Anmeldung an n8n blieb zuletzt nicht bestehen.
+
 ## Frische Ausgangsversionen
 
 Die n8n-Versionshistorie bestätigt weiterhin:

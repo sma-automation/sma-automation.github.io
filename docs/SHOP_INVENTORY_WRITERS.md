@@ -3,6 +3,10 @@
 Stand: 6. November 2026, Europe/Vienna. **63 Tests und gemeinsamer echter n8n-Prüflauf
 bestanden. Keine produktive Übernahme.**
 
+Fortsetzung: [Bestätigte Produktbearbeitung und HTTP-Antworten](SHOP_PRODUCT_EDIT_RESPONSES.md)
+erweitert den privaten Kandidaten auf 534 Nodes. 74 automatisierte Tests bestehen;
+der neue äußere Live-Test ist wegen der aktuell nicht gehaltenen n8n-Anmeldung offen.
+
 ## Abgeglichene Quellen
 
 Der separate veröffentlichte Bestands-Webhook wurde frisch exportiert:
@@ -105,8 +109,9 @@ Supabase-Abschlussprüfung vom **6. November 2026, 02:28 Uhr Wiener Zeit**:
 ## Verbleibende Übernahme
 
 Die geänderten Schreibwege sind gemeinsam in der getrennten QA-Kopie geprüft.
-Der vollständige 527-Node-Kundenworkflow und der 42-Node-Bestands-Webhook liegen
-weiterhin als private Integrationskandidaten vor. Vor ihrer produktiven Übernahme
+Der vollständige Kundenworkflow (inzwischen 534 Nodes einschließlich der
+[Antwortprüfung](SHOP_PRODUCT_EDIT_RESPONSES.md)) und der 42-Node-Bestands-Webhook
+liegen weiterhin als private Integrationskandidaten vor. Vor ihrer produktiven Übernahme
 folgen der aktuelle Versionsabgleich und die Abnahme des vollständigen
 angemeldeten Kundenablaufs einschließlich seiner Antworten. Der manuelle
 Prüflauf ersetzt keinen Test dieses äußeren Authentifizierungs-/Webhook-Einstiegs.

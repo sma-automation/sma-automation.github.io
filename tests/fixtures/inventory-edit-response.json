@@ -1,0 +1,672 @@
+{
+  "id": "GHBsYQcyt0JLFvRP",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-produkt-bearbeiten",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -4304,
+        -4992
+      ],
+      "id": "72eca76e-e71e-4474-9ea5-122730e6bc10",
+      "name": "SMA – Produkt – Bearbeiten – Webhook",
+      "webhookId": "43c30a6e-606d-4fc4-8b92-ac17d065df00"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/oVIgtuR95fFUbMrN"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "zugangs_token",
+              "keyValue": "={{ $json.body.token }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "keyValue": "={{ true }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -4080,
+        -4992
+      ],
+      "id": "43151717-f39d-4503-bf2d-5cab19e99cb0",
+      "name": "SMA – Produkt – Bearbeiten – Kunde prüfen",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b03b4cab-bcb2-4e77-b0b0-b169e8868a47",
+              "leftValue": "={{ $json.demo_delta_aktiv === true || ($json.zahlung_bestaetigt === true && ['beta','delta'].includes(($json.paket || '').toLowerCase())) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3856,
+        -4992
+      ],
+      "id": "4e7faa73-7055-44a1-b510-7d612521aa0c",
+      "name": "SMA – Produkt – Bearbeiten – Paket berechtigt?"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.produkt_id }}"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Kunde prüfen').first().json.kunde_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -3632,
+        -5088
+      ],
+      "id": "f2f11437-3c7c-4242-b151-e4d619fab9a9",
+      "name": "SMA – Produkt – Bearbeiten – Produkt prüfen",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dd84d848-5ffb-412d-9cff-43aa292000a7",
+              "leftValue": "={{ !!$json.produkt_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3408,
+        -5088
+      ],
+      "id": "d88c34d3-364c-4508-b854-e5f9c96b4a9f",
+      "name": "SMA – Produkt – Bearbeiten – Produkt gefunden?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"message\": \"Produkt nicht gefunden\"\n}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3184,
+        -4992
+      ],
+      "id": "eb788f94-cde0-4887-bfa0-cd3018586375",
+      "name": "SMA – Produkt – Bearbeiten – Produkt nicht gefunden"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TM5GRZx8AfES1BFo",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/TM5GRZx8AfES1BFo"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_id }}"
+            },
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Kunde prüfen').first().json.kunde_id }}"
+            },
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Bestand schützen').first().json.id }}"
+            },
+            {
+              "keyName": "updatedAt",
+              "condition": "eq",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Bestand schützen').first().json.updatedAt }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "aktiv": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.aktiv ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.aktiv }}",
+            "produkt_name": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.produkt_name ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_name }}",
+            "produkt_typ": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.produkt_typ ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_typ }}",
+            "beschreibung": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.beschreibung ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.beschreibung }}",
+            "sku": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.sku ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.sku }}",
+            "preis": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.preis !== undefined ? Number($('SMA – Produkt – Bearbeiten – Webhook').first().json.body.preis) : $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.preis }}",
+            "waehrung": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.waehrung ?? $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.waehrung }}",
+            "bestand": "={{ $('SMA – Produkt – Bearbeiten – Webhook').first().json.body.bestand !== undefined ? Number($('SMA – Produkt – Bearbeiten – Webhook').first().json.body.bestand) : $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.bestand }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "kunde_id",
+              "displayName": "kunde_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_id",
+              "displayName": "produkt_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "produkt_name",
+              "displayName": "produkt_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "produkt_typ",
+              "displayName": "produkt_typ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "beschreibung",
+              "displayName": "beschreibung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "sku",
+              "displayName": "sku",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "preis",
+              "displayName": "preis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "waehrung",
+              "displayName": "waehrung",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bestand",
+              "displayName": "bestand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aktiv",
+              "displayName": "aktiv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -3184,
+        -5184
+      ],
+      "id": "2b39a925-94f1-4e86-884e-985c42980254",
+      "name": "SMA – Produkt – Bearbeiten – Speichern",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "continueOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"message\": \"Produkt erfolgreich aktualisiert\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2960,
+        -5360
+      ],
+      "id": "8303c570-fb4d-45a3-8f98-51b3e90b6382",
+      "name": "SMA – Produkt – Bearbeiten – Erfolgreich"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"message\": \"Produktbearbeitung für dieses Paket nicht freigeschaltet\"\n}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3632,
+        -4896
+      ],
+      "id": "445debaa-4978-40d9-8c4e-fd78cdf88035",
+      "name": "SMA – Produkt – Bearbeiten – Zugriff verweigert"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/sma_produkte",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "on_conflict",
+              "value": "kunde_id,sma_produkt_id"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "kunde_id",
+              "value": "={{ $json.kunde_id }}"
+            },
+            {
+              "name": "sma_produkt_id",
+              "value": "={{ $json.produkt_id }}"
+            },
+            {
+              "name": "produkt_name",
+              "value": "={{ $json.produkt_name }}"
+            },
+            {
+              "name": "beschreibung",
+              "value": "={{ $json.beschreibung ?? '' }}"
+            },
+            {
+              "name": "sku",
+              "value": "={{ $json.sku ?? '' }}"
+            },
+            {
+              "name": "produkt_typ",
+              "value": "={{ $json.produkt_typ }}"
+            },
+            {
+              "name": "preis",
+              "value": "={{ Number($json.preis) }}"
+            },
+            {
+              "name": "waehrung",
+              "value": "={{ $json.waehrung }}"
+            },
+            {
+              "name": "bestand",
+              "value": "={{ Number($json.bestand) }}"
+            },
+            {
+              "name": "aktiv",
+              "value": "={{ $json.aktiv === true }}"
+            },
+            {
+              "name": "updated_at",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -2960,
+        -5184
+      ],
+      "id": "16040c22-5001-4289-aa5f-fa404b87120a",
+      "name": "SMA – Supabase – Bearbeitung spiegeln",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fixture-secret-reference",
+          "name": "Fixture credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Jb6FkNxGMsZXJ1GB",
+          "mode": "list",
+          "cachedResultName": "SMA_Produkt_Maerkte",
+          "cachedResultUrl": "/projects/LbvAJ6LiSOzHnRsK/datatables/Jb6FkNxGMsZXJ1GB"
+        },
+        "matchType": "allConditions",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.kunde_id }}"
+            },
+            {
+              "keyName": "produkt_id",
+              "keyValue": "={{ $('SMA – Produkt – Bearbeiten – Produkt prüfen').first().json.produkt_id }}"
+            },
+            {
+              "keyName": "markt",
+              "keyValue": "shopify"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -3664,
+        -4924
+      ],
+      "id": "8cdfba4a-0914-4fa0-8d94-1b704a215d8a",
+      "name": "SMA – Produkt – Bearbeiten – Shopify-Zuordnungen lesen",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "continueOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "id": "191abb63-d1d4-4f69-8361-06345f0676a4",
+      "name": "SMA – Produkt – Bearbeiten – Bestand schützen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3424,
+        -4924
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "'use strict';\n\nfunction writerVersion(row) {\n  if (!Number.isSafeInteger(row?.id) || row.id <= 0 || typeof row.updatedAt !== 'string' ||\n      !/^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$/.test(row.updatedAt) || !Number.isFinite(Date.parse(row.updatedAt)))\n    throw new Error('STOCK_ROW_VERSION_REQUIRED');\n}\nfunction prepareProductEdit(product, mappings, body) {\n  writerVersion(product);\n  if (!product.kunde_id || !product.produkt_id || !body || body.produkt_id !== product.produkt_id || !Array.isArray(mappings))\n    throw new Error('PRODUCT_EDIT_IDENTITY');\n  const rows=mappings.filter(r=>r && Object.keys(r).length);\n  if (rows.some(r=>r.kunde_id!==product.kunde_id || r.produkt_id!==product.produkt_id || r.markt!=='shopify'))\n    throw new Error('PRODUCT_EDIT_MAPPING');\n  // Any established Shopify product keeps stock ownership, including a mapping\n  // temporarily paused for sync. Removing stock ownership needs its own process.\n  const shopify=rows.some(r=>r.externe_produkt_id||r.externe_variant_id);\n  let target=product.bestand;\n  if (body.bestand !== undefined) {\n    if (!['number','string'].includes(typeof body.bestand) || String(body.bestand).trim()==='') throw new Error('PRODUCT_EDIT_STOCK_INVALID');\n    target=Number(body.bestand);\n    if (!Number.isSafeInteger(target) || target<0) throw new Error('PRODUCT_EDIT_STOCK_INVALID');\n    if (shopify && target!==product.bestand) throw new Error('SHOPIFY_STOCK_USE_STOCK_ORDER');\n  }\n  return {...product,stock_owner:shopify?'shopify':'sma',expected_stock:target};\n}\nfunction confirmProductEdit(rows, before) {\n  if (!Array.isArray(rows) || rows.length!==1 || !rows[0] || !Object.keys(rows[0]).length)\n    throw new Error('PRODUCT_EDIT_CONFLICT_RELOAD_REQUIRED');\n  const row=rows[0];writerVersion(row);\n  if (row.id!==before.id || row.kunde_id!==before.kunde_id || row.produkt_id!==before.produkt_id ||\n      row.bestand!==before.expected_stock || Date.parse(row.updatedAt)<=Date.parse(before.updatedAt))\n    throw new Error('PRODUCT_EDIT_NOT_CONFIRMED');\n  return row;\n}\n\nconst products=$('SMA – Produkt – Bearbeiten – Produkt prüfen').all();\n if(products.length!==1)throw Error('PRODUCT_EDIT_IDENTITY');\n return [{json:prepareProductEdit(products[0].json,$input.all().map(x=>x.json),$('SMA – Produkt – Bearbeiten – Webhook').first().json.body)}];"
+      },
+      "retryOnFail": false,
+      "continueOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "id": "fb89a1c3-4085-4346-8124-381e010dc08c",
+      "name": "SMA – Produkt – Bearbeiten – Speicherung bestätigen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2944,
+        -4924
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "'use strict';\n\nfunction writerVersion(row) {\n  if (!Number.isSafeInteger(row?.id) || row.id <= 0 || typeof row.updatedAt !== 'string' ||\n      !/^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$/.test(row.updatedAt) || !Number.isFinite(Date.parse(row.updatedAt)))\n    throw new Error('STOCK_ROW_VERSION_REQUIRED');\n}\nfunction prepareProductEdit(product, mappings, body) {\n  writerVersion(product);\n  if (!product.kunde_id || !product.produkt_id || !body || body.produkt_id !== product.produkt_id || !Array.isArray(mappings))\n    throw new Error('PRODUCT_EDIT_IDENTITY');\n  const rows=mappings.filter(r=>r && Object.keys(r).length);\n  if (rows.some(r=>r.kunde_id!==product.kunde_id || r.produkt_id!==product.produkt_id || r.markt!=='shopify'))\n    throw new Error('PRODUCT_EDIT_MAPPING');\n  // Any established Shopify product keeps stock ownership, including a mapping\n  // temporarily paused for sync. Removing stock ownership needs its own process.\n  const shopify=rows.some(r=>r.externe_produkt_id||r.externe_variant_id);\n  let target=product.bestand;\n  if (body.bestand !== undefined) {\n    if (!['number','string'].includes(typeof body.bestand) || String(body.bestand).trim()==='') throw new Error('PRODUCT_EDIT_STOCK_INVALID');\n    target=Number(body.bestand);\n    if (!Number.isSafeInteger(target) || target<0) throw new Error('PRODUCT_EDIT_STOCK_INVALID');\n    if (shopify && target!==product.bestand) throw new Error('SHOPIFY_STOCK_USE_STOCK_ORDER');\n  }\n  return {...product,stock_owner:shopify?'shopify':'sma',expected_stock:target};\n}\nfunction confirmProductEdit(rows, before) {\n  if (!Array.isArray(rows) || rows.length!==1 || !rows[0] || !Object.keys(rows[0]).length)\n    throw new Error('PRODUCT_EDIT_CONFLICT_RELOAD_REQUIRED');\n  const row=rows[0];writerVersion(row);\n  if (row.id!==before.id || row.kunde_id!==before.kunde_id || row.produkt_id!==before.produkt_id ||\n      row.bestand!==before.expected_stock || Date.parse(row.updatedAt)<=Date.parse(before.updatedAt))\n    throw new Error('PRODUCT_EDIT_NOT_CONFIRMED');\n  return row;\n}\n\nreturn [{json:confirmProductEdit($input.all().map(x=>x.json),$('SMA – Produkt – Bearbeiten – Bestand schützen').first().json)}];"
+      },
+      "retryOnFail": false,
+      "continueOnFail": false,
+      "onError": "stopWorkflow"
+    }
+  ],
+  "connections": {
+    "SMA – Produkt – Bearbeiten – Webhook": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Kunde prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Kunde prüfen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Paket berechtigt?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Paket berechtigt?": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Produkt prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Zugriff verweigert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Produkt prüfen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Produkt gefunden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Produkt gefunden?": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Shopify-Zuordnungen lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Produkt nicht gefunden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Speichern": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Speicherung bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Supabase – Bearbeitung spiegeln": {
+      "main": [
+        []
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Shopify-Zuordnungen lesen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Bestand schützen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Bestand schützen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Produkt – Bearbeiten – Speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA – Produkt – Bearbeiten – Speicherung bestätigen": {
+      "main": [
+        [
+          {
+            "node": "SMA – Supabase – Bearbeitung spiegeln",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SMA – Produkt – Bearbeiten – Erfolgreich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

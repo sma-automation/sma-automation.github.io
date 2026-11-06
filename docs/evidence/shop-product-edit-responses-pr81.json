@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-06",
+  "workflow_id": "GHBsYQcyt0JLFvRP",
+  "before_nodes": 527,
+  "after_nodes": 534,
+  "compared_nodes_sha256": "a3ec6641bd9de099327e4caec6d5d69ae12439b57e02698208745cb2eb0c8a19",
+  "compared_connections_sha256": "64b3985fb153142ff7dbd4fb366f19bd9c0bd070f1750d65121963321bfd04b9",
+  "modified_candidate_nodes": [
+    "SMA – Supabase – Bearbeitung spiegeln",
+    "SMA – Produkt – Bearbeiten – Bestand schützen",
+    "SMA – Produkt – Bearbeiten – Speicherung bestätigen"
+  ],
+  "added_nodes": [
+    "SMA – Produkt – Bearbeiten – Eingabe gültig?",
+    "SMA – Produkt – Bearbeiten – Supabase-Kunde lesen",
+    "SMA – Produkt – Bearbeiten – Supabase-Kunde bestätigen",
+    "SMA – Produkt – Bearbeiten – Änderung gespeichert?",
+    "SMA – Produkt – Bearbeiten – Konflikt melden",
+    "SMA – Produkt – Bearbeiten – Spiegelung bestätigen",
+    "SMA – Produkt – Bearbeiten – Speicherung unbestätigt"
+  ],
+  "published_source_nodes": 511,
+  "modified_published_nodes": [
+    "SMA – Produkt – Bearbeiten – Speichern",
+    "SMA – Marktkonto – Initialimport – Shopify Produkt aktualisieren",
+    "SMA – Marktkonto – Initialimport – Digistore24 Produkt aktualisieren",
+    "SMA – Supabase – Produkt spiegeln",
+    "SMA – Supabase – Bearbeitung spiegeln"
+  ],
+  "unchanged_published_nodes": 506,
+  "existing_credentials_unchanged": true,
+  "settings_unchanged": true,
+  "source_authentication_unchanged": true,
+  "automated_tests": {
+    "passed": 74,
+    "failed": 0,
+    "kind": "Generated workflow code, expressions and routes with in-memory Data Table and HTTP adapters"
+  },
+  "live_customer_http_test": false,
+  "imported": false,
+  "published": false,
+  "blocker": "Secure n8n sign-in submitted; target returned sessionExpired=true. Fresh target-origin tab also showed sign-in.",
+  "protected_original_draft_untouched": true,
+  "shopify_mutations": false
+}

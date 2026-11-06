@@ -1,0 +1,96 @@
+{
+  "workflow_id": "GHBsYQcyt0JLFvRP",
+  "nodes": {
+    "SMA – Produkt – Bearbeiten – Webhook": {
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "parameters": "3b0bed22bcac4dd002a0913326928c2b25e2ae19e3c6b1dfb45aecb34920e19d",
+      "connections": "cab9e3697dbe715d6501026afe93a2eb24fa2eeb13442e71133423db214793b2",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Kunde prüfen": {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "parameters": "167df435a785855cb600cfa9bcf9a87621857e260158788672786096c5234ff1",
+      "connections": "6f8da0c4eee4faa780897547106e8d258abb5f8e06db1af8936a136983fd436a",
+      "runtime": "3d4a7aab59a54c12119c1f40f871cc0d02fd5eb92aa3f943320064ef373fe062"
+    },
+    "SMA – Produkt – Bearbeiten – Paket berechtigt?": {
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": "23c13544c8e4dfe9526ce564978a27f8fd76d93acd0cf465246b85d87a9c48b5",
+      "connections": "51a6bf6f9243cfe356880dfdd89b067e4b57f376d3ac262ec233b69af4fa817b",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Produkt prüfen": {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "parameters": "dd8d7aa465afbdfc866bb9ea337464a590cd173b0cc3d409b43bcbedd2778366",
+      "connections": "61e5f7cb3c5857f39115f76b57ac15cd91bd296198583e61216dd2f1d048f53e",
+      "runtime": "3d4a7aab59a54c12119c1f40f871cc0d02fd5eb92aa3f943320064ef373fe062"
+    },
+    "SMA – Produkt – Bearbeiten – Produkt gefunden?": {
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": "4e646e6ebaa7da54c013ae0504d9b09448fbd4bc517d87afb20f0b03a6772033",
+      "connections": "6068616b4b55c6404b2364c61ed5868c6764d5f7de6a91242b7c77495906a425",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Produkt nicht gefunden": {
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": "2fe8cc53adbaebc1df9cdb749ab199e4f0022c4fa3694691d5b37bec309d57da",
+      "connections": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Speichern": {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "parameters": "1273e1ed109ba08ea810064e2c15adaee7a89769e520b8fe8a6e8f0f936e7cf6",
+      "connections": "8866513cc77a6d57a63343d8875130336c89864e15cde2b75a7d0a1d813675eb",
+      "runtime": "3d4a7aab59a54c12119c1f40f871cc0d02fd5eb92aa3f943320064ef373fe062"
+    },
+    "SMA – Produkt – Bearbeiten – Erfolgreich": {
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": "9eaaa909e091d3aed3cf4209f6848d1bd413b2651f6d7b4cb749487a75586f90",
+      "connections": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Zugriff verweigert": {
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": "3e9ae20beccde787f19535fca2f178d86e7828c15cfb11269769950f8940a660",
+      "connections": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Supabase – Bearbeitung spiegeln": {
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": "2945262fa8418f654ca76666f3b82aa908805c84c4d2f18395a8b2b451bb1117",
+      "connections": "1e20202a8465641f5ce5314fb2815bd7d617fe53b2c57aaa175dd27170c79119",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Shopify-Zuordnungen lesen": {
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "parameters": "f30012c256ce92929bc93122162b60c959d68b98782c96bcd44e0d13e3d08bef",
+      "connections": "ce21ad96cb411062a905c859d10b91b6622de96c90f33523f5c34950e070c4c4",
+      "runtime": "3d4a7aab59a54c12119c1f40f871cc0d02fd5eb92aa3f943320064ef373fe062"
+    },
+    "SMA – Produkt – Bearbeiten – Bestand schützen": {
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": "55b872db4e4e4de7874a11947502c4822cb79288ee44072cf062650b4836cfb4",
+      "connections": "402e78d161ce60ff874a9e567e5ed54b6ef42c94f9920b0b8e1325a89fb01c57",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    },
+    "SMA – Produkt – Bearbeiten – Speicherung bestätigen": {
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": "4e39034c9f2acdd4bea2306e31b4c36edac3e8340487eeb159d2a29ebf571c52",
+      "connections": "ca854141bb6f540d16cf72bc2bd3f79546aacd8eeaad89184ab5cf8aa1dcdbe6",
+      "runtime": "f484f27c56d6f52dc30df75282b0c8aac8f77754c15e1183a325d97d1f5345a8"
+    }
+  }
+}
