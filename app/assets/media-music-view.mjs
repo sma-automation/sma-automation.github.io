@@ -16,6 +16,31 @@ export function mountMediaMusic({doc,onChange,setBusy,createURL=URL.createObject
   catch(error){if(!disposed&&e===epoch&&!controller.signal.aborted){paint();$('musicStatus').textContent=(musicLibraryMessages[error.message]||'Die gespeicherte Musik konnte nicht geladen werden.')+' Du kannst dieselbe Datei erneut auswählen.';}}
   finally{if(restoreController===controller){restoreController=null;restoring=null;}}
  }
+ function waitForMusic(pending,controller,signal,e){
+  if(!signal)return pending;
+  return new Promise((resolve,reject)=>{
+   const stop=()=>{
+    if(!disposed&&e===epoch&&restoreController===controller){
+     restoreController=null;restoring=null;controller?.abort();paint();
+     $('musicStatus').textContent='Laden der Musik abgebrochen. Beim nächsten Export wird es erneut versucht.';
+    }
+    signal.removeEventListener('abort',stop);reject(signal.reason);
+   };
+   signal.addEventListener('abort',stop,{once:true});
+   if(signal.aborted)stop();
+   pending.then(value=>{signal.removeEventListener('abort',stop);resolve(value);},error=>{signal.removeEventListener('abort',stop);reject(error);});
+  });
+ }
+ async function getSource(m,signal){
+  signal?.throwIfAborted();const e=epoch;
+  if(disposed)throw new DOMException('Music view closed','AbortError');
+  if(!blob&&library){if(!restoring)restoring=restore(m);await waitForMusic(restoring,restoreController,signal,e);}
+  signal?.throwIfAborted();
+  if(disposed||e!==epoch)throw new DOMException('Music selection changed','AbortError');
+  const bytes=await verifyMusicBytes(blob,m);signal?.throwIfAborted();
+  if(disposed||e!==epoch)throw new DOMException('Music selection changed','AbortError');
+  return bytes;
+ }
  async function saveLibrary(){if(!blob||!setting||!library||disposed||savingLibrary)return;savingLibrary=true;const e=epoch,controller=new AbortController(),bytes=blob,m=setting;restoreController=controller;setBusy(true);$('musicStatus').textContent='Musik wird dauerhaft gespeichert …';try{await library.upload(new File([bytes],m.name,{type:m.mime_type}),controller.signal);if(disposed||e!==epoch||controller.signal.aborted)return;$('musicStatus').textContent=m.name+' · in deiner Bibliothek gespeichert';void libraryView?.refresh();}catch(error){if(!disposed&&e===epoch&&!controller.signal.aborted)$('musicStatus').textContent=musicLibraryMessages[error.message]||musicLibraryMessages.MUSIC_UNAVAILABLE;}finally{savingLibrary=false;if(restoreController===controller)restoreController=null;if(!disposed&&e===epoch)setBusy(false);}}
  if(library){libraryView=mountMusicLibrary({doc,host:$('musicLibraryHost'),api:library,selectionKey:()=>video?key:null,onSelect:async(t,b)=>{if(!disposed&&video){epoch++;accept(t,b);}},createURL,revokeURL});$('musicSaveLibrary').addEventListener('click',saveLibrary);}
  async function choose(){const file=$('musicFile').files?.[0];if(!file||!video||disposed)return;const e=++epoch;setBusy(true);$('musicStatus').textContent='Musikdatei wird geprüft …';
@@ -26,5 +51,5 @@ export function mountMediaMusic({doc,onChange,setBusy,createURL=URL.createObject
  function edit(){if(!setting||disposed)return;const volume=Number($('musicVolume').value),start_ms=Math.round(Number($('musicStart').value)*1000);setting={...setting,volume,start_ms};$('musicVolumeValue').textContent=volume+' %';onChange();}
  function remove(){if(!setting||disposed)return;epoch++;clearBlob();setting=null;paint();onChange();}
  $('musicFile').addEventListener('change',choose);$('musicVolume').addEventListener('input',edit);$('musicStart').addEventListener('input',edit);$('musicRemove').addEventListener('click',remove);
- return {setContext(file,m){const next=file?file.id+':'+file.revision:'';if(next!==key||m?.sha256!==setting?.sha256||m?.size_bytes!==setting?.size_bytes){epoch++;clearBlob();}key=next;video=file?.media_kind==='video';setting=m?readMusicSetting(m):null;paint();if(setting&&!blob&&library&&!restoring)restoring=restore(setting);},getSetting(){return setting?readMusicSetting(setting):null;},async getSource(m){if(!blob&&library){if(!restoring)restoring=restore(m);await restoring;}return verifyMusicBytes(blob,m);},clear(){epoch++;clearBlob();setting=null;video=false;key='';paint();},destroy(){disposed=true;epoch++;libraryView?.destroy();$('musicSaveLibrary')?.removeEventListener('click',saveLibrary);clearBlob();$('musicFile').removeEventListener('change',choose);$('musicVolume').removeEventListener('input',edit);$('musicStart').removeEventListener('input',edit);$('musicRemove').removeEventListener('click',remove);}};
+ return {setContext(file,m){const next=file?file.id+':'+file.revision:'';if(next!==key||m?.sha256!==setting?.sha256||m?.size_bytes!==setting?.size_bytes){epoch++;clearBlob();}key=next;video=file?.media_kind==='video';setting=m?readMusicSetting(m):null;paint();if(setting&&!blob&&library&&!restoring)restoring=restore(setting);},getSetting(){return setting?readMusicSetting(setting):null;},getSource,clear(){epoch++;clearBlob();setting=null;video=false;key='';paint();},destroy(){disposed=true;epoch++;libraryView?.destroy();$('musicSaveLibrary')?.removeEventListener('click',saveLibrary);clearBlob();$('musicFile').removeEventListener('change',choose);$('musicVolume').removeEventListener('input',edit);$('musicStart').removeEventListener('input',edit);$('musicRemove').removeEventListener('click',remove);}};
 }
