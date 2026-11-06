@@ -1,7 +1,7 @@
 name: Publication history checks
 on:
   push:
-    branches: [publication-history-v1, publication-history-months, publication-text-history, compact-history-orders, website-v1]
+    branches: [publication-history-v1, publication-history-months, publication-text-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
       - app/assets/publication-history*
       - app/assets/publication-text-history*
