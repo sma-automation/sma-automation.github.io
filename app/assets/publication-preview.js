@@ -243,13 +243,13 @@ function readableFilename(name){
 function describeFile(file){
  const video=file.media_kind==='video';
  const kind=video?'Video':'Bild';
- const musicVersion=video&&file.name?.endsWith(' – mit SMA-Musik.mp4');
- const variant=musicVersion?'Video mit SMA-Musik':{original:video?'Originalvideo':'Originalbild',clip:'Videoausschnitt',cover:'Titelbild',export:video?'Bearbeitetes Video':'Bearbeitetes Bild'}[file.display?.variant]||kind;
+ const variant={original:video?'Originalvideo':'Originalbild',clip:'Videoausschnitt',cover:'Titelbild',
+  soundtrack:'Video mit SMA-Musik',export:video?'Bearbeitetes Video':'Bearbeitetes Bild'}[file.display?.variant]||kind;
  const duration=video&&Number.isFinite(file.duration_ms)&&file.duration_ms>0
   ? Math.max(0.1,Math.round(file.duration_ms/100)/10).toLocaleString('de-DE')+' Sek.' : '';
  const modified=new Date(file.modified_at);
  const fallback=Number.isFinite(modified.getTime())?kind+' vom '+modified.toLocaleDateString('de-AT')+' · '+modified.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):kind;
- const title=file.display?.product||file.display?.draft_title||readableFilename((file.display?.source_name||'').replace(/ – mit SMA-Musik\.mp4$/,''))||readableFilename((file.name||'').replace(/ – mit SMA-Musik\.mp4$/,''))||fallback;
+ const title=file.display?.product||file.display?.draft_title||readableFilename(file.display?.source_name)||readableFilename(file.name)||fallback;
  return {title,version:[variant,duration].filter(Boolean).join(' · ')};
 }
 async function optimizerCatalog(){

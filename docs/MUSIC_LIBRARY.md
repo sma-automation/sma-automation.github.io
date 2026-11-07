@@ -131,6 +131,24 @@ Musikfassung. Wiederholte Bestätigungen liefern dieselbe Datei. Ein falscher
 Hash, eine abweichende Größe, ein fremder Dateiname oder eine geänderte Quelle
 verhindern die Zuordnung. Das Testkonto behält seine neun übrigen Credits.
 
+### Produktlinks für vertonte Videos
+
+In der Portaloptimierung erscheint eine bestätigte Musikfassung mit dem Zusatz
+**Video mit SMA-Musik**. SMA erkennt sie auch nach dem Umbenennen anhand des
+abgeschlossenen Vertonungsauftrags, der Drive-Datei, der Größe und der SHA-256-Prüfsumme.
+
+Für einen neuen Beitrag kann SMA die Produktangaben der zugehörigen Quellversion
+verwenden. Das gilt auch für einen anschließenden Ausschnitt im Editor. Führt die
+Zuordnung zu genau einem aktiven Artikel im öffentlichen Kundenshop, enthält der
+gespeicherte Entwurf dessen direkten Produktlink. Bei fehlender oder mehrdeutiger
+Zuordnung greifen die üblichen Regeln für die Textvorbereitung. Medienprüfung,
+Titelbild und persönliche Freigabe beziehen sich weiterhin auf die gewählte Datei.
+
+Der isolierte Test `node tests/run-gallery-background-sql.mjs` verfolgt einen
+synthetischen stummen Clip durch die Vertonung bis zum gespeicherten YouTube-
+und TikTok-Text. Er prüft außerdem den umbenannten Dateistand, den nachfolgenden
+Editor-Export und die Ablehnung einer fremden oder veränderten Quelle.
+
 ### Hintergrundverarbeitung in n8n Cloud
 
 Ein minütlicher Datenbank-Zeitplan löst den separaten Workflow

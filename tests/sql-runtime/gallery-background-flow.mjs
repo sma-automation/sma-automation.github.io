@@ -13,7 +13,7 @@ export async function backgroundFlow({db,value,pick,uid,sha,file,browserJob}){
  const video=Buffer.from(fixture.video,'base64'),audio=Buffer.from(fixture.audio,'base64');
  const audioPath='render/'+sha+'/'+hash(audio)+'.aac';
  await db.query("update storage.objects set name=$1,metadata=$2 where name like 'render/%'",[audioPath,{size:audio.length,mimetype:'audio/aac'}]);
- const sourceId=await file(3);
+ const sourceId=await file(3,'Demo-SKU.mp4');
  await db.query("update sma_private.publication_files_v1 set revision=$1,size_bytes=$2 where id=$3",['sha256:'+hash(video)+':1',video.length,sourceId]);
  const folder='fixture_processing_folder',driveId='fixture_generated_file_03';
  const grantUrl='https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=fixture';
@@ -68,4 +68,5 @@ export async function backgroundFlow({db,value,pick,uid,sha,file,browserJob}){
  assert.equal(await value("select state v from sma_private.gallery_music_v1 where id=$1",[ticket.id]),'completed');
  assert.equal(await value("select count(*)::int v from sma_private.publication_uploads_v1 where id=$1 and status='completed'",[ticket.id]),1);
  console.log('Full background graph: closed-dashboard dispatch, verified source and track, resumable upload, correct AAC and one stored receipt.');
+ return ticket.id;
 }
