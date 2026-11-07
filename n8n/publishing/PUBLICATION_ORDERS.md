@@ -67,6 +67,20 @@ direkt den gespeicherten Stand. Bis der Stand geklärt ist, bleibt die Freigabe 
 Der Statusweg für bereits freigegebene Aufträge ist in
 [PORTAL_COVER_HANDOFF.md](../../docs/PORTAL_COVER_HANDOFF.md) beschrieben.
 
+### Vorbereiteten Auftrag im selben Tab wieder öffnen
+
+Wer nach **Auftrag prüfen** den Dialog schließt, kann ihn beim selben gespeicherten
+Beitrag über **Freigabe vorbereiten** wieder öffnen. SMA liest die vorhandene
+Auftrags-ID und zeigt die gespeicherten Einstellungen und die verbleibende
+Frist. Alle persönlichen Bestätigungen beginnen leer. Wurde der Auftrag
+inzwischen abgebrochen oder freigegeben, erscheint der gespeicherte Status.
+
+Bei einer unterbrochenen Verbindung bleibt **Status erneut laden** verfügbar.
+Für eine andere Sichtbarkeit oder Kennzeichnung öffnet **Vorbereitung neu starten**
+die Kontooptionen. Erst der anschließende Klick auf **Auftrag prüfen** sendet die
+geänderte Auswahl. Nach dem Schließen des gesamten Tabs ist die gespeicherte
+Vorbereitung unter **History → Aufträge** erreichbar.
+
 ## Unterbrochene Vorbereitung – 7. November 2026
 
 Fehlt nach **Auftrag prüfen** die Antwort, liest SMA den gespeicherten Stand

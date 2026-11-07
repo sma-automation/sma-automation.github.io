@@ -234,7 +234,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     const ended=preparationEnded(order),locked=ended||recovery!==null;
     controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');
     syncCommercial();close.disabled=value;consent.disabled=value||locked;
-    restart.hidden=recovery?!recovery.canRestart:!ended&&!pendingTarget(order);
+    restart.hidden=recovery?!recovery.canRestart:order?.state!=='prepared'&&!pendingTarget(order);
     restart.disabled=value;
     for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared'||locked;
     humanEnabled.disabled=value||!humanReviewAvailable(order);humanChecklist.hidden=!humanEnabled.checked;
@@ -452,14 +452,22 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
     finally{if(generation===epoch)setWorking(false);}
   }
+  function savedPreparation(){
+    const status=order.approval_window?.status;
+    return {id:order.id,choices:order.choices,targetId:order.target?.id,persisted:true,
+      code:status==='recheck'?'TARGET_OPTIONS_CHANGED':status==='expired'?'ORDER_NOT_PREPARED':null};
+  }
   async function startPreparation(resume=false){
-    if(resume&&!recovery&&pendingTarget(order))recovery={id:order.id,choices:order.choices,persisted:true};
-    if(resume&&!recovery&&interruptedPreparation&&(!order||(order.state==='prepared'&&order.id===interruptedPreparation.id))){
-      recovery=interruptedPreparation;
+    if(working)return;
+    if(resume&&!recovery){
+      if(order?.state==='prepared'||pendingTarget(order))recovery=savedPreparation();
+      else if(!order)recovery=interruptedPreparation;
     }
     if(recovery){
+      setWorking(false);
       let next;
       try{next=getContext();}catch(e){
+        controls.hidden=true;details.replaceChildren();
         if(!dialog.open)dialog.showModal();
         notice.textContent=e.message;return;
       }
@@ -516,13 +524,13 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     if(recovery)return run();
     if(pendingTarget(order))return continuePending(false);
     if(order.state==='prepared'){
-      recovery={id:order.id,choices:order.choices,targetId:order.target?.id,persisted:true};
+      recovery=savedPreparation();
       return run();
     }
     return run(()=>client.get(order.id));
   });
-  close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',clearExpiryTimer);dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
-  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;recovery=null;interruptedPreparation=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>{if(!dialog.open)clearExpiryTimer();});dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
+  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;working=false;recovery=null;interruptedPreparation=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {

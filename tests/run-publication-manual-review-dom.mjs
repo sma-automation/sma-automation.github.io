@@ -14,7 +14,7 @@ function fixture({option=true,platform='youtube',approvalResponse,storedResponse
   if(tag==='input')e.checked=false;
   return e;
  };
- const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform,preview_id:'synthetic-preview',preview_revision:1,assignment_revision:1};let currentBinding={...binding},reloadPatch={};
+ const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform,preview_id:'synthetic-preview',preview_revision:1,assignment_revision:1};let currentBinding={...binding},reloadPatch={},dirty=false;
  let sequence=8,clock=Date.now(),timer,savedPreparation;class TestDate extends Date{static now(){return clock;}}
  const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-'+String(++sequence).padStart(12,'0')},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
@@ -33,12 +33,15 @@ function fixture({option=true,platform='youtube',approvalResponse,storedResponse
   if(!storedResponse)return {...savedPreparation,...reloadPatch};
   return storedResponse(id,{ok:true,id,binding,can_publish:false,can_upload:false,state:'approved',
    approved_at:new Date(clock).toISOString(),target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel'},choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},approval_policy:'media-consent-2026-11-03.1'});
- },session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh});
+ },session:async()=>({access_token:'synthetic'}),getContext:()=>{
+  if(dirty)throw Error('Bitte speichere zuerst deine Änderungen.');
+  return {binding:currentBinding,name:'Synthetic.mp4'};
+ },refresh});
  const $=id=>doc.getElementById(id),dialog=$('publicationOrderDialog'),buttons=[...dialog.querySelectorAll('button')],approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
  const open=async()=>{await $('preparePublicationOrder').handlers.click();$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';if(platform==='youtube'){$('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';}await dialog.querySelector('form').handlers.submit({preventDefault(){}});};
- return {$,doc,view,binding,requests,reads,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+ return {$,doc,view,binding,requests,reads,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,setDirty:value=>dirty=value,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
 }
 {
  const t=fixture();await t.open();
@@ -89,7 +92,9 @@ for(const platform of ['youtube','tiktok']){
  eq(t.$('order-final-consent').checked,false);eq(t.requests.map(r=>r.action),['account']);
  t.$('order-visibility').value='private';synthetic.value='false';await t.doc.querySelector('form').handlers.submit({preventDefault(){}});
  eq(t.requests.at(-1).input.choices,{made_for_kids:false,contains_synthetic_media:false,visibility:'private'});
- await show();eq(t.$('order-contains_synthetic_media').children[0].textContent,'Bisher Nein · bitte wählen');
+ const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
+ eq(restart.hidden,false);await restart.handlers.click();
+ eq(t.$('order-contains_synthetic_media').children[0].textContent,'Bisher Nein · bitte wählen');
  for(const patch of [{state:'cancelled'},{approved_at:'today'},{target:{id:'elsewhere'}},{choices:{contains_synthetic_media:'true',made_for_kids:false}},{check_error:'FILE_CHANGED'},...['asset_id','asset_revision','assignment_revision','preview_id','preview_revision','platform'].map(key=>({binding:{...t.binding,[key]:'different'}}))]){
   t.view.rememberVideoChoices({...saved,...patch});await show();eq(reuse.hidden,true);
  }
@@ -305,5 +310,74 @@ for(const platform of ['youtube','tiktok']){
  assert.match(notice(status),/gespeicherten Portaleinstellungen/);
  status.patch({});await status.status.handlers.click();eq(status.approve.hidden,false);eq(status.approve.disabled,true);
  eq(status.reads,[status.requests[1].input.id,status.requests[1].input.id]);eq(status.requests.length,2);
+}
+// Closing a normally prepared order should preserve its ID and deadline, but no declarations.
+for(const platform of ['youtube','tiktok']){
+ const t=fixture({platform});await t.open();
+ const original=t.requests[1].input;
+ t.change('order-human-enabled');t.ready();eq(t.approve.disabled,false);
+ await reopen(t);
+ eq(t.requests.map(r=>r.action),['account','prepare']);
+ eq(t.reads,[original.id]);eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+ for(const key of ['content_checked','media_rights','music_rights','tiktok_music_terms','tiktok_branded_terms']){
+  eq(t.$('order-review-'+key).checked,false);
+ }
+ for(const key of keys)eq(t.$('order-human-'+key).checked,false);
+ eq(t.$('order-final-consent').checked,false);eq(t.$('order-human-enabled').checked,false);
+ await reopen(t);eq(t.reads,[original.id,original.id]);eq(t.requests.length,2);
+ // A queued close event from the previous opening must not clear the new expiry timer.
+ t.$('publicationOrderDialog').handlers.close();
+ t.advance(1800001);eq(t.approve.hidden,true);
+}
+for(const reason of ['ORDER_NOT_PREPARED','TARGET_OPTIONS_CHANGED']){
+ const t=fixture({approvalResponse:()=>({ok:true,json:async()=>({ok:false,code:reason})})});
+ await authorize(t);eq(t.approve.hidden,true);
+ // A late read of the former active window cannot reverse the server's rejection.
+ await reopen(t);eq(t.approve.hidden,true);eq(t.approve.disabled,true);
+ eq(t.reads,[savedId,savedId]);eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+ assert.match(notice(t),reason==='ORDER_NOT_PREPARED'?/abgelaufen/:/erneut geprüft/);
+}
+for(const state of ['approved','checked','blocked','cancelled']){
+ const t=fixture();await t.open();
+ t.patch({state,approval_token:null,approved_at:state==='cancelled'?null:new Date().toISOString(),approval_window:null});
+ await reopen(t);eq(t.reads,[t.requests[1].input.id]);eq(t.requests.length,2);
+ eq(t.approve.hidden,true);eq(t.approve.disabled,true);
+ assert.match(notice(t),state==='cancelled'?/storniert/:/Freigabe ist gespeichert/);
+}
+{
+ const t=fixture();await t.open();t.ready();eq(t.approve.disabled,false);
+ t.setDirty(true);await reopen(t);eq(t.reads,[]);eq(t.requests.length,2);
+ assert.match(notice(t),/speichere/);eq(t.approve.hidden,true);eq(t.$('order-final-consent').checked,false);
+ t.setDirty(false);await reopen(t);eq(t.reads,[t.requests[1].input.id]);eq(t.approve.disabled,true);
+ t.changeBinding();await reopen(t);eq(t.reads.length,1);eq(t.requests.map(r=>r.action),['account','prepare','account']);
+ eq(t.$('order-visibility').value,'');eq(t.approve.hidden,true);
+}
+{
+ let offline=true,saved;
+ const t=fixture({prepareResponse:async(_,response)=>{saved=await response.json();return response;},
+  storedResponse:()=>{if(offline)throw Error('Offline');return saved;}});
+ await t.open();const id=saved.id;
+ await reopen(t);eq(t.approve.hidden,true);assert.match(notice(t),/noch unklar/);
+ await t.approve.handlers.click();offline=false;await t.status.handlers.click();
+ eq(t.reads,[id,id]);eq(t.requests.length,2);eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+}
+{
+ let finish,started,saved;const reading=new Promise(resolve=>{started=resolve;});
+ const t=fixture({prepareResponse:async(_,response)=>{saved=await response.json();return response;},
+  storedResponse:()=>{started();return new Promise(resolve=>finish=resolve);}});
+ await t.open();t.ready();const readingOrder=reopen(t);await reading;
+ eq(t.approve.disabled,true);eq(t.$('order-final-consent').checked,false);
+ await t.$('preparePublicationOrder').handlers.click();await t.status.handlers.click();eq(t.reads,[saved.id]);
+ t.view.clear();finish(saved);await readingOrder;eq(t.$('publicationOrderDialog').open,false);
+ eq(notice(t),'');eq(t.requests.length,2);
+}
+{
+ const t=fixture();await t.open();await reopen(t);
+ const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
+ eq(restart.hidden,false);await restart.handlers.click();
+ eq(t.requests.map(r=>r.action),['account','prepare','account']);
+ t.$('order-visibility').value='unlisted';t.$('order-made_for_kids').value='false';t.$('order-contains_synthetic_media').value='false';
+ await submit(t);assert.notEqual(t.requests[3].input.id,t.requests[1].input.id);
+ eq(t.requests[3].input.choices.visibility,'unlisted');eq(t.approve.disabled,true);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');
