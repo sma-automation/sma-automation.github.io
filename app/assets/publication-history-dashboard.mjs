@@ -3,7 +3,7 @@ import {mountPublicationEditorHistory} from './publication-editor-history-dashbo
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
 import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
-import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=3';
+import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
 export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
@@ -125,6 +125,11 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    details.append(toggle,create('p',entry.target_name||'Zielkonto nicht gespeichert'),detail,dates,coverDetail);
    if(entry.cover.updated_at)details.append(create('small','Cover-Stand: '+format(entry.cover.updated_at)));
    if(previewLink)details.append(previewLink);
+   if(entry.order_caption){
+    details.append(create('h4','Gespeicherter Beitragstext'),create('p',entry.order_caption,'sma-history-saved-text'));
+   }else{
+    details.append(create('p','Für diesen Auftrag ist kein vollständiger Beitragstext verfügbar.'));
+   }
    row.append(details);list.append(row);
   }
   message.textContent=entries.length?(pageNumber*pageSize+1)+'–'+Math.min((pageNumber+1)*pageSize,entries.length)+' von '+summary.orders+' Aufträgen · Seite '+(pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';

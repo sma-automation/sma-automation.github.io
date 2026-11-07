@@ -41,6 +41,8 @@ on:
       - supabase/migrations/*_publication_text_edits_v1.sql
       - app/assets/publication-cover-history*
       - tests/*publication-cover-history*
+      - supabase/sql/publication-history-order-caption.sql
+      - supabase/migrations/*_publication_history_order_caption_v1.sql
       - supabase/sql/publication-cover-history.sql
       - supabase/migrations/*_publication_cover_history_v1.sql
       - n8n/publishing/*provider-cover*

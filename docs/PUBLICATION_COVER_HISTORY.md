@@ -28,6 +28,21 @@ Der Veröffentlichungsstatus bleibt unabhängig vom Coverstatus. Eine erfolgreic
 Coverübertragung erhöht weder die Zahl öffentlicher Beiträge noch ersetzt sie
 eine Veröffentlichungsbestätigung.
 
+### Gespeicherter Beitragstext
+
+Unter **History → Aufträge** zeigt ein aufgeklappter Auftrag seinen damaligen
+Beitragstext mit Zeilenumbrüchen, Hashtags und Link, wie sie bei der Vorbereitung
+gespeichert wurden. Das gilt auch für abgelaufene und abgebrochene Aufträge.
+Der historische Link erscheint als Text. Fehlt die gespeicherte Fassung oder
+passt ihr Portal nicht zum Auftrag, zeigt SMA einen Hinweis. Eine spätere
+Änderung des Entwurfs wirkt sich nur auf neue Aufträge aus.
+
+Der bestehende Leseaufruf liefert pro Auftrag nur das zusätzliche Feld
+`order_caption`. Beim Aufklappen erfolgt kein weiterer Abruf. Am 07.11.2026
+stimmten alle zehn im Testkonto gelesenen Texte exakt mit den gespeicherten
+Aufträgen überein. Die Auftragsdaten und die bisherigen History-Felder hatten
+vor und nach der Änderung dieselben Prüfsummen.
+
 ## Technik
 
 - Additiver Lese-RPC `sma_publication_history_v3`, öffentlich SECURITY INVOKER,

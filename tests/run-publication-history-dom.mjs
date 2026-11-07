@@ -18,6 +18,18 @@ await test('renders saved status with text-only untrusted title and no action li
  const f=fixture({request:()=>result([entry(1,{title:'<img src=x onerror=alert(1)>',target_name:'<script>bad</script>'})])});await tick();
  assert.match(f.$('ol').textContent,/Blockiert/);assert.match(f.$('ol').textContent,/<img/);assert.equal(f.$('img'),null);assert.equal(f.$('script'),null);assert.equal(f.$('a'),null);assert.deepEqual(f.calls,[{}]);assert.equal(f.$('#historyActivitySlot').querySelectorAll('button').length,3);f.view.destroy();
 });
+await test('expanded orders show their own saved caption as plain multiline text, with no further request',async()=>{
+ const caption='Historischer Text 🛒\n\n#Video\nhttps://example.test/?produkt=alt\n<img src=x>';
+ const f=fixture({request:()=>result([entry(1,{status:'cancelled',order_caption:caption}),entry(2,{status:'prepared',order_caption:'Text des zweiten Auftrags.'}),entry(3)])});await tick();
+ const [first,second,legacy]=f.doc.querySelectorAll('ol li details');
+ assert.equal(first.hasAttribute('open'),false);first.setAttribute('open','');
+ assert.equal(first.querySelector('.sma-history-saved-text').textContent,caption);
+ assert.equal(first.querySelector('summary').textContent.includes(caption),false);
+ assert.equal(first.querySelector('a, img, button'),null);
+ assert.equal(second.querySelector('.sma-history-saved-text').textContent,'Text des zweiten Auftrags.');
+ assert.match(legacy.textContent,/kein vollständiger Beitragstext/);
+ assert.deepEqual(f.calls,[{}]);f.owner('other');assert.equal(f.$('.sma-history-saved-text'),null);f.view.destroy();
+});
 await test('hidden History is silent and opening it loads; leaving clears results',async()=>{
  const f=fixture({active:false});await tick();assert.equal(f.calls.length,0);f.page.classList.add('active');await tick();assert.equal(f.calls.length,1);assert.equal(f.page.querySelectorAll('li').length,1);
  f.page.classList.remove('active');await tick();assert.equal(f.page.querySelectorAll('li').length,0);f.focus();await tick();assert.equal(f.calls.length,1);f.view.destroy();
