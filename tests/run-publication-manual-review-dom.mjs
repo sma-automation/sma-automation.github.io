@@ -551,6 +551,25 @@ for(const platform of ['youtube','tiktok']){
  eq(t.requests.map(r=>r.action),['account','prepare','approve']);
 }
 const historyLink=t=>t.doc.querySelector('a[href*="#auftrag/"]');
+for(const platform of ['youtube','tiktok']){
+ let matches=true;
+ const t=fixture({platform,prepareResponse:duplicateReply,storedResponse:(_,row)=>({...row,
+  target:{...row.target,id:matches?row.target.id:'other-channel'},
+  binding:{...row.binding,preview_revision:3},draft:{title:'Bereits freigegeben'}})});
+ await t.open();
+ eq(t.requests[1].input.expected_target_id,'synthetic-channel');
+ eq(historyLink(t)?.getAttribute('href'),'dashboard.html#auftrag/'+otherOrderId);
+ eq(t.approve.hidden,true);eq(t.approve.disabled,true);eq(t.$('order-final-consent').checked,false);
+ await t.approve.handlers.click();await submit(t);
+ matches=false;await t.status.handlers.click();eq(historyLink(t),null);
+ matches=true;await reopen(t);eq(historyLink(t)?.getAttribute('href'),'dashboard.html#auftrag/'+otherOrderId);
+ eq(t.requests.map(r=>r.action),['account','prepare']);eq(t.reads,[otherOrderId,otherOrderId,otherOrderId]);
+}
+{
+ const t=fixture({prepareResponse:req=>({ok:true,json:async()=>({ok:false,code:'DUPLICATE_PUBLICATION',existing_order_id:req.input.id})})});
+ await t.open();eq(t.reads,[]);eq(historyLink(t),null);eq(t.status.hidden,false);eq(t.approve.disabled,true);
+}
+
 {
  const t=fixture();await authorize(t);eq(historyLink(t).getAttribute('href'),'dashboard.html#auftrag/'+savedId);
  eq(t.reads.length,0);t.view.clear();eq(historyLink(t),null);

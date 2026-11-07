@@ -17,6 +17,15 @@ test('lost responses reuse the order ID and preserve the complete selection',asy
  assert.equal(requests[0].options.credentials,'omit');assert.equal(requests[0].options.cache,'no-store');
  await client.prepare({...binding,asset_revision:'version:2'},choices);assert.notEqual(requests[2].body.input.id,id);
 });
+test('a new target gets a new request ID after a lost preparation response',async()=>{
+ const {client,requests}=await setup((body,n)=>{if(n===1)throw Error('lost');return ok(body.input.id);});
+ await assert.rejects(client.prepare(binding,choices,undefined,'channel-one'));
+ await client.prepare(binding,choices,undefined,'channel-one');
+ await client.prepare(binding,choices,undefined,'channel-two');
+ assert.deepEqual(requests[0].body,requests[1].body);
+ assert.notEqual(requests[1].body.input.id,requests[2].body.input.id);
+ assert.equal(requests[2].body.input.expected_target_id,'channel-two');
+});
 test('final approval requires explicit confirmation and sends only bound token and ID',async()=>{
  const {client,requests}=await setup(body=>ok(body.input.id,{state:'blocked'}));
  const order={id,state:'prepared',target:{id:'target'},approval_token:'token',binding,choices,approval_policy:policy};
