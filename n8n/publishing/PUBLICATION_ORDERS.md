@@ -57,6 +57,24 @@ bewahrt die unterbrochene Anfrage für dieselbe Auswahl. Bewusst geänderte
 Optionen starten eine eigene Vorbereitung. Nach einem Neuladen der Seite
 sind bereits gespeicherte Aufträge über **History → Aufträge** erreichbar.
 
+### Nach dem Schließen des Tabs
+
+Auch ein gespeicherter Auftrag im Zustand `preparing` ist über
+**History → Aufträge → Vorbereitung fortsetzen** erreichbar. Die Vorschau prüft
+Datei und Portaltext. Der Dialog zeigt die gespeicherten Portaloptionen. Solange
+das Zielkonto fehlt, lesen Öffnen und **Status erneut laden** nur den Auftrag.
+Erst **Zielkonto prüfen** setzt die Vorbereitung mit derselben Auftrags-ID und
+denselben Optionen fort. Ist der Auftrag in einem anderen Tab inzwischen
+weitergelaufen, zeigt SMA dessen gespeicherten Stand. Nach einer erfolgreichen
+Kontoprüfung müssen alle persönlichen Erklärungen neu angekreuzt werden.
+
+Die beiden Kundenleser liefern für eine noch ungebundene Vorbereitung das
+zusätzliche Feld `preparation_window`. Die Frist endet 30 Minuten nach dem
+ursprünglichen Erstellen. Der bestehende Freigabetoken und die persönliche
+Prüfoption werden weiterhin erst für einen fertig vorbereiteten Auftrag mit
+gültigem Kontonachweis ausgegeben. Nach Fristablauf führt der History-Link
+zur Beitragsvorschau für einen Neustart.
+
 ## Verbindungsabbruch bei der Freigabe – 7. November 2026
 
 Wenn nach einem Klick auf **Veröffentlichung freigeben** eine eindeutige Antwort

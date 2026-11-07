@@ -539,6 +539,17 @@ test('history opens the specific prepared order directly as a saved post preview
  assert.equal(p.calls.some(c=>c.url||!['get','list','check'].includes(c.p_action)),false);
  assert.equal(p.orderOptions.getContext().binding.preview_id,historySaved.id);assert.equal(p.orderOptions.previousOrder.id,historyOrderId);
 });
+test('unfinished history previews use only reads and reject inconsistent account evidence',async()=>{
+ const pending={...historyOrder,state:'preparing',target:null,approval_token:null,preparation_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}};
+ const p=await historyView({resume:true,order:pending});
+ assert.equal(p.orderOptions.resumeOrder.id,historyOrderId);assert.deepEqual(p.views,['preview']);
+ assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+ for(const patch of [{target:{id:'foreign'}},{approved_at:'today'},{approval_token:'token'},{account_check:{}},
+     {preparation_window:null},{preparation_window:{status:'active',expires_at:'invalid'}}]){
+  const bad=await historyView({resume:true,order:{...pending,...patch}});
+  assert.deepEqual(bad.views,[]);assert.equal(bad.orderOptions.resumeOrder,undefined);
+ }
+});
 test('resuming a preparation reads the same order and exact text before opening the dialog',async()=>{
  let reads=0;
  const p=await historyView({resume:true,orderResponse:async()=>({...historyOrder,approval_token:'fixture-'+(++reads)})});

@@ -33,9 +33,32 @@ try{
  const provider=async(d={})=>asRole('service_role',async()=>(await db.query("select public.sma_publication_provider_v1('begin',$1,null,$2) r",[id(10),d])).rows[0].r);
  // Install the actual history projections and test the same deadline in both customer reads.
  await db.exec((await src('publication-provider-cover')).split('create or replace function')[0]);
- for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window'])await db.exec(await src(f));
+ for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window','publication-pending-preparation'])await db.exec(await src(f));
  const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
+ for(const [age,expected] of [['1 minute','active'],['30 minutes','expired'],['1 day','expired']]){
+  await db.exec('begin');
+  await db.query("update sma_private.publication_orders_v1 set created_at=now()-$1::interval,state='preparing',target=null,account_check=null",[age]);
+  const saved=await request('get',{id:id(10)}),entry=(await history()).entries[0];
+  eq(saved.preparation_window.status,expected);eq(entry.preparation_window,saved.preparation_window);
+  eq(Date.parse(entry.created_at)+1800000,Date.parse(saved.preparation_window.expires_at));
+  eq(saved.approval_window,null);eq(saved.approval_token,null);eq(saved.human_review_option,null);
+  eq(saved.approved_at,null);eq(saved.can_upload,false);eq(saved.can_publish,false);
+  eq((await request('get',{id:id(10)},other)).code,'ORDER_UNAVAILABLE');
+  await db.exec('rollback');
+ }
+ await db.exec('begin');
+ const selected={platform:'youtube',asset_id:id(1),asset_revision:rev,assignment_revision:1,preview_id:id(2),preview_revision:1};
+ await db.query("update sma_private.publication_orders_v1 set state='preparing',target=null,account_check=null,binding=binding||$1::jsonb",[selected]);
+ const retry={id:id(10),...selected,choices};
+ eq((await request('prepare',retry)).state,'preparing');
+ eq((await request('prepare',{...retry,choices:{...choices,visibility:'public'}})).code,'REQUEST_CONFLICT');
+ const bound=await worker('bind_target',{target,account_check:evidence});
+ eq(bound.state,'prepared');eq(bound.id,retry.id);eq(bound.target.id,target.id);eq(bound.approved_at,null);
+ eq((await request('prepare',retry)).state,'prepared');eq((await history()).entries.length,1);
+ eq((await db.query('select count(*)::int as n from sma_private.publication_journal_v1')).rows[0].n,0);
+ await db.exec('rollback');
+ eq((await view()).preparation_window,null);
  eq((await view()).approval_window.status,'active');
  eq(Date.parse((await view()).approval_window.expires_at),Date.parse(evidence.expires_at));
  eq((await history()).entries[0].approval_window,(await view()).approval_window);

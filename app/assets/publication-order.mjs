@@ -26,9 +26,19 @@ const errors = {
 export function orderError(code) { return errors[code] || 'Die Auftragsprüfung konnte nicht abgeschlossen werden. Du kannst denselben Auftrag erneut prüfen.'; }
 export const approvalPolicy='media-consent-2026-11-03.1';
 export const humanReviewPolicy='human-video-2026-11-06.1';
+function preparationWindow(order){
+  if(order?.state==='preparing')return order.preparation_window;
+  if(order?.state==='prepared')return order.approval_window;
+}
 function preparationEnded(order) {
-  const window=order?.approval_window;
-  return order?.state==='prepared'&&window!=null&&(window.status!=='active'||!(Date.parse(window.expires_at)>Date.now()));
+  const window=preparationWindow(order);
+  return window!=null&&(window.status!=='active'||!(Date.parse(window.expires_at)>Date.now()));
+}
+function pendingTarget(order){
+  return order?.state==='preparing'&&order.approved_at===null&&order.target===null&&order.account_check==null&&
+    typeof order.choices?.visibility==='string'&&
+    order.approval_token===null&&order.approval_window==null&&
+    ['active','expired'].includes(order.preparation_window?.status)&&Number.isFinite(Date.parse(order.preparation_window.expires_at));
 }
 export function humanReviewAvailable(order) {
   return order?.state==='prepared'&&!preparationEnded(order)&&!order.check_error&&['youtube','tiktok'].includes(order.binding?.platform)&&
@@ -71,9 +81,10 @@ export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomU
   }
   return {
     account:platform=>call('account',{id:uuid(),platform}),
-    prepare(binding,choices) {
+    prepare(binding,choices,savedId) {
       const input={...binding,choices};const signature=JSON.stringify(input);
-      if(!attempt||attempt.signature!==signature)attempt={signature,id:uuid()};
+      if(savedId)attempt={signature,id:savedId};
+      else if(!attempt||attempt.signature!==signature)attempt={signature,id:uuid()};
       const id=attempt.id;
       return call('prepare',{id,...input}).catch(error=>{
         if(error?.rejected)throw error;
@@ -129,10 +140,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   consent.id='order-final-consent';
   consentLabel.append(consent,doc.createTextNode(' Ich habe Zielkonto, Beitrag, Rechte und Kennzeichnungen geprüft und gebe diesen Auftrag zur Veröffentlichung frei.'));
   const approve=make('button','Veröffentlichung freigeben');approve.type='button';approve.disabled=true;
+  const checkTarget=make('button','Zielkonto prüfen');checkTarget.type='button';checkTarget.hidden=true;
   const statusButton=make('button','Status erneut laden');statusButton.type='button';statusButton.className='secondary';statusButton.hidden=true;
   const restart=make('button','Vorbereitung neu starten');restart.type='button';restart.className='secondary';restart.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
-  const actions=make('div');actions.className='actions';actions.append(approve,restart,statusButton,close);
+  const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,restart,statusButton,close);
   dialog.append(title,intro,controls,details,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
   let recovery=null,interruptedPreparation=null;
@@ -215,16 +227,18 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     working=value;
     const ended=preparationEnded(order),locked=ended||recovery!==null;
     controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');
-    syncCommercial();close.disabled=value;consent.disabled=value||locked;restart.hidden=!ended||!!recovery;restart.disabled=value;
+    syncCommercial();close.disabled=value;consent.disabled=value||locked;restart.hidden=(!ended&&!pendingTarget(order))||!!recovery;restart.disabled=value;
     for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared'||locked;
     humanEnabled.disabled=value||!humanReviewAvailable(order);humanChecklist.hidden=!humanEnabled.checked;
     for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);
+    checkTarget.hidden=!pendingTarget(order)||locked;
+    checkTarget.disabled=value||checkTarget.hidden||!!order?.check_error;
     statusButton.disabled=value;approve.disabled=value||order?.state!=='prepared'||locked||!consent.checked||!reviewReady();
     if(locked){
       consent.checked=false;humanEnabled.checked=false;
       for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;
       approve.hidden=consentLabel.hidden=reviewControls.hidden=humanControls.hidden=true;
-      if(!value&&!recovery)notice.textContent=order.approval_window.status==='recheck'
+      if(!value&&!recovery)notice.textContent=preparationWindow(order)?.status==='recheck'
         ? 'Das Zielkonto muss erneut geprüft werden. Starte die Vorbereitung neu.'
         : 'Die Vorbereitung ist abgelaufen. Starte sie neu, um das Zielkonto und die Einstellungen erneut zu prüfen.';
     }
@@ -235,8 +249,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function showOrder(r) {
     checkBinding(r);
     clearExpiryTimer();order=r;rememberVideoChoices(r);details.replaceChildren();
-    if(r.state==='prepared'&&r.approval_window?.status==='active'&&!preparationEnded(r)){
-      const until=Date.parse(r.approval_window.expires_at);
+    const window=preparationWindow(r);
+    if(window?.status==='active'&&!preparationEnded(r)){
+      const until=Date.parse(window.expires_at);
       details.append(make('p','Vorbereitung gültig bis '+new Intl.DateTimeFormat('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Europe/Vienna'}).format(until)+' Uhr (Wien).'));
       expiryTimer=setTimeout(()=>{if(order===r)setWorking(working);},Math.max(0,until-Date.now()+1));
     }
@@ -263,17 +278,20 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
     else if(r.state==='checked')notice.textContent=(r.approved_at?'Deine Freigabe ist gespeichert. ':'')+'Die Auftragsprüfung ist abgeschlossen. Den Veröffentlichungsstand findest du unter History → Aufträge.';
     else if(r.approved_at)notice.textContent=r.state==='blocked'?'Deine Freigabe ist gespeichert. Eine offene Prüfung blockiert den Auftrag.':'Deine Freigabe ist gespeichert. Den Veröffentlichungsstand findest du unter History → Aufträge.';
-    else notice.textContent='Der Auftrag ist vorbereitet; die Zielkontoprüfung ist noch nicht abgeschlossen.';
+    else if(pendingTarget(r))notice.textContent='Die Einstellungen sind gespeichert. Prüfe das Zielkonto, um diesen Auftrag weiter vorzubereiten.';
+    else notice.textContent='Die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
     approve.hidden=r.state!=='prepared';
   }
   function resumePrepared(previous){
-    if(previous.state!=='prepared'||previous.approved_at!==null||previous.check_error||
-       previous.approval_window?.status!=='active'||preparationEnded(previous)||
-       previous.can_upload!==false||previous.can_publish!==false||!previous.approval_token||
-       !previous.target?.id||previous.target.platform!==previous.binding?.platform)return false;
+    if(previous.approved_at!==null||previous.check_error||preparationEnded(previous)||
+       previous.can_upload!==false||previous.can_publish!==false)return false;
+    if(!pendingTarget(previous)&&(previous.state!=='prepared'||previous.approval_window?.status!=='active'||
+       !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
     context=getContext();
-    showOrder(previous);setWorking(false);
+    showOrder(previous);
+    if(pendingTarget(previous))interruptedPreparation={id:previous.id,choices:previous.choices,persisted:true};
+    setWorking(false);
     dialog.showModal();
     onOpen();
     return true;
@@ -292,6 +310,30 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     if(pending.targetId&&needsTarget&&
        (stored.target?.id!==pending.targetId||stored.target?.platform!==context.binding.platform))throw Error(orderError('TARGET_ACCOUNT_CHANGED'));
   }
+  function checkStoredState(stored){
+    if(stored.state==='preparing'||(['approved','checking','checked','blocked'].includes(stored.state)&&!stored.approved_at))throw Error(orderError('REQUEST_CONFLICT'));
+    if(stored.state==='prepared'&&(stored.approved_at!==null||
+        !['active','expired','recheck'].includes(stored.approval_window?.status)||
+        !Number.isFinite(Date.parse(stored.approval_window.expires_at))||
+        (stored.approval_window.status==='active'&&(!stored.approval_token||!stored.target?.id||
+         stored.target?.platform!==stored.binding?.platform))))throw Error(orderError('REQUEST_CONFLICT'));
+  }
+  function continuePending(checkAccount){
+    const previous=order,generation=epoch;
+    if(!pendingTarget(previous))return;
+    return run(async()=>{
+      // Reading through n8n could also continue a checked order. Read the stored row directly.
+      if(checkAccount)await refresh();
+      if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
+      unchanged();
+      const stored=validatedOrder(await readStoredOrder(previous.id),previous.id);
+      if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
+      unchanged();checkPreparation(stored,previous);
+      if(!pendingTarget(stored))checkStoredState(stored);
+      if(!checkAccount||!pendingTarget(stored)||preparationEnded(stored)||stored.check_error)return stored;
+      return client.prepare(context.binding,stored.choices,stored.id);
+    },{choices:checkAccount?previous.choices:null});
+  }
   async function readRecovery(generation){
     const pending=recovery;
     clearExpiryTimer();controls.hidden=true;statusButton.hidden=false;setWorking(true);
@@ -301,23 +343,23 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       const result=await readStoredOrder(pending.id);
       if(generation!==epoch||pending!==recovery)return;
       unchanged();
-      if(pending.choices&&result?.ok===false&&result.code==='ORDER_UNAVAILABLE'){
+      if(pending.choices&&!pending.persisted&&result?.ok===false&&result.code==='ORDER_UNAVAILABLE'){
         offerPreparationRetry('Unter dieser Anfrage ist noch kein Auftrag verfügbar.');
         return;
       }
       const stored=validatedOrder(result,pending.id);
       if(pending.choices){
         checkPreparation(stored,pending);
-        if(stored.state==='preparing'&&stored.approved_at===null&&stored.approval_token===null&&stored.approval_window==null){
+        if(pendingTarget(stored)&&(pending.persisted||preparationEnded(stored))){
+          showOrder(stored);recovery=null;return;
+        }
+        if(!pending.persisted&&stored.state==='preparing'&&stored.approved_at===null&&stored.approval_token===null&&stored.approval_window==null){
           offerPreparationRetry('Die Vorbereitung ist noch nicht abgeschlossen.');
           return;
         }
       }
       if(order?.target?.id&&stored.target?.id!==order.target.id)throw Error();
-      if(stored.state==='preparing'||(['approved','checking','checked','blocked'].includes(stored.state)&&!stored.approved_at))throw Error();
-      if(stored.state==='prepared'&&(stored.approved_at!==null||
-          !['active','expired','recheck'].includes(stored.approval_window?.status)||
-          (stored.approval_window.status==='active'&&(!stored.approval_token||!stored.target?.id))))throw Error();
+      checkStoredState(stored);
       if(pending.duplicate&&(!stored.approved_at||stored.state==='prepared'))throw Error();
       if(stored.state==='prepared'&&['ORDER_NOT_PREPARED','TARGET_OPTIONS_CHANGED'].includes(pending.code)){
         const status=pending.code==='ORDER_NOT_PREPARED'?'expired':'recheck';
@@ -349,7 +391,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(choices){
         preparationId=result.id;
         if(interruptedPreparation?.id===result.id)checkPreparation(result,interruptedPreparation);
-        if(result.state==='preparing')throw Error();
+        if(order?.state==='preparing'){
+          checkPreparation(result,order);
+          if(!pendingTarget(result))checkStoredState(result);
+        }
+        if(result.state==='preparing'&&!(pendingTarget(order)&&pendingTarget(result)))throw Error();
       }
       unchanged();
       if(sentApproval&&(!result.approved_at||['preparing','prepared'].includes(result.state)))throw Error();
@@ -360,7 +406,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       const duplicate=e.rejected&&e.code==='DUPLICATE_PUBLICATION';
       preparationId=e.preparationId||preparationId;
       if(choices&&preparationId&&!e.rejected){
-        interruptedPreparation={id:preparationId,choices,targetId:account?.target?.id};
+        interruptedPreparation={id:preparationId,choices,targetId:account?.target?.id,persisted:order?.state==='preparing'};
         recovery=interruptedPreparation;
       }else if(sentApproval||duplicate){
         interruptedPreparation=null;
@@ -376,6 +422,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     finally{if(generation===epoch)setWorking(false);}
   }
   async function startPreparation(resume=false){
+    if(resume&&!recovery&&pendingTarget(order))recovery={id:order.id,choices:order.choices,persisted:true};
     if(resume&&!recovery&&interruptedPreparation&&(!order||(order.state==='prepared'&&order.id===interruptedPreparation.id))){
       recovery=interruptedPreparation;
     }
@@ -422,7 +469,8 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   humanEnabled.addEventListener('change',()=>{for(const input of humanFields.values())input.checked=false;consent.checked=false;setWorking(working);});
   for(const input of humanFields.values())input.addEventListener('change',()=>setWorking(working));
   approve.addEventListener('click',()=>{if(!approve.disabled)return run(()=>client.approve(order,consent.checked,reviewValues()),{approval:true});});
-  statusButton.addEventListener('click',()=>run(()=>client.get(order.id)));
+  checkTarget.addEventListener('click',()=>{if(!checkTarget.disabled)return continuePending(true);});
+  statusButton.addEventListener('click',()=>pendingTarget(order)&&!recovery?continuePending(false):run(()=>client.get(order.id)));
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',clearExpiryTimer);dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
   return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;recovery=null;interruptedPreparation=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }

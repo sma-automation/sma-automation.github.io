@@ -3,7 +3,7 @@ import {mountPublicationEditorHistory} from './publication-editor-history-dashbo
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
 import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
-import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=2';
+import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=3';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
 export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
@@ -99,7 +99,7 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    const details=create('details'),toggle=create('summary');toggle.append(heading,meta);
    const detail=create('p',historyStatuses[entry.status][1]);
    let previewLink;
-   const window=entry.approval_window;
+   const window=entry.approval_window||entry.preparation_window;
    if(window){
     previewLink=create('a','Beitragsvorschau öffnen','sma-history-preview-link');
     const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
@@ -113,7 +113,9 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
     if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';}
     else if(window.status==='expired'||remaining<=0)expire();
     else{
-     detail.textContent='Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';
+     detail.textContent=entry.status==='preparing'
+       ? 'Das Zielkonto ist noch offen. Du kannst diese Vorbereitung bis '+format(window.expires_at)+' Uhr (Wien) fortsetzen.'
+       : 'Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';
      previewLink.href=previewUrl+'&resume=1';previewLink.textContent='Vorbereitung fortsetzen';
      expiryTimers.push(setTimeout(expire,remaining+1));
     }

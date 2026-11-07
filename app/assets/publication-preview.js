@@ -7,7 +7,7 @@ let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
-import {installOrderReview} from './publication-order.mjs?v=12';
+import {installOrderReview} from './publication-order.mjs?v=13';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -436,7 +436,10 @@ async function readHistoryOrder(id){
  const unavailable='Die Beitragsvorschau für diesen Auftrag ist in deinem Konto nicht verfügbar.';
  if(!workspace||!orderUuid.test(id))throw Error(unavailable);
  const order=await readStoredOrder(id),binding=order?.binding;
- if(!order?.ok||order.id!==id||order.state!=='prepared'||order.approved_at!=null||
+ if(order?.state==='preparing'&&(order.approved_at!==null||order.target!==null||order.approval_token!==null||
+    order.account_check!=null||order.approval_window!=null||!['active','expired'].includes(order.preparation_window?.status)||
+    !Number.isFinite(Date.parse(order.preparation_window.expires_at))))throw Error(unavailable);
+ if(!order?.ok||order.id!==id||!['preparing','prepared'].includes(order.state)||order.approved_at!=null||
     order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!orderUuid.test(binding.asset_id)||
     !orderUuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Error(unavailable);

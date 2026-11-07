@@ -222,4 +222,41 @@ for(const missing of [false,true]){
  const pending=t.open();await new Promise(resolve=>setImmediate(resolve));
  t.view.clear();release();await pending;eq(t.requests.map(r=>r.action),['account']);eq(t.reads.length,0);
 }
+// A new tab has no previous request ID or form state. Only an explicit target check may write.
+function unfinishedHistory(platform='youtube'){
+ const id='ab660000-0000-4000-9000-000000000088',expires_at=new Date(Date.now()+60000).toISOString();
+ const choices=platform==='youtube'?{visibility:'private',made_for_kids:false,contains_synthetic_media:true}:
+  {visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,brand_organic_toggle:false,brand_content_toggle:false};
+ let stored,loseReply=false;
+ const t=fixture({platform,storedResponse:()=>stored,prepareResponse:async(req,response)=>{
+  eq(req.input.id,id);eq(req.input.choices,choices);
+  stored={...await response.json(),approval_window:{status:'active',expires_at},preparation_window:null};
+  if(loseReply)timeout();
+  return {ok:true,json:async()=>stored};
+ }});
+ stored={id,ok:true,state:'preparing',approved_at:null,target:null,approval_token:null,approval_window:null,
+  preparation_window:{status:'active',expires_at},choices,binding:t.binding,can_upload:false,can_publish:false,
+  draft:{title:'History',caption:'Saved caption'}};
+ const check=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Zielkonto prüfen');
+ return {...t,id,check,resume:()=>t.view.resumePrepared(stored),patchSaved:p=>stored={...stored,...p},lose:()=>loseReply=true};
+}
+for(const platform of ['youtube','tiktok']){
+ const t=unfinishedHistory(platform);
+ eq(t.resume(),true);eq(t.approve.hidden,true);eq(t.check.disabled,false);eq(t.requests.length,0);
+ await t.status.handlers.click();eq(t.reads,[t.id]);eq(t.requests.length,0);
+ t.lose();await t.check.handlers.click();
+ eq(t.requests.map(r=>r.action),['prepare']);eq(t.reads,[t.id,t.id,t.id]);
+ eq(t.check.hidden,true);eq(t.approve.hidden,false);eq(t.approve.disabled,true);eq(t.$('order-final-consent').checked,false);
+ await reopen(t);eq(t.reads.length,4);eq(t.requests.length,1);
+}
+for(const patch of [{state:'cancelled'},{approved_at:'now',state:'approved'},
+   {choices:{visibility:'public'}},{binding:{platform:'other'}},{id:'other'},
+   {check_error:'FILE_CHANGED'},{preparation_window:{status:'expired',expires_at:new Date(0).toISOString()}}]){
+ const t=unfinishedHistory();eq(t.resume(),true);t.patchSaved(patch);await t.check.handlers.click();
+ eq(t.requests.length,0);eq(t.reads,[t.id]);eq(t.approve.disabled,true);
+}
+{
+ const t=unfinishedHistory();eq(t.resume(),true);t.advance(60001);eq(t.check.hidden,true);
+ await t.check.handlers.click();eq(t.requests.length,0);eq(t.reads.length,0);
+}
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');
