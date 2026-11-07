@@ -13,7 +13,7 @@ async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
  return {orderOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
@@ -719,4 +719,41 @@ test('a customer can write a description for an ambiguous video and keep the gen
  const sent=JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body);
  assert.equal(sent.source_text,p.get('source_text').value);
  assert.equal(p.get('shopLink').href,result.preview.shop_url);
+});
+
+test('an unrecognized video can use an explicitly selected shop item and reopen it without a catalogue call',async()=>{
+ const item={product_id:'sku_3',name:'Grüne Leuchte',sku:'L-03',purpose:'Beleuchtet eine Arbeitsfläche.'};
+ const opts={portal:'instagram',asset:supportedVideo.id,wide:true,formTracksDom:true,
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis}),fetchResponse:async()=>instagramResult};
+ const files=(saved={ok:true,status:'empty'})=>a=>a.p_action==='catalog_search'?{ok:true,choices:[item],more:false}:productFiles(null,saved)(a);
+ const p=await boot({...opts,filesRpc:files()});
+ assert.equal(p.get('catalogLookup').hidden,false);assert.ok(!p.calls.some(c=>c.p_action==='catalog_search'));
+ p.get('catalogQuery').value='L-03';await p.get('catalogSearch').click();
+ assert.equal(p.get('catalogProduct').value,'');p.get('catalogProduct').value='sku_3';
+ await p.get('magicText').click();const input=JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body);
+ assert.ok(input.source_text.startsWith('SMA-Artikelauswahl aus dem Shop: '));
+ assert.ok(input.source_text.includes(item.purpose));assert.ok(input.source_text.endsWith(videoAnalysis.result.source_text));
+ assert.ok(p.calls.some(c=>c.p_action==='catalog_search'&&c.p_input.product_id==='sku_3'));
+ const reopened=await boot({...opts,filesRpc:files({...instagramResult,input,assignment_revision:1})});
+ assert.equal(reopened.get('catalogProduct').value,'sku_3');assert.equal(reopened.get('source_text').value,videoAnalysis.result.source_text);
+ assert.ok(!reopened.calls.some(c=>c.p_action==='catalog_search'));
+ reopened.signOut();assert.equal(reopened.get('catalogLookup').hidden,true);assert.equal(reopened.get('catalogProduct').children.length,0);
+});
+test('catalogue search and pagination never select a product, and a late result after sign-out is ignored',async()=>{
+ const item={product_id:'art-1',sku:null,name:'Leuchte',purpose:'Eine Leuchte'};
+ let release;
+ const p=await boot({portal:'youtube',asset:supportedVideo.id,filesRpc:a=>a.p_action==='catalog_search'?
+   a.p_input.after?new Promise(r=>release=r):{ok:true,choices:[item],more:true}:productFiles(null)(a)});
+ await p.get('catalogSearch').click();assert.equal(p.get('catalogProduct').value,'');
+ const pending=p.get('catalogMore').click();p.signOut();release({ok:true,choices:[{...item,product_id:'art-2'}],more:false});await pending;
+ assert.equal(p.get('catalogProduct').children.length,0);assert.equal(p.get('catalogLookup').hidden,true);
+});
+test('a withdrawn manually selected product stops generation, while leaving the picker blank uses the normal flow',async()=>{
+ const item={product_id:'art-1',name:'Artikel',sku:null,purpose:'Für den Test.'};
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,formTracksDom:true,fetchResponse:async()=>instagramResult,
+  filesRpc:a=>a.p_action==='catalog_search'?{ok:true,choices:a.p_input.product_id?[]:[item],more:false}:productFiles(null)(a)});
+ p.get('source_text').value='Die Kamera zeigt einen Gegenstand auf einem Tisch.';
+ await p.get('catalogSearch').click();p.get('catalogProduct').value='art-1';await p.run();
+ assert.match(p.get('status').textContent,/Artikel hat sich geändert/);assert.ok(!p.calls.some(c=>isCaption(c.url)));
+ await p.run();assert.equal(JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body).source_text,p.get('source_text').value);
 });

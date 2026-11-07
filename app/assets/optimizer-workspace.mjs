@@ -199,7 +199,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('result').append(resultDetails);
   $('save').textContent = 'Entwurf speichern';
   text.append(textHeader, empty, $('result'));
-  editor.append($('magicActionsText'), $('sourcePanel'), text);
+  editor.append($('magicActionsText'), $('catalogLookup'), $('sourcePanel'), text);
   $('assetPanel').hidden = true;
   $('resultFileActions').hidden = true;
   $('exampleFiles').hidden = true;
