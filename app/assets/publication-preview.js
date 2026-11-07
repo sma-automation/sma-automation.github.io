@@ -1,4 +1,4 @@
-import {mountGalleryMusic} from './gallery-music-worker.mjs?v=1';
+import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';

@@ -27,6 +27,7 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
    if(job.state==='completed'){await refreshGallery();continue;}
    if(job.state!=='claimed'||!editorUUID(job.id)||!editorUUID(job.lease)||!editorUUID(job.file?.id))throw Error('UNAVAILABLE');
    const bound={id:job.id,lease:job.lease};
+   let reserved=false;
    try{
     onStatus('SMA prüft die Tonspur …');
     const bytes=await source(job.file,signal);signal.throwIfAborted();
@@ -39,12 +40,21 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
     }
     if(result.state!=='rendered'||result.blob?.type!=='video/mp4')throw Error('RENDER_FAILED');
     await call('reserve',{...bound,sha256:await sha256(await result.blob.arrayBuffer()),size_bytes:result.blob.size});
+    reserved=true;
     onStatus('Musikfassung wird im Kundenordner gespeichert …');
     const asset=await upload(result.blob,{upload_id:job.id,name:job.name,mime_type:'video/mp4'},signal);
     const saved=await call('complete',bound);
     if(saved.asset_id!==asset)throw Error('UPLOAD_INCOMPLETE');
     onStatus('Musikfassung gespeichert · '+job.track.name);await refreshGallery();
    }catch(e){
+    if(signal.aborted)throw e;
+    if(reserved){
+     // Drive can have committed the bytes even when the client missed the reply.
+     const receipt=await call('complete',bound).catch(()=>null);
+     if(receipt?.state==='completed'&&editorUUID(receipt.asset_id)){
+      onStatus('Musikfassung gespeichert · '+job.track.name);await refreshGallery();continue;
+     }
+    }
     if(signal.aborted)throw e;
     await call('retry',bound).catch(()=>{});
     onStatus('Die Vertonung wird später erneut versucht.');
