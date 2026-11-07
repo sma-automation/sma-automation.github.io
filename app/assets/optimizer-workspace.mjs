@@ -1,3 +1,4 @@
+import {draftDestination} from './publication-destination.mjs?v=1';
 // Reuse the live forms and their handlers; only the workspace arrangement changes.
 export function createOptimizerWorkspace(doc, portalName, onGallery, options = {}) {
   const $ = id => doc.getElementById(id);
@@ -128,9 +129,11 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
     postTags.textContent = (draft.hashtags || []).map(tag => '#' + tag).join(' ');
     postTags.hidden = !postTags.textContent;
-    const shop = typeof draft.shop_url === 'string' && /^https:\/\/sma-automation\.com\/app\/shop\.html\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.shop_url) ? draft.shop_url : '';
-    postShop.hidden = !shop; postShop.textContent = shop ? (data.language === 'en' ? 'Visit our shop: ' : 'Zum Shop: ') + shop : '';
-    if (shop) postShop.href = shop; else postShop.removeAttribute('href');
+    const target = draftDestination(draft.shop_url, draft, data.language);
+    const shop = target?.url;
+    postShop.hidden = !target;
+    postShop.textContent = target ? target.label + ': ' + shop : '';
+    if (target) postShop.href = shop; else postShop.removeAttribute('href');
     sourceDescription.textContent = data.source || 'Noch keine Inhaltsbeschreibung vorhanden.';
     facts.replaceChildren();
     const number = value => Number.isFinite(value) && value >= 0;
@@ -141,7 +144,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       ['Dauer', file.media_kind !== 'video' ? 'Nicht zutreffend' : number(info.duration_ms) ? (info.duration_ms / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' Sekunden' : 'Noch nicht ermittelt'],
       ['Portal', portalName], ['Sprache', data.language === 'en' ? 'Englisch' : 'Deutsch'],
       ['Entwurf', data.draftStatus || 'Noch kein Beitragstext vorbereitet'],
-      ['Shop-Link', shop || 'Noch kein Shop-Link zugeordnet'],
+      [draft.product_id ? 'Produktlink' : 'Shop-Link', shop || 'Noch kein Shop-Link zugeordnet'],
     ];
     for (const [label, value] of values) facts.append(make('dt', null, label), make('dd', null, value));
     reviewNotes.replaceChildren();

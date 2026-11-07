@@ -6,12 +6,13 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
+import {draftDestination} from './publication-destination.mjs?v=1';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=12';
 import {installOrderReview} from './publication-order.mjs?v=13';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
-const messages={CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
+const messages={CAPTION_TOO_LONG:'Der gesamte Beitrag mit Link ist zu lang. Bitte kürze den Text oder die Hashtags.',CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0,dirty=false;
 let reviewStatus=null;
 let retryHistoryPreview=false;
@@ -41,7 +42,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
   const draft=current?.preview?.drafts.find(d=>d.platform===selectedPortal);
   let hashtags=[];try{hashtags=parseHashtags($(selectedPortal+'-hashtags')?.value||'');}catch{}
   return {draft:draft?{...draft,hashtags,title:$(selectedPortal+'-title').value,body:$(selectedPortal+'-body').value,shop_url:current.preview.shop_url}:null,
-   facts:selectedMediaFacts,source:$('source_text').value,language:$('language').value,
+   facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
    draftStatus:draft?(dirty?'Aktuelle, noch nicht gespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet'):''};
  },
  onView:view=>{if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
@@ -103,19 +104,24 @@ function attachProduct(input,product){
 }
 function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
 function syncMedia(){if(selectedAsset){$('media_kind').value=selectedAsset.media_kind;$('media_kind').disabled=true;}else{$('media_kind').disabled=false;}if(selectedPortal){for(const c of document.querySelectorAll('[name=platforms]'))c.checked=c.value===selectedPortal;if(selectedPortal==='youtube'){$('media_kind').value='video';$('media_kind').disabled=true;}}const yt=document.querySelector('[name=platforms][value=youtube]');yt.disabled=$('media_kind').value==='image';if(yt.disabled)yt.checked=false;}
-function caption(d,body,tags=d.hashtags){return [body.trim(),tags.map(x=>'#'+x).join(' '),(current.preview.language==='en'?'🛒 Visit our shop: ':'🛒 Zum Shop: ')+current.preview.shop_url].filter(Boolean).join('\n\n');}
+function caption(d,body,tags=d.hashtags){
+ const target=draftDestination(current.preview.shop_url,d,current.preview.language);
+ if(!target)throw Error('Die Shop-Adresse ist ungültig.');
+ return [body.trim(),tags.map(x=>'#'+x).join(' '),'🛒 '+target.label+': '+target.url].filter(Boolean).join('\n\n');
+}
 function render(data){
  if(signedOut)throw Error(messages.AUTH_REQUIRED);
  if(data.status!=='completed'||!data.preview||data.preview.can_publish!==false)throw Error(errorText(data));
- current=data;$('drafts').replaceChildren();const url=data.preview.shop_url;
- if(!/^https:\/\/sma-automation\.com\/app\/shop\.html\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/.test(url))throw Error('Die Shop-Adresse ist ungültig.');
- $('shopLink').textContent=url;$('shopLink').href=url;
  const visibleDrafts=data.preview.drafts.filter(d=>!selectedPortal||d.platform===selectedPortal);
  if(!visibleDrafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
+ const target=draftDestination(data.preview.shop_url,visibleDrafts.length===1?visibleDrafts[0]:null,data.preview.language);
+ if(!target)throw Error('Die Shop-Adresse ist ungültig.');
+ current=data;$('drafts').replaceChildren();
+ $('shopLink').textContent=target.url;$('shopLink').href=target.url;
  for(const d of visibleDrafts){const card=document.createElement('article');card.className='card draft';card.dataset.platform=d.platform;const h=document.createElement('h3');h.textContent=names[d.platform];card.append(h);
   for(const [key,label,max] of [['title','Titel / Einstieg',80],['body','Beitragstext',1200]]){const box=document.createElement('div');box.className='field';const l=document.createElement('label');l.htmlFor=d.platform+'-'+key;l.textContent=label;const control=document.createElement(key==='body'?'textarea':'input');control.id=l.htmlFor;control.dataset.field=key;control.maxLength=max;control.value=d[key];control.required=true;box.append(l,control);card.append(box);}
   const tags=addHashtagField(document,card,d.platform,d.hashtags);
-  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
+  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=d.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
   if(d.review_notes.length){const notes=document.createElement('ul');notes.className='note';for(const text of d.review_notes){const li=document.createElement('li');li.textContent=text;notes.append(li);}card.append(notes);}
   card.addEventListener('input',()=>{dirty=true;$('saveStatus').textContent='Ungespeicherte Änderungen';try{full.textContent=caption(d,card.querySelector('textarea').value,parseHashtags(tags.value));tags.setCustomValidity('');}catch(e){tags.setCustomValidity(e.message);full.textContent=e.message;}});$('drafts').append(card);
  }
@@ -476,7 +482,7 @@ async function openHistoryOrderPreview(id,owner){
  }
  const draft=saved.preview?.drafts?.find(d=>d.platform===selectedPortal);
  if(!draft||!order.draft||saved.preview.shop_url!==binding.shop_url||
-    ['platform','title','body','caption','hashtags','review_notes'].some(key=>JSON.stringify(draft[key])!==JSON.stringify(order.draft[key])))throw Error(changed);
+    ['platform','title','body','caption','hashtags','review_notes','product_id'].some(key=>JSON.stringify(draft[key])!==JSON.stringify(order.draft[key])))throw Error(changed);
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  // Select only after the order, file and saved portal text have all been verified.
  assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;

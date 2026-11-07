@@ -11,7 +11,8 @@ let template = await asset('publication-preview.html');
 for (const [tag, path] of template.matchAll(/<link rel="stylesheet" href="([^"?]+)\?[^"]+">/g)) {
   template = template.replace(tag, '<style>' + await asset(path) + '</style>');
 }
-const workspace = (await asset('assets/optimizer-workspace.mjs')).replace('export function', 'function');
+const workspace = (await asset('assets/publication-destination.mjs')).replace('export function', 'function') +
+  (await asset('assets/optimizer-workspace.mjs')).replace(/^import .*;$/gm, '').replace('export function', 'function');
 const orderDialog = (await asset('assets/publication-order.mjs')).replaceAll('export ', '');
 const sizes = [
   ['YouTube', 1008, 728], ['YouTube', 390, 844], ['TikTok', 320, 568],

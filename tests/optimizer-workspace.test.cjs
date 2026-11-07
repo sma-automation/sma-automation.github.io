@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('app/assets/optimizer-workspace.mjs','utf8').replace('export function','function');
+const source=fs.readFileSync('app/assets/publication-destination.mjs','utf8').replace('export function','function')+fs.readFileSync('app/assets/optimizer-workspace.mjs','utf8').replace(/^import .*;$/gm,'').replace('export function','function');
 function setup(previewData={}){
  const byId=new Map();
  class Element{
@@ -116,4 +116,15 @@ test('standalone preview groups its navigation and resets the media format on se
  p.get('workspaceViewFile').click();
  assert.equal(p.get('workspacePost').dataset.orientation,'');
  assert.equal(p.get('workspacePost').style['--media-aspect'],undefined);
+});
+
+test('a bound product uses its direct link in the post and file details',()=>{
+ const shop='https://sma-automation.com/app/shop.html?shop=fixture';
+ const p=setup({draft:{shop_url:shop,product_id:'article-02'},language:'en'});
+ p.workspace.selection({name:'Video.mp4',media_kind:'video'});
+ p.get('workspaceViewFile').click();
+ const target=shop+'&produkt=article-02';
+ assert.equal(p.get('workspacePostShop').href,target);
+ assert.equal(p.get('workspacePostShop').textContent,'View product: '+target);
+ assert.ok(p.get('workspacePreviewFacts').children.some(node=>node.textContent===target));
 });

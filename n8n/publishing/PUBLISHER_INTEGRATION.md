@@ -57,3 +57,11 @@ Die freigegebene Galerie, Schrift und separate Beitragsvorschau bleiben erhalten
 ## Provider-Grundlagen
 
 Geprüfte Primärquellen: [YouTube videos.insert](https://developers.google.com/youtube/data/reference/rest/v3/videos/insert), [TikTok Direct Post](https://developers.tiktok.com/docs/en/content-posting-api-reference-direct-post), [Meta Instagram API](https://www.postman.com/meta/instagram/documentation/6yqw8pt/instagram-api), [Meta SDK – Page](https://github.com/meta/facebook-python-business-sdk/blob/main/facebook_business/adobjects/page.py), [Meta SDK – IGUser](https://github.com/meta/facebook-python-business-sdk/blob/main/facebook_business/adobjects/iguser.py), [n8n Execute Sub-workflow](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.executeworkflow/). Diese Feldprüfung belegt keine Portalübertragung und ersetzt weder Kontoprüfung noch Medienabnahme.
+
+### Produktlinks in neuen Videoentwürfen
+
+Bei der Zuordnung eines neuen Portaltexts zu einem Video prüft SMA den Produktkontext der Dateiversion. Ein eindeutiger aktiver Artikel im öffentlichen Shop desselben Kunden erhält den Direktlink mit `&produkt=<sma_produkt_id>`. Ein bestätigtes privates Produktprofil braucht dafür genau einen aktiven Artikel mit demselben vollständigen Namen. Bei fehlender oder mehrdeutiger Zuordnung verwendet der Entwurf die Shop-Startseite.
+
+Die Dateizuordnung speichert Artikelkennung und fertigen Beitragstext. Bearbeiten und erneutes Öffnen verwenden diese gespeicherte Auswahl. Die interne Übergabe prüft die aktuelle Erreichbarkeit des Katalogeintrags und den exakten Link im gespeicherten Text. Ein zurückgezogener Artikel erfordert einen neuen Entwurf. Die bisherige Shop-Adresse in der Auftragsbindung bleibt mit vorhandenen Aufträgen kompatibel.
+
+Der isolierte Durchlauf mit `node tests/run-publication-draft-product-links-sql.mjs` prüft die vier Portaltexte auf Deutsch und Englisch bis zu den vorbereiteten Textfeldern.
