@@ -49,11 +49,13 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  const editorHistory=requestEditors?mountPublicationEditorHistory({doc,after:page.querySelector('#historyAssignmentCard')||page.querySelector('#historyTextCard')||slot.closest('.card'),request:requestEditors,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  const analysisHistory=requestAnalyses?mountPublicationAnalysisHistory({doc,after:page.querySelector('#historyEditorCard')||page.querySelector('#historyAssignmentCard')||page.querySelector('#historyTextCard')||slot.closest('.card'),request:requestAnalyses,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  const activityCard=slot.closest('.card'),textCard=page.querySelector('#historyTextCard'),assignmentCard=page.querySelector('#historyAssignmentCard'),editorCard=page.querySelector('#historyEditorCard'),analysisCard=page.querySelector('#historyAnalysisCard');
+ const chapterReaders={texts:textHistory,assignments:assignmentHistory,edits:editorHistory,analyses:analysisHistory};
+ const requestedChapters=new Set();
  const switcher=create('div',null,'sma-history-switcher');switcher.setAttribute('role','group');switcher.setAttribute('aria-label','History-Bereich');
  let chapterTabs;
  if(textCard||assignmentCard||editorCard||analysisCard){
   activityCard.id='historyOrderCard';
-  chapterTabs=createChapterTabs({doc,id:'sma-history',list:switcher,entries:[
+  chapterTabs=createChapterTabs({doc,id:'sma-history',list:switcher,onSelect:loadSelectedChapter,entries:[
    {key:'orders',label:'Aufträge',en:'Orders',panel:activityCard},
    ...(textCard?[{key:'texts',label:'Portaltexte',en:'Platform texts',panel:textCard}]:[]),
    ...(assignmentCard?[{key:'assignments',label:'Dateiverlauf',en:'File history',panel:assignmentCard}]:[]),
@@ -69,9 +71,18 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  function clearExpiryTimers(){for(const timer of expiryTimers)clearTimeout(timer);expiryTimers.length=0;}
  let pageNumber=0,lastResult=null,entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
  const active=()=>!disposed&&!invalidOwner&&page.classList.contains('active')&&ownerWindow.document.visibilityState!=='hidden';
+ function loadSelectedChapter(key=chapterTabs?.selected){
+  const reader=chapterReaders[key];
+  if(!reader||!active()||requestedChapters.has(key))return;
+  // The orders response supplies the shared period, including the server's current month.
+  if(!lastResult){if(!busy)load();return;}
+  requestedChapters.add(key);
+  reader.load(lastResult.month);
+ }
  function clear(text=''){
   clearExpiryTimers();
-  textHistory?.clear();assignmentHistory?.clear();editorHistory?.clear();analysisHistory?.clear();
+  requestedChapters.clear();
+  for(const reader of Object.values(chapterReaders))reader?.clear();
   generation++;busy=false;entries=[];cursor=null;summary=null;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
@@ -148,8 +159,14 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    if(selection!==undefined&&result.month!==selection)throw Error('INVALID_HISTORY');
    if(append&&result.entries.some(e=>entries.some(old=>old.id===e.id)))throw Error('INVALID_HISTORY');
    const combined=append?[...entries,...result.entries]:result.entries;if(combined.length>result.summary.orders)throw Error('INVALID_HISTORY');
-   entries=combined;cursor=result.next;pageNumber=Math.min(pageNumber+(append?1:0),Math.max(0,Math.ceil(entries.length/pageSize)-1));selection=result.month;summary=result.summary;render(result);if(!append){textHistory?.load(result.month);assignmentHistory?.load(result.month);editorHistory?.load(result.month);analysisHistory?.load(result.month);}
-  }catch{if(current(g))clear('Der Verlauf konnte nicht geladen werden. Bitte erneut aktualisieren.');}
+   entries=combined;cursor=result.next;pageNumber=Math.min(pageNumber+(append?1:0),Math.max(0,Math.ceil(entries.length/pageSize)-1));selection=result.month;summary=result.summary;render(result);
+   if(!append)loadSelectedChapter();
+  }catch{
+   if(current(g)){
+    clear('Der Verlauf konnte nicht geladen werden. Bitte erneut aktualisieren.');
+    chapterTabs?.select('orders',{notify:false});
+   }
+  }
   finally{if(g===generation&&!disposed){busy=false;refresh.disabled=invalidOwner;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;slot.setAttribute('aria-busy','false');}}
  }
  const onRefresh=()=>load(),onMore=()=>{if(!active()||busy)return;if((pageNumber+1)*pageSize<entries.length){pageNumber++;render();}else if(cursor)load(true);};
