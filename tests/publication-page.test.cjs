@@ -677,3 +677,46 @@ test('the optimizer labels a receipted renamed music version; a lookalike filena
  assert.equal(second.querySelector('strong').textContent,'Bühne – mit SMA-Musik');
  assert.doesNotMatch(second.querySelector('small').textContent,/SMA-Musik/);
 });
+
+const productChoices=[
+ {product_id:'lamp-a',name:'Testlampe',sku:'LAMPE',purpose:'Die Lampe leuchtet in Grün.'},
+ {product_id:'lamp-b',name:'Testlampe',sku:'LAMPE',purpose:'Die Lampe leuchtet in Blau.'}
+];
+const ambiguousVideo={asset_id:supportedVideo.id,asset_revision:supportedVideo.revision,state:'ambiguous',choices:productChoices};
+test('a new video draft uses the explicitly chosen matching shop article and restores the choice on reopening',async()=>{
+ const options={portal:'instagram',asset:supportedVideo.id,wide:true,formTracksDom:true,filesRpc:productFiles(ambiguousVideo),
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis}),fetchResponse:async()=>instagramResult};
+ const p=await boot(options),select=p.get('productChoice');
+ assert.equal(p.get('productChoiceField').hidden,false);assert.equal(select.value,'');
+ assert.equal(select.children[1].textContent,'Testlampe · LAMPE · lamp-a');
+ assert.equal(select.children[2].textContent,'Testlampe · LAMPE · lamp-b');
+ await p.get('magicText').click();assert.equal(select.focused,true);assert.equal(p.calls.some(c=>c.url),false);
+ select.value='lamp-b';p.get('previewForm').events.input({target:select});
+ await p.get('magicText').click();
+ const input=JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body);
+ const [header,description]=input.source_text.split('\nDateiinhalt: ');
+ assert.equal(description,videoAnalysis.result.source_text);
+ assert.deepEqual(JSON.parse(header.replace('SMA-Produktauswahl (Kunden-/Katalogdaten): ','')),{Produkt:'Testlampe',Thema:'',Einsatzzweck:productChoices[1].purpose,Artikelnummer:'lamp-b'});
+ assert.equal(p.calls.filter(c=>c.p_action==='assign').length,1);
+ const reopened=await boot({...options,filesRpc:productFiles(ambiguousVideo,{...instagramResult,input,assignment_revision:1})});
+ assert.equal(reopened.get('productChoice').value,'lamp-b');
+ assert.equal(reopened.get('source_text').value,description);
+ reopened.signOut();assert.equal(reopened.get('productChoiceField').hidden,true);assert.equal(reopened.get('productChoice').children.length,0);
+});
+test('a choice lost between display and generation requires a new decision',async()=>{
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:a=>a.p_action==='product'?
+  {ok:true,product_context:{...ambiguousVideo,choices:[productChoices[0]]}}:productFiles(ambiguousVideo)(a)});
+ p.get('productChoice').value='lamp-b';await p.run();
+ assert.match(p.get('status').textContent,/Artikelauswahl hat sich geändert/);
+ assert.equal(p.get('productChoice').value,'');assert.equal(p.calls.some(c=>c.url),false);
+});
+
+test('a customer can write a description for an ambiguous video and keep the general shop link',async()=>{
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,formTracksDom:true,
+  filesRpc:productFiles(ambiguousVideo),fetchResponse:async()=>instagramResult});
+ p.get('source_text').value='Zwei Leuchten stehen auf dem Tisch vor der Kamera.';
+ p.get('previewForm').events.input({target:p.get('source_text')});await p.run();
+ const sent=JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body);
+ assert.equal(sent.source_text,p.get('source_text').value);
+ assert.equal(p.get('shopLink').href,result.preview.shop_url);
+});

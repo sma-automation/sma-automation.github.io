@@ -65,3 +65,9 @@ Bei der Zuordnung eines neuen Portaltexts zu einem Video prüft SMA den Produktk
 Die Dateizuordnung speichert Artikelkennung und fertigen Beitragstext. Bearbeiten und erneutes Öffnen verwenden diese gespeicherte Auswahl. Die interne Übergabe prüft die aktuelle Erreichbarkeit des Katalogeintrags und den exakten Link im gespeicherten Text. Ein zurückgezogener Artikel erfordert einen neuen Entwurf. Die bisherige Shop-Adresse in der Auftragsbindung bleibt mit vorhandenen Aufträgen kompatibel.
 
 Der isolierte Durchlauf mit `node tests/run-publication-draft-product-links-sql.mjs` prüft die vier Portaltexte auf Deutsch und Englisch bis zu den vorbereiteten Textfeldern.
+
+### Shopartikel bei mehreren Treffern wählen
+
+Unter **Inhalt und Ziel** kann der Kunde einen Shopartikel für einen neuen Videoentwurf auswählen, wenn mehrere Produkte zum Dateistand passen. Das Feld enthält die passenden, öffentlich erreichbaren Artikel des eigenen Shops. Name und SKU unterscheiden Varianten. Bei identischen Angaben zeigt SMA zusätzlich die Artikelkennung. Ohne Auswahl kann der Kunde die Datei selbst beschreiben und den allgemeinen Shop-Link verwenden.
+
+Magic Effect und die manuelle Texterstellung verwenden die Angaben des gewählten Artikels. Beim Zuordnen des fertigen Entwurfs gleicht SMA Artikelkennung, Produktangaben und aktuelle Treffer erneut ab. Ist der Artikel entfallen oder haben sich seine Angaben geändert, fordert SMA eine neue Auswahl an. Eine erfolgreich gespeicherte Zuordnung behält ihren Produktlink beim Bearbeiten und erneuten Öffnen. Die Auswahl für einen neuen Entwurf ändert keinen vorhandenen Auftrag.

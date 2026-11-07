@@ -17,7 +17,7 @@ export async function checkSoundtrackProduct({db,value,sql,uid,jobId}) {
   }
   await db.exec(`alter table sma_private.publication_editor_exports_v1 add column local_probe jsonb;
     create function sma_private.publication_export_technical_v1(sma_private.publication_files_v1) returns jsonb language sql as $$select null::jsonb$$;`);
-  for(const name of ['publication-product-context','publication-optimizer-file-labels','publication-draft-product-links','gallery-music-product-context']){
+  for(const name of ['publication-product-context','publication-optimizer-file-labels','publication-draft-product-links','gallery-music-product-context','publication-product-choice']){
     await db.exec(await sql(name));
   }
   const job=await value('select to_jsonb(j) v from sma_private.gallery_music_v1 j where id=$1',[jobId]);
@@ -84,6 +84,7 @@ export async function checkSoundtrackProduct({db,value,sql,uid,jobId}) {
   await db.query("insert into public.sma_produkte(user_id,kunde_id,produkt_name,sma_produkt_id,aktiv) values($1,'fixture','Zweite Lampe','lamp-02',true)",[uid]);
   const conflict=await context();
   assert.equal(conflict.state,'ambiguous');
+  assert.deepEqual(conflict.choices.map(choice=>choice.product_id).sort(),['lamp-01','lamp-02']);
   assert.equal(conflict.product_id,undefined);
   await db.exec('rollback');
 
