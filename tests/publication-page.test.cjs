@@ -7,7 +7,7 @@ const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').s
 const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').split('// Existing owner-scoped')[0].replaceAll('export function','function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
 async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
- const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:'fixture-owner'}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?orderResponse:['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
+ const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:'fixture-owner'}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
@@ -536,12 +536,49 @@ test('history deep link fails safely on stale media, stale text, wrong account a
   assert.equal(p.get('status').dataset.error,'true');assert.equal(p.calls.some(c=>c.url),false);
  }
 });
-test('history rechecks stale catalog metadata before displaying the saved file',async()=>{
- let lists=0;
- const p=await historyView({fetchResponse:async()=>({ok:true}),filesRpc:async a=>a.p_action==='list'?
-  {ok:true,files:[{...historyFile,verified_at:++lists===1?staleTime:new Date().toISOString()}]}:a.p_action==='get'?historySaved:{ok:true}});
- assert.equal(lists,2);assert.deepEqual(p.views,['preview']);
- assert.deepEqual(p.calls.filter(c=>c.url).map(c=>new URL(c.url).pathname),['/webhook/sma-publication-files-v1']);
+test('history uses the server freshness check regardless of the device clock',async()=>{
+ for(const check_error of ['FILE_CHANGED','FILE_REFRESH_REQUIRED',null]){
+  let synced=false;
+  const p=await historyView({file:{...historyFile,verified_at:staleTime},
+   orderResponse:async()=>({...historyOrder,check_error:synced?null:check_error}),
+   fetchResponse:async()=>{synced=true;return {ok:true};}});
+  assert.deepEqual(p.views,['preview']);
+  const syncs=p.calls.filter(c=>c.url).map(c=>new URL(c.url).pathname);
+  assert.deepEqual(syncs,check_error?['/webhook/sma-publication-files-v1']:[]);
+  assert.equal(p.calls.filter(c=>c.name==='sma_publication_order_v1').length,check_error?2:1);
+ }
+});
+test('history retry reopens the same order after a temporary sync failure and serializes clicks',async()=>{
+ let synced=false,release,attempts=0;
+ const p=await historyView({orderResponse:async()=>({...historyOrder,check_error:synced?null:'FILE_REFRESH_REQUIRED'}),
+  fetchResponse:async()=>{if(++attempts===1)return {ok:false,code:'FILE_SYNC_RUNNING'};
+   await new Promise(resolve=>{release=resolve;});synced=true;return {ok:true};}});
+ const button=p.get('refreshFiles');
+ assert.equal(button.disabled,false);assert.equal(button.textContent,'Vorschau erneut laden');
+ assert.deepEqual(p.views,[]);assert.equal(p.get('inputFields').disabled,true);
+ const retry=button.click();await new Promise(resolve=>setImmediate(resolve));await button.click();
+ assert.equal(button.disabled,true);assert.equal(attempts,2);
+ release();await retry;
+ assert.deepEqual(p.views,['preview']);assert.equal(button.textContent,'Dateien aktualisieren');
+ assert.ok(p.calls.filter(c=>c.name==='sma_publication_order_v1').every(c=>c.p_input.id===historyOrderId));
+ assert.equal(p.calls.some(c=>c.p_action&&!['get','list','check'].includes(c.p_action)),false);
+});
+test('a timed-out folder request leaves the order preview retry available until sign-out',async()=>{
+ const p=await historyView({order:{...historyOrder,check_error:'FILE_REFRESH_REQUIRED'},
+  fetchResponse:async()=>{throw new DOMException('Timeout','TimeoutError');}});
+ assert.equal(p.get('refreshFiles').disabled,false);assert.deepEqual(p.views,[]);
+ p.signOut();assert.equal(p.get('refreshFiles').disabled,true);
+ await p.get('refreshFiles').click();assert.equal(p.calls.filter(c=>c.url).length,1);
+});
+test('history refuses an outdated binding even when the folder sync succeeds',async()=>{
+ for(const error of ['ORDER_CHANGED','FILE_CHANGED','FILE_REFRESH_REQUIRED']){
+  let synced=false;
+  const p=await historyView({orderResponse:async()=>({...historyOrder,check_error:synced?error:'FILE_REFRESH_REQUIRED'}),
+   fetchResponse:async()=>{synced=true;return {ok:true};}});
+  assert.deepEqual(p.views,[]);assert.equal(p.get('result').hidden,true);
+  assert.equal(p.get('refreshFiles').disabled,error!=='FILE_REFRESH_REQUIRED');
+  assert.equal(p.calls.filter(c=>c.url).length,1);
+ }
 });
 
 test('YouTube and TikTok display the bound export cover on the post and the player',async()=>{

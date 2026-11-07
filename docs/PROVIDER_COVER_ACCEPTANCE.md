@@ -20,7 +20,9 @@ Dialog lädt die Kontooptionen. Erst „Auftrag prüfen“ bereitet einen neuen 
 Bei einer abgelaufenen Vorbereitung führt **History → Aufträge → Beitragsvorschau öffnen**
 im selben Tab direkt zur gebundenen Datei und zum gespeicherten Portaltext. Bei
 einem geänderten Datei- oder Textstand zeigt SMA einen Hinweis. Eine veraltete
-Dateiliste wird bei Bedarf mit dem Kundenordner abgeglichen.
+Dateiliste wird anhand der serverseitigen Auftragsprüfung mit dem Kundenordner
+abgeglichen. Ist der Abgleich vorübergehend nicht möglich, öffnet **Vorschau
+erneut laden** denselben Auftrag nach einer erneuten Prüfung.
 
 Die beiden Werbeentwürfe am Zehn-Sekunden-Original wurden anhand der vorhandenen
 241 Einzelbilder und des vom Kunden beschriebenen Produktzwecks geprüft.

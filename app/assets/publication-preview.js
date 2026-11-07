@@ -13,6 +13,7 @@ const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:
 const messages={CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0,dirty=false;
 let reviewStatus=null;
+let retryHistoryPreview=false;
 let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
@@ -419,25 +420,35 @@ $('reviewContent').addEventListener('click',async()=>{
   if(selectedAsset?.id===file.id){await loadMediaCheck();$('mediaPanel').open=true;}
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
-async function openHistoryOrderPreview(id,owner){
+async function readHistoryOrder(id){
  const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
  const unavailable='Die Beitragsvorschau für diesen Auftrag ist in deinem Konto nicht verfügbar.';
- const changed='Datei oder Beitrag wurden seit diesem Auftrag geändert. Öffne den aktuellen Stand unter Veröffentlichung.';
  if(!workspace||!uuid.test(id))throw Error(unavailable);
  const {data:order,error}=await supabase.rpc('sma_publication_order_v1',{p_action:'get',p_input:{id}});
  const binding=order?.binding;
- if(error||!order?.ok||order.id!==id||order.state!=='prepared'||order.approved_at!=null||
+ if(error)throw fileError('FILE_SYNC_UNAVAILABLE');
+ if(!order?.ok||order.id!==id||order.state!=='prepared'||order.approved_at!=null||
     order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!uuid.test(binding.asset_id)||
     !uuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Error(unavailable);
- let catalog=await optimizerCatalog();
- let file=catalog.files?.find(f=>f.id===binding.asset_id);
- if(file&&!catalogFileIsFresh(file)){
-  await syncFileCatalog();
-  catalog=await optimizerCatalog();
-  file=catalog.files?.find(f=>f.id===binding.asset_id);
-  if(file&&!catalogFileIsFresh(file))throw fileError('FILE_REFRESH_REQUIRED');
+ return order;
+}
+async function openHistoryOrderPreview(id,owner){
+ const changed='Datei oder Beitrag wurden seit diesem Auftrag geändert. Öffne den aktuellen Stand unter Veröffentlichung.';
+ let order=await readHistoryOrder(id);
+ // The order RPC evaluates the catalogue timestamp on the server. A device clock
+ // can be ahead or behind even immediately after a successful Drive sync.
+ if(['FILE_REFRESH_REQUIRED','FILE_CHANGED'].includes(order.check_error)){
+  status('SMA gleicht die Datei für diesen Auftrag mit deinem Kundenordner ab …');
+  try{await syncFileCatalog();}catch(error){throw typeof error.code==='string'?error:fileError('FILE_SYNC_UNAVAILABLE');}
+  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
+  order=await readHistoryOrder(id);
  }
+ if(order.check_error==='FILE_REFRESH_REQUIRED')throw fileError('FILE_REFRESH_REQUIRED');
+ if(order.check_error)throw Error(order.check_error==='FILE_UNAVAILABLE'?messages.FILE_UNAVAILABLE:changed);
+ const binding=order.binding;
+ const catalog=await optimizerCatalog();
+ const file=catalog.files?.find(f=>f.id===binding.asset_id);
  if(!file||!fileFitsPortal(file))throw Error(messages.FILE_UNAVAILABLE);
  const assignment=file.assignments?.find(a=>a.platform===selectedPortal);
  if(file.revision!==binding.asset_revision||assignment?.status!=='assigned'||assignment.revision!==binding.assignment_revision)throw Error(changed);
@@ -455,6 +466,22 @@ async function openHistoryOrderPreview(id,owner){
  await loadMediaCheck();await loadMagicEffect(false);lock(false);syncMedia();
 }
 
+async function loadHistoryPreview(){
+ retryHistoryPreview=false;
+ lock(true);
+ $('refreshFiles').textContent='Dateien aktualisieren';
+ status('Beitragsvorschau wird geladen …');
+ try{await openHistoryOrderPreview(params.get('order'),previewOwnerId);}
+ catch(error){
+  if(signedOut)return;
+  if(['FILE_REFRESH_REQUIRED','FILE_SYNC_RUNNING','FILE_SYNC_RATE_LIMITED','FILE_SYNC_UNAVAILABLE','FOLDER_UNAVAILABLE'].includes(error.code)){
+   retryHistoryPreview=true;
+   $('refreshFiles').textContent='Vorschau erneut laden';
+   $('refreshFiles').disabled=false;
+   status(error.code==='FILE_REFRESH_REQUIRED'?'Die Datei ist noch nicht aktuell bestätigt. Bitte lade die Vorschau erneut.':error.message,true);
+  }else{status(error.message,true);}
+ }
+}
 async function loadLatest(){const file=selectedAsset;lock(true);try{
  await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
@@ -614,7 +641,7 @@ async function refreshVideoMetadata(){
  finally{lock(false);}
 }
 $('refreshVideoMetadata').addEventListener('click',refreshVideoMetadata);
-$('refreshFiles').addEventListener('click',refreshFiles);
+$('refreshFiles').addEventListener('click',()=>retryHistoryPreview&&!signedOut?loadHistoryPreview():refreshFiles());
 $('pickerRefresh').addEventListener('click',refreshFiles);
 $('previewForm').addEventListener('input',()=>{sourceDirty=true;attempt=null;});
 $('media_kind').addEventListener('change',syncMedia);
@@ -688,7 +715,7 @@ try{
  }});
  originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner)});
  if(params.has('order')){
-  await openHistoryOrderPreview(params.get('order'),coverOwner);
+  await loadHistoryPreview();
  }else{
   let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}
   if(ready)await loadLatest();
