@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
+import {checkProductChoice} from './sql-runtime/publication-product-choice-checks.mjs';
 import handoff from '../n8n/publishing/publisher-handoff.cjs';
 import publisher from '../n8n/publishing/publisher-text.cjs';
 
@@ -62,6 +63,7 @@ try {
   const legacy = await assign('youtube','de');
   await db.query("update sma_private.publication_assignments_v1 set draft=draft-'product_id'");
   await db.exec(await load('publication-draft-product-links'));
+  await db.exec(await load('publication-product-choice'));
   const keep = await file('save','youtube',{assignment_revision:legacy.assignment_revision,title:'Alter Entwurf',body:'Ein bearbeiteter älterer Entwurf.'});
   assert.equal(keep.preview.drafts[0].product_id,undefined);
   assert.ok(keep.preview.drafts[0].caption.endsWith('🛒 Zum Shop: '+shop));
@@ -90,6 +92,7 @@ try {
       assert.equal(caption,'Bearbeiteter Testartikel '+fresh.id+'\n\n#Grün\n\n'+footer);
     }
   }
+  await checkProductChoice({db,file,saved,product,owner,other,shop});
   const previous = (await file('get','youtube')).assignment_revision;
   for (const modify of [
     () => product('Zweiter Treffer','Article-SKU','other-id'),

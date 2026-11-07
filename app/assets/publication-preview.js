@@ -19,6 +19,7 @@ let retryHistoryPreview=false;
 let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
+let pendingProductFocus=null;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceDirty=false,signedOut=false;
 const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-video-magic-effect-v1';
 const magicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-magic-effect-v1';
@@ -56,7 +57,9 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();}
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+ if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
+}
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
 async function rpc(action,input={},id=null){const {data,error}=await supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 // Read controlled fields directly: FormData omits the disabled fields during a Magic run.
@@ -68,22 +71,49 @@ function sourceInput(){
 // Product facts stay separate from observations and from text entered by the customer.
 const productPrefix='SMA-Produktangaben (Kunden-/Katalogdaten): ';
 const sourceSeparator='\nDateiinhalt: ';
-function originalSource(text){
- if(typeof text!=='string'||!text.startsWith(productPrefix))return text;
+const choicePrefix='SMA-Produktauswahl (Kunden-/Katalogdaten): ';
+messages.PRODUCT_SELECTION_CHANGED='Die Artikelauswahl hat sich geändert. Prüfe den Artikel und erstelle den Entwurf erneut.';
+
+function sourceProduct(text){
+ if(typeof text!=='string')return null;
+ const prefix=[choicePrefix,productPrefix].find(value=>text.startsWith(value));
  const split=text.indexOf(sourceSeparator);
- if(split<0)return text;
+ if(!prefix||split<prefix.length)return null;
  try{
-  const facts=JSON.parse(text.slice(productPrefix.length,split));
-  if(typeof facts.Produkt==='string'&&typeof facts.Einsatzzweck==='string')return text.slice(split+sourceSeparator.length);
+  const facts=JSON.parse(text.slice(prefix.length,split));
+  if(typeof facts?.Produkt==='string'&&typeof facts.Einsatzzweck==='string')
+   return {choice:prefix===choicePrefix?facts.Artikelnummer:null,source:text.slice(split+sourceSeparator.length)};
  }catch{}
- return text;
+ return null;
 }
-function showProductContext(value,file){
- const note=$('productContext');
- note.hidden=true;note.textContent='';
+function originalSource(text){return sourceProduct(text)?.source??text;}
+function showProductContext(value,file,preferred){
+ const note=$('productContext'),field=$('productChoiceField'),select=$('productChoice');
+ const sameFile=file&&select.dataset.asset===file.id&&select.dataset.revision===file.revision;
+ const wanted=preferred??(sameFile?select.value:'');
+ note.hidden=true;note.textContent='';field.hidden=true;select.replaceChildren();select.value='';
+ select.dataset.asset=file?.id||'';select.dataset.revision=file?.revision||'';
  if(!value||!file||value.asset_id!==file.id||value.asset_revision!==file.revision)return null;
  if(value.state==='ambiguous'){
-  note.textContent='Mehrere Produkte passen zu dieser Datei. Ergänze Produktname und Einsatzzweck in der Beschreibung.';
+  const choices=file.media_kind==='video'&&Array.isArray(value.choices)?value.choices:[];
+  if(choices.length){
+   const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Bitte auswählen';select.append(placeholder);
+   const labels=choices.map(c=>c.sku?c.name+' · '+c.sku:c.name);
+   const counts=new Map();
+   for(const label of labels)counts.set(label,(counts.get(label)||0)+1);
+   choices.forEach((c,i)=>{
+    const option=document.createElement('option');option.value=c.product_id;
+    option.textContent=counts.get(labels[i])>1?labels[i]+' · '+c.product_id:labels[i];
+    select.append(option);
+   });
+   const selected=choices.find(c=>c.product_id===wanted);
+   select.value=selected?.product_id||'';field.hidden=false;
+   note.textContent='Mehrere Shopartikel passen zum Video. Wähle den Artikel für den Produktlink oder verwende eine eigene Beschreibung mit allgemeinem Shop-Link.';
+   note.hidden=false;
+   if(selected)return {...selected,state:'matched',chosen:true};
+  }else{
+   note.textContent='Mehrere Produkte passen zu dieser Datei. Ergänze Produktname und Einsatzzweck in der Beschreibung.';
+  }
  }else if(value.state==='matched'&&typeof value.name==='string'&&typeof value.purpose==='string'){
   note.textContent=['Produkt: '+value.name,value.topic&&'Thema: '+value.topic,value.purpose].filter(Boolean).join(' · ');
  }else{return null;}
@@ -91,14 +121,26 @@ function showProductContext(value,file){
 }
 async function getDraftProduct(context){
  if(!context)return null;
+ const selected=$('productChoice').value;
  const data=await fileRpc('product',{asset_id:context.asset_id,asset_revision:context.asset_revision,platform:context.platform});
  assertFileContext(context);
- return showProductContext(data.product_context,selectedAsset);
+ const product=showProductContext(data.product_context,selectedAsset);
+ if(selected&&(!product?.chosen||product.product_id!==selected)){askForProduct();throw fileError('PRODUCT_SELECTION_CHANGED');}
+ return product;
+}
+function askForProduct(){
+ $('sourcePanel').open=true;workspace?.show('source');
+ pendingProductFocus=$('productChoiceField').hidden?'source_text':'productChoice';
+ if(pendingProductFocus==='productChoice'){
+  return 'Wähle den passenden Shopartikel für den neuen Entwurf.';
+ }
+ return 'Bitte ergänze den zutreffenden Produktnamen und Einsatzzweck in der Dateibeschreibung.';
 }
 function attachProduct(input,product){
  if(product?.state!=='matched')return input;
  const info={Produkt:product.name,Thema:product.topic||'',Einsatzzweck:product.purpose};
- const source=productPrefix+JSON.stringify(info)+sourceSeparator+input.source_text;
+ if(product.chosen)info.Artikelnummer=product.product_id;
+ const source=(product.chosen?choicePrefix:productPrefix)+JSON.stringify(info)+sourceSeparator+input.source_text;
  if(source.length>8000)throw Error('Die Produktangaben und die Dateibeschreibung sind zusammen zu lang. Bitte kürze die Dateibeschreibung.');
  return {...input,source_text:source};
 }
@@ -486,7 +528,7 @@ async function openHistoryOrderPreview(id,owner){
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  // Select only after the order, file and saved portal text have all been verified.
  assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
- renderSelectedFile();showProductContext(saved.product_context,file);fillInput(saved.input);render(saved);
+ renderSelectedFile();showProductContext(saved.product_context,file,sourceProduct(saved.input?.source_text)?.choice);fillInput(saved.input);render(saved);
  orderReview.rememberVideoChoices(order);
  workspace.show('preview');status('Beitragsvorschau des Auftrags geladen.');
  await loadMediaCheck();await loadMagicEffect(false);
@@ -517,8 +559,8 @@ async function loadLatest(){const file=selectedAsset;lock(true);try{
  await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
  if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
- showProductContext(data.product_context,file);
- if(data.status==='empty'){clearDraft();status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
+ showProductContext(data.product_context,file,sourceProduct(data.input?.source_text)?.choice);
+ if(data.status==='empty'){clearDraft();if(!$('productChoiceField').hidden)$('sourcePanel').open=true;status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
 
@@ -634,10 +676,7 @@ async function runMagicAction(mode,replace=false){
  try{
   await ensureFreshFile(context);
   const product=await getDraftProduct(context);
-  if(product?.state==='ambiguous'){
-   $('sourcePanel').open=true;workspace?.show('source');$('source_text').focus();
-   throw Error('Welches Produkt ist im Beitrag zu sehen? Ergänze Produktname und Einsatzzweck in der Beschreibung.');
-  }
+  if(product?.state==='ambiguous')throw Error(askForProduct());
   if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
    $('source_text').value=product.visual;
   }else{
@@ -674,7 +713,7 @@ async function refreshVideoMetadata(){
 $('refreshVideoMetadata').addEventListener('click',refreshVideoMetadata);
 $('refreshFiles').addEventListener('click',()=>retryHistoryPreview&&!signedOut?loadHistoryPreview():refreshFiles());
 $('pickerRefresh').addEventListener('click',refreshFiles);
-$('previewForm').addEventListener('input',()=>{sourceDirty=true;attempt=null;});
+$('previewForm').addEventListener('input',event=>{if(event?.target!==$('productChoice'))sourceDirty=true;attempt=null;});
 $('media_kind').addEventListener('change',syncMedia);
 $('language').addEventListener('change',()=>{sourceDirty=true;attempt=null;});
 $('loadLatest').addEventListener('click',async()=>{if(!busy){await loadLatest();if(current)workspace?.show('text');}});
@@ -686,7 +725,7 @@ async function generatePreview({withinAutomatic=false}={}){
  try{
   await ensureFreshFile(context);
   const product=await getDraftProduct(context);
-  if(product?.state==='ambiguous'&&(withinAutomatic||!sourceDirty))throw Error('Bitte ergänze den zutreffenden Produktnamen und Einsatzzweck in der Dateibeschreibung.');
+  if(product?.state==='ambiguous'&&(withinAutomatic||!sourceDirty))throw Error(askForProduct());
   const draftInput=attachProduct(input,product);
   const signature=JSON.stringify({input:draftInput,asset_id:context?.asset_id,asset_revision:context?.asset_revision});
   if(!attempt||attempt.signature!==signature||attempt.finished)attempt={signature,id:crypto.randomUUID(),finished:false};

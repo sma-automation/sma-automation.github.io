@@ -22,6 +22,9 @@ on:
       - tests/*publication-text-edits*
       - tests/publication-hashtags.test.cjs
       - supabase/sql/publication-text-edits.sql
+      - supabase/sql/publication-product-choice.sql
+      - supabase/migrations/*_publication_product_choice_v1.sql
+      - tests/sql-runtime/publication-product-choice-checks.mjs
       - supabase/sql/publication-draft-product-links.sql
       - supabase/migrations/*_publication_draft_product_links_v1.sql
       - tests/run-publication-draft-product-links-sql.mjs
