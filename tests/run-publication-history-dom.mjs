@@ -243,4 +243,16 @@ await test('active preparation links to the same order and falls back to preview
   assert.deepEqual(f.calls,[{}]);
  }finally{f.view.destroy();mock.timers.reset();}
 });
+await test('unfinished order links to its saved preparation until the server deadline',async()=>{
+ const now=Date.now();mock.timers.enable({apis:['Date','setTimeout'],now});
+ const expires_at=new Date(now+60000).toISOString();
+ const f=fixture({request:()=>result([entry(1,{status:'preparing',target_name:'',preparation_window:{status:'active',expires_at}})])});
+ try{
+  await tick();
+  const link=f.$('ol a'),url='/app/publication-preview.html?wide=1&portal=youtube&order='+entry(1).id;
+  assert.equal(link.getAttribute('href'),url+'&resume=1');assert.match(f.$('ol').textContent,/Zielkonto ist noch offen/);
+  mock.timers.tick(60001);assert.equal(link.getAttribute('href'),url);assert.match(f.$('ol').textContent,/Vorbereitung abgelaufen/);
+  assert.deepEqual(f.calls,[{}]);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
 console.log(`${passed} history DOM scenarios passed.`);
