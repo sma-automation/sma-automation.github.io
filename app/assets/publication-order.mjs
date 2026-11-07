@@ -76,7 +76,13 @@ export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomU
       const rejected=response.ok&&r?.ok===false&&Object.hasOwn(errors,r.code);
       throw Object.assign(Error(orderError(r?.code)),{code:r?.code,existingId:r?.existing_order_id,rejected});
     }
-    if(action==='account'){if(r.id!==input.id||r.stage!=='account'||r.target?.platform!==input.platform||r.account_check?.target_id!==r.target?.id||r.can_publish!==false||r.can_upload!==false)throw Error(orderError());return r;}
+    if(action==='account'){
+      const targetId=r.target?.id;
+      if(r.id!==input.id||r.stage!=='account'||r.target?.platform!==input.platform||
+         typeof targetId!=='string'||!targetId.trim()||r.account_check?.target_id!==targetId||
+         r.can_publish!==false||r.can_upload!==false)throw Error(orderError());
+      return r;
+    }
     return validatedOrder(r,input.id);
   }
   return {
@@ -227,7 +233,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     working=value;
     const ended=preparationEnded(order),locked=ended||recovery!==null;
     controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');
-    syncCommercial();close.disabled=value;consent.disabled=value||locked;restart.hidden=(!ended&&!pendingTarget(order))||!!recovery;restart.disabled=value;
+    syncCommercial();close.disabled=value;consent.disabled=value||locked;
+    restart.hidden=recovery?!recovery.canRestart:!ended&&!pendingTarget(order);
+    restart.disabled=value;
     for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared'||locked;
     humanEnabled.disabled=value||!humanReviewAvailable(order);humanChecklist.hidden=!humanEnabled.checked;
     for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);
@@ -305,10 +313,17 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function checkPreparation(stored,pending){
     checkBinding(stored);
     if(!stored.choices||Object.keys(stored.choices).length!==Object.keys(pending.choices).length||
-       Object.entries(pending.choices).some(([key,value])=>stored.choices[key]!==value))throw Error(orderError('REQUEST_CONFLICT'));
+       Object.entries(pending.choices).some(([key,value])=>stored.choices[key]!==value)){
+      throw Object.assign(Error('Die gespeicherten Portaleinstellungen weichen von deiner Auswahl ab.'),{selectionConflict:true});
+    }
     const needsTarget=stored.target!=null||!['preparing','cancelled'].includes(stored.state);
+    const verifiedPortal=['youtube','tiktok'].includes(context.binding.platform);
+    const checkAccount=verifiedPortal&&(stored.account_check!=null||(stored.state==='prepared'&&stored.approval_window?.status==='active'));
     if(pending.targetId&&needsTarget&&
-       (stored.target?.id!==pending.targetId||stored.target?.platform!==context.binding.platform))throw Error(orderError('TARGET_ACCOUNT_CHANGED'));
+       (stored.target?.id!==pending.targetId||stored.target?.platform!==context.binding.platform||
+        (checkAccount&&stored.account_check?.target_id!==pending.targetId))){
+      throw Object.assign(Error('Das gespeicherte Zielkonto passt nicht zum angezeigten Konto.'),{selectionConflict:true});
+    }
   }
   function checkStoredState(stored){
     if(stored.state==='preparing'||(['approved','checking','checked','blocked'].includes(stored.state)&&!stored.approved_at))throw Error(orderError('REQUEST_CONFLICT'));
@@ -346,6 +361,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   }
   async function readRecovery(generation){
     const pending=recovery;
+    let stored;
     clearExpiryTimer();controls.hidden=true;statusButton.hidden=false;setWorking(true);
     notice.textContent='Der gespeicherte Auftragsstand wird geladen …';
     try{
@@ -357,7 +373,8 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         offerPreparationRetry('Unter dieser Anfrage ist noch kein Auftrag verfügbar.');
         return;
       }
-      const stored=validatedOrder(result,pending.id);
+      stored=validatedOrder(result,pending.id);
+      if(order?.state==='prepared'&&stored.state==='preparing')throw Error(orderError('REQUEST_CONFLICT'));
       if(pending.choices){
         checkPreparation(stored,pending);
         if(pendingTarget(stored)&&(pending.persisted||preparationEnded(stored))){
@@ -380,9 +397,13 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       }
       recovery=null;
       if(pending.duplicate)notice.textContent=errors.DUPLICATE_PUBLICATION+' Den Verlauf findest du unter History → Aufträge.';
-    }catch{
+    }catch(error){
       if(generation!==epoch||pending!==recovery)return;
-      if(pending.choices)notice.textContent='Der Stand der Vorbereitung ist noch unklar. Lade den Status erneut oder öffne den Auftrag unter History.';
+      pending.canRestart=error.selectionConflict===true&&stored?.state==='prepared'&&stored.approved_at===null;
+      if(pending.canRestart){
+        pending.persisted=true;
+        notice.textContent=error.message+' Starte die Vorbereitung neu, um Konto und Einstellungen erneut zu prüfen.';
+      }else if(pending.choices)notice.textContent='Der Stand der Vorbereitung ist noch unklar. Lade den Status erneut oder öffne den Auftrag unter History.';
       else notice.textContent=pending.duplicate
         ? errors.DUPLICATE_PUBLICATION+' Den gespeicherten Auftrag findest du unter History → Aufträge.'
         : unresolvedMessage;
@@ -400,12 +421,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(generation!==epoch)return;
       if(choices){
         preparationId=result.id;
-        if(interruptedPreparation?.id===result.id)checkPreparation(result,interruptedPreparation);
-        if(order?.state==='preparing'){
-          checkPreparation(result,order);
-          if(!pendingTarget(result))checkStoredState(result);
-        }
-        if(result.state==='preparing'&&!(pendingTarget(order)&&pendingTarget(result)))throw Error();
+        const expected=interruptedPreparation?.id===result.id?interruptedPreparation:{choices,targetId:account?.target?.id};
+        checkPreparation(result,expected);
+        if(result.state==='preparing'){
+          if(!pendingTarget(order)||!pendingTarget(result))throw Error();
+        }else checkStoredState(result);
       }
       unchanged();
       if(sentApproval&&(!result.approved_at||['preparing','prepared'].includes(result.state)))throw Error();
@@ -465,7 +485,12 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }catch(e){if(generation===epoch&&!offerLinkRepair(e))notice.textContent=e.message||orderError();}
     finally{if(generation===epoch)setWorking(false);}
   }
-  button.addEventListener('click',()=>startPreparation(true));restart.addEventListener('click',()=>startPreparation());
+  button.addEventListener('click',()=>startPreparation(true));
+  restart.addEventListener('click',()=>{
+    if(working||restart.hidden)return;
+    if(recovery?.canRestart){recovery=null;interruptedPreparation=null;}
+    return startPreparation();
+  });
   controls.addEventListener('submit',event=>{event.preventDefault();if(working||order||recovery||!controls.reportValidity())return;
     if(commercial?.checked&&!fields.get('brand_content_toggle').checked&&!fields.get('brand_organic_toggle').checked){notice.textContent='Wähle eigene Marke, Werbung für Dritte oder beides.';return;}
     if(context.binding.platform==='tiktok'&&fields.get('brand_content_toggle').checked&&fields.get('visibility').value==='SELF_ONLY'){notice.textContent='Werbung für Dritte kann bei TikTok nicht mit „Nur ich“ veröffentlicht werden. Bitte wähle eine andere Sichtbarkeit.';return;}
@@ -486,7 +511,16 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   for(const input of humanFields.values())input.addEventListener('change',()=>setWorking(working));
   approve.addEventListener('click',()=>{if(!approve.disabled)return run(()=>client.approve(order,consent.checked,reviewValues()),{approval:true});});
   checkTarget.addEventListener('click',()=>{if(!checkTarget.disabled)return continuePending(true);});
-  statusButton.addEventListener('click',()=>pendingTarget(order)&&!recovery?continuePending(false):run(()=>client.get(order.id)));
+  statusButton.addEventListener('click',()=>{
+    if(working||statusButton.hidden)return;
+    if(recovery)return run();
+    if(pendingTarget(order))return continuePending(false);
+    if(order.state==='prepared'){
+      recovery={id:order.id,choices:order.choices,targetId:order.target?.id,persisted:true};
+      return run();
+    }
+    return run(()=>client.get(order.id));
+  });
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',clearExpiryTimer);dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
   return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;recovery=null;interruptedPreparation=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }

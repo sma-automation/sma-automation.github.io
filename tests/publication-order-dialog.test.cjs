@@ -18,18 +18,19 @@ test('status refresh replaces a consented preview with a terminal cancellation a
  }
  const doc={head:new Element('head'),body:new Element('body'),createElement:tag=>new Element(tag),createTextNode:text=>Object.assign(new Element('#text'),{textContent:text})};
  const binding={asset_id:'synthetic-asset',asset_revision:'revision:1',platform:'youtube',assignment_revision:1,preview_id:'synthetic-preview',preview_revision:1};
- let sequence=0,preparedId;
- const context={document:doc,AbortSignal,crypto:{randomUUID:()=>`fa660000-0000-4000-8000-${String(++sequence).padStart(12,'0')}`},fetch:async(_url,options)=>{
+ let sequence=0,preparedId,saved;const reads=[];
+ const context={document:doc,AbortSignal,setTimeout:()=>1,clearTimeout:()=>{},crypto:{randomUUID:()=>`fa660000-0000-4000-8000-${String(++sequence).padStart(12,'0')}`},fetch:async(_url,options)=>{
   const b=JSON.parse(options.body);requests.push(b);
   const base={ok:true,id:b.input.id,can_upload:false,can_publish:false,target:{id:'synthetic-channel',platform:'youtube'},account_check:{target_id:'synthetic-channel',display_name:'Test channel'}};
   if(b.action==='account')return {ok:true,json:async()=>({...base,stage:'account'})};
-  if(b.action==='prepare')preparedId=b.input.id;
-  assert.ok(['prepare','get'].includes(b.action),'No approval request may leave the cancelled dialog');
-  return {ok:true,json:async()=>({...base,binding,choices:{visibility:'private'},draft:{title:'Test',caption:'Synthetic text'},state:b.action==='get'?'cancelled':'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:b.action==='get'?null:'synthetic-token',approved_at:null,blockers:[]})};
+  assert.equal(b.action,'prepare','Refreshing an unapproved order must not call n8n');
+  preparedId=b.input.id;
+  saved={...base,binding,choices:b.input.choices,draft:{title:'Test',caption:'Synthetic text'},state:'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()},approved_at:null,blockers:[]};
+  return {ok:true,json:async()=>saved};
  }};
  const source=fs.readFileSync('app/assets/publication-order.mjs','utf8').replaceAll('export function','function').replaceAll('export const','const');
  vm.runInNewContext(source+';this.install=installOrderReview;',context);
- context.install(doc,{host:doc.body,portalName:'YouTube',session:async()=>({access_token:'synthetic-session'}),getContext:()=>({binding,name:'Synthetic.mp4'}),refresh:async()=>{}});
+ context.install(doc,{host:doc.body,portalName:'YouTube',readStoredOrder:async id=>{reads.push(id);return {...saved,state:'cancelled',approval_token:null};},session:async()=>({access_token:'synthetic-session'}),getContext:()=>({binding,name:'Synthetic.mp4'}),refresh:async()=>{}});
  const dialog=byId.get('publicationOrderDialog'),form=dialog.children.find(e=>e.tag==='form');
  const open=byId.get('preparePublicationOrder'),buttons=dialog.querySelectorAll('button');
  const approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
@@ -50,7 +51,7 @@ test('status refresh replaces a consented preview with a terminal cancellation a
  buttons.find(e=>e.textContent==='Schließen').events.click();assert.equal(dialog.open,false);
  await open.events.click();await prepare();
  assert.notEqual(preparedId,firstId);assert.equal(consent.checked,false);assert.equal(approve.disabled,true);assert.equal(status.hidden,false);
- assert.deepEqual(requests.map(r=>r.action),['account','prepare','get','account','prepare']);
+ assert.deepEqual(reads,[firstId]);assert.deepEqual(requests.map(r=>r.action),['account','prepare','account','prepare']);
 });
 
 function tiktokDialog({checkError=null,productId,verifyProductLink,onUnavailableLink}={}) {
@@ -69,12 +70,12 @@ function tiktokDialog({checkError=null,productId,verifyProductLink,onUnavailable
  const binding={asset_id:'asset',asset_revision:'version:1',platform:'tiktok'};
  const policy={privacy_levels:['SELF_ONLY','MUTUAL_FOLLOW_FRIENDS'],comment_disabled:false,duet_disabled:true,stitch_disabled:true,max_duration_sec:60};
  let counter=0;
- const scope={AbortSignal,crypto:{randomUUID:()=>`fa660000-0000-4000-8000-${String(++counter).padStart(12,'0')}`},fetch:async(_url,opts)=>{
+ const scope={AbortSignal,setTimeout:()=>1,clearTimeout:()=>{},crypto:{randomUUID:()=>`fa660000-0000-4000-8000-${String(++counter).padStart(12,'0')}`},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);
   const base={ok:true,id:req.input.id,can_upload:false,can_publish:false,target:{id:'synthetic-tiktok',platform:'tiktok'},account_check:{target_id:'synthetic-tiktok',display_name:'Synthetic TikTok',policy}};
   if(req.action==='account')return {ok:true,json:async()=>({...base,stage:'account'})};
   assert.equal(req.action,'prepare','This UI test must never submit an approval');
-  return {ok:true,json:async()=>({...base,binding,choices:req.input.choices,state:'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic',check_error:checkError,draft:{caption:'Synthetic caption'},media_check:{asset_id:'asset',asset_revision:'version:1',checks:[{code:'CONTENT_REVIEW_PENDING',status:'pending',message:'Visuelle Prüfung offen.'}]}})};
+  return {ok:true,json:async()=>({...base,binding,choices:req.input.choices,state:'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic',approved_at:null,approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()},check_error:checkError,draft:{caption:'Synthetic caption'},media_check:{asset_id:'asset',asset_revision:'version:1',checks:[{code:'CONTENT_REVIEW_PENDING',status:'pending',message:'Visuelle Prüfung offen.'}]}})};
  }};
  vm.runInNewContext(fs.readFileSync('app/assets/publication-order.mjs','utf8').replaceAll('export function','function').replaceAll('export const','const')+';this.install=installOrderReview;',scope);
  scope.install(doc,{host:doc.body,portalName:'TikTok',session:async()=>({access_token:'synthetic'}),getContext:()=>({binding,name:'Synthetic.mp4',productId}),verifyProductLink,onUnavailableLink,refresh:async()=>{}});

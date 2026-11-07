@@ -49,6 +49,24 @@ Beim Öffnen der Freigabevorbereitung prüft SMA den Artikel vor der Zielkontoab
 
 Ein History-Link kann bei einem zurückgezogenen Artikel den gespeicherten Entwurf zur Korrektur öffnen. Dazu müssen Auftrags-ID, Datei, Portal, Revisionen, Shop und Beitrag weiterhin übereinstimmen. Die unterbrochene Vorbereitung wird in diesem Fall nicht fortgesetzt. Eine Ersatzwahl muss der Kunde speichern.
 
+## Abgleich vor der Freigabe
+
+Nach **Auftrag prüfen** vergleicht die Beitragsvorschau die gespeicherten Portaloptionen
+mit der Auswahl im Formular. Bei YouTube und TikTok muss das Zielkonto zum zuvor
+angezeigten Konto passen. Bei einer aktiven Vorbereitung prüft SMA auch die
+Konto-ID im zurückgegebenen Kontonachweis.
+
+Weicht die Antwort ab, liest die Vorschau den gespeicherten Stand derselben Auftrags-ID.
+Stimmt dieser mit der Auswahl überein, beginnt die persönliche Bestätigung mit leeren
+Feldern. Bestätigt der gespeicherte Auftrag die Abweichung, nennt der Dialog den
+Grund und bietet **Vorbereitung neu starten** an. Die erneute Kontoprüfung und die
+Auswahl der Portaloptionen erfolgen erst nach diesem Klick.
+
+**Status erneut laden** liest bei einem vorbereiteten, noch nicht freigegebenen Auftrag
+direkt den gespeicherten Stand. Bis der Stand geklärt ist, bleibt die Freigabe gesperrt.
+Der Statusweg für bereits freigegebene Aufträge ist in
+[PORTAL_COVER_HANDOFF.md](../../docs/PORTAL_COVER_HANDOFF.md) beschrieben.
+
 ## Unterbrochene Vorbereitung – 7. November 2026
 
 Fehlt nach **Auftrag prüfen** die Antwort, liest SMA den gespeicherten Stand

@@ -71,3 +71,10 @@ test('TikTok music consent always applies; third-party advertising additionally 
   assert.equal(result.tiktok_music_terms,true);assert.equal(result.tiktok_branded_terms,third);
  }
 });
+
+test('preflight requires a nonempty target even if both response identifiers are missing',async()=>{
+ for(const targetId of [undefined,'','   ']){
+  const {client}=await setup(body=>ok(body.input.id,{stage:'account',target:{id:targetId,platform:'youtube'},account_check:{target_id:targetId}}));
+  await assert.rejects(client.account('youtube'));
+ }
+});
