@@ -6,7 +6,7 @@ import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} f
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
-export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
+export function mountPublicationHistory({doc,request,requestOrderPage,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
  if(!slot||!expectedOwnerId)return {destroy(){}};
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -26,7 +26,14 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  cards.forEach((card,i)=>{translated(card.querySelector('.card-title'),metrics[i][0],metrics[i][1]);card.querySelector('.big-value')?.setAttribute('data-history-metric',metrics[i][2]);});
  const monthSlot=page.querySelector('#historyMonthSlot');
  let picker,monthButtons,period,periodDisclosure,periodHeading;
- const chooseMonth=value=>{if(!active())return;selection=value;periodDisclosure?.removeAttribute('open');clear();load();};
+ const hash=ownerWindow.location?.hash||'';
+ const route=/^#auftrag\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/.exec(hash);
+ let orderId=requestOrderPage&&route?route[1]:null;
+ let focusOnReturn=!!orderId;
+ const chooseMonth=value=>{
+  if(!active())return;
+  if(orderId&&ownerWindow.location?.hash===hash)ownerWindow.history.replaceState(ownerWindow.history.state,'',ownerWindow.location.pathname+ownerWindow.location.search);
+  orderId=null;focusOnReturn=false;selection=value;periodDisclosure?.removeAttribute('open');clear();load();};
  if(monthSlot){
   monthSlot.classList.add('sma-history-months');
   const archiveCard=monthSlot.closest('.card'),activityCard=slot.closest('.card');
@@ -66,10 +73,10 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  const analyticsCard=page.querySelector('#historyAnalyticsSlot')?.closest('.card');
  let analyticsDisclosure;
  if(analyticsCard){analyticsDisclosure=create('details',null,'sma-history-analytics');const label=create('summary','Analytics · In Vorbereitung');analyticsCard.before(analyticsDisclosure);analyticsDisclosure.append(label,analyticsCard);}
- const pageSize=5;
+ const pageSize=5,batchSize=20;
  const expiryTimers=[];
  function clearExpiryTimers(){for(const timer of expiryTimers)clearTimeout(timer);expiryTimers.length=0;}
- let pageNumber=0,lastResult=null,entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
+ let pagesBeforeBatch=0,pageNumber=0,lastResult=null,entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
  const active=()=>!disposed&&!invalidOwner&&page.classList.contains('active')&&ownerWindow.document.visibilityState!=='hidden';
  function loadSelectedChapter(key=chapterTabs?.selected){
   const reader=chapterReaders[key];
@@ -79,11 +86,12 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
   requestedChapters.add(key);
   reader.load(lastResult.month);
  }
+ const firstPage=()=>pagesBeforeBatch+pageNumber===0;
  function clear(text=''){
   clearExpiryTimers();
   requestedChapters.clear();
   for(const reader of Object.values(chapterReaders))reader?.clear();
-  generation++;busy=false;entries=[];cursor=null;summary=null;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
+  generation++;busy=false;entries=[];cursor=null;summary=null;pagesBeforeBatch=0;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
  }
@@ -142,24 +150,45 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
     details.append(create('p','Für diesen Auftrag ist kein vollständiger Beitragstext verfügbar.'));
    }
    row.append(details);list.append(row);
+   if(entry.id===orderId){
+    details.open=true;
+    if(focusOnReturn){focusOnReturn=false;toggle.focus();toggle.scrollIntoView?.({block:'center'});}
+   }
   }
-  message.textContent=entries.length?(pageNumber*pageSize+1)+'–'+Math.min((pageNumber+1)*pageSize,entries.length)+' von '+summary.orders+' Aufträgen · Seite '+(pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';
-  nav.hidden=!entries.length;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
+  const start=(pagesBeforeBatch+pageNumber)*pageSize;
+  message.textContent=entries.length?(start+1)+'–'+(pagesBeforeBatch*pageSize+Math.min((pageNumber+1)*pageSize,entries.length))+' von '+summary.orders+' Aufträgen · Seite '+(pagesBeforeBatch+pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';
+  nav.hidden=!entries.length;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
  }
- async function load(append=false){
+ async function load(append=false,requestedPage=null){
   if(!active()||busy||append&&!cursor)return;
-  if(!append)clear();
+  if(!append&&requestedPage===null)clear();
   const g=generation,input={...(selection!==undefined?{month:selection}:{}),...(append?cursor:{})};
   busy=true;refresh.disabled=true;previous.disabled=true;more.disabled=true;slot.setAttribute('aria-busy','true');message.textContent='Verlauf wird geladen …';
   try{
    const before=await getOwnerId();if(!current(g))return;if(before!==expectedOwnerId){invalidateOwner();return;}
-   const response=await request(input);if(!current(g))return;
+   const response=orderId?await requestOrderPage(orderId,requestedPage):await request(input);if(!current(g))return;
    const after=await getOwnerId();if(!current(g))return;if(after!==expectedOwnerId){invalidateOwner();return;}
+   if(orderId&&response?.code==='ORDER_UNAVAILABLE'){
+    clear('Dieser Auftrag ist für dein Konto nicht verfügbar. Über die Monatsauswahl kannst du deine Aufträge öffnen.');
+    return;
+   }
    const result=readPublicationCoverHistory(response);
    if(selection!==undefined&&result.month!==selection)throw Error('INVALID_HISTORY');
    if(append&&result.entries.some(e=>entries.some(old=>old.id===e.id)))throw Error('INVALID_HISTORY');
    const combined=append?[...entries,...result.entries]:result.entries;if(combined.length>result.summary.orders)throw Error('INVALID_HISTORY');
-   entries=combined;cursor=result.next;pageNumber=Math.min(pageNumber+(append?1:0),Math.max(0,Math.ceil(entries.length/pageSize)-1));selection=result.month;summary=result.summary;render(result);
+   if(orderId){
+    const target=response.order_page;
+    if(!validHistoryMonth(result.month)||!Number.isSafeInteger(target)||target<1||target>Math.ceil(result.summary.orders/pageSize))throw Error('INVALID_HISTORY');
+    pagesBeforeBatch=Math.floor((target-1)*pageSize/batchSize)*(batchSize/pageSize);
+    pageNumber=target-1-pagesBeforeBatch;
+    if((requestedPage!==null&&target!==Math.min(requestedPage,Math.ceil(result.summary.orders/pageSize)))||
+       Boolean(result.next)!==(pagesBeforeBatch*pageSize+batchSize<result.summary.orders)||
+       result.entries.length!==Math.min(batchSize,result.summary.orders-pagesBeforeBatch*pageSize)||
+       (requestedPage===null&&!result.entries.slice(pageNumber*pageSize,(pageNumber+1)*pageSize).some(e=>e.id===orderId)))throw Error('INVALID_HISTORY');
+   }else{
+    pageNumber=Math.min(pageNumber+(append?1:0),Math.max(0,Math.ceil(combined.length/pageSize)-1));
+   }
+   entries=combined;cursor=result.next;selection=result.month;summary=result.summary;render(result);
    if(!append)loadSelectedChapter();
   }catch{
    if(current(g)){
@@ -167,16 +196,27 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
     chapterTabs?.select('orders',{notify:false});
    }
   }
-  finally{if(g===generation&&!disposed){busy=false;refresh.disabled=invalidOwner;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;slot.setAttribute('aria-busy','false');}}
+  finally{if(g===generation&&!disposed){busy=false;refresh.disabled=invalidOwner;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;slot.setAttribute('aria-busy','false');}}
  }
- const onRefresh=()=>load(),onMore=()=>{if(!active()||busy)return;if((pageNumber+1)*pageSize<entries.length){pageNumber++;render();}else if(cursor)load(true);};
- const onPrevious=()=>{if(active()&&!busy&&pageNumber>0){pageNumber--;render();}};previous.addEventListener('click',onPrevious);
+ const onRefresh=()=>load();
+ const onMore=()=>{
+  if(!active()||busy)return;
+  if((pageNumber+1)*pageSize<entries.length){pageNumber++;render();return;}
+  if(!cursor)return;
+  if(orderId)load(false,pagesBeforeBatch+pageNumber+2);else load(true);
+ };
+ const onPrevious=()=>{
+  if(!active()||busy||firstPage())return;
+  if(pageNumber>0){pageNumber--;render();}else load(false,pagesBeforeBatch);
+ };
+ previous.addEventListener('click',onPrevious);
  const onVisibility=()=>{if(active())load();else clear();};
  const onFocus=()=>{if(active())load();};
  refresh.addEventListener('click',onRefresh);more.addEventListener('click',onMore);
  const observer=new doc.defaultView.MutationObserver(onVisibility);observer.observe(page,{attributes:true,attributeFilter:['class']});
  ownerWindow.addEventListener('focus',onFocus);ownerWindow.document.addEventListener('visibilitychange',onVisibility);
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
+ if(orderId&&!page.classList.contains('active'))doc.querySelector('button[data-page="history"]')?.click();
  load();
  return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

@@ -11,7 +11,7 @@ try{
  await db.exec(await readFile(new URL('./sql-runtime/publication-history-fixture.sql',import.meta.url),'utf8'));
  // Exact installed cover table DDL; no dispatcher or provider functions needed.
  await db.exec((await sql('publication-provider-cover.sql')).split('create or replace function')[0]);
- for(const f of ['publication-history.sql','publication-history-months.sql','publication-cover-history.sql','publication-history-order-caption.sql'])await db.exec(await sql(f));
+ for(const f of ['publication-history.sql','publication-history-months.sql','publication-cover-history.sql','publication-history-order-caption.sql','publication-history-order-page.sql'])await db.exec(await sql(f));
  await db.query('insert into public.sma_kunden values(91,$1,true,true,false),(92,$2,true,true,false)',[uid,other]);
  const read=async(input={month:null},owner=uid,version=3)=>{await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);try{return (await db.query(`select public.sma_publication_history_v${version}($1) as r`,[input])).rows[0].r;}finally{await db.exec('reset role');}};
  const binding={platform:'youtube',media_kind:'video',asset_id:id(40),asset_revision:'sha256:'+'a'.repeat(64)+':4'};
@@ -91,13 +91,34 @@ try{
  const page=await read({month:'2026-11'}),next=await read({month:'2026-11',...page.next});
  eq(page.entries.length,20);eq(next.entries.length,4);eq(new Set([...page.entries,...next.entries].map(e=>e.id)).size,24);eq(page.summary.orders,24);readPublicationCoverHistory(page);readPublicationCoverHistory(next);checks+=2;
  eq((await read({month:'2026-10'})).entries,[]);
+ const locate=async(orderId,page=null,owner=uid)=>{
+  await db.exec('set role authenticated');
+  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);
+  try{return (await db.query('select public.sma_publication_history_order_page_v1($1,$2) r',[orderId,page])).rows[0].r;}
+  finally{await db.exec('reset role');}
+ };
+ const savedRows=await snapshot();
+ const last=await locate(id(1));
+ eq(last.order_page,5);eq(last.month,page.month);eq(last.entries,next.entries);eq(last.summary,page.summary);
+ eq((await locate(id(1),1)).entries,page.entries);eq((await locate(id(1),999)).order_page,5);
+ eq((await locate(id(1),0)).code,'INVALID_INPUT');eq((await locate(id(2))).code,'ORDER_UNAVAILABLE');
+ eq((await locate(id(3))).code,'ORDER_UNAVAILABLE');eq((await locate(id(4))).code,'ORDER_UNAVAILABLE');
+ eq((await locate(id(1),null,other)).code,'ORDER_UNAVAILABLE');eq((await locate(id(1),null,'')).code,'AUTH_REQUIRED');
+ eq(await snapshot(),savedRows);
+ await db.exec('begin');
+ await db.query("update sma_private.publication_orders_v1 set created_at='2026-10-31T23:00:00Z' where id=$1",[id(1)]);
+ eq((await locate(id(1))).month,'2026-11');
+ await db.query("update sma_private.publication_orders_v1 set created_at='2026-10-31T22:59:59Z' where id=$1",[id(1)]);
+ const october=await locate(id(1));eq(october.month,'2026-10');eq(october.order_page,1);eq(october.entries.map(e=>e.id),[id(1)]);
+ await db.exec("update public.sma_kunden set aktiv=false where id=91");eq((await locate(id(1))).code,'ORDER_UNAVAILABLE');await db.exec('rollback');
+ await db.exec('begin');await db.query('insert into public.sma_kunden values(93,$1,true,true,false)',[uid]);eq((await locate(id(1))).code,'ORDER_UNAVAILABLE');await db.exec('rollback');
  for(const change of ['aktiv=false','demo_delta_aktiv=false,zahlung_bestaetigt=false']){await db.exec('begin');await db.exec('update public.sma_kunden set '+change+' where id=91');eq((await read()).code,'ACCESS_INACTIVE');await db.exec('rollback');}
  await db.exec('begin');await db.query('insert into public.sma_kunden values(93,$1,true,true,false)',[uid]);eq((await read()).code,'ACCOUNT_UNAVAILABLE');await db.exec('rollback');
  for(const role of ['anon','authenticated','service_role']){
   await db.exec('set role '+role);
   await assert.rejects(()=>db.exec('select * from sma_private.publication_provider_covers_v1'),/permission denied/);checks++;
   await assert.rejects(()=>db.exec("select sma_private.publication_history_cover_v1(null::sma_private.publication_orders_v1)"),/permission denied/);checks++;
-  if(role!=='authenticated'){await assert.rejects(()=>db.exec('select public.sma_publication_history_v3()'),/permission denied/);checks++;}
+  if(role!=='authenticated'){await assert.rejects(()=>db.exec('select public.sma_publication_history_order_page_v1(null)'),/permission denied/);checks++;await assert.rejects(()=>db.exec('select public.sma_publication_history_v3()'),/permission denied/);checks++;}
   await db.exec('reset role');
  }
  eq((await db.query("select prosecdef,provolatile from pg_proc where oid='public.sma_publication_history_v3(jsonb)'::regprocedure")).rows,[{prosecdef:false,provolatile:'s'}]);

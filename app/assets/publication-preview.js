@@ -511,6 +511,11 @@ $('reviewContent').addEventListener('click',async()=>{
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
 const orderUuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+if(workspace&&orderUuid.test(params.get('order'))){
+ const back=$('back');
+ back.href='dashboard.html#auftrag/'+params.get('order').toLowerCase();
+ back.textContent='← Zurück zum Auftrag';
+}
 async function readStoredOrder(id){
  if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
  const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:'get',p_input:{id}})

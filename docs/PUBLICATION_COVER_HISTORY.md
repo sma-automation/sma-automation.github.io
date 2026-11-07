@@ -38,6 +38,19 @@ Nach einem Monatswechsel lädt SMA die Übersicht und das gerade geöffnete Kapi
 für den neuen Zeitraum. Nach dem Verlassen der History werden die geladenen
 Listen verworfen.
 
+### Aus der Beitragsvorschau zum Auftrag zurückkehren
+
+**Zurück zum Auftrag** öffnet in der History den Erstellungsmonat und die
+aktuelle Seite des Auftrags. Sein Eintrag ist aufgeklappt und zeigt den zuletzt
+gespeicherten Stand. Die Monatsauswahl führt wieder in den normalen Verlauf.
+
+Der Leseaufruf `sma_publication_history_order_page_v1` bestimmt die Position anhand
+des Erstellungszeitpunkts und bei Gleichstand der Auftrags-ID. Er prüft den
+angemeldeten Benutzer und das aktive Kundenkonto. Er liest den passenden Block
+von höchstens 20 Aufträgen mit der bestehenden History-Funktion. Vorherige
+Seiten müssen dafür nicht einzeln geladen werden. Der Rücklink enthält nur die
+Auftrags-ID im URL-Fragment.
+
 ### Gespeicherter Beitragstext
 
 Unter **History → Aufträge** zeigt ein aufgeklappter Auftrag seinen damaligen
