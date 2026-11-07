@@ -23,13 +23,9 @@ ohne Audiospur soll bei Bedarf Musik aus den für das Kundenkonto freigeschaltet
 SMA-Titeln erhalten. Bereits vertonte Videos behalten ihren Ton. Diese Paketregel
 betrifft den SMA-Katalog. Die bestehenden persönlichen Uploads sind separat.
 
-**Geprüfter Ausbaustand.** Im angemeldeten Dashboard steht unter
-**Einstellungen → Paket & Credits** beim Guthaben „–“. **Credits aufladen** ist
-deaktiviert. Die n8n-Kundenassistentensicherung enthält bereits die Paketangaben
-zur Musik. Die vorhandene Mollie-Strecke betrifft SMA-Paketzahlungen. Im aktuellen
-Repository und im produktiven Supabase-Schema ist keine Gutschrift für einen
-10-Euro-Musikkauf, kein Credit-Buchungsjournal und keine gekaufte Trackfreischaltung
-nachweisbar. Die automatische Vertonung beim Galerieeingang ist ebenfalls offen.
+**Prüfstand vor der Anbindung (PR #134).** Das Kundendashboard hatte eine
+Guthabenanzeige und einen deaktivierten Aufladeknopf. Die Mollie-Zahlungsstrecke
+für Mitgliedschaften war vorhanden. Es gab noch keine Buchungen für Musikkäufe.
 
 Der Zuschnitt ist lokal separat geprüft. Beim stummen Türgriff-Original blieb
 der Videostream bytegleich. Ein zwölf Sekunden langer synthetischer Ton wurde
@@ -37,10 +33,55 @@ auf 10,041 Sekunden zugeschnitten (Video 10,041667 Sekunden). Der bereits
 vertonte Drei-Sekunden-Export wurde übersprungen. Diese lokale Prüfung nutzte
 weder einen Kundenkauf noch einen Titel aus dem künftigen SMA-Katalog.
 
-Der nächste technische Schritt ist die Zuordnung bestätigter Zehnerkäufe und
-einmaliger Trackfreischaltungen zum Kundenkonto. Damit kann die automatische
-Musikauswahl bei Alpha und Beta auf die erworbenen Titel zugreifen. Wiederholte
-Zahlungsrückmeldungen dürfen denselben Kauf nur einmal gutschreiben.
+### Kauf und Nutzung eines SMA-Tracks
+
+Unter **Musikbibliothek → SMA-Musik** erscheinen die veröffentlichten
+Katalogtitel, fünf pro Seite. Auch **Einstellungen → Paket & Credits** zeigt das
+Musikguthaben. Delta inklusive Demo kann die bereitgestellten Tracks direkt
+verwenden. Alpha und Beta können mit einem Credit einen bestimmten Titel
+freischalten. Ein freigeschalteter Titel erscheint zusätzlich in der
+Musikauswahl im Medieneditor und kann erneut verwendet werden.
+
+Jede produktiv bestätigte Einmalzahlung über genau 10,00 EUR gewährt ein Paket
+mit zehn Musik-Credits. Der Zahlungsauftrag ist an Benutzer und Kundenkonto
+gebunden. Die Edge Function liest Zahlungsstatus, Modus, Betrag, Währung,
+Artikelkennung und Auftrag direkt bei Mollie. Eine Rückkehr ins Dashboard
+bestätigt keine Zahlung. Kunden-RPCs können kein Guthaben buchen. Der Zugriff
+auf die privaten Audiodateien wird auch beim Abruf geprüft.
+
+Eine pro Kundenkonto serialisierte Datenbankbuchung verhindert doppelten
+Verbrauch beim erneuten Freischalten und bei parallelen Anfragen. Der
+Zahlungsbeleg ist eindeutig. Rückerstattungen oder Rückbuchungen sperren die
+betroffenen Paketansprüche. Eine verspätete ältere Erfolgsmeldung kann sie
+nicht erneut aktivieren. Eine teilweise Erstattung setzt das betroffene Paket
+bis zur manuellen Klärung ebenfalls aus.
+
+**Bereitstellung der Musik.** SMA legt seine eigenen freigegebenen Master im
+privaten Bucket `sma-katalog` ab. Objektname ist die SHA-256 der Originalbytes
+plus `.wav` oder `.mp3`. Die Administration trägt dieselbe Prüfsumme, MIME,
+Bytezahl und Titel in `sma_private.music_catalog_v1` ein und setzt `listed`.
+Der Katalog listet nur passende gespeicherte Objekte. Der Browser kontrolliert
+die Prüfsumme und Größe beim Abruf. Private Kundenuploads bleiben im separaten
+Bucket `sma-musik`.
+
+**Zahlungsanschluss.** `sma-music-credit-pack` benötigt das serverseitige
+Secret `SMA_MUSIC_MOLLIE_KEY` des SMA-Händlerkontos. Das Dashboard bietet den
+Kauf erst bei verfügbarem Katalog und eingerichteter Live-Anbindung an. Für die
+technische Abnahme werden keine Händlerzugangsdaten aus der n8n-Sicherung
+kopiert. Testbelege erzeugen kein echtes Guthaben. Die automatisierte Prüfung
+verwendet einen isolierten Zahlungsanbieter und synthetische Konten.
+
+Am 07.11.2026 wurde die Migration
+`20261107145457_music_catalog_credits_v1.sql` eingespielt. Der Zahlungsanschluss
+ist bereitgestellt. Sein Statusabruf meldet `enabled: false`. Es gibt derzeit
+keinen gelisteten SMA-Master, keinen Musikkauf und keine Trackfreischaltung.
+Der Technikton bleibt ein privater Kunden-Track. 79 isolierte SQL- und
+Ablaufprüfungen einschließlich Zahlungsrückmeldung und 601 Repository-Tests
+sind bestanden.
+
+Die automatische Vertonung beim Eingang eines neuen Galerievideos ist weiterhin
+offen. Dafür kann SMA künftig die bereits geprüften Katalogberechtigungen und
+den getrennt erprobten Zuschnitt verwenden.
 
 ## Bedienung
 

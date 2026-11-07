@@ -1,5 +1,5 @@
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
-import {mountMediaMusic} from './media-music-view.mjs?v=3';
+import {mountMediaMusic} from './media-music-view.mjs?v=4';
 import {mountMediaExport} from './media-export-view.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=3';

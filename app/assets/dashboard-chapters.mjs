@@ -54,7 +54,7 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
  }
  function mount(name,groups,{shared,sharedIn=[]}={}){
   const root=page(name);if(!root||controllers.has(name))return null;
-  groups=groups.map(group=>({...group,nodes:group.nodes.filter(Boolean)})).filter(group=>group.nodes.length);
+  groups=groups.map(group=>({...group,nodes:group.nodes.filter(Boolean)})).filter(group=>group.nodes.length||group.emptyPanel);
   if(groups.length<2)return null;
   const restore=[],panels=[];
   const entries=groups.map(group=>{
@@ -91,7 +91,8 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
  const music=page('music'),musicOptions=children(music?.querySelector('.grid'),'.card'),musicCards=children(music,'.card');
  mount('music',[
   {key:'tracks',label:'Tracks',nodes:[musicOptions[0],musicCards[0]]},
-  {key:'playlist',label:'Meine Playlist',en:'My playlist',nodes:[musicOptions[1],musicCards[1],doc.getElementById('playlistResultSlot')]}
+  {key:'playlist',label:'Meine Playlist',en:'My playlist',nodes:[musicOptions[1],musicCards[1],doc.getElementById('playlistResultSlot')]},
+  {key:'catalog',label:'SMA-Musik',en:'SMA music',emptyPanel:true,nodes:[]}
  ]);
  const settings=page('settings'),settingGrids=children(settings,'.grid'),settingCards=children(settings,'.card');
  mount('settings',[
