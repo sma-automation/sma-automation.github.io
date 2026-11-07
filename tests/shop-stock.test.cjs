@@ -178,6 +178,7 @@ test('only active products in the current public shop expose a copyable link wit
  h.api.publicShop('mein-shop');
  for(const mismatch of [{...p,aktiv:false},{...p,kunde_id:'foreign'}])assert.ok(!actions(mismatch).some(b=>b.textContent==='Produktlink kopieren'));
  const buttons=actions(p),copy=buttons.find(b=>b.textContent==='Produktlink kopieren'),field=buttons.at(-1);
- await copy.events.click();assert.equal(copied,'https://sma-automation.com/app/shop.html?shop=mein-shop&produkt=product-1');
+ const open=buttons.find(b=>b.textContent==='Produktseite öffnen');assert.equal(open.hidden,true);
+ await copy.events.click();assert.equal(open.hidden,false);assert.equal(open.href,copied);assert.equal(copied,'https://sma-automation.com/app/shop.html?shop=mein-shop&produkt=product-1');
  denied=true;await copy.events.click();assert.equal(field.hidden,false);assert.equal(field.selected,true);assert.equal(field.value,copied);
 });
