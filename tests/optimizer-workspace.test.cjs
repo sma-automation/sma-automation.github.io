@@ -129,3 +129,13 @@ test('a bound product uses its direct link in the post and file details',()=>{
  assert.equal(p.get('workspacePostShop').textContent,'View product: '+target);
  assert.ok(p.get('workspacePreviewFacts').children.some(node=>node.textContent===target));
 });
+
+test('the separate preview shows the unavailable destination as plain text and removes the warning after correction',()=>{
+ const data={draft:{product_id:'item',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture'},linkNotice:'Artikel im Shop nicht verfügbar.'};
+ const p=setup(data);p.workspace.selection({name:'Clip.mp4',media_kind:'video'});p.workspace.show('preview');
+ const link=p.get('workspacePostShop');
+ assert.equal(p.get('workspaceLinkIssue').hidden,false);assert.equal(p.get('workspaceLinkMessage').textContent,data.linkNotice);
+ assert.ok(link.textContent.endsWith('&produkt=item'));assert.equal(link.href,undefined);
+ delete data.draft.product_id;data.linkNotice='';p.workspace.refreshPreview();
+ assert.equal(p.get('workspaceLinkIssue').hidden,true);assert.equal(link.href,data.draft.shop_url);
+});
