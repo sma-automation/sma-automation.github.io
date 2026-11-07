@@ -287,3 +287,5 @@ body.wide:not(.embedded) #workspacePost[data-portal=youtube][data-media-kind=vid
 }
 body.wide:not(.embedded) #workspacePost[data-orientation=portrait] { --original-video-max-height: min(80svh, 720px); }
 body.wide:not(.embedded) #workspacePreviewNotice { margin: 10px 0 0; }
+
+body.wide #workspacePost #assetPreview:has(#originalVideoPreview video:not([hidden])) #assetPreviewStatus[data-cover]{display:none}

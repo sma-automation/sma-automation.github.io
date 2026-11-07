@@ -124,3 +124,11 @@ sind für diese Umsetzung nicht maßgeblich.
 Bestandsprüfung abgeschlossen. PR #57/#69 separat offen. Shopify-Testmodus und
 unveröffentlichte n8n-Originalentwürfe erhalten. Keine Tarifänderung, kein Kauf
 und keine Social-Media-Veröffentlichung.
+
+## Titelbild in der Beitragsvorschau
+
+Bei YouTube zeigt die Beitragskarte die gespeicherte PNG-Datei des ausgewählten
+Exports. Bei TikTok zeigt sie dieses Bild zusammen mit dem Zeitpunkt im fertigen
+Video. Vorschau und Übergabe berechnen den Zeitpunkt aus demselben Coverplan.
+Die Webseite prüft Dateistand, Größe und SHA-256 der geladenen PNG-Datei.
+Hat ein Video kein Exportcover, zeigt SMA das gewöhnliche Videovorschaubild.

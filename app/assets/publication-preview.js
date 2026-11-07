@@ -1,8 +1,8 @@
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
-import {mountExportCover} from './publication-export-cover.mjs?v=2';
-import {mountOriginalVideo} from './original-video-preview.mjs?v=2';
-let supabase,coverView,originalVideo;
+import {mountExportCover} from './publication-export-cover.mjs?v=3';
+import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
+let supabase,coverView,originalVideo,previewOwnerId;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=10';
@@ -173,32 +173,53 @@ function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','ti
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
 function clearAssetPreview(){
+ originalVideo?.setPoster(selectedAsset,null);
+ delete $('assetPreviewStatus').dataset.cover;
  mediaViewController?.abort();mediaViewController=null;mediaViewKey='';
  for(const video of $('assetPreviewMedia').querySelectorAll('video')){video.pause();video.removeAttribute('src');video.load();}
  $('assetPreviewMedia').replaceChildren();if(mediaViewUrl)URL.revokeObjectURL(mediaViewUrl);mediaViewUrl=null;
  $('assetPreviewStatus').textContent='';$('retryAssetPreview').hidden=true;
 }
-function showAssetMedia(blob,kind,key){
+function showAssetMedia(blob,kind,key,cover=null){
  if(signedOut||key!==mediaViewKey)return;
  mediaViewUrl=URL.createObjectURL(blob);const media=document.createElement(kind==='video'?'video':'img');
  if(kind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata';media.setAttribute('aria-label','Ausgewähltes Video');}
  else{media.alt=selectedAsset?.media_kind==='video'?'Vorschaubild des ausgewählten Videos':'Ausgewähltes Bild';media.decoding='async';}
- media.addEventListener('error',()=>{if(mediaViewKey!==key)return;media.hidden=true;$('assetPreviewStatus').textContent='Diese Vorschau kann dein Browser gerade nicht anzeigen.';$('retryAssetPreview').hidden=false;});
+ media.addEventListener('error',()=>{if(mediaViewKey!==key||media.src!==mediaViewUrl)return;media.hidden=true;
+  if(cover)originalVideo?.setPoster(selectedAsset,null);$('assetPreviewStatus').textContent='Diese Vorschau kann dein Browser gerade nicht anzeigen.';$('retryAssetPreview').hidden=false;});
  media.src=mediaViewUrl;$('assetPreviewMedia').replaceChildren(media);$('assetPreviewStatus').textContent='';
+ if(cover){
+  const caption=selectedPortal==='youtube'?'Geplantes YouTube-Titelbild':'TikTok-Covervorschau · Bild bei '+(cover.position_ms/1000).toLocaleString('de-AT')+' Sek.';
+  media.alt=caption;$('assetPreviewStatus').dataset.cover='true';$('assetPreviewStatus').textContent=caption;
+  originalVideo?.setPoster(selectedAsset,mediaViewUrl);
+ }
 }
-async function loadAssetPreview(force=false){
+async function loadAssetPreview({retry=false,refresh=false}={}){
  const file=selectedAsset,key=file?file.id+':'+file.revision:'';
- if(!force&&key===mediaViewKey)return;clearAssetPreview();if(!file||signedOut)return;mediaViewKey=key;
- if(localMedia?.id===file.id&&localMedia.revision===file.revision&&!force){showAssetMedia(localMedia.file,file.media_kind,key);return;}
+ if(!retry&&!refresh&&key===mediaViewKey)return;
+ clearAssetPreview();
+ if(!file||signedOut){coverView?.clear();return;}
+ mediaViewKey=key;
  const controller=new AbortController();mediaViewController=controller;$('assetPreviewStatus').textContent='Vorschau wird geladen …';
  try{
+  const coverTask=coverView?.setContext(file);
+  if(file.media_kind==='video'&&['youtube','tiktok'].includes(selectedPortal)){
+   const result=await coverTask;controller.signal.throwIfAborted();
+   if(result?.unavailable)throw Error('COVER_UNAVAILABLE');
+   if(result?.cover){showAssetMedia(result.blob,'image',key,result.cover);return;}
+  }
+  if(localMedia?.id===file.id&&localMedia.revision===file.revision&&!retry){showAssetMedia(localMedia.file,file.media_kind,key);return;}
   const auth=await session();controller.signal.throwIfAborted();
   const blob=await fetchAssetThumbnail(file,auth.access_token,controller.signal);
   showAssetMedia(blob,'image',key);
- }catch{if(!signedOut&&!controller.signal.aborted&&mediaViewKey===key){$('assetPreviewStatus').textContent='Vorschau noch nicht verfügbar. Deine Datei bleibt ausgewählt.';$('retryAssetPreview').hidden=false;}}
- finally{if(mediaViewController===controller)mediaViewController=null;}
+ }catch(e){
+  if(!signedOut&&!controller.signal.aborted&&mediaViewKey===key){
+   $('assetPreviewStatus').textContent=e.message==='COVER_UNAVAILABLE'?'Das geplante Titelbild ist gerade nicht verfügbar.':'Vorschau noch nicht verfügbar. Deine Datei bleibt ausgewählt.';
+   $('retryAssetPreview').hidden=false;
+  }
+ }finally{if(mediaViewController===controller)mediaViewController=null;}
 }
-$('retryAssetPreview').addEventListener('click',()=>loadAssetPreview(true));
+$('retryAssetPreview').addEventListener('click',()=>loadAssetPreview({retry:true}));
 window.addEventListener('pagehide',()=>{originalVideo?.destroy();coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
 function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
@@ -225,17 +246,16 @@ function describeFile(file){
 async function optimizerCatalog(){
  return fileRpc('list',workspace?{platform:selectedPortal}:{});
 }
-function renderSelectedFile(){
+function renderSelectedFile(refreshCover=false){
  showProductContext(null,null);
  originalVideo?.setContext(selectedAsset);
  renderVideoMetadata();
- void coverView?.setContext(selectedAsset);
  workspace?.selection(selectedAsset);
  $('selectedFileName').textContent=selectedAsset?(workspace?'Dateiname: ':'')+selectedAsset.name:'';
  $('noSelectedFile').hidden=!!selectedAsset;$('fileDetails').hidden=!selectedAsset;$('fileDetails').open=false;
  $('assetPreview').hidden=!selectedAsset;$('assetPreviewKind').textContent=selectedAsset?.media_kind==='video'?'Video':'Bild';
  $('assetStatus').textContent=selectedAsset?'':'„Dateien durchsuchen“ öffnet dein Gerät. Bereits hochgeladene Dateien findest du unter „Kundenordner öffnen“.';
- void loadAssetPreview();
+ void loadAssetPreview({refresh:refreshCover});
 }
 function renderFilePicker(){
  pickerThumbnails.reset();
@@ -342,7 +362,7 @@ $('cancelFileSwitch').addEventListener('click',()=>{pendingAssetId=null;$('fileS
 async function loadFiles(preferredId=null){
  const r=await optimizerCatalog();if(signedOut)return;assets=r.files||[];const old=preferredId??selectedAsset?.id??'';
  selectedAsset=assets.find(f=>f.id===old&&fileFitsPortal(f))||null;
- assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;renderSelectedFile();renderFilePicker();
+ assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;renderSelectedFile(!!selectedAsset&&mediaViewKey===selectedAsset.id+':'+selectedAsset.revision);renderFilePicker();
  if(old&&!selectedAsset){clearDraft();resetMediaCheck(messages.FILE_UNAVAILABLE);throw Error(messages.FILE_UNAVAILABLE);}
 }
 function resetMediaCheck(message='Wähle zuerst eine Datei aus.'){
@@ -658,8 +678,14 @@ lock(true);status('Deine Dateien werden geladen …');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
- const coverOwner=(await session()).user.id;coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},thumbnail:async(f,signal)=>fetchAssetThumbnail(f,(await session()).access_token,signal)});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
+ coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
+  if(!['youtube','tiktok'].includes(selectedPortal))return fetchAssetThumbnail(f,(await session()).access_token,signal);
+  const blob=await (await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner);
+  if(blob.type!=='image/png'||(f.size_bytes!=null&&blob.size!==f.size_bytes))throw Error('COVER_UNAVAILABLE');
+  return blob;
+ }});
  originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner)});
  if(params.has('order')){
   await openHistoryOrderPreview(params.get('order'),coverOwner);

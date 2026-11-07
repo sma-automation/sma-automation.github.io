@@ -30,6 +30,8 @@ on:
       - n8n/publishing/*provider-cover*
       - tests/*provider-cover*
       - tests/sql-runtime/provider-cover-pr57-journal.sql
+      - supabase/sql/publication-preview-cover-plan.sql
+      - supabase/migrations/*_publication_preview_cover_plan_v1.sql
       - supabase/sql/publication-provider-cover.sql
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - app/assets/music-library*
