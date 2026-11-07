@@ -71,3 +71,9 @@ Der isolierte Durchlauf mit `node tests/run-publication-draft-product-links-sql.
 Unter **Inhalt und Ziel** kann der Kunde einen Shopartikel für einen neuen Videoentwurf auswählen, wenn mehrere Produkte zum Dateistand passen. Das Feld enthält die passenden, öffentlich erreichbaren Artikel des eigenen Shops. Name und SKU unterscheiden Varianten. Bei identischen Angaben zeigt SMA zusätzlich die Artikelkennung. Ohne Auswahl kann der Kunde die Datei selbst beschreiben und den allgemeinen Shop-Link verwenden.
 
 Magic Effect und die manuelle Texterstellung verwenden die Angaben des gewählten Artikels. Beim Zuordnen des fertigen Entwurfs gleicht SMA Artikelkennung, Produktangaben und aktuelle Treffer erneut ab. Ist der Artikel entfallen oder haben sich seine Angaben geändert, fordert SMA eine neue Auswahl an. Eine erfolgreich gespeicherte Zuordnung behält ihren Produktlink beim Bearbeiten und erneuten Öffnen. Die Auswahl für einen neuen Entwurf ändert keinen vorhandenen Auftrag.
+
+### Video ohne erkannten Artikel
+
+Unter **Inhalt und Ziel → Artikel aus meinem Shop zuordnen** kann der Kunde bei einem Video ohne Produkttreffer seinen öffentlichen Shop durchsuchen. Produktname, SKU oder SMA-Artikelnummer sind suchbar. Eine leere Suche zeigt das Sortiment in Gruppen von zehn. Erst die Wahl im Artikelfeld übernimmt die Angaben für den neuen Entwurf.
+
+Die Katalogsuche verwendet den vorhandenen authentifizierten Datei-RPC. Vor der Textvorbereitung und bei der Dateizuordnung prüft SMA Kundenkonto, Dateistand und Artikel erneut. Liegt inzwischen eine automatische Produktzuordnung vor, greift die normale Produkterkennung und der Kunde muss die geänderte Auswahl prüfen. Bleibt das Artikelfeld leer, ist der allgemeine Shop-Link weiterhin möglich. Die Kundenwahl ist eine Angabe für den Textentwurf. Medienprüfung und Auftragsfreigabe laufen über ihre bisherigen Schritte.

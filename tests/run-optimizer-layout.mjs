@@ -13,6 +13,7 @@ for (const [tag, path] of template.matchAll(/<link rel="stylesheet" href="([^"?]
 }
 const workspace = (await asset('assets/publication-destination.mjs')).replace('export function', 'function') +
   (await asset('assets/optimizer-workspace.mjs')).replace(/^import .*;$/gm, '').replace('export function', 'function');
+const productLookup = (await asset('assets/publication-catalog-lookup.mjs')).replaceAll('export function', 'function');
 const orderDialog = (await asset('assets/publication-order.mjs')).replaceAll('export ', '');
 const sizes = [
   ['YouTube', 1008, 728], ['YouTube', 390, 844], ['TikTok', 320, 568],
@@ -22,6 +23,7 @@ function frame([portal, width, height]) {
   const script = `
     ${workspace}
     ${orderDialog}
+    ${productLookup}
     const $ = id => document.getElementById(id);
     const portal = ${JSON.stringify(portal)};
     document.body.classList.add('portal-mode');
@@ -40,7 +42,19 @@ function frame([portal, width, height]) {
       stage:media.height, fits:viewport.scrollWidth<=innerWidth,
       beside:body.left>=media.right-1, page:viewport.scrollHeight
     };
-    parent.postMessage(result, '*');
+    controller.show('source');
+    const item={name:'Synthetischer Testartikel',sku:'TEST-01',product_id:'fixture-1',purpose:'Testartikel'};
+    const lookup=mountCatalogLookup(document,async()=>({choices:[item],more:false}));
+    lookup.setContext({id:'fixture-video',revision:'version:1'},portal);
+    $('catalogLookup').open=true;$('catalogQuery').value='TEST';
+    $('catalogSearch').click();
+    Promise.resolve().then(async()=>{
+      result.lookupVisible=box('catalogProduct').width>0&&viewport.scrollWidth<=innerWidth;
+      result.noPreselection=$('catalogProduct').value==='';
+      $('catalogProduct').value=item.product_id;
+      result.selectedProduct=(await lookup.validate()).product_id;
+      parent.postMessage(result, '*');
+    });
   `;
   const html = template.replace(/<script type="module" src="assets\/publication-preview.js[^"]*"><\/script>/, () => '<script>' + script + '</script>');
   const escaped = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
@@ -63,6 +77,8 @@ try {
     console.log(report);
     assert.ok(report.fits && report.action < height/2 && report.stage <= height*0.51);
     assert.equal(report.beside,width>=660);
+    assert.ok(report.lookupVisible&&report.noPreselection);
+    assert.equal(report.selectedProduct,'fixture-1');
     if(width>=660)assert.ok(report.page<=height,'Short portrait post should fit one desktop screen');
   }
 } finally {

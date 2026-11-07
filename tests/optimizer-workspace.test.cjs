@@ -21,7 +21,7 @@ function setup(previewData={}){
  const el=(tag,id)=>{const node=new Element(tag);if(id)node.id=id;return node};
  const main=el('main'),body=el('body'),pickerBody=el('div'),searchLabel=el('label');
  body.append(main);const header=el('header');header.append(el('a','back'));main.append(header);
- const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles','sourceSummary','generate','loadLatest','language','resultHeading','save'];
+ const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','catalogLookup','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles','sourceSummary','generate','loadLatest','language','resultHeading','save'];
  for(const id of ids)main.append(el('div',id));
  byId.get('filePicker').append(pickerBody);pickerBody.append(searchLabel,byId.get('fileSearch'),byId.get('fileSwitchNotice'));
  for(const id of ['pickerRefresh','chooseGeneralTemplate']){const parent=el('div');parent.append(byId.get(id));pickerBody.append(parent)}
@@ -56,6 +56,7 @@ test('combined content and text preserve edits, disclosure state and original la
  p.workspace.show('text');assert.equal(p.get('workspaceTab-source').attrs['aria-pressed'],'true');
  assert.equal(p.get('sourcePanel').open,true);assert.equal(p.form.value,'Überarbeitete eigene Angaben');
  assert.ok(p.get('sourcePanel').children.includes(p.form));
+ assert.equal(p.get('catalogLookup').parentElement,p.get('workspaceEditor'));
  assert.equal(p.get('language').attrs.form,'previewForm');assert.equal(p.get('language').parentElement.parentElement,p.get('workspaceTextHeader'));
  assert.equal(p.get('workspaceSelectedName').textContent,'Mein Video');
 });
