@@ -1,11 +1,11 @@
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=2';
-import {mountOriginalVideo} from './original-video-preview.mjs?v=1';
+import {mountOriginalVideo} from './original-video-preview.mjs?v=2';
 let supabase,coverView,originalVideo;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=9';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=10';
 import {installOrderReview} from './publication-order.mjs?v=7';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);

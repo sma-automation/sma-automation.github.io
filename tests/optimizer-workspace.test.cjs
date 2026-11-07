@@ -6,7 +6,7 @@ const source=fs.readFileSync('app/assets/optimizer-workspace.mjs','utf8').replac
 function setup(previewData={}){
  const byId=new Map();
  class Element{
-  constructor(tag){this.tag=tag;this.children=[];this.events={};this.attrs={};this.dataset={};this.hidden=false;this.classes=new Set();this.classList={add:n=>this.classes.add(n),toggle:(n,v)=>v?this.classes.add(n):this.classes.delete(n)};}
+  constructor(tag){this.tag=tag;this.children=[];this.events={};this.attrs={};this.dataset={};this.hidden=false;this.classes=new Set();this.style={setProperty(k,v){this[k]=v},removeProperty(k){delete this[k]}};this.classList={contains:n=>this.classes.has(n),add:n=>this.classes.add(n),toggle:(n,v)=>v?this.classes.add(n):this.classes.delete(n)};}
   set id(value){this._id=value;byId.set(value,this)}get id(){return this._id}
   append(...nodes){for(const node of nodes){if(node.parentElement)node.parentElement.children=node.parentElement.children.filter(n=>n!==node);node.parentElement=this;this.children.push(node)}}
   prepend(...nodes){this.append(...nodes);this.children=[...nodes,...this.children.filter(n=>!nodes.includes(n))]}
@@ -20,7 +20,7 @@ function setup(previewData={}){
  }
  const el=(tag,id)=>{const node=new Element(tag);if(id)node.id=id;return node};
  const main=el('main'),body=el('body'),pickerBody=el('div'),searchLabel=el('label');
- body.append(main);
+ body.append(main);const header=el('header');header.append(el('a','back'));main.append(header);
  const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles','sourceSummary','generate','loadLatest','language','resultHeading','save'];
  for(const id of ids)main.append(el('div',id));
  byId.get('filePicker').append(pickerBody);pickerBody.append(searchLabel,byId.get('fileSearch'),byId.get('fileSwitchNotice'));
@@ -102,4 +102,18 @@ test('clearing or changing selected files clears the separate preview and cannot
  p.get('workspacePreviewBack').click();p.workspace.selection(null);
  for(const id of ['workspacePostTitle','workspacePostCaption','workspacePreviewSource','workspacePreviewName'])assert.equal(p.get(id).textContent,'');
  assert.equal(p.get('workspaceViewFile').disabled,true);assert.equal(p.get('workspacePreviewFacts').children.length,0);
+});
+
+test('standalone preview groups its navigation and resets the media format on selection changes',()=>{
+ const p=setup(),back=p.get('back'),header=back.parentElement;
+ p.workspace.selection({name:'Hochformat.mp4',media_kind:'video',width_px:720,height_px:1280});
+ p.get('workspaceViewFile').click();
+ assert.equal(back.parentElement,p.get('workspacePreviewNav'));
+ assert.equal(p.get('workspacePost').dataset.orientation,'portrait');
+ assert.equal(p.get('workspacePost').style['--media-aspect'],'720 / 1280');
+ p.get('workspacePreviewBack').click();assert.equal(back.parentElement,header);
+ p.workspace.selection({name:'Weitere Datei.mp4',media_kind:'video'});
+ p.get('workspaceViewFile').click();
+ assert.equal(p.get('workspacePost').dataset.orientation,'');
+ assert.equal(p.get('workspacePost').style['--media-aspect'],undefined);
 });

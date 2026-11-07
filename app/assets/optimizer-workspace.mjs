@@ -67,6 +67,11 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const previewBack = button('workspacePreviewBack', '← Datei', () => {
     show('files'); viewFile.focus();
   });
+  const previewNav = make('nav', 'workspacePreviewNav');
+  previewNav.setAttribute('aria-label', 'Vorschaunavigation');
+  previewNav.append(previewBack);
+  const dashboardBack = $('back');
+  const pageHeader = dashboardBack?.parentElement;
   const previewHeading = make('h1', 'workspacePreviewHeading', 'Vorschau für ' + portalName);
   const previewName = make('p', 'workspacePreviewName');
   const previewTabs = make('nav', 'workspacePreviewTabs');
@@ -77,7 +82,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const detailTab = button('workspaceDetailTab', 'Dateidetails', () => previewTab('details'));
   postTab.setAttribute('aria-controls', postView.id); detailTab.setAttribute('aria-controls', detailView.id);
   previewTabs.append(postTab, detailTab);
-  preview.append(previewBack, previewHeading, previewName, previewTabs, postView, detailView);
+  preview.append(previewNav, previewHeading, previewName, previewTabs, postView, detailView);
   const post = make('article', 'workspacePost');
   post.setAttribute('aria-label', 'Darstellung des Beitrags');
   post.dataset.portal = portalName.toLowerCase();
@@ -108,6 +113,11 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const file = selectedFile || {};
     const info = data.facts || {};
     post.dataset.mediaKind = file.media_kind || '';
+    const width = file.width_px || info.width_px;
+    const height = file.height_px || info.height_px;
+    post.dataset.orientation = width > 0 && height > width ? 'portrait' : '';
+    if (width > 0 && height > 0) post.style.setProperty('--media-aspect', width + ' / ' + height);
+    else post.style.removeProperty('--media-aspect');
     const description = selectedFile ? describe(file) : null;
     previewName.textContent = description ? [description.title, description.version].join(' · ') : '';
     postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
@@ -197,6 +207,11 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     if (key === 'preview' && !selectedFile) return;
     const changed = active !== key;
     active = key;
+    doc.body.classList.toggle('post-preview-open', key === 'preview');
+    if (pageHeader && !doc.body.classList.contains('embedded')) {
+      if (key === 'preview') previewNav.prepend(dashboardBack);
+      else if (dashboardBack.parentElement === previewNav) pageHeader.prepend(dashboardBack);
+    }
     for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== key;
     for (const [name, tab] of Object.entries(buttons)) {tab.setAttribute('aria-pressed', String(name === key));tab.setAttribute('aria-selected',String(name===key));tab.tabIndex=name===key?0:-1;}
     for (const video of main.querySelectorAll('video')) video.pause();

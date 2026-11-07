@@ -3,7 +3,7 @@ export function originalVideoSupported(file){return file?.media_kind==='video'&&
 export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOwnerId,source,createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL}){
  const box=doc.createElement('div'),button=doc.createElement('button'),video=doc.createElement('video'),status=doc.createElement('p');
  box.id='originalVideoPreview';box.hidden=true;button.type='button';button.className='secondary';button.textContent='Originalvideo laden';
- video.controls=true;video.playsInline=true;video.preload='metadata';video.hidden=true;video.setAttribute('aria-label','Originalvideo der ausgewählten Datei');video.style.cssText='display:block;width:100%;max-height:500px;object-fit:contain;background:#111827';
+ video.controls=true;video.playsInline=true;video.preload='metadata';video.hidden=true;video.setAttribute('aria-label','Originalvideo der ausgewählten Datei');video.style.cssText='display:block;width:100%;max-height:var(--original-video-max-height,500px);object-fit:contain;background:#111827';
  status.className='note';status.setAttribute('role','status');status.setAttribute('aria-live','polite');box.append(button,video,status);host.append(box);
  let file=null,key='',generation=0,controller=null,url=null,disposed=false;
  const stop=()=>{try{video.pause();}catch{}};

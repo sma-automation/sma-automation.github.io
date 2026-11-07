@@ -241,3 +241,49 @@ body.wide #workspacePreview #mediaPanel{max-width:none}
  body.wide #workspaceSource #result>.actions{align-items:flex-start;flex-direction:column}
  body.wide #workspaceSource #save{align-self:flex-end}
 }
+
+/* The standalone page supplies its own gutters; the embedded dashboard supplies its own shell. */
+body.wide:not(.embedded) main {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding: clamp(16px, 3vw, 36px);
+}
+body.wide.post-preview-open:not(.embedded) main {
+  --post-width: 600px;
+  width: min(var(--post-width), calc(100% - 32px));
+  padding: 0;
+  margin: clamp(16px, 3vh, 32px) auto 36px;
+}
+body.wide.post-preview-open:not(.embedded) main:has(#workspacePost[data-portal=instagram]) { --post-width: 460px; }
+body.wide.post-preview-open:not(.embedded) main:has(#workspacePost[data-portal=tiktok]),
+body.wide.post-preview-open:not(.embedded) main:has(#workspacePost[data-portal=youtube][data-media-kind=video][data-orientation=portrait]) {
+  --post-width: clamp(320px, 44svh, 390px);
+}
+body.wide.post-preview-open:not(.embedded) main > header { display: none; }
+body.wide:not(.embedded) #workspacePreviewNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 18px;
+}
+body.wide:not(.embedded) #workspacePreviewNav #back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+body.wide:not(.embedded) #workspacePreviewNav #back:hover { text-decoration: underline; }
+body.wide:not(.embedded) #workspacePreviewBack { min-height: 40px; margin: 0; padding: 8px 14px; }
+body.wide:not(.embedded) #workspacePreviewName { margin-bottom: 12px; font-size: 13px; }
+body.wide:not(.embedded) #workspacePreviewTabs { flex-wrap: wrap; gap: 0 20px; margin-bottom: 16px; }
+body.wide:not(.embedded) #workspacePost { max-width: none; }
+body.wide:not(.embedded) #workspacePost[data-portal=youtube][data-media-kind=video] #assetPreviewMedia {
+  max-height: min(80svh, 720px);
+  aspect-ratio: var(--media-aspect, 16 / 9);
+}
+body.wide:not(.embedded) #workspacePost[data-orientation=portrait] { --original-video-max-height: min(80svh, 720px); }
+body.wide:not(.embedded) #workspacePreviewNotice { margin: 10px 0 0; }
