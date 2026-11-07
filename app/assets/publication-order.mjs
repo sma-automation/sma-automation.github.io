@@ -108,7 +108,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,host,portalName,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,host,portalName,verifyProductLink,onUnavailableLink,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -318,11 +318,21 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         (stored.approval_window.status==='active'&&(!stored.approval_token||!stored.target?.id||
          stored.target?.platform!==stored.binding?.platform))))throw Error(orderError('REQUEST_CONFLICT'));
   }
+  async function checkLink(generation){
+    await verifyProductLink(context);
+    if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
+    unchanged();
+  }
+  function offerLinkRepair(error){
+    if(error?.code!=='PRODUCT_LINK_UNAVAILABLE'||!onUnavailableLink)return false;
+    dialog.close();onUnavailableLink();return true;
+  }
   function continuePending(checkAccount){
     const previous=order,generation=epoch;
     if(!pendingTarget(previous))return;
     return run(async()=>{
       // Reading through n8n could also continue a checked order. Read the stored row directly.
+      if(checkAccount&&context.productId)await checkLink(generation);
       if(checkAccount)await refresh();
       if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
       unchanged();
@@ -402,6 +412,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       showOrder(result);
     }catch(e){
       if(generation!==epoch)return;
+      if(!sentApproval&&offerLinkRepair(e))return;
       notice.textContent=e.message||orderError();
       const duplicate=e.rejected&&e.code==='DUPLICATE_PUBLICATION';
       preparationId=e.preparationId||preparationId;
@@ -443,11 +454,15 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;humanControls.hidden=true;humanEnabled.checked=false;for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Zielkonto wird beim Portal geprüft …';if(!dialog.open)dialog.showModal();onOpen();setWorking(true);
     try{
       context=getContext();const platform=context.binding.platform;
+      if(context.productId){
+        notice.textContent='SMA prüft den gespeicherten Produktlink …';
+        await checkLink(generation);notice.textContent='Zielkonto wird beim Portal geprüft …';
+      }
       const verified=['youtube','tiktok'].includes(platform)?await client.account(platform):null;
       if(generation!==epoch)return;account=verified;unchanged();renderChoices(platform,account);controls.hidden=false;
       if(account){details.append(make('p','Verbundenes Zielkonto: '+account.account_check.display_name+' · '+account.target.id));if(platform==='tiktok')details.append(make('p','Dieses TikTok-Konto erlaubt Videos bis '+account.account_check.policy.max_duration_sec+' Sekunden.'));}
       notice.textContent='Wähle die Einstellungen für diesen Beitrag.';
-    }catch(e){if(generation===epoch)notice.textContent=e.message||orderError();}
+    }catch(e){if(generation===epoch&&!offerLinkRepair(e))notice.textContent=e.message||orderError();}
     finally{if(generation===epoch)setWorking(false);}
   }
   button.addEventListener('click',()=>startPreparation(true));restart.addEventListener('click',()=>startPreparation());
@@ -460,6 +475,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       await refresh();
       if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
       unchanged();
+      if(context.productId)await checkLink(generation);
       if(interruptedPreparation&&JSON.stringify(choices)!==JSON.stringify(interruptedPreparation.choices))interruptedPreparation=null;
       return client.prepare(context.binding,choices);
     },{choices});

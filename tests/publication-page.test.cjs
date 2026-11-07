@@ -797,3 +797,47 @@ test('editing a saved link uses the current catalogue choice and retains unsaved
  assert.throws(()=>p.orderOptions.getContext(),/speichere/);
  assert.equal(p.calls.some(c=>isCaption(c.url)),false);
 });
+
+test('an unavailable saved product opens the link editor; staging, undo and saving update the warning and href',async()=>{
+ const d={...instagramResult.preview.drafts[0],product_id:'art-1'};
+ d.caption=d.caption.replace('Zum Shop: ','Zum Produkt: ')+'&produkt=art-1';
+ const existing={...instagramResult,assignment_revision:2,product_link_available:false,preview:{...result.preview,drafts:[d]}};
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,wide:true,filesRpc:a=>a.p_action==='get'?existing:
+   a.p_action==='save'?{...instagramResult,assignment_revision:3,product_link_available:null}:videoFiles(a)});
+ assert.equal(p.get('draftLinkEditor').open,true);assert.equal(p.get('draftLinkIssue').hidden,false);
+ for(const id of ['draftLinkValue','shopLink']){assert.equal(p.get(id).href,undefined);assert.ok(p.get(id).textContent.endsWith('&produkt=art-1'));}
+ await p.get('draftLinkShop').click();assert.equal(p.get('draftLinkIssue').hidden,true);assert.equal(p.get('shopLink').href,result.preview.shop_url);
+ await p.get('draftLinkUndo').click();assert.equal(p.get('draftLinkIssue').hidden,false);assert.equal(p.get('shopLink').href,undefined);
+ await p.get('draftLinkShop').click();await p.save();assert.equal(p.get('draftLinkIssue').hidden,true);assert.equal(p.get('draftLinkEditor').open,false);
+ assert.equal(p.calls.filter(c=>c.url).length,0);
+});
+test('a product that disappears after opening is detected on a scoped re-read; stale and failed reads cannot authorize a target check',async()=>{
+ const d={...instagramResult.preview.drafts[0],product_id:'art-1'};
+ let response={...instagramResult,assignment_revision:2,product_link_available:true,preview:{...result.preview,drafts:[d]}};
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,wide:true,filesRpc:a=>a.p_action==='get'?response:videoFiles(a)});
+ const options=p.orderOptions,context=options.getContext();
+ assert.equal(context.productId,'art-1');assert.equal(context.binding.productId,undefined);
+ response={...response,product_link_available:false};
+ await assert.rejects(options.verifyProductLink(context),{code:'PRODUCT_LINK_UNAVAILABLE'});
+ assert.equal(p.get('draftLinkIssue').hidden,false);assert.equal(p.get('shopLink').href,undefined);
+ options.onUnavailableLink();assert.equal(p.views.at(-1),'source');assert.equal(p.get('draftLinkEditor').open,true);
+ response={...response,product_link_available:true};await options.verifyProductLink(context);
+ assert.equal(p.get('draftLinkIssue').hidden,true);assert.ok(p.get('shopLink').href.endsWith('&produkt=art-1'));
+ response={...response,product_link_available:null};await assert.rejects(options.verifyProductLink(context),/Produktlink gerade nicht prüfen/);
+ response={...response,assignment_revision:3,product_link_available:true};await assert.rejects(options.verifyProductLink(context),{code:'ASSIGNMENT_CHANGED'});
+ assert.equal(p.calls.filter(c=>c.url).length,0);
+});
+test('history with a withdrawn product opens only the verified saved draft for correction, including a resume link',async()=>{
+ const d={...historyOrder.draft,product_id:'art-1',caption:historyOrder.draft.caption.replace('Zum Shop: ','Zum Produkt: ')+'&produkt=art-1'};
+ const saved={...historySaved,product_link_available:false,preview:{...historySaved.preview,drafts:[d]}};
+ const order={...historyOrder,draft:d,check_error:'ASSIGNMENT_CHANGED'};
+ for(const resume of [false,true]){
+  const p=await historyView({saved,order,resume});assert.deepEqual(p.views,['source']);assert.equal(p.orderOptions.resumeOrder,undefined);
+  assert.equal(p.get('draftLinkIssue').hidden,false);assert.equal(p.get('draftLinkProduct').focused,true);
+  assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+ }
+ for(const invalid of [{...saved,product_link_available:true},{...saved,assignment_revision:5},
+    {...saved,preview:{...saved.preview,drafts:[{...d,title:'Anderer Stand'}]}}]){
+  const p=await historyView({saved:invalid,order,resume:true});assert.deepEqual(p.views,[]);assert.equal(p.get('result').hidden,true);
+ }
+});

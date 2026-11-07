@@ -12,12 +12,30 @@ export async function checkDraftLinkEdits({db,file,saved,product,owner,other,sho
     };
     const target=(source,product_id,name)=>({source,product_id,name,purpose:''});
     const original=await read(),draft=original.preview.drafts[0];
+    assert.equal(original.product_link_available,true);
+    await db.exec('savepoint duplicate_product');
+    await product('Zweites Produkt mit derselben Kennung','Duplicate-SKU','good_01');
+    assert.equal((await read()).product_link_available,false);
+    await db.exec('rollback to savepoint duplicate_product');
+    // A seller with the same public article ID in a different shop is irrelevant.
+    await product('Fremder Artikel','Foreign-SKU','good_01',other);
+    assert.equal((await read()).product_link_available,true);
+    await db.exec('savepoint removed_product');
+    await db.query("delete from public.sma_produkte where sma_produkt_id='good_01' and user_id=$1",[owner]);
+    assert.equal((await read()).product_link_available,false);
+    await db.exec('rollback to savepoint removed_product');
     const sibling=await file('get','tiktok');
     // Two portals can reference one generic preview. Pure link changes must leave that shared revision intact.
     await db.query("update sma_private.publication_assignments_v1 set preview_id=$1,preview_revision=$2 where platform='tiktok'",[original.id,original.revision]);
     await db.exec("update public.sma_produkte set aktiv=false where sma_produkt_id='good_01'");
     assert.equal((await saved('youtube')).code,'ASSIGNMENT_CHANGED');
+    assert.equal((await read()).product_link_available,false);
+    await db.exec('savepoint edited_text');
+    const edited=await file('save','youtube',{assignment_revision:original.assignment_revision,title:draft.title,body:'Korrigierter Text zum bisherigen Artikel.',hashtags:draft.hashtags});
+    assert.equal(edited.ok,true);assert.equal(edited.product_link_available,false);
+    await db.exec('rollback to savepoint edited_text');
     const root=await edit(original,null);
+    assert.equal(root.product_link_available,null);
     assert.equal(root.ok,true,JSON.stringify(root));assert.equal(root.revision,original.revision);
     assert.equal(root.assignment_revision,original.assignment_revision+1);
     assert.equal(root.preview.drafts[0].product_id,undefined);
@@ -25,7 +43,7 @@ export async function checkDraftLinkEdits({db,file,saved,product,owner,other,sho
     assert.equal((await saved('youtube')).can_publish,false);
     assert.equal((await read()).link_product,null);
     assert.equal((await saved('tiktok')).code,'ASSIGNMENT_CHANGED');
-    const same=await edit(root,null);assert.equal(same.assignment_revision,root.assignment_revision);
+    const same=await edit(root,null);assert.equal(same.assignment_revision,root.assignment_revision);assert.equal(same.product_link_available,null);
     assert.equal((await edit(original,null)).code,'ASSIGNMENT_CONFLICT');
     for(const bad of [false,'https://evil.invalid',{},target('catalog','foreign','Fremdartikel'),target('catalog','second','Veraltet')]){
       assert.equal((await edit(root,bad,{body:'Dieser Text darf nicht gespeichert werden.'})).ok,false);
@@ -36,7 +54,7 @@ export async function checkDraftLinkEdits({db,file,saved,product,owner,other,sho
     const linked=await edit(root,replacement);
     assert.equal(linked.ok,true);assert.equal(linked.revision,original.revision);
     assert.equal(linked.preview.drafts[0].product_id,'second');
-    assert.equal((await read()).link_product.name,'Zweiter Artikel');
+    assert.equal((await read()).link_product.name,'Zweiter Artikel');assert.equal(linked.product_link_available,true);
     assert.deepEqual((await saved('youtube')).text,linked.preview.drafts[0]);
     assert.equal((await file('get','tiktok')).assignment_revision,sibling.assignment_revision);
     await db.exec("update public.sma_produkte set aktiv=true where sma_produkt_id='good_01'");

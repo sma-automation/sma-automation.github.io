@@ -41,6 +41,14 @@ Bestandsprüfung abgeschlossen. PR #57/#69 separat offen, unveröffentlichte
 n8n-Originalentwürfe und Shopify-Testmodus erhalten; keine kostenpflichtigen
 Änderungen freigegeben.
 
+## Nicht mehr verfügbarer Produktlink
+
+Beim Öffnen und Speichern eines Videoentwurfs prüft SMA die gespeicherte Artikelkennung im öffentlichen Shop des Kunden. Ist der Artikel entfernt, deaktiviert oder die Kennung mehrfach vergeben, zeigt SMA die gespeicherte Adresse als Text. **Linkziel bearbeiten** führt von der Beitragsvorschau direkt zur Korrektur.
+
+Beim Öffnen der Freigabevorbereitung prüft SMA den Artikel vor der Zielkontoabfrage erneut. Vor der Übergabe einer Vorbereitung an n8n wird der Stand nochmals gelesen. Ein später wieder verfügbarer Artikel kann die Prüfung bestehen. Der allgemeine Shop-Link braucht keinen Artikelabruf.
+
+Ein History-Link kann bei einem zurückgezogenen Artikel den gespeicherten Entwurf zur Korrektur öffnen. Dazu müssen Auftrags-ID, Datei, Portal, Revisionen, Shop und Beitrag weiterhin übereinstimmen. Die unterbrochene Vorbereitung wird in diesem Fall nicht fortgesetzt. Eine Ersatzwahl muss der Kunde speichern.
+
 ## Unterbrochene Vorbereitung – 7. November 2026
 
 Fehlt nach **Auftrag prüfen** die Antwort, liest SMA den gespeicherten Stand

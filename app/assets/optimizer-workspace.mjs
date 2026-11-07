@@ -101,7 +101,12 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   postShop.target = '_blank'; postShop.rel = 'noopener noreferrer';
   postBody.append(postTitle, postCaption, postTags, postShop);
   post.append(profile, $('assetPreview'), postBody);
-  postView.append(post, make('p', 'workspacePreviewNotice', 'Gestaltungsvorschau · Die endgültige Darstellung kann je nach Portal und Gerät abweichen.'));
+  const linkIssue=make('div','workspaceLinkIssue');
+  const linkMessage=make('p','workspaceLinkMessage');linkMessage.className='notice';linkMessage.setAttribute('role','status');
+  const editLink=make('button','workspaceEditLink','Linkziel bearbeiten');editLink.type='button';editLink.className='secondary';
+  editLink.addEventListener('click',()=>options.onEditLink?.());
+  linkIssue.hidden=true;linkIssue.append(linkMessage,editLink);
+  postView.append(linkIssue,post, make('p', 'workspacePreviewNotice', 'Gestaltungsvorschau · Die endgültige Darstellung kann je nach Portal und Gerät abweichen.'));
   const facts = make('dl', 'workspacePreviewFacts');
   const sourceDescription = make('p', 'workspacePreviewSource');
   const reviewNotes = make('ul', 'workspacePreviewNotes');
@@ -133,7 +138,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const shop = target?.url;
     postShop.hidden = !target;
     postShop.textContent = target ? target.label + ': ' + shop : '';
-    if (target) postShop.href = shop; else postShop.removeAttribute('href');
+    const issue=target&&draft.product_id?data.linkNotice:'';
+    linkMessage.textContent=issue||'';linkIssue.hidden=!issue;
+    if (target&&!issue) postShop.href = shop; else postShop.removeAttribute('href');
     sourceDescription.textContent = data.source || 'Noch keine Inhaltsbeschreibung vorhanden.';
     facts.replaceChildren();
     const number = value => Number.isFinite(value) && value >= 0;
@@ -250,6 +257,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
 
   function clearPreview() {
     for (const node of [postTitle, postCaption, postTags, postShop, sourceDescription, previewName]) node.textContent = '';
-    postShop.removeAttribute('href'); facts.replaceChildren(); reviewNotes.replaceChildren();
+    postShop.removeAttribute('href');linkIssue.hidden=true;linkMessage.textContent=''; facts.replaceChildren(); reviewNotes.replaceChildren();
   }
 }

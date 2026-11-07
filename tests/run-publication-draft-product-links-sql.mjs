@@ -68,13 +68,15 @@ try {
   await db.exec(await load('publication-product-choice'));
   await db.exec(await load('publication-catalog-lookup'));
   await db.exec(await load('publication-edit-draft-link'));
+  await db.exec(await load('publication-draft-product-availability'));
   const keep = await file('save','youtube',{assignment_revision:legacy.assignment_revision,title:'Alter Entwurf',body:'Ein bearbeiteter älterer Entwurf.'});
-  assert.equal(keep.preview.drafts[0].product_id,undefined);
+  assert.equal(keep.preview.drafts[0].product_id,undefined);assert.equal(keep.product_link_available,null);
   assert.ok(keep.preview.drafts[0].caption.endsWith('🛒 Zum Shop: '+shop));
   for (const platform of ['youtube','tiktok','instagram','facebook']) {
     let sequence = platform === 'youtube' ? keep.assignment_revision : 0;
     for (const language of ['de','en']) {
       const fresh = await assign(platform, language, sequence);
+      assert.equal(fresh.product_link_available,true);
       const draft = fresh.preview.drafts[0];
       const footer = (language==='de'?'🛒 Zum Produkt: ':'🛒 View product: ') + shop + '&produkt=good_01';
       assert.equal(draft.product_id,'good_01');

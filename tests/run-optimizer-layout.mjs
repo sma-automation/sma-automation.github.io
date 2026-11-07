@@ -27,8 +27,10 @@ function frame([portal, width, height]) {
     const $ = id => document.getElementById(id);
     const portal = ${JSON.stringify(portal)};
     document.body.classList.add('portal-mode');
+    const previewData={draft:{title:'Testbeitrag',body:'Beitragstext zur ausgewählten Datei.'}};
     const controller = createOptimizerWorkspace(document, portal, () => {}, {
-      getPreview: () => ({draft:{title:'Testbeitrag', body:'Beitragstext zur ausgewählten Datei.'}}),
+      getPreview: () => previewData,
+      onEditLink: () => controller.show('source')
     });
     installOrderReview(document, {host:$('workspacePreviewHeader'), portalName:portal});
     controller.selection({name:'Testvideo', media_kind:'video', width_px:720, height_px:1280});
@@ -42,7 +44,11 @@ function frame([portal, width, height]) {
       stage:media.height, fits:viewport.scrollWidth<=innerWidth,
       beside:body.left>=media.right-1, page:viewport.scrollHeight
     };
-    controller.show('source');
+    Object.assign(previewData.draft,{shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',product_id:'fixture-1'});
+    previewData.linkNotice='Der gewählte Artikel ist nicht mehr verfügbar.';
+    controller.refreshPreview();
+    result.withdrawnVisible=box('workspaceEditLink').width>0&&!$('workspacePostShop').hasAttribute('href')&&viewport.scrollWidth<=innerWidth;
+    $('workspaceEditLink').click();
     const item={name:'Synthetischer Testartikel',sku:'TEST-01',product_id:'fixture-1',purpose:'Testartikel'};
     const lookup=mountCatalogLookup(document,async()=>({choices:[item],more:false}));
     lookup.setContext({id:'fixture-video',revision:'version:1'},portal);
@@ -77,7 +83,7 @@ try {
     console.log(report);
     assert.ok(report.fits && report.action < height/2 && report.stage <= height*0.51);
     assert.equal(report.beside,width>=660);
-    assert.ok(report.lookupVisible&&report.noPreselection);
+    assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
     assert.equal(report.selectedProduct,'fixture-1');
     if(width>=660)assert.ok(report.page<=height,'Short portrait post should fit one desktop screen');
   }
