@@ -535,4 +535,52 @@ for(const interrupt of ['logout','edit']){
  if(interrupt==='logout')t.view.clear();else t.changeBinding();
  finish(saved);await pending;eq(t.requests.length,3);eq(t.approve.hidden,true);
 }
+// The duplicate guard uses the file version and target even if the two saved captions differ.
+const otherOrderId='ab660000-0000-4000-9000-000000000099';
+const duplicateReply=()=>({ok:true,json:async()=>({ok:false,code:'DUPLICATE_PUBLICATION',existing_order_id:otherOrderId})});
+for(const platform of ['youtube','tiktok']){
+ const t=fixture({platform,approvalResponse:duplicateReply,storedResponse:(_,row)=>({...row,state:'checked',
+  binding:{...row.binding,preview_id:'previous-preview',preview_revision:2,assignment_revision:3},
+  approved_at:'2026-11-07T20:13:00Z',choices:{visibility:'public'},draft:{title:'Ursprünglicher Beitrag <img src=x>'}})});
+ await authorize(t);const receipt=t.doc.querySelector('a[href*="#auftrag/"]');
+ eq(receipt?.getAttribute('href'),'dashboard.html#auftrag/'+otherOrderId);
+ eq(receipt.target,'_top');eq(t.approve.disabled,true);eq(t.approve.hidden,true);
+ assert.match(t.doc.body.textContent,/Ursprünglicher Beitrag <img src=x>/);eq(t.doc.querySelector('img'),null);
+ assert.match(t.doc.body.textContent,/Freigegeben am .*21:13 Uhr \(Wien\)/);
+ await t.approve.handlers.click();await t.status.handlers.click();eq(t.reads,[otherOrderId,otherOrderId]);
+ eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+}
+const historyLink=t=>t.doc.querySelector('a[href*="#auftrag/"]');
+{
+ const t=fixture();await authorize(t);eq(historyLink(t).getAttribute('href'),'dashboard.html#auftrag/'+savedId);
+ eq(t.reads.length,0);t.view.clear();eq(historyLink(t),null);
+}
+for(const bad of [null,'',savedId,'https://example.invalid/',[otherOrderId]]){
+ const t=fixture({approvalResponse:()=>({ok:true,json:async()=>({ok:false,code:'DUPLICATE_PUBLICATION',existing_order_id:bad})})});
+ await authorize(t);eq(t.reads.length,0);eq(historyLink(t),null);eq(t.approve.hidden,true);
+}
+{
+ let change=row=>row;const t=fixture({approvalResponse:duplicateReply,storedResponse:(_,row)=>change({...row,draft:{title:'Saved receipt'}})});
+ await authorize(t);eq(!!historyLink(t),true);
+ for(const bad of [
+  r=>({...r,id:savedId}),r=>({...r,state:'prepared'}),r=>({...r,state:'cancelled'}),r=>({...r,approved_at:null}),
+  r=>({...r,approved_at:'not-a-date'}),r=>({...r,can_publish:true}),r=>({...r,binding:null}),
+  r=>({...r,binding:{...r.binding,asset_id:'another'}}),r=>({...r,binding:{...r.binding,asset_revision:'other'}}),
+  r=>({...r,binding:{...r.binding,platform:'tiktok'}}),r=>({...r,target:{...r.target,id:'other'}}),
+  r=>({...r,target:{...r.target,platform:'tiktok'}}),()=>({ok:false,code:'ORDER_UNAVAILABLE'}),
+  ()=>{throw Error('offline');}
+ ]){
+  change=bad;await t.status.handlers.click();
+  eq(historyLink(t),null);eq(t.approve.hidden,true);assert.doesNotMatch(t.doc.body.textContent,/Saved receipt/);
+ }
+ change=r=>r;await reopen(t);eq(!!historyLink(t),true);eq(t.requests.length,3);
+ t.view.clear();eq(historyLink(t),null);
+}
+{
+ let finish,started;const reading=new Promise(resolve=>started=resolve);
+ const t=fixture({approvalResponse:duplicateReply,storedResponse:(_,row)=>{started();return new Promise(resolve=>finish=()=>resolve(row));}});
+ const done=authorize(t);await reading;await t.status.handlers.click();eq(t.reads,[otherOrderId]);
+ t.view.clear();finish();await done;eq(historyLink(t),null);eq(notice(t),'');
+ eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+}
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');

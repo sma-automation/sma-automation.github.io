@@ -78,6 +78,13 @@ function sameAccountTerms(saved,current){
   return sameStringList(oldLevels,newLevels)&&sameOptions(oldRules,newRules);
 }
 
+const orderIdPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+function recordedApproval(row){
+  return typeof row.id==='string'&&orderIdPattern.test(row.id)&&['approved','checking','checked','blocked'].includes(row.state)&&
+    typeof row.approved_at==='string'&&/^20\d{2}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d\d:\d\d)$/.test(row.approved_at)&&
+    Number.isFinite(Date.parse(row.approved_at));
+}
+
 function validatedOrder(result,id){
   if(result?.ok!==true||result.id!==id||result.can_upload!==false||result.can_publish!==false||
      !['preparing','prepared','approved','checking','blocked','checked','cancelled'].includes(result.state))throw Error(orderError());
@@ -275,6 +282,22 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function checkBinding(r){
     if(!r.binding||Object.entries(context.binding).some(([k,v])=>r.binding[k]!==v))throw Error(orderError('ORDER_CHANGED'));
   }
+  function appendApprovalReceipt(row){
+    const when=new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(row.approved_at));
+    const link=make('a','Freigegebenen Auftrag in der History öffnen');
+    link.href='dashboard.html#auftrag/'+row.id;link.target='_top';
+    details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),link);
+  }
+  function showDuplicate(row){
+    // The journal identifies duplicate approvals by file version, platform and target.
+    // Caption revisions and visibility belong to the independently approved order.
+    if(!recordedApproval(row)||!order?.target?.id||row.target?.id!==order.target.id||
+       row.target.platform!==context.binding.platform||
+       !['asset_id','asset_revision','platform'].every(k=>context.binding[k]&&row.binding?.[k]===context.binding[k]))throw Error(orderError('REQUEST_CONFLICT'));
+    if(typeof row.draft?.title==='string'&&row.draft.title)details.append(make('h3',row.draft.title));
+    appendApprovalReceipt(row);
+    notice.textContent=errors.DUPLICATE_PUBLICATION;
+  }
   function showOrder(r) {
     checkBinding(r);
     clearExpiryTimer();order=r;rememberVideoChoices(r);details.replaceChildren();
@@ -305,11 +328,12 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     statusButton.hidden=r.state==='cancelled';
     if(r.state==='cancelled')notice.textContent='Dieser Auftrag wurde storniert und kann nicht mehr freigegeben werden. Schließe dieses Fenster und bereite bei Bedarf einen neuen Auftrag vor.';
     else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
-    else if(r.state==='checked')notice.textContent=(r.approved_at?'Deine Freigabe ist gespeichert. ':'')+'Die Auftragsprüfung ist abgeschlossen. Den Veröffentlichungsstand findest du unter History → Aufträge.';
-    else if(r.approved_at)notice.textContent=r.state==='blocked'?'Deine Freigabe ist gespeichert. Eine offene Prüfung blockiert den Auftrag.':'Deine Freigabe ist gespeichert. Den Veröffentlichungsstand findest du unter History → Aufträge.';
+    else if(r.state==='checked')notice.textContent=(r.approved_at?'Deine Freigabe ist gespeichert. ':'')+'Die Auftragsprüfung ist abgeschlossen.';
+    else if(r.approved_at)notice.textContent=r.state==='blocked'?'Deine Freigabe ist gespeichert. Eine offene Prüfung blockiert den Auftrag.':'Deine Freigabe ist gespeichert.';
     else if(pendingTarget(r))notice.textContent='Die Einstellungen sind gespeichert. Prüfe das Zielkonto, um diesen Auftrag weiter vorzubereiten.';
     else notice.textContent='Die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
+    if(recordedApproval(r))appendApprovalReceipt(r);
     approve.hidden=r.state!=='prepared';
   }
   function resumePrepared(previous){
@@ -346,7 +370,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
   }
   function checkStoredState(stored){
-    if(stored.state==='preparing'||(['approved','checking','checked','blocked'].includes(stored.state)&&!stored.approved_at))throw Error(orderError('REQUEST_CONFLICT'));
+    if(stored.state==='preparing'||(['approved','checking','checked','blocked'].includes(stored.state)&&!recordedApproval(stored)))throw Error(orderError('REQUEST_CONFLICT'));
     if(stored.state==='prepared'&&(stored.approved_at!==null||
         !['active','expired','recheck'].includes(stored.approval_window?.status)||
         !Number.isFinite(Date.parse(stored.approval_window.expires_at))||
@@ -384,8 +408,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     let stored;
     clearExpiryTimer();controls.hidden=true;statusButton.hidden=false;setWorking(true);
     notice.textContent='Der gespeicherte Auftragsstand wird geladen …';
+    if(pending.duplicate)details.replaceChildren();
     try{
       unchanged();
+      if(pending.duplicate&&(typeof pending.id!=='string'||!orderIdPattern.test(pending.id)||pending.id===order?.id))throw Error(orderError('REQUEST_CONFLICT'));
       const result=await readStoredOrder(pending.id);
       if(generation!==epoch||pending!==recovery)return;
       unchanged();
@@ -394,6 +420,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         return;
       }
       stored=validatedOrder(result,pending.id);
+      if(pending.duplicate){
+        showDuplicate(stored);
+        return; // Keep status refresh read-only for the other order.
+      }
       if((order?.state==='prepared'||pending.state==='prepared')&&stored.state==='preparing')throw Error(orderError('REQUEST_CONFLICT'));
       if(pending.choices){
         checkPreparation(stored,pending);
@@ -407,7 +437,6 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       }
       if(order?.target?.id&&stored.target?.id!==order.target.id)throw Error();
       checkStoredState(stored);
-      if(pending.duplicate&&(!stored.approved_at||stored.state==='prepared'))throw Error();
       if(stored.state==='prepared'&&['ORDER_NOT_PREPARED','TARGET_OPTIONS_CHANGED'].includes(pending.code)){
         const status=pending.code==='ORDER_NOT_PREPARED'?'expired':'recheck';
         showOrder({...stored,approval_window:{...stored.approval_window,status}});
@@ -416,7 +445,6 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         if(stored.state==='prepared'&&pending.code)notice.textContent=orderError(pending.code);
       }
       recovery=null;
-      if(pending.duplicate)notice.textContent=errors.DUPLICATE_PUBLICATION+' Den Verlauf findest du unter History → Aufträge.';
     }catch(error){
       if(generation!==epoch||pending!==recovery)return;
       pending.canRestart=error.selectionConflict===true&&stored?.state==='prepared'&&stored.approved_at===null;
@@ -425,7 +453,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         notice.textContent=error.message+' Starte die Vorbereitung neu, um Konto und Einstellungen erneut zu prüfen.';
       }else if(pending.choices)notice.textContent='Der Stand der Vorbereitung ist noch unklar. Lade den Status erneut oder öffne den Auftrag unter History.';
       else notice.textContent=pending.duplicate
-        ? errors.DUPLICATE_PUBLICATION+' Den gespeicherten Auftrag findest du unter History → Aufträge.'
+        ? 'SMA hat eine doppelte Freigabe gemeldet. Der bestehende Auftrag konnte noch nicht zugeordnet werden. Lade den Status erneut oder öffne History → Aufträge.'
         : unresolvedMessage;
     }
   }
@@ -448,7 +476,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         }else checkStoredState(result);
       }
       unchanged();
-      if(sentApproval&&(!result.approved_at||['preparing','prepared'].includes(result.state)))throw Error();
+      if(sentApproval&&!recordedApproval(result))throw Error();
       showOrder(result);
       if(choices&&preparationToResume?.state==='prepared'&&preparationToResume.id===result.id&&
          result.state==='prepared'&&!result.check_error&&!preparationEnded(result)){
@@ -458,7 +486,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(generation!==epoch)return;
       if(!sentApproval&&offerLinkRepair(e))return;
       notice.textContent=e.message||orderError();
-      const duplicate=e.rejected&&e.code==='DUPLICATE_PUBLICATION';
+      const duplicate=sentApproval&&e.rejected&&e.code==='DUPLICATE_PUBLICATION';
       preparationId=e.preparationId||preparationId;
       if(choices&&preparationId&&!e.rejected){
         if(preparationToResume?.id!==preparationId){
