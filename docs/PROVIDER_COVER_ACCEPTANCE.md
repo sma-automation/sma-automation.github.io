@@ -92,9 +92,14 @@ eigenen Prüfweg. Der lokale Messweg besteht unabhängig von einer Transkription
 
 ## Nächster ausführbarer Schritt und Grenzen
 
-1. Den separaten Portaltextvergleich für die gespeicherten Entwurfsrevisionen
-   abschließen. Sein regulärer Maschinenweg verlangt gespeicherte Video-Inhaltsbelege.
-   Der lokale FFmpeg-Befund erfüllt die technische Dateiprüfung.
+1. Automatischer Textvergleich abgeschlossen. Die beiden gespeicherten Entwürfe
+   in Revision 1 stimmen in Titel, Text, Hashtags und vollständiger Caption mit
+   der unabhängig bei der Sichtung des Kurzexports dokumentierten Referenz
+   überein. Der Vergleich schließt den Shop-Link ein. Die reguläre Auftragsprüfung
+   liefert für beide Portale `PORTAL_TEXT_COMPARISON=pass`. Die Referenz ist an
+   die vollständige lokale Messung und die Sichtbeobachtungen gebunden. Eine
+   Abweichung im Text erfordert eine neue Prüfung. Die Methode erfasst exakt
+   bekannte Formulierungen. Persönliche Inhalts- und Rechteerklärungen stehen aus.
 2. Erst danach das aktuelle Zielkonto samt erlaubten Optionen lesen und den
    konkreten Auftrag vorbereiten. Alte Kontonachweise aus stornierten Aufträgen
    sind keine frische Zielkontobestätigung.
@@ -112,7 +117,8 @@ eigenen Prüfweg. Der lokale Messweg besteht unabhängig von einer Transkription
    Videoabschluss und übergebenen Bildzeitpunkt nachweisen; daraus keine
    unabhängig bestätigte Coverdatei ableiten. History anschließend lesen.
 
-Die nächste fachliche Voraussetzung ist der gebundene Portaltextvergleich.
+Migration `20261107102147_publication_export_reference_v1.sql` ist installiert.
+Der nächste Schritt für einen echten Test ist die Prüfung des konkreten Zielkontos.
 Die neun bestehenden Aufträge bleiben unverändert. Keine Operatorberechtigung,
 kein Provider- oder Coverversuch. PR #57/#69, n8n-Originalentwürfe und
 Shopify-Testmodus bleiben unangetastet.
