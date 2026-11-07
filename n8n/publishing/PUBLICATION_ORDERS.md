@@ -24,7 +24,7 @@ Keine echte persönliche Bestätigung wurde durch die Umsetzung abgegeben.
 **Fortsetzung am 07.11.2026:** Die Assistenzsichtung des 10-s-Originals ist
 abgeschlossen. Der vorhandene 3-s-Coverexport wurde separat lokal dekodiert und
 gesichtet. Eigene Portaltexte und technische FFmpeg-Nachweise sind für beide
-Portale gespeichert. Der separate Portaltextvergleich ist offen.
+Portale gespeichert. Der separate Referenztextvergleich ist für beide Portale bestanden.
 Konkreter Testtext, Dateibindung, Prüfgrenzen und Reihenfolge:
 [PROVIDER_COVER_ACCEPTANCE.md](../../docs/PROVIDER_COVER_ACCEPTANCE.md).
 Persönliche Kundenerklärung, ausdrückliche Auftragsfreigabe und gesonderte
