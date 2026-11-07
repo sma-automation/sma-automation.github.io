@@ -31,6 +31,27 @@ export async function checkProductContext({db,load,first}) {
   await asUser(output.user_id);
   assert.equal((await read()).product_context,null);
   await db.query(`insert into sma_private.publication_product_sources_v1 values(1,$1,$2,$3)`,[output.user_id,parentHash,profile]);
+  await db.exec(await load('publication-optimizer-file-labels.sql'));
+  const catalog=async(platform)=>first("select public.sma_publication_files_v1('list',$1) value",[JSON.stringify(platform?{platform}:{})]);
+  assert.ok((await catalog()).files.every(f=>!('display' in f)));
+  await db.exec('begin');
+  await db.query('update sma_private.publication_files_v1 set duration_ms=10000 where id=$1',[source]);
+  const coverHash='c'.repeat(64);
+  const cover=await first(`insert into sma_private.publication_files_v1(customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes)
+    values(1,$1,'fixture-cover','technical-cover.png','image','image/png',$2,now(),54321) returning id value`,[output.user_id,'sha256:'+coverHash+':1']);
+  await db.query(`update sma_private.publication_editor_exports_v1 set cover_asset_id=$1,
+    outputs=jsonb_set(outputs,'{cover}',jsonb_build_object('sha256',$2::text,'size_bytes',54321))`,[cover,coverHash]);
+  const list=(await catalog('youtube')).files;
+  const originalLabel=list.find(f=>f.id===source).display,clipLabel=list.find(f=>f.id===output.id).display;
+  assert.equal(originalLabel.variant,'original');assert.equal(clipLabel.variant,'clip');
+  assert.equal(clipLabel.product,'Hotelgriff');assert.equal(clipLabel.draft_title,'Ein kurzer Test');
+  assert.equal(list.find(f=>f.id===cover).display.variant,'cover');
+  assert.equal(list.find(f=>f.id===cover).display.product,'Hotelgriff');
+  assert.equal((await catalog('instagram')).files.find(f=>f.id===output.id).display.draft_title,undefined);
+  await db.query('update sma_private.publication_files_v1 set size_bytes=size_bytes+1 where id=$1',[cover]);
+  assert.equal((await catalog('youtube')).files.find(f=>f.id===cover).display.variant,undefined);
+  await db.exec('rollback');
+  assert.equal(await first("select has_function_privilege('authenticated','sma_private.publication_optimizer_file_label_v1(sma_private.publication_files_v1,text)','execute') value"),false);
   const matched=(await read()).product_context;
   assert.equal(matched.name,'Hotelgriff');
   assert.equal(matched.topic,'Reisehygiene');
@@ -77,6 +98,7 @@ export async function checkProductContext({db,load,first}) {
   assert.equal((await read()).product_context.state,'ambiguous');
   await db.exec("insert into public.sma_kunden(id,user_id,aktiv,demo_delta_aktiv,kunde_id) values(2,gen_random_uuid(),true,true,'foreign')");
   await asUser(await first('select user_id value from public.sma_kunden where id=2'));
+  assert.deepEqual((await catalog('youtube')).files,[]);
   assert.equal((await read()).code,'FILE_UNAVAILABLE');
   assert.equal(await first('select sma_private.publication_product_context_v1($1) value',[output.id]),null);
   for(const table of ['publication_product_profiles_v1','publication_product_sources_v1']){
