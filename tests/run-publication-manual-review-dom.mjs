@@ -5,8 +5,8 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube'}={}){
- const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],create=doc.createElement.bind(doc);
+function fixture({option=true,platform='youtube',approvalResponse,storedResponse}={}){
+ const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
   if(tag==='form')e.reportValidity=()=>true;
@@ -18,16 +18,21 @@ function fixture({option=true,platform='youtube'}={}){
  let clock=Date.now(),timer;class TestDate extends Date{static now(){return clock;}}
  const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-000000000010'},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
+  if(req.action==='approve'&&approvalResponse)return approvalResponse(req);
   if(req.action==='account')return {ok:true,json:async()=>({...common,stage:'account'})};
-  return {ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
+  return {ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
- const view=scope.install(doc,{host:doc.body,portalName:platform,session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh:async()=>{}});
+ const view=scope.install(doc,{host:doc.body,portalName:platform,readStoredOrder:async id=>{
+  reads.push(id);
+  return storedResponse(id,{ok:true,id,binding,can_publish:false,can_upload:false,state:'approved',
+   approved_at:new Date(clock).toISOString(),target:{id:'synthetic-channel',platform},choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},approval_policy:'media-consent-2026-11-03.1'});
+ },session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh:async()=>{}});
  const $=id=>doc.getElementById(id),dialog=$('publicationOrderDialog'),buttons=[...dialog.querySelectorAll('button')],approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
  const open=async()=>{await $('preparePublicationOrder').handlers.click();$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';if(platform==='youtube'){$('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';}await dialog.querySelector('form').handlers.submit({preventDefault(){}});};
- return {$,doc,view,binding,requests,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+ return {$,doc,view,binding,requests,reads,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
 }
 {
  const t=fixture();await t.open();
@@ -106,5 +111,62 @@ for(const platform of ['youtube','tiktok']){
 }
 {
  const t=fixture();await t.open();t.change('order-human-enabled');t.ready();t.changeBinding();await t.approve.handlers.click();eq(t.requests.some(x=>x.action==='approve'),false);
+}
+const timeout=()=>{throw Object.assign(new Error('timed out'),{code:23});};
+const savedId='ab660000-0000-4000-9000-000000000010';
+const authorize=async t=>{await t.open();t.ready();await t.approve.handlers.click();};
+const notice=t=>t.doc.querySelector('[aria-live="polite"]').textContent;
+for(const platform of ['youtube','tiktok']){
+ for(const approvalResponse of [timeout,()=>({ok:true,json:async()=>{throw Error('Truncated JSON');}}),
+  ()=>({ok:true,json:async()=>({ok:true,id:'wrong',state:'approved'})}),
+  ()=>({ok:true,json:async()=>({ok:false,code:'ORDER_RUNNING'})}),
+  ()=>({ok:false,json:async()=>({ok:false,code:'ORDER_NOT_PREPARED'})})]){
+  const t=fixture({platform,approvalResponse,storedResponse:(_,row)=>row});
+  await authorize(t);
+  eq(t.reads,[savedId]);eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+  eq(t.approve.hidden,true);eq(t.$('order-final-consent').checked,false);
+  assert.match(notice(t),/Freigabe ist gespeichert/);
+ }
+}
+{
+ let stored;
+ const t=fixture({approvalResponse:timeout,storedResponse:(id,row)=>stored(id,row)});
+ stored=()=>{throw Error('offline');};
+ await authorize(t);eq(t.approve.disabled,true);eq(t.status.disabled,false);assert.match(notice(t),/noch unklar/);
+ eq(t.$('order-review-media_rights').checked,false);
+ await t.approve.handlers.click();eq(t.requests.length,3);
+ for(const patch of [{id:'other'},{can_upload:true},{binding:{...t.binding,preview_revision:2}},{target:{id:'other'}}]){
+  stored=(_,row)=>({...row,...patch});await t.status.handlers.click();assert.match(notice(t),/noch unklar/);eq(t.approve.disabled,true);
+ }
+ stored=(_,row)=>({...row,approved_at:null,state:'prepared',approval_token:'token',approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}});
+ t.$('publicationOrderDialog').close();await t.$('preparePublicationOrder').handlers.click();
+ eq(t.reads.length,6);eq(t.reads.every(id=>id===savedId),true);eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+ for(const key of ['content_checked','music_rights','media_rights'])eq(t.$('order-review-'+key).checked,false);
+ eq(t.$('order-final-consent').checked,false);eq(t.requests.length,3);
+}
+{
+ const t=fixture({approvalResponse:()=>({ok:true,json:async()=>({ok:false,code:'TARGET_OPTIONS_CHANGED'})}),
+  storedResponse:(_,row)=>({...row,state:'prepared',approved_at:null,approval_token:'token',
+   approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}})});
+ await authorize(t);
+ eq(t.reads,[savedId]);eq(t.approve.hidden,true);eq(t.approve.disabled,true);
+ assert.match(notice(t),/Zielkonto muss erneut geprüft werden/);
+ eq(t.requests.length,3);
+}
+{
+ const duplicateId='ab660000-0000-4000-9000-000000000099';
+ const t=fixture({approvalResponse:()=>({ok:true,json:async()=>({ok:false,code:'DUPLICATE_PUBLICATION',existing_order_id:duplicateId})}),
+  storedResponse:(_,row)=>({...row,state:'checked'})});
+ await authorize(t);
+ eq(t.reads,[duplicateId]);eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+ eq(t.approve.hidden,true);assert.match(notice(t),/bereits ein freigegebener Auftrag/);
+}
+{
+ let release,started;
+ const reading=new Promise(resolve=>{started=resolve;});
+ const t=fixture({approvalResponse:timeout,storedResponse:(_,row)=>{started();return new Promise(resolve=>{release=()=>resolve(row);});}});
+ const pending=authorize(t);await reading;
+ await t.status.handlers.click();eq(t.reads.length,1);t.view.clear();release();await pending;
+ eq(notice(t),'');eq(t.$('publicationOrderDialog').open,false);eq(t.requests.length,3);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');
