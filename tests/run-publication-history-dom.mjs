@@ -222,6 +222,9 @@ await test('analysis history distinguishes empty periods, failures and expired u
 await test('expired preparation shows the next step without exposing approval controls',async()=>{
  const f=fixture({request:()=>result([entry(1,{status:'prepared',approval_window:{status:'expired',expires_at:'2026-11-07T11:02:26Z'}})])});
  await tick();assert.equal(f.$('.sma-history-status').textContent,'Vorbereitung abgelaufen');
- assert.match(f.$('ol').textContent,/Beitragsvorschau/);assert.equal(f.$('ol button'),null);f.view.destroy();
+ const link=f.$('ol a');
+ assert.equal(link.textContent,'Beitragsvorschau öffnen');assert.equal(link.hidden,false);
+ assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+entry(1).id);
+ assert.equal(link.getAttribute('target'),'_top');assert.equal(f.$('ol button'),null);f.view.destroy();
 });
 console.log(`${passed} history DOM scenarios passed.`);

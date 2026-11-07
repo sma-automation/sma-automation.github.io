@@ -12,7 +12,7 @@ import {mountWebsitePreparation} from './assets/website-domain.mjs?v=15';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
-import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=14';
+import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=15';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=3';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -71,7 +71,7 @@ frame.addEventListener('load',()=>{
   websitePreparation?.destroy();websitePreparation=null;
   const websitePage=doc?.getElementById('page-website'),ownerId=dashboardOwnerId;
   if(doc&&ownerId)publicationHistory=mountPublicationHistory({doc,expectedOwnerId:ownerId,ownerWindow:window,
-    stylesheetUrl:new URL('./assets/publication-history.css?v=7',location.href).href,
+    stylesheetUrl:new URL('./assets/publication-history.css?v=8',location.href).href,
     getOwnerId:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;},
     watchOwner:callback=>supabase.auth.onAuthStateChange((_event,session)=>callback(session?.user?.id||null)).data.subscription,
     request:async(input)=>{

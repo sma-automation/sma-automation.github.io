@@ -138,11 +138,14 @@ async function syncFileCatalog(){
  const response=await fetch(fileEndpoint,{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});
  const data=await response.json();if(signedOut)throw fileError('AUTH_REQUIRED');if(!response.ok||!data?.ok)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
 }
+function catalogFileIsFresh(file){
+ const age=Date.now()-Date.parse(file.verified_at);
+ return Number.isFinite(age)&&age>=0&&age<14*60*1000;
+}
 async function ensureFreshFile(context,force=false){
  assertFileContext(context);if(!context)return;
- const age=Date.now()-Date.parse(selectedAsset.verified_at);
  // Refresh before the server's 15-minute limit. The server remains authoritative.
- if(!force&&Number.isFinite(age)&&age>=0&&age<14*60*1000)return;
+ if(!force&&catalogFileIsFresh(selectedAsset))return;
  status('Die Datei wird automatisch im Kundenordner geprüft. Deine Eingaben bleiben erhalten …');
  await syncFileCatalog();assertFileContext(context);
  const catalog=await optimizerCatalog();assertFileContext(context);
@@ -396,6 +399,42 @@ $('reviewContent').addEventListener('click',async()=>{
   if(selectedAsset?.id===file.id){await loadMediaCheck();$('mediaPanel').open=true;}
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
+async function openHistoryOrderPreview(id,owner){
+ const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+ const unavailable='Die Beitragsvorschau für diesen Auftrag ist in deinem Konto nicht verfügbar.';
+ const changed='Datei oder Beitrag wurden seit diesem Auftrag geändert. Öffne den aktuellen Stand unter Veröffentlichung.';
+ if(!workspace||!uuid.test(id))throw Error(unavailable);
+ const {data:order,error}=await supabase.rpc('sma_publication_order_v1',{p_action:'get',p_input:{id}});
+ const binding=order?.binding;
+ if(error||!order?.ok||order.id!==id||order.state!=='prepared'||order.approved_at!=null||
+    order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!uuid.test(binding.asset_id)||
+    !uuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
+    !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Error(unavailable);
+ let catalog=await optimizerCatalog();
+ let file=catalog.files?.find(f=>f.id===binding.asset_id);
+ if(file&&!catalogFileIsFresh(file)){
+  await syncFileCatalog();
+  catalog=await optimizerCatalog();
+  file=catalog.files?.find(f=>f.id===binding.asset_id);
+  if(file&&!catalogFileIsFresh(file))throw fileError('FILE_REFRESH_REQUIRED');
+ }
+ if(!file||!fileFitsPortal(file))throw Error(messages.FILE_UNAVAILABLE);
+ const assignment=file.assignments?.find(a=>a.platform===selectedPortal);
+ if(file.revision!==binding.asset_revision||assignment?.status!=='assigned'||assignment.revision!==binding.assignment_revision)throw Error(changed);
+ const saved=await fileRpc('get',{asset_id:file.id,platform:selectedPortal});
+ if(saved.status!=='completed'||saved.id!==binding.preview_id||saved.revision!==binding.preview_revision||
+    saved.assignment_revision!==binding.assignment_revision)throw Error(changed);
+ const draft=saved.preview?.drafts?.find(d=>d.platform===selectedPortal);
+ if(!draft||!order.draft||saved.preview.shop_url!==binding.shop_url||
+    ['platform','title','body','caption','hashtags','review_notes'].some(key=>JSON.stringify(draft[key])!==JSON.stringify(order.draft[key])))throw Error(changed);
+ if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
+ // Select only after the order, file and saved portal text have all been verified.
+ assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
+ renderSelectedFile();showProductContext(saved.product_context,file);fillInput(saved.input);render(saved);
+ workspace.show('preview');status('Beitragsvorschau des Auftrags geladen.');
+ await loadMediaCheck();await loadMagicEffect(false);lock(false);syncMedia();
+}
+
 async function loadLatest(){const file=selectedAsset;lock(true);try{
  await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
@@ -622,4 +661,10 @@ try{
  supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},thumbnail:async(f,signal)=>fetchAssetThumbnail(f,(await session()).access_token,signal)});
  originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner)});
- let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}if(ready)await loadLatest();}catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
+ if(params.has('order')){
+  await openHistoryOrderPreview(params.get('order'),coverOwner);
+ }else{
+  let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}
+  if(ready)await loadLatest();
+ }
+}catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
