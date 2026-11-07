@@ -36,7 +36,8 @@ on:
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - app/assets/gallery-music*
       - tests/*gallery-music*
-      - supabase/sql/gallery-music.sql
+      - supabase/sql/gallery-music*.sql
+      - supabase/migrations/*_gallery_music_receipt_v1.sql
       - supabase/migrations/*_gallery_automatic_music_v1.sql
       - app/assets/music-catalog.mjs
       - supabase/sql/music-credits.sql
@@ -145,6 +146,7 @@ jobs:
           node tests/run-export-music-cancel-dom.mjs
           node tests/run-gallery-music-sql.mjs
           node tests/run-gallery-music-wasm.mjs
+          node tests/run-gallery-music-receipt.mjs
           node tests/run-music-credits-sql.mjs
           node tests/run-music-library-sql.mjs
           node tests/run-music-library-reservations-sql.mjs

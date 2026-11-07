@@ -111,6 +111,24 @@ Tracks sowie einer lokalen Kopie des Türgriff-Originals (241 Bilder, 10,041667 
 AAC 10,040998 s). Beim vorhandenen Drei-Sekunden-Export blieb die Tonspur erhalten.
 Der erste vollständige Kundendurchlauf mit einem produzierten SMA-Master steht aus.
 
+**Unterbrechung nach dem Upload.** Sobald der bestätigte Geräte-Upload oder ein
+späterer Kundenordner-Abgleich die fertige Musikfassung im Katalog speichert,
+ordnet die Datenbank sie dem reservierten Auftrag zu. Der Abgleich wartet das
+Transaktionsende ab, weil Drive Original und Ausgabe in beliebiger Reihenfolge
+liefern kann. Kundenkonto, Quellversion, reservierte Drive-ID, Dateiname, Größe
+und SHA-256 müssen passen. Auch ein später eindeutig geklärter Upload kann den
+Status „Kundenordner prüfen“ verlassen. Ein offener Tab ist für diesen Abschluss
+entbehrlich. Das Erzeugen der Audiospur erfolgt weiterhin im geöffneten Browser.
+
+Der isolierte Durchlauf in `tests/run-gallery-music-receipt.mjs` verbindet den
+echten FFmpeg-Zuschnitt, den Katalogzugriff eines Alpha-Kontos, die
+Uploadreservierung, den Dateitransfer und die SQL-Bestätigung. Drive und die
+Storage-Datei werden im Test lokal bereitgestellt. Das Fenster schließt nach
+dem letzten übertragenen Byte. Ein nachfolgender Abgleich findet genau eine
+Musikfassung. Wiederholte Bestätigungen liefern dieselbe Datei. Ein falscher
+Hash, eine abweichende Größe, ein fremder Dateiname oder eine geänderte Quelle
+verhindern die Zuordnung. Das Testkonto behält seine neun übrigen Credits.
+
 ## Bedienung
 
 - Tracks: Musik hinzufügen, suchen, anhören und zur Playlist hinzufügen.

@@ -35,9 +35,9 @@ test('no available music or another active tab leaves the gallery alone',async()
   try{await worker.wake();assert.deepEqual(calls.map(x=>x[0]),['claim']);}finally{worker.destroy();}
  }
 });
-test('failed transfer retries the bound job and never completes it',async()=>{
+test('unconfirmed transfer checks the receipt before retrying its bound job',async()=>{
  const {worker,calls}=await fixture([job],{upload:async()=>{throw Error('offline');}});
- try{await worker.wake();assert.deepEqual(calls.map(x=>x[0]),['claim','reserve','retry','claim']);assert.deepEqual(calls[2][1],{id:job.id,lease:job.lease});}
+ try{await worker.wake();assert.deepEqual(calls.map(x=>x[0]),['claim','reserve','complete','retry','claim']);assert.deepEqual(calls[3][1],{id:job.id,lease:job.lease});}
  finally{worker.destroy();}
 });
 test('losing the account during a source read prevents rendering or transfer',async()=>{
@@ -46,4 +46,17 @@ test('losing the account during a source read prevents rendering or transfer',as
  const {worker,calls,uploads}=await fixture([job],{source:async()=>{started();await gate;return video;},render:()=>assert.fail('Cross-account render')});
  const done=worker.wake();await ready;worker.destroy();release();await done;
  assert.deepEqual(calls.map(x=>x[0]),['claim']);assert.equal(uploads.length,0);
+});
+
+test('a lost upload reply uses the verified server receipt without repeating the render',async()=>{
+ const actions=[],queue=[job],notes=[];
+ const {worker,updates}=await fixture([],{
+  rpc:async(action,input)=>{actions.push(action);return {ok:true,...(action==='claim'?queue.shift()||{state:'idle'}:
+   action==='complete'?{state:'completed',asset_id:uuid(4)}:{})};},
+  upload:async()=>{throw Error('response lost');},onStatus:text=>notes.push(text)
+ });
+ try{
+  await worker.wake();assert.deepEqual(actions,['claim','reserve','complete','claim']);
+  assert.equal(updates.length,1);assert.match(notes.at(-1),/gespeichert/);
+ }finally{worker.destroy();}
 });
