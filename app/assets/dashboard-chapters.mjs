@@ -149,6 +149,38 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
   shopFrame.addEventListener('load',attach);attach();
   cleanups.push(()=>{shopFrame.removeEventListener('load',attach);observer?.disconnect();unbind.forEach(fn=>fn());shopFrame.style.height=previousHeight;savedExtras.forEach(([el,hidden])=>el.hidden=hidden);tabs.destroy();shop.removeAttribute('data-sma-chapters');});
  }
+ // The dashboard shell already names the current area in its top bar.
+ const topTitle=doc.querySelector('.topbar-title');
+ if(topTitle){
+  const headings=[...doc.querySelectorAll('[id^="page-"]')].map(root=>
+   root.querySelector(':scope > .page-head > h1') || root.querySelector(':scope > h1')
+  ).filter(Boolean);
+  const label=element=>element.textContent.trim().replace(/\s+/gu,' ');
+  const syncHeadings=()=>{
+   const shown=topTitle.offsetHeight!==0 && doc.defaultView.getComputedStyle?.(topTitle)?.visibility!=='hidden';
+   const title=label(topTitle);
+   for(const heading of headings){
+    heading.toggleAttribute('data-sma-duplicate-heading',shown && title!=='' && label(heading)===title);
+   }
+  };
+  const role=topTitle.getAttribute('role'), level=topTitle.getAttribute('aria-level');
+  topTitle.setAttribute('role','heading');
+  topTitle.setAttribute('aria-level','1');
+  const observer=new doc.defaultView.MutationObserver(syncHeadings);
+  for(const element of [topTitle,...headings]) observer.observe(element,{childList:true,characterData:true,subtree:true});
+  const resizeObserver=doc.defaultView.ResizeObserver && new doc.defaultView.ResizeObserver(syncHeadings);
+  resizeObserver?.observe(topTitle);
+  doc.defaultView.addEventListener('resize',syncHeadings);
+  syncHeadings();
+  cleanups.push(()=>{
+   observer.disconnect();
+   resizeObserver?.disconnect();
+   doc.defaultView.removeEventListener('resize',syncHeadings);
+   for(const heading of headings) heading.removeAttribute('data-sma-duplicate-heading');
+   if(role===null)topTitle.removeAttribute('role');else topTitle.setAttribute('role',role);
+   if(level===null)topTitle.removeAttribute('aria-level');else topTitle.setAttribute('aria-level',level);
+  });
+ }
  // Original layout containers remain in the DOM for existing code; empty ones take no space.
  return {controllers,destroy(){cleanups.reverse().forEach(fn=>fn());css.remove();}};
 }

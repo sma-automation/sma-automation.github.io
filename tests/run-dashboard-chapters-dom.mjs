@@ -25,7 +25,7 @@ function fixture(){
   page('shop',feature+'<iframe id="smaShopFrame" style="height:900px"></iframe><details id="smaProductDetails">Existing product editor</details>'),
   page('website','<div class="package-module-slot"></div>')
  ].join('');
- const {document:doc,window}=parseHTML('<html><head></head><body>'+html+'</body></html>');
+ const {document:doc,window}=parseHTML('<html><head></head><body><header><div class="topbar-title">overview</div></header>'+html+'</body></html>');
  window.HTMLElement.prototype.scrollIntoView=function(){};
  Object.defineProperty(window.HTMLInputElement.prototype,'checked',{configurable:true,get(){return this.hasAttribute('checked');},set(value){if(value){for(const radio of doc.querySelectorAll('input[type="radio"]'))if(radio.name===this.name)radio.removeAttribute('checked');this.setAttribute('checked','');}else this.removeAttribute('checked');}});
  const $=selector=>doc.querySelector(selector),history=$('.sma-history-switcher'),historyTabs=createChapterTabs({doc,id:'history',list:history,entries:[{key:'orders',button:history.children[0],panel:$('#orders')},{key:'texts',button:history.children[1],panel:$('#texts')}]});
@@ -49,6 +49,22 @@ await test('all twelve dashboard areas have tabs directly after their original h
  for(const root of f.doc.querySelectorAll('[data-sma-chapters]')){const nav=root.querySelector('.sma-chapters');assert.equal(nav.previousElementSibling.tagName,'H1');assert.equal(nav.querySelectorAll('[aria-selected=true]').length,1);}
  for(const [name,tabs] of f.view.controllers){for(const entry of tabs.entries){entry.button.click();assert.equal(tabs.selected,entry.key);if(entry.panel){assert.equal(entry.panel.hidden,false);assert.equal(tabs.entries.filter(e=>e.panel&&!e.panel.hidden).length,1);}}}
  f.destroy();
+});
+await test('only the repeated page title disappears across all areas and translated views',async()=>{
+ const f=fixture(), title=f.$('.topbar-title');
+ assert.equal(title.getAttribute('aria-level'),'1');
+ for(const root of f.doc.querySelectorAll('[data-sma-chapters]')){
+  const heading=root.querySelector('.page-head > h1');
+  title.textContent=heading.textContent;await tick();
+  assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),true,root.id);
+  assert.equal(f.doc.querySelectorAll('h1[data-sma-duplicate-heading]').length,1);
+ }
+ const heading=f.$('#page-publishing .page-head > h1');
+ heading.textContent='Publishing';title.textContent='Publishing';await tick();
+ assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),true);
+ assert.equal(f.$('#page-publishing [data-chapter="files"] h1').hasAttribute('data-sma-duplicate-heading'),false);
+ title.textContent='';await tick();assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),false);
+ f.destroy();assert.equal(title.hasAttribute('role'),false);
 });
 await test('switches preserve exact form nodes, unsaved values, listeners and generated results',()=>{
  const f=fixture(),tabs=f.view.controllers.get('content'),result=f.$('#contentOptimizerResult');
