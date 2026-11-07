@@ -15,7 +15,8 @@ function fixture({option=true,platform='youtube'}={}){
   return e;
  };
  const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform};let currentBinding={...binding},reloadPatch={};
- const scope={AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-000000000010'},fetch:async(_url,opts)=>{
+ let clock=Date.now(),timer;class TestDate extends Date{static now(){return clock;}}
+ const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-000000000010'},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
   if(req.action==='account')return {ok:true,json:async()=>({...common,stage:'account'})};
   return {ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
@@ -26,7 +27,18 @@ function fixture({option=true,platform='youtube'}={}){
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
  const open=async()=>{await $('preparePublicationOrder').handlers.click();$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';if(platform==='youtube'){$('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';}await dialog.querySelector('form').handlers.submit({preventDefault(){}});};
- return {$,doc,requests,approve,status,change,ready,open,patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+ return {$,doc,requests,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+}
+{
+ const t=fixture();await t.open();
+ t.patch({approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}});
+ await t.status.handlers.click();t.change('order-human-enabled');t.ready();eq(t.approve.disabled,false);
+ t.advance(61000);eq(t.approve.hidden,true);eq(t.approve.disabled,true);eq(t.$('order-final-consent').checked,false);
+ eq(t.$('order-human-review').hidden,true);
+ const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
+ eq(restart.hidden,false);await t.approve.handlers.click();eq(t.requests.some(r=>r.action==='approve'),false);
+ await restart.handlers.click();eq(t.requests.map(r=>r.action),['account','prepare','get','account']);
+ eq(t.$('order-visibility').value,'');eq(t.$('order-final-consent').checked,false);
 }
 for(const platform of ['youtube','tiktok']){
  const t=fixture({platform});await t.open();eq(t.$('order-human-review').hidden,false);eq(t.$('order-human-enabled').checked,false);eq(t.approve.disabled,true);eq(t.requests.map(x=>x.action),['account','prepare']);
