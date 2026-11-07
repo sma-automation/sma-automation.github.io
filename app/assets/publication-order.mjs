@@ -57,6 +57,27 @@ export function reviewConfirmation(order,values) {
   return result;
 }
 
+function sameStringList(a,b){
+  return Array.isArray(a)&&Array.isArray(b)&&a.every(v=>typeof v==='string')&&b.every(v=>typeof v==='string')&&
+    JSON.stringify([...a].sort())===JSON.stringify([...b].sort());
+}
+function sameOptions(a,b){
+  if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)||Array.isArray(b))return false;
+  return Object.keys(a).length===Object.keys(b).length&&Object.entries(a).every(([key,value])=>
+    Object.hasOwn(b,key)&&value===b[key]);
+}
+function sameAccountTerms(saved,current){
+  if(saved?.version!==1||current?.version!==1||saved.platform!==current.platform||
+     saved.target_id!==current.target_id||saved.display_name!==current.display_name||
+     !(Date.parse(current.expires_at)>Date.now())||!(Date.parse(saved.expires_at)>Date.now())||
+     !sameStringList(saved.permissions,current.permissions))return false;
+  if(saved.platform==='youtube')return sameOptions(saved.policy,current.policy);
+  if(saved.platform!=='tiktok'||!saved.policy||!current.policy)return false;
+  const {privacy_levels:oldLevels,...oldRules}=saved.policy;
+  const {privacy_levels:newLevels,...newRules}=current.policy;
+  return sameStringList(oldLevels,newLevels)&&sameOptions(oldRules,newRules);
+}
+
 function validatedOrder(result,id){
   if(result?.ok!==true||result.id!==id||result.can_upload!==false||result.can_publish!==false||
      !['preparing','prepared','approved','checking','blocked','checked','cancelled'].includes(result.state))throw Error(orderError());
@@ -312,8 +333,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   }
   function checkPreparation(stored,pending){
     checkBinding(stored);
-    if(!stored.choices||Object.keys(stored.choices).length!==Object.keys(pending.choices).length||
-       Object.entries(pending.choices).some(([key,value])=>stored.choices[key]!==value)){
+    if(!sameOptions(stored.choices,pending.choices)){
       throw Object.assign(Error('Die gespeicherten Portaleinstellungen weichen von deiner Auswahl ab.'),{selectionConflict:true});
     }
     const needsTarget=stored.target!=null||!['preparing','cancelled'].includes(stored.state);
@@ -430,6 +450,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       unchanged();
       if(sentApproval&&(!result.approved_at||['preparing','prepared'].includes(result.state)))throw Error();
       showOrder(result);
+      if(choices&&preparationToResume?.state==='prepared'&&preparationToResume.id===result.id&&
+         result.state==='prepared'&&!result.check_error&&!preparationEnded(result)){
+        notice.textContent='Deine Einstellungen stimmen mit dem vorbereiteten Auftrag überein. Die ursprüngliche Frist gilt weiter.';
+      }
     }catch(e){
       if(generation!==epoch)return;
       if(!sentApproval&&offerLinkRepair(e))return;
@@ -437,7 +461,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       const duplicate=e.rejected&&e.code==='DUPLICATE_PUBLICATION';
       preparationId=e.preparationId||preparationId;
       if(choices&&preparationId&&!e.rejected){
-        preparationToResume={id:preparationId,choices,targetId:account?.target?.id,persisted:order?.state==='preparing'};
+        if(preparationToResume?.id!==preparationId){
+          preparationToResume={id:preparationId,choices,targetId:account?.target?.id,persisted:order?.state==='preparing'};
+        }
         recovery=preparationToResume;
       }else if(sentApproval||duplicate){
         preparationToResume=null;
@@ -514,6 +540,23 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     recovery=null;
     return startPreparation(prior);
   });
+  async function prepareSelection(choices,generation){
+    const prior=preparationToResume;
+    if(prior?.state==='prepared'&&!prior.code&&!prior.canRestart&&account&&
+       prior.targetId===account.target.id&&sameOptions(prior.choices,choices)){
+      const stored=validatedOrder(await readStoredOrder(prior.id),prior.id);
+      if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
+      unchanged();
+      if(stored.state!=='prepared'||stored.check_error||
+         (!preparationEnded(stored)&&sameAccountTerms(stored.account_check,account.account_check)))return stored;
+      // Verify the old selection before writing a replacement for an expired or changed account check.
+      try{checkPreparation(stored,prior);checkStoredState(stored);}
+      catch(error){throw Object.assign(error,{preparationId:prior.id});}
+    }
+    // Once this write is sent, a lost response belongs to the new request.
+    if(prior&&(prior.persisted||!sameOptions(choices,prior.choices)))preparationToResume=null;
+    return client.prepare(context.binding,choices);
+  }
   controls.addEventListener('submit',event=>{event.preventDefault();if(working||order||recovery||!controls.reportValidity())return;
     if(commercial?.checked&&!fields.get('brand_content_toggle').checked&&!fields.get('brand_organic_toggle').checked){notice.textContent='Wähle eigene Marke, Werbung für Dritte oder beides.';return;}
     if(context.binding.platform==='tiktok'&&fields.get('brand_content_toggle').checked&&fields.get('visibility').value==='SELF_ONLY'){notice.textContent='Werbung für Dritte kann bei TikTok nicht mit „Nur ich“ veröffentlicht werden. Bitte wähle eine andere Sichtbarkeit.';return;}
@@ -524,11 +567,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
       unchanged();
       if(context.productId)await checkLink(generation);
-      // Once this write is sent, a lost response belongs to the new request.
-      if(preparationToResume&&(preparationToResume.persisted||JSON.stringify(choices)!==JSON.stringify(preparationToResume.choices))){
-        preparationToResume=null;
-      }
-      return client.prepare(context.binding,choices);
+      return prepareSelection(choices,generation);
     },{choices});
   });
   consent.addEventListener('change',()=>setWorking(working));
