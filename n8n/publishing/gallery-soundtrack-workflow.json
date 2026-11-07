@@ -1,0 +1,1879 @@
+{
+  "name": "SMA – Galerie – Automatische Vertonung V1",
+  "nodes": [
+    {
+      "id": "eff4ee8a-f55a-4a97-a0df-6ce90df1256b",
+      "name": "Galerieauftrag",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sma-gallery-soundtrack-v1",
+        "options": {
+          "responseData": "noData"
+        }
+      },
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "0bc30225-2c28-4d61-b36b-dd58fb0e8a70",
+      "name": "Ticket prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const b=$json.body,u=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;return b&&Object.keys(b).length===2&&u.test(b.id)&&u.test(b.ticket)?[{json:{id:b.id,ticket:b.ticket}}]:[];"
+      },
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "0dea9494-5e8e-411c-a2b2-71563739ab78",
+      "name": "Eigene Datei prüfen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_gallery_background_v1",
+        "jsonBody": "={{ {p_action:'take',p_input:$json } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "13e52fa5-714f-4be8-ac0f-a461832acdef",
+      "name": "Auftrag verfügbar?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eed3dd9e-f89a-4fee-9882-5435a53f8f13",
+              "leftValue": "={{ $json.ok === true && $json.can_publish === false }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "id": "9cf803e1-ec19-4fe2-afba-5969dd67b62d",
+      "name": "Synthetischer Prüflauf?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c0177008-6445-4aee-afa7-56a8f8447acc",
+              "leftValue": "={{ $json.probe === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        770,
+        0
+      ]
+    },
+    {
+      "id": "3494a20a-8a60-4ad8-83a3-502cd7facf6f",
+      "name": "Kundenordner zuordnen",
+      "type": "n8n-nodes-base.dataTable",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "id": "6ed0f3ab-20a7-49bd-b806-46c225e1cffb",
+      "name": "Ordner prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\nreturn [{json:verifiedFolders($input.all().map(x=>x.json),$('Eigene Datei prüfen').first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "687d1026-cbab-457d-bed8-4d64178222ea",
+      "name": "Dateimetadaten lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Eigene Datei prüfen\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,parents,trashed,version,size,md5Checksum,sha256Checksum,capabilities(canDownload)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "e11e3226-8ae9-43db-9408-a451dd86397a",
+      "name": "Dateistand prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst {createHash}=require('crypto');\nfunction editorSourceMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');\n const revision=context.asset_revision;\n // Drive can finish indexing metadata after upload without changing file bytes.\n // Keep the requested catalogue revision bound by both owner checks; bind bytes by checksum.\n const same=revision.startsWith('sha256:')?revision.split(':')[1]===file.sha256Checksum:revision.startsWith('md5:')?revision.split(':')[1]===file.md5Checksum:revision==='version:'+file.version;\n if(!same)throw Error('FILE_CHANGED');\n const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;\n if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');\n return {sha256,md5,size_bytes:Number(file.size)};\n}\nfunction editorSourceBytes(bytes,context,metadata){\n if(!Buffer.isBuffer(bytes)||bytes.length<12||bytes.length>24000000||bytes.length!==metadata.size_bytes)throw Error('SOURCE_UNVERIFIED');\n const sha256=createHash('sha256').update(bytes).digest('hex');\n if(metadata.sha256&&sha256!==metadata.sha256||metadata.md5&&createHash('md5').update(bytes).digest('hex')!==metadata.md5)throw Error('FILE_CHANGED');\n const magic=context.mime_type==='video/mp4'?bytes.toString('ascii',4,8)==='ftyp':context.mime_type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:context.mime_type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):context.mime_type==='image/webp'?bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP':false;\n if(!magic)throw Error('SOURCE_UNVERIFIED');\n return {ok:true,can_publish:false,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:context.mime_type,size_bytes:bytes.length,sha256,data_base64:bytes.toString('base64')};\n}\n\nreturn [{json:editorSourceMetadata($input.first().json,$('Eigene Datei prüfen').first().json,$('Ordner prüfen').first().json.folders)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "id": "414a4a1e-8eda-4024-8e35-3f43efde3718",
+      "name": "Originaldatei laden",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Eigene Datei prüfen\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "alt",
+              "value": "media"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "4f78d362-be42-44b4-a5dc-0c19d8ab3ca7",
+      "name": "Tonspur prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst {createHash}=require('crypto');\nfunction editorSourceMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');\n const revision=context.asset_revision;\n // Drive can finish indexing metadata after upload without changing file bytes.\n // Keep the requested catalogue revision bound by both owner checks; bind bytes by checksum.\n const same=revision.startsWith('sha256:')?revision.split(':')[1]===file.sha256Checksum:revision.startsWith('md5:')?revision.split(':')[1]===file.md5Checksum:revision==='version:'+file.version;\n if(!same)throw Error('FILE_CHANGED');\n const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;\n if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');\n return {sha256,md5,size_bytes:Number(file.size)};\n}\nfunction editorSourceBytes(bytes,context,metadata){\n if(!Buffer.isBuffer(bytes)||bytes.length<12||bytes.length>24000000||bytes.length!==metadata.size_bytes)throw Error('SOURCE_UNVERIFIED');\n const sha256=createHash('sha256').update(bytes).digest('hex');\n if(metadata.sha256&&sha256!==metadata.sha256||metadata.md5&&createHash('md5').update(bytes).digest('hex')!==metadata.md5)throw Error('FILE_CHANGED');\n const magic=context.mime_type==='video/mp4'?bytes.toString('ascii',4,8)==='ftyp':context.mime_type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:context.mime_type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):context.mime_type==='image/webp'?bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP':false;\n if(!magic)throw Error('SOURCE_UNVERIFIED');\n return {ok:true,can_publish:false,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:context.mime_type,size_bytes:bytes.length,sha256,data_base64:bytes.toString('base64')};\n}\n\n'use strict';\n// Classic, self-contained MP4. Preserve the entire video track and every original\n// media offset. Add only the AAC samples that the movie's presentation requires.\nconst LIMIT=24000000, RATE=48000, PRIMING=1024;\nfunction invalid(){throw Error('BACKGROUND_UNSUPPORTED');}\nfunction boxes(buf,start=0,end=buf.length){\n const result=[];\n while(start<end){\n  if(result.length>=10000||end-start<8)invalid();\n  const size=buf.readUInt32BE(start),type=buf.toString('latin1',start+4,start+8);\n  if(size<8||size>end-start)invalid();\n  result.push({type,start,end:start+size,body:start+8});start+=size;\n }\n return result;\n}\nfunction single(list,type){const found=list.filter(b=>b.type===type);if(found.length!==1)invalid();return found[0];}\nfunction children(buf,b){return boxes(buf,b.body,b.end);}\nfunction inside(buf,b,offset,length){if(offset<0||b.body+offset+length>b.end)invalid();return b.body+offset;}\nfunction u32(n){const b=Buffer.alloc(4);b.writeUInt32BE(n);return b;}\nfunction box(type,...parts){return Buffer.concat([u32(8+parts.reduce((n,p)=>n+p.length,0)),Buffer.from(type,'ascii'),...parts]);}\nfunction full(type,flags,...parts){return box(type,u32(flags),...parts);}\nfunction timing(buf,b){\n const v=buf[inside(buf,b,0,1)];\n if(v!==0&&v!==1)invalid();\n const scale=buf.readUInt32BE(inside(buf,b,v?20:12,4));\n const ticks=v?Number(buf.readBigUInt64BE(inside(buf,b,24,8))):buf.readUInt32BE(inside(buf,b,16,4));\n if(!scale||!Number.isSafeInteger(ticks)||ticks<1||ticks>0xffffffff||ticks/scale>60.001)invalid();\n return {scale,ticks};\n}\nfunction inspectVideo(buf){\n if(!Buffer.isBuffer(buf)||buf.length<12||buf.length>LIMIT)invalid();\n const top=boxes(buf);if(top[0]?.type!=='ftyp'||top.some(b=>!['ftyp','moov','mdat','free','skip','wide'].includes(b.type)))invalid();\n const moov=single(top,'moov'),m=children(buf,moov);\n if(m.some(b=>b.type==='mvex'))invalid();\n const tracks=m.filter(b=>b.type==='trak').map(trak=>{\n  const t=children(buf,trak),mdia=children(buf,single(t,'mdia')),handler=single(mdia,'hdlr');\n  return {t,mdia,kind:buf.toString('ascii',inside(buf,handler,8,4),handler.body+12)};\n });\n if(tracks.some(t=>t.kind==='soun'))return {state:'audio_present'};\n if(tracks.length!==1||tracks[0].kind!=='vide')invalid();\n const mvhd=single(m,'mvhd'),clock=timing(buf,mvhd),track=tracks[0],tkhd=single(track.t,'tkhd');\n const version=buf[inside(buf,tkhd,0,1)];if(version>1)invalid();\n const trackId=buf.readUInt32BE(inside(buf,tkhd,version?20:12,4));\n if(!trackId||trackId>=0xfffffffd)invalid();\n const minf=children(buf,single(track.mdia,'minf')),stbl=children(buf,single(minf,'stbl'));\n const dref=single(children(buf,single(minf,'dinf')),'dref');\n const refs=boxes(buf,inside(buf,dref,8,0),dref.end);\n if(refs.length!==1||refs[0].type!=='url '||buf.readUInt32BE(inside(buf,refs[0],0,4))!==1)invalid();\n const stsd=single(stbl,'stsd'),desc=boxes(buf,inside(buf,stsd,8,0),stsd.end);\n if(desc.length!==1||!['avc1','avc3','hvc1','hev1'].includes(desc[0].type))invalid();\n const offsets=stbl.filter(b=>['stco','co64'].includes(b.type));\n if(offsets.length!==1)invalid();\n const o=offsets[0],count=buf.readUInt32BE(inside(buf,o,4,4)),width=o.type==='stco'?4:8;\n const data=top.filter(b=>b.type==='mdat');\n if(!count||count>100000||data.length!==1||o.end-o.body!==8+width*count)invalid();\n for(let i=0;i<count;i++){\n  const pos=o.body+8+width*i;\n  const at=width===4?buf.readUInt32BE(pos):Number(buf.readBigUInt64BE(pos));\n  if(at<data[0].body||at>=data[0].end)invalid();\n }\n return {state:'silent',moov,mvhd,clock,trackId:trackId+1};\n}\nfunction aacSamples(audio,count){\n if(!Buffer.isBuffer(audio)||audio.length>1500000||count>2820)invalid();\n const frames=[];let offset=0;\n while(frames.length<count){\n  if(offset+7>audio.length)invalid();\n  const h=audio.subarray(offset,offset+7);\n  const length=((h[3]&3)<<11)|(h[4]<<3)|(h[5]>>5);\n  if(h[0]!==255||h[1]!==0xf1||h[2]>>6!==1||((h[2]>>2)&15)!==3||\n     (((h[2]&1)<<2)|(h[3]>>6))!==2||(h[6]&3)!==0||length<=7||offset+length>audio.length)invalid();\n  frames.push(audio.subarray(offset+7,offset+length));offset+=length;\n }\n return frames;\n}\nfunction audioTrack(id,ticks,samples,offset){\n const matrix=Buffer.from('000100000000000000000000000000000001000000000000000000000000000040000000','hex');\n const tkhd=full('tkhd',3,Buffer.alloc(8),u32(id),u32(0),u32(ticks),Buffer.alloc(12),Buffer.from([1,0,0,0]),matrix,Buffer.alloc(8));\n const edts=box('edts',full('elst',0,u32(1),u32(ticks),u32(PRIMING),u32(65536)));\n const mdhd=full('mdhd',0,Buffer.alloc(8),u32(RATE),u32(samples.length*1024),Buffer.from([0x55,0xc4,0,0]));\n const hdlr=full('hdlr',0,u32(0),Buffer.from('soun'),Buffer.alloc(12),Buffer.from('SMA Audio\\0'));\n // MPEG-4 AudioSpecificConfig 0x1190 = AAC-LC, 48 kHz, two channels.\n const esds=full('esds',0,Buffer.from('0319000100041140150000000001f4000001f40005021190060102','hex'));\n const entry=Buffer.alloc(28);entry.writeUInt16BE(1,6);entry.writeUInt16BE(2,16);entry.writeUInt16BE(16,18);entry.writeUInt32BE(RATE*65536,24);\n const sizes=Buffer.alloc(samples.length*4);samples.forEach((s,i)=>sizes.writeUInt32BE(s.length,i*4));\n const stbl=box('stbl',full('stsd',0,u32(1),box('mp4a',entry,esds)),full('stts',0,u32(1),u32(samples.length),u32(1024)),\n  full('stsc',0,u32(1),u32(1),u32(samples.length),u32(1)),full('stsz',0,u32(0),u32(samples.length),sizes),full('stco',0,u32(1),u32(offset)));\n const dinf=box('dinf',full('dref',0,u32(1),full('url ',1)));\n return box('trak',tkhd,edts,box('mdia',mdhd,hdlr,box('minf',full('smhd',0,u32(0)),dinf,stbl)));\n}\nfunction soundtrackMP4(video,audio){\n const v=inspectVideo(video);if(v.state!=='silent')return v;\n const frames=aacSamples(audio,Math.ceil((v.clock.ticks/v.clock.scale*RATE+PRIMING)/1024));\n const track=audioTrack(v.trackId,v.clock.ticks,frames,video.length+8);\n const header=Buffer.from(video.subarray(v.moov.body,v.moov.end));\n header.writeUInt32BE(v.trackId+1,v.mvhd.end-v.moov.body-4);\n const moov=box('moov',header,track),audioData=box('mdat',...frames);\n if(video.length+audioData.length+moov.length>LIMIT)invalid();\n const output=Buffer.concat([video,audioData,moov]);\n // Videodata stays in place, even with fast-start sources. Reclaim the old\n // metadata area as a free box; only the new movie header remains active.\n output.write('free',v.moov.start+4,'ascii');output.fill(0,v.moov.body,v.moov.end);\n return {state:'rendered',bytes:output};\n}\n\nconst bytes=await this.helpers.getBinaryDataBuffer(0,'data');\nconst checked=editorSourceBytes(bytes,$('Eigene Datei prüfen').first().json,$('Dateistand prüfen').first().json);\nlet state;\ntry{state=inspectVideo(bytes).state;}catch(e){if(e.message!=='BACKGROUND_UNSUPPORTED')throw e;state='fallback';}\nreturn [{json:{state,...(state==='silent'?{source:checked.data_base64}:{})}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "id": "ea8fe33a-892d-4885-a9bb-406c900caf20",
+      "name": "Musik benötigt?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eae8a10e-61e1-4ad8-8698-6f13547ced7c",
+              "leftValue": "={{ $json.state === 'silent' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "id": "51cb1637-0139-41d2-958c-1a14d0bb2c1d",
+      "name": "Tonentscheidung speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_gallery_background_v1",
+        "jsonBody": "={{ {p_action:'audio_present',p_input:{id:$('Eigene Datei prüfen').first().json.id,lease:$('Eigene Datei prüfen').first().json.lease} } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        280
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "ff163d9e-a8cf-4eee-8aef-571429a3cc1f",
+      "name": "Browser übernehmen lassen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_gallery_background_v1",
+        "jsonBody": "={{ {p_action:'fallback',p_input:{id:$('Eigene Datei prüfen').first().json.id,lease:$('Eigene Datei prüfen').first().json.lease} } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        500
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "aeef5c23-dbef-497e-8755-4eb48e545505",
+      "name": "Ton vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d8470be-cd3e-4fbf-95cf-bd128ecd9509",
+              "leftValue": "={{ $json.state === 'audio_present' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "id": "5ced2ded-9b90-43c0-a65b-e892568aa263",
+      "name": "SMA-Musik laden",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://bnvnmdxosbnuzedokqgh.supabase.co/storage/v1/object/authenticated/sma-katalog/' + $('Eigene Datei prüfen').first().json.audio_path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        -120
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "361f6cf7-ff01-4c59-b49d-b1454edcb51e",
+      "name": "Musikfassung erstellen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\n// Classic, self-contained MP4. Preserve the entire video track and every original\n// media offset. Add only the AAC samples that the movie's presentation requires.\nconst LIMIT=24000000, RATE=48000, PRIMING=1024;\nfunction invalid(){throw Error('BACKGROUND_UNSUPPORTED');}\nfunction boxes(buf,start=0,end=buf.length){\n const result=[];\n while(start<end){\n  if(result.length>=10000||end-start<8)invalid();\n  const size=buf.readUInt32BE(start),type=buf.toString('latin1',start+4,start+8);\n  if(size<8||size>end-start)invalid();\n  result.push({type,start,end:start+size,body:start+8});start+=size;\n }\n return result;\n}\nfunction single(list,type){const found=list.filter(b=>b.type===type);if(found.length!==1)invalid();return found[0];}\nfunction children(buf,b){return boxes(buf,b.body,b.end);}\nfunction inside(buf,b,offset,length){if(offset<0||b.body+offset+length>b.end)invalid();return b.body+offset;}\nfunction u32(n){const b=Buffer.alloc(4);b.writeUInt32BE(n);return b;}\nfunction box(type,...parts){return Buffer.concat([u32(8+parts.reduce((n,p)=>n+p.length,0)),Buffer.from(type,'ascii'),...parts]);}\nfunction full(type,flags,...parts){return box(type,u32(flags),...parts);}\nfunction timing(buf,b){\n const v=buf[inside(buf,b,0,1)];\n if(v!==0&&v!==1)invalid();\n const scale=buf.readUInt32BE(inside(buf,b,v?20:12,4));\n const ticks=v?Number(buf.readBigUInt64BE(inside(buf,b,24,8))):buf.readUInt32BE(inside(buf,b,16,4));\n if(!scale||!Number.isSafeInteger(ticks)||ticks<1||ticks>0xffffffff||ticks/scale>60.001)invalid();\n return {scale,ticks};\n}\nfunction inspectVideo(buf){\n if(!Buffer.isBuffer(buf)||buf.length<12||buf.length>LIMIT)invalid();\n const top=boxes(buf);if(top[0]?.type!=='ftyp'||top.some(b=>!['ftyp','moov','mdat','free','skip','wide'].includes(b.type)))invalid();\n const moov=single(top,'moov'),m=children(buf,moov);\n if(m.some(b=>b.type==='mvex'))invalid();\n const tracks=m.filter(b=>b.type==='trak').map(trak=>{\n  const t=children(buf,trak),mdia=children(buf,single(t,'mdia')),handler=single(mdia,'hdlr');\n  return {t,mdia,kind:buf.toString('ascii',inside(buf,handler,8,4),handler.body+12)};\n });\n if(tracks.some(t=>t.kind==='soun'))return {state:'audio_present'};\n if(tracks.length!==1||tracks[0].kind!=='vide')invalid();\n const mvhd=single(m,'mvhd'),clock=timing(buf,mvhd),track=tracks[0],tkhd=single(track.t,'tkhd');\n const version=buf[inside(buf,tkhd,0,1)];if(version>1)invalid();\n const trackId=buf.readUInt32BE(inside(buf,tkhd,version?20:12,4));\n if(!trackId||trackId>=0xfffffffd)invalid();\n const minf=children(buf,single(track.mdia,'minf')),stbl=children(buf,single(minf,'stbl'));\n const dref=single(children(buf,single(minf,'dinf')),'dref');\n const refs=boxes(buf,inside(buf,dref,8,0),dref.end);\n if(refs.length!==1||refs[0].type!=='url '||buf.readUInt32BE(inside(buf,refs[0],0,4))!==1)invalid();\n const stsd=single(stbl,'stsd'),desc=boxes(buf,inside(buf,stsd,8,0),stsd.end);\n if(desc.length!==1||!['avc1','avc3','hvc1','hev1'].includes(desc[0].type))invalid();\n const offsets=stbl.filter(b=>['stco','co64'].includes(b.type));\n if(offsets.length!==1)invalid();\n const o=offsets[0],count=buf.readUInt32BE(inside(buf,o,4,4)),width=o.type==='stco'?4:8;\n const data=top.filter(b=>b.type==='mdat');\n if(!count||count>100000||data.length!==1||o.end-o.body!==8+width*count)invalid();\n for(let i=0;i<count;i++){\n  const pos=o.body+8+width*i;\n  const at=width===4?buf.readUInt32BE(pos):Number(buf.readBigUInt64BE(pos));\n  if(at<data[0].body||at>=data[0].end)invalid();\n }\n return {state:'silent',moov,mvhd,clock,trackId:trackId+1};\n}\nfunction aacSamples(audio,count){\n if(!Buffer.isBuffer(audio)||audio.length>1500000||count>2820)invalid();\n const frames=[];let offset=0;\n while(frames.length<count){\n  if(offset+7>audio.length)invalid();\n  const h=audio.subarray(offset,offset+7);\n  const length=((h[3]&3)<<11)|(h[4]<<3)|(h[5]>>5);\n  if(h[0]!==255||h[1]!==0xf1||h[2]>>6!==1||((h[2]>>2)&15)!==3||\n     (((h[2]&1)<<2)|(h[3]>>6))!==2||(h[6]&3)!==0||length<=7||offset+length>audio.length)invalid();\n  frames.push(audio.subarray(offset+7,offset+length));offset+=length;\n }\n return frames;\n}\nfunction audioTrack(id,ticks,samples,offset){\n const matrix=Buffer.from('000100000000000000000000000000000001000000000000000000000000000040000000','hex');\n const tkhd=full('tkhd',3,Buffer.alloc(8),u32(id),u32(0),u32(ticks),Buffer.alloc(12),Buffer.from([1,0,0,0]),matrix,Buffer.alloc(8));\n const edts=box('edts',full('elst',0,u32(1),u32(ticks),u32(PRIMING),u32(65536)));\n const mdhd=full('mdhd',0,Buffer.alloc(8),u32(RATE),u32(samples.length*1024),Buffer.from([0x55,0xc4,0,0]));\n const hdlr=full('hdlr',0,u32(0),Buffer.from('soun'),Buffer.alloc(12),Buffer.from('SMA Audio\\0'));\n // MPEG-4 AudioSpecificConfig 0x1190 = AAC-LC, 48 kHz, two channels.\n const esds=full('esds',0,Buffer.from('0319000100041140150000000001f4000001f40005021190060102','hex'));\n const entry=Buffer.alloc(28);entry.writeUInt16BE(1,6);entry.writeUInt16BE(2,16);entry.writeUInt16BE(16,18);entry.writeUInt32BE(RATE*65536,24);\n const sizes=Buffer.alloc(samples.length*4);samples.forEach((s,i)=>sizes.writeUInt32BE(s.length,i*4));\n const stbl=box('stbl',full('stsd',0,u32(1),box('mp4a',entry,esds)),full('stts',0,u32(1),u32(samples.length),u32(1024)),\n  full('stsc',0,u32(1),u32(1),u32(samples.length),u32(1)),full('stsz',0,u32(0),u32(samples.length),sizes),full('stco',0,u32(1),u32(offset)));\n const dinf=box('dinf',full('dref',0,u32(1),full('url ',1)));\n return box('trak',tkhd,edts,box('mdia',mdhd,hdlr,box('minf',full('smhd',0,u32(0)),dinf,stbl)));\n}\nfunction soundtrackMP4(video,audio){\n const v=inspectVideo(video);if(v.state!=='silent')return v;\n const frames=aacSamples(audio,Math.ceil((v.clock.ticks/v.clock.scale*RATE+PRIMING)/1024));\n const track=audioTrack(v.trackId,v.clock.ticks,frames,video.length+8);\n const header=Buffer.from(video.subarray(v.moov.body,v.moov.end));\n header.writeUInt32BE(v.trackId+1,v.mvhd.end-v.moov.body-4);\n const moov=box('moov',header,track),audioData=box('mdat',...frames);\n if(video.length+audioData.length+moov.length>LIMIT)invalid();\n const output=Buffer.concat([video,audioData,moov]);\n // Videodata stays in place, even with fast-start sources. Reclaim the old\n // metadata area as a free box; only the new movie header remains active.\n output.write('free',v.moov.start+4,'ascii');output.fill(0,v.moov.body,v.moov.end);\n return {state:'rendered',bytes:output};\n}\n\nconst {createHash}=require('crypto'),sum=b=>createHash('sha256').update(b).digest('hex');\nconst a=await this.helpers.getBinaryDataBuffer(0,'data'),c=$('Eigene Datei prüfen').first().json;\nif(!c.audio_path.endsWith('/'+sum(a)+'.aac'))throw Error('MUSIC_CHANGED');\nlet r;try{r=soundtrackMP4(Buffer.from($('Tonspur prüfen').first().json.source,'base64'),a);}catch(e){if(e.message==='BACKGROUND_UNSUPPORTED')return [{json:{fallback:true}}];throw e;}\nif(r.state!=='rendered')throw Error('RENDER_FAILED');\nreturn [{json:{sha256:sum(r.bytes),size_bytes:r.bytes.length},binary:{data:await this.helpers.prepareBinaryData(r.bytes,'music.mp4','video/mp4')}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -120
+      ]
+    },
+    {
+      "id": "e36632a1-331a-4800-84dc-5390e922602f",
+      "name": "Fassung bereit?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "470aebea-5b68-4c30-81af-d810a3fbf77c",
+              "leftValue": "={{ !!$json.sha256 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "id": "c788b834-f7c4-4db3-b323-a27d1a40b441",
+      "name": "Dateistand erneut lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Eigene Datei prüfen\").first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,parents,trashed,version,size,md5Checksum,sha256Checksum,capabilities(canDownload)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "229c2de7-850d-4ebb-a10d-1d206372eab0",
+      "name": "Quelle erneut prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst {createHash}=require('crypto');\nfunction editorSourceMetadata(file,context,folders){\n if(context?.ok!==true||file?.id!==context.drive_file_id||file.trashed!==false||file.capabilities?.canDownload!==true||file.mimeType!==context.mime_type||String(file.size)!==String(context.size_bytes)||!Array.isArray(file.parents)||!file.parents.some(p=>folders.includes(p))||!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mimeType)||!(Number(file.size)>0&&Number(file.size)<=24000000))throw Error('FILE_UNAVAILABLE');\n const revision=context.asset_revision;\n // Drive can finish indexing metadata after upload without changing file bytes.\n // Keep the requested catalogue revision bound by both owner checks; bind bytes by checksum.\n const same=revision.startsWith('sha256:')?revision.split(':')[1]===file.sha256Checksum:revision.startsWith('md5:')?revision.split(':')[1]===file.md5Checksum:revision==='version:'+file.version;\n if(!same)throw Error('FILE_CHANGED');\n const sha256=/^[a-f0-9]{64}$/.test(file.sha256Checksum||'')?file.sha256Checksum:null,md5=/^[a-f0-9]{32}$/.test(file.md5Checksum||'')?file.md5Checksum:null;\n if(!sha256&&!md5)throw Error('SOURCE_UNVERIFIED');\n return {sha256,md5,size_bytes:Number(file.size)};\n}\nfunction editorSourceBytes(bytes,context,metadata){\n if(!Buffer.isBuffer(bytes)||bytes.length<12||bytes.length>24000000||bytes.length!==metadata.size_bytes)throw Error('SOURCE_UNVERIFIED');\n const sha256=createHash('sha256').update(bytes).digest('hex');\n if(metadata.sha256&&sha256!==metadata.sha256||metadata.md5&&createHash('md5').update(bytes).digest('hex')!==metadata.md5)throw Error('FILE_CHANGED');\n const magic=context.mime_type==='video/mp4'?bytes.toString('ascii',4,8)==='ftyp':context.mime_type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:context.mime_type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):context.mime_type==='image/webp'?bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP':false;\n if(!magic)throw Error('SOURCE_UNVERIFIED');\n return {ok:true,can_publish:false,asset_id:context.asset_id,asset_revision:context.asset_revision,media_kind:context.media_kind,mime_type:context.mime_type,size_bytes:bytes.length,sha256,data_base64:bytes.toString('base64')};\n}\n\nconst after=editorSourceMetadata($json,$('Eigene Datei prüfen').first().json,$('Ordner prüfen').first().json.folders);if(JSON.stringify(after)!==JSON.stringify($('Dateistand prüfen').first().json))throw Error('FILE_CHANGED');return [{json:{ok:true}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        3300,
+        0
+      ]
+    },
+    {
+      "id": "19e69b66-1f21-439f-8b60-f4c2835e724f",
+      "name": "Upload reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_gallery_background_v1",
+        "jsonBody": "={{ {p_action:'reserve',p_input:{id:$('Eigene Datei prüfen').first().json.id,lease:$('Eigene Datei prüfen').first().json.lease,sha256:$('Musikfassung erstellen').first().json.sha256,size_bytes:$('Musikfassung erstellen').first().json.size_bytes} } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        3520,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "a1799368-4fbc-4b20-a970-f3e07d0d8a23",
+      "name": "Schreibrecht prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if(!$json.ok||$json.can_publish!==false)throw Error('UPLOAD_UNAVAILABLE');return $json.status==='completed'?[]:$input.all();"
+      },
+      "typeVersion": 2,
+      "position": [
+        3740,
+        0
+      ]
+    },
+    {
+      "id": "a5fa9c65-b00d-4572-9353-4158c0d55b21",
+      "name": "Entwurfsordner prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nreturn [{json:uploadFolder($input.all().map(x=>x.json),$(\"Upload reservieren\").first().json)}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        4180,
+        0
+      ]
+    },
+    {
+      "id": "cf711f61-f752-4bd2-af32-cbb0b3ad4f7a",
+      "name": "Zielkonto erneut lesen",
+      "type": "n8n-nodes-base.dataTable",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "oVIgtuR95fFUbMrN",
+          "mode": "list",
+          "cachedResultName": "SMA_Kunden"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "kunde_id",
+              "keyValue": "={{ $(\"Upload reservieren\").first().json.n8n_kunde_id }}"
+            },
+            {
+              "keyName": "kunde_email",
+              "keyValue": "={{ $(\"Upload reservieren\").first().json.kunde_email }}"
+            },
+            {
+              "keyName": "zugang_aktiv",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 2
+      },
+      "typeVersion": 1,
+      "position": [
+        3960,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "id": "6f03b29e-067f-49fb-85c4-4748210d5867",
+      "name": "Neuer Upload?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e0773ec4-179e-469e-8143-2ac213c2636f",
+              "leftValue": "={{ $('Upload reservieren').first().json.initialize === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        4400,
+        0
+      ]
+    },
+    {
+      "id": "32cfc224-35f6-4d13-b2ab-6f12cb655302",
+      "name": "Zielordner lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\"+$(\"Entwurfsordner prüfen\").first().json.folder_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,mimeType,trashed,capabilities(canAddChildren)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        4620,
+        -160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "95c5cf12-a9cc-4e27-a950-3799167059b4",
+      "name": "Schreibziel bestätigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const f=$input.first().json;if(f.id!==$(\"Entwurfsordner prüfen\").first().json.folder_id||f.mimeType!==\"application/vnd.google-apps.folder\"||f.trashed!==false||f.capabilities?.canAddChildren!==true)throw Error(\"FOLDER_UNAVAILABLE\");return [{json:{ok:true}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        4840,
+        -160
+      ]
+    },
+    {
+      "id": "777f99d6-cb92-4ad8-a62b-edb050b016ae",
+      "name": "Datei-ID reservieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files/generateIds",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "count",
+              "value": "1"
+            },
+            {
+              "name": "space",
+              "value": "drive"
+            },
+            {
+              "name": "type",
+              "value": "files"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        5060,
+        -160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "6ca766dc-d9fd-453e-abef-0665402b3776",
+      "name": "Datei-ID prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const ids=$input.first().json.ids;if(!Array.isArray(ids)||ids.length!==1||!/^[A-Za-z0-9_-]{10,200}$/.test(ids[0]))throw Error(\"UPLOAD_UNAVAILABLE\");return [{json:{drive_file_id:ids[0]}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        5280,
+        -160
+      ]
+    },
+    {
+      "id": "c3bf9d3c-6223-48e0-a80d-13e06bda645a",
+      "name": "Übertragung vorbereiten",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Upload-Content-Type",
+              "value": "={{ $(\"Upload reservieren\").first().json.mime_type }}"
+            },
+            {
+              "name": "X-Upload-Content-Length",
+              "value": "={{ String($(\"Upload reservieren\").first().json.size_bytes) }}"
+            },
+            {
+              "name": "Origin",
+              "value": "https://sma-automation.com"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {id:$json.drive_file_id,name:$(\"Upload reservieren\").first().json.name,mimeType:$(\"Upload reservieren\").first().json.mime_type,parents:[$(\"Entwurfsordner prüfen\").first().json.folder_id],appProperties:{sma_upload_id:$(\"Upload reservieren\").first().json.upload_id,sma_draft:\"true\"} } }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        5500,
+        -160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "6afbef0d-88e3-45fa-9ef6-c1567793e285",
+      "name": "Sitzung binden",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nconst c=$(\"Upload reservieren\").first().json;return [{json:{p_id:c.upload_id,p_lease_id:c.lease_id,p_drive_file_id:$(\"Datei-ID prüfen\").first().json.drive_file_id,p_folder_id:$(\"Entwurfsordner prüfen\").first().json.folder_id,p_upload_url:uploadSession($input.first().json)}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        5720,
+        -160
+      ]
+    },
+    {
+      "id": "3fa71dea-b82b-4e4f-b658-db0d0009837c",
+      "name": "Uploadsitzung speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_upload_bind_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        5940,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "1cbc36c0-edc1-44f8-8379-970b726438fd",
+      "name": "Uploadziel binden",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nconst u=$('Upload reservieren').first().json,d=$('Entwurfsordner prüfen').first().json.folder_id;\nif($json.ok!==true||u.initialize!==true&&u.folder_id!==d)throw Error('FOLDER_UNAVAILABLE');\nconst target=checkedUploadURL(u.initialize?$json.upload_url:u.upload_url);\nconst driveId=u.initialize?$('Datei-ID prüfen').first().json.drive_file_id:u.drive_file_id;\nif(!/^[A-Za-z0-9_-]{10,200}$/.test(driveId))throw Error('UPLOAD_UNAVAILABLE');\nreturn [{json:{target,drive_file_id:driveId,folder_id:d}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        6160,
+        0
+      ]
+    },
+    {
+      "id": "9e45ac30-48c3-432a-9c79-71044114706b",
+      "name": "Übertragung bestätigen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_gallery_background_v1",
+        "jsonBody": "={{ {p_action:'check',p_input:{id:$('Eigene Datei prüfen').first().json.id,lease:$('Eigene Datei prüfen').first().json.lease} } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        6380,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "8fae8169-31a8-4f46-8472-f38a626615ea",
+      "name": "Kontoprüfung bestätigen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.ok!==true||$json.asset_revision!==$('Eigene Datei prüfen').first().json.asset_revision)throw Error('FILE_CHANGED');return $input.all();"
+      },
+      "typeVersion": 2,
+      "position": [
+        6490,
+        0
+      ]
+    },
+    {
+      "id": "3630f076-61fa-4d68-9b7d-241b4543a96b",
+      "name": "Übertragungsstand lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Uploadziel binden').first().json.target }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Range",
+              "value": "={{ 'bytes */'+$('Musikfassung erstellen').first().json.size_bytes }}"
+            },
+            {
+              "name": "Content-Length",
+              "value": "0"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        6540,
+        0
+      ]
+    },
+    {
+      "id": "de87dda0-1b74-44d5-a5c7-84fcc579b09e",
+      "name": "Restliche Bytes bestimmen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "\nconst n=$('Musikfassung erstellen').first().json.size_bytes;\nif([200,201,404,410].includes($json.statusCode))return [{json:{verify:true}}];\nif($json.statusCode!==308)throw Error('UPLOAD_UNAVAILABLE');\nconst range=$json.headers?.range;\nif(range!==undefined&&!/^bytes=0-[0-9]+$/.test(range))throw Error('UPLOAD_INCOMPLETE');\nconst offset=range===undefined?0:Number(range.slice(8))+1;\nif(!Number.isSafeInteger(offset)||offset<0||offset>=n)throw Error('UPLOAD_INCOMPLETE');\nreturn [{json:{offset},binary:$('Musikfassung erstellen').first().binary}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        6560,
+        0
+      ]
+    },
+    {
+      "id": "eaee3ad5-bc8e-407c-b18a-dd25f9e849a3",
+      "name": "Bytes benötigt?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c7140ba3-b33c-4767-b724-687ab68cf876",
+              "leftValue": "={{ $json.verify !== true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        6580,
+        0
+      ]
+    },
+    {
+      "id": "43968123-f9c1-499d-9fc1-8236ab90b7d4",
+      "name": "Bytes übernehmen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "\nconst offset=$json.offset,source=await this.helpers.getBinaryDataBuffer(0,'data');\nconst u=$('Uploadziel binden').first().json;\nreturn [{json:{...u,range:'bytes '+offset+'-'+(source.length-1)+'/'+source.length},\n binary:{data:offset===0?$input.first().binary.data:await this.helpers.prepareBinaryData(source.subarray(offset),'music.mp4','video/mp4')}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        6600,
+        0
+      ]
+    },
+    {
+      "id": "3e0be32e-1200-487c-be5d-0503adc4ed7a",
+      "name": "Musikfassung übertragen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.target }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "video/mp4"
+            },
+            {
+              "name": "Content-Range",
+              "value": "={{ $json.range }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 150000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        6820,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4841913d-8937-478f-8410-a32c14232d0f",
+      "name": "Hochgeladene Datei prüfen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/'+$('Uploadziel binden').first().json.drive_file_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,appProperties,imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "typeVersion": 4.5,
+      "position": [
+        7040,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VcVRAhAAnk2YcHNE",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "id": "c8ab7b74-751a-4dd9-8ec5-ed7a8747c25c",
+      "name": "Datei zuordnen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\nconst DRIVE_ID=/^[A-Za-z0-9_-]{10,200}$/;\n// Drive may not have finished extracting video metadata yet. Missing values\n// stay unknown; they must never become zero or a successful media inspection.\nfunction mediaMetadata(f){\n const video=f.mimeType?.startsWith('video/');\n const m=(video?f.videoMediaMetadata:f.imageMediaMetadata)||{};\n const dimension=v=>Number.isInteger(v)&&v>0&&v<=1000000?v:null;\n const duration=video&&typeof m.durationMillis==='string'&&/^\\d{1,13}$/.test(m.durationMillis)?Number(m.durationMillis):null;\n return {width_px:dimension(m.width),height_px:dimension(m.height),duration_ms:duration};\n}\nfunction verifiedFolders(rows,context){\n const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;\n const norm=x=>String(x||'').trim().toLowerCase();\n if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');\n const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];\n if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');\n return {folders,q:\"trashed = false and (\"+folders.map(f=>\"'\"+f+\"' in parents\").join(' or ')+\") and (mimeType contains 'image/' or mimeType contains 'video/')\"};\n}\nfunction accessibleFolders(metadata,context){\n const folders=context?.folders;\n if(!Array.isArray(folders)||folders.length!==2||new Set(folders).size!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f))||!Array.isArray(metadata)||metadata.length!==2)throw Error('FOLDER_UNAVAILABLE');\n for(let i=0;i<folders.length;i++){\n  const f=metadata[i];\n  if(f?.id!==folders[i]||f.mimeType!=='application/vnd.google-apps.folder'||f.trashed!==false||f.capabilities?.canListChildren!==true)throw Error('FOLDER_UNAVAILABLE');\n }\n return context;\n}\nfunction catalogFiles(response,folders){\n if(!response||!Array.isArray(response.files)||response.incompleteSearch===true)throw Error('FILE_METADATA_INVALID');\n if(response.nextPageToken||response.files.length>1000)throw Error('FILE_CATALOG_TOO_LARGE');\n const seen=new Set();return response.files.map(f=>{\n  if(!DRIVE_ID.test(f.id||'')||seen.has(f.id)||f.trashed===true||!Array.isArray(f.parents)||!f.parents.some(p=>folders.includes(p)))throw Error('FILE_METADATA_INVALID');\n  seen.add(f.id);\n  if(typeof f.name!=='string'||f.name.length<1||f.name.length>500||/[\\u0000-\\u001f\\u202a-\\u202e\\u2066-\\u2069]/u.test(f.name)||! /^(image|video)\\/[A-Za-z0-9.+-]+$/.test(f.mimeType||''))throw Error('FILE_METADATA_INVALID');\n  if(!/^\\d{1,18}$/.test(f.size||'')||!/^\\d{1,30}$/.test(f.version||'')||!Number.isFinite(Date.parse(f.modifiedTime)))throw Error('FILE_METADATA_INVALID');\n  const checksum=/^[a-f0-9]{64}$/.test(f.sha256Checksum||'')?'sha256:'+f.sha256Checksum:/^[a-f0-9]{32}$/.test(f.md5Checksum||'')?'md5:'+f.md5Checksum:'version';\n  return {drive_file_id:f.id,name:f.name,media_kind:f.mimeType.startsWith('video/')?'video':'image',mime_type:f.mimeType,revision:checksum+':'+f.version,modified_at:new Date(f.modifiedTime).toISOString(),size_bytes:String(f.size),...mediaMetadata(f)};\n });\n}\n\n'use strict';\nfunction uploadRequest(request){\n const auth=request?.headers?.authorization, b=request?.body;\n if(typeof auth!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8000}$/.test(auth))return {ok:false,code:'AUTH_REQUIRED'};\n if(!b||!['start','finish'].includes(b.action)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.upload_id||''))return {ok:false,code:'INVALID_INPUT'};\n const input={upload_id:b.upload_id};\n if(b.action==='start')Object.assign(input,{name:b.name,mime_type:b.mime_type,size_bytes:b.size_bytes});\n return {ok:true,auth,action:b.action,input};\n}\nfunction uploadFolder(rows,context){\n const {folders}=verifiedFolders(rows,context);\n // 01 Upload is watched by the legacy automatic publishing flow. Store manual\n // dashboard drafts in 02 Verarbeitung, which the existing catalogue recognizes.\n return {folder_id:folders[1]};\n}\nfunction checkedUploadURL(value){\n if(typeof value!=='string'||value.length>4000||!/^https:\\/\\/www\\.googleapis\\.com\\/upload\\/drive\\/v3\\/files\\?/.test(value))throw Error('UPLOAD_UNAVAILABLE');\n const parts=value.split('?');if(parts.length!==2)throw Error('UPLOAD_UNAVAILABLE');\n const seen=new Set();for(const item of parts[1].split('&')){\n  const m=/^(uploadType|supportsAllDrives|upload_id|session_crd)=([A-Za-z0-9_.%~=-]+)$/.exec(item);\n  if(!m||seen.has(m[1])||(m[1]==='uploadType'&&m[2]!=='resumable')||(m[1]==='supportsAllDrives'&&m[2]!=='true'))throw Error('UPLOAD_UNAVAILABLE');seen.add(m[1]);\n }\n if(!seen.has('uploadType')||!seen.has('upload_id'))throw Error('UPLOAD_UNAVAILABLE');return value;\n}\nfunction uploadSession(response){\n if(response?.statusCode!==200)throw Error('UPLOAD_UNAVAILABLE');\n return checkedUploadURL(response?.headers?.location);\n}\nfunction uploadedFile(response,context,folder){\n if(folder!==context.folder_id||response?.id!==context.drive_file_id||response.name!==context.name||response.mimeType!==context.mime_type||response.size!==String(context.size_bytes)||response.trashed!==false||!response.parents?.includes(folder)||response.appProperties?.sma_upload_id!==context.upload_id)throw Error('UPLOAD_INCOMPLETE');\n const file=catalogFiles({files:[response]},[folder])[0];\n if(!/^(sha256:|md5:)/.test(file.revision))throw Error('UPLOAD_INCOMPLETE');\n return {...file,folder_id:folder,upload_id:context.upload_id};\n}\nfunction uploadAnswer(r){\n if(r?.ok===true&&r.status==='completed'&&typeof r.asset_id==='string')return {ok:true,status:'completed',upload_id:r.upload_id,asset_id:r.asset_id,can_publish:false};\n if(r?.ok===true&&r.status==='ready'&&typeof r.upload_url==='string')return {ok:true,status:'ready',upload_id:r.upload_id,upload_url:uploadSession({statusCode:200,headers:{location:r.upload_url}}),can_publish:false};\n const known=['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','INVALID_INPUT','UPLOAD_UNAVAILABLE','UPLOAD_CONFLICT','UPLOAD_EXPIRED','UPLOAD_INITIALIZING','UPLOAD_FORMAT','UPLOAD_SIZE','UPLOAD_RATE_LIMITED','UPLOAD_INCOMPLETE','FOLDER_UNAVAILABLE'];\n return {ok:false,code:known.includes(r?.code)?r.code:'UPLOAD_UNAVAILABLE'};\n}\n\nconst u=$('Upload reservieren').first().json,b=$('Uploadziel binden').first().json;\nconst f=uploadedFile($json,{...u,...b},b.folder_id);\nif(f.revision.split(':')[1]!==$('Musikfassung erstellen').first().json.sha256)throw Error('UPLOAD_INCOMPLETE');\nreturn [{json:{p_id:u.upload_id,p_file:f}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        7260,
+        0
+      ]
+    },
+    {
+      "id": "83e753c1-1d13-439b-bdca-56279fb053fc",
+      "name": "Upload abschließen",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_upload_finish_v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={{ $json }}"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        7480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    },
+    {
+      "id": "6a1d8d35-ee80-4bed-a385-ea603d5329c3",
+      "name": "Speicherung prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if(!$json.ok||$json.status!=='completed'||$json.can_publish!==false)throw Error('UPLOAD_INCOMPLETE');return [{json:{status:'completed',can_publish:false}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        7700,
+        0
+      ]
+    },
+    {
+      "id": "107e99c0-eca0-48db-bb92-dac7b585cfe2",
+      "name": "Bestehende Sitzung prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const u=$('Upload reservieren').first().json;if(!u.ok||u.status!=='ready')throw Error('UPLOAD_UNAVAILABLE');return [{json:u}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        4620,
+        160
+      ]
+    },
+    {
+      "id": "22dae9c9-ccd4-4cd2-bcde-28475a0e0120",
+      "name": "Isolierten Tontest starten",
+      "type": "n8n-nodes-base.manualTrigger",
+      "parameters": {},
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ]
+    },
+    {
+      "id": "227fd9c3-9620-4b0b-b038-d620477a9a4d",
+      "name": "Testmusik und Videospur prüfen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "'use strict';\n// Classic, self-contained MP4. Preserve the entire video track and every original\n// media offset. Add only the AAC samples that the movie's presentation requires.\nconst LIMIT=24000000, RATE=48000, PRIMING=1024;\nfunction invalid(){throw Error('BACKGROUND_UNSUPPORTED');}\nfunction boxes(buf,start=0,end=buf.length){\n const result=[];\n while(start<end){\n  if(result.length>=10000||end-start<8)invalid();\n  const size=buf.readUInt32BE(start),type=buf.toString('latin1',start+4,start+8);\n  if(size<8||size>end-start)invalid();\n  result.push({type,start,end:start+size,body:start+8});start+=size;\n }\n return result;\n}\nfunction single(list,type){const found=list.filter(b=>b.type===type);if(found.length!==1)invalid();return found[0];}\nfunction children(buf,b){return boxes(buf,b.body,b.end);}\nfunction inside(buf,b,offset,length){if(offset<0||b.body+offset+length>b.end)invalid();return b.body+offset;}\nfunction u32(n){const b=Buffer.alloc(4);b.writeUInt32BE(n);return b;}\nfunction box(type,...parts){return Buffer.concat([u32(8+parts.reduce((n,p)=>n+p.length,0)),Buffer.from(type,'ascii'),...parts]);}\nfunction full(type,flags,...parts){return box(type,u32(flags),...parts);}\nfunction timing(buf,b){\n const v=buf[inside(buf,b,0,1)];\n if(v!==0&&v!==1)invalid();\n const scale=buf.readUInt32BE(inside(buf,b,v?20:12,4));\n const ticks=v?Number(buf.readBigUInt64BE(inside(buf,b,24,8))):buf.readUInt32BE(inside(buf,b,16,4));\n if(!scale||!Number.isSafeInteger(ticks)||ticks<1||ticks>0xffffffff||ticks/scale>60.001)invalid();\n return {scale,ticks};\n}\nfunction inspectVideo(buf){\n if(!Buffer.isBuffer(buf)||buf.length<12||buf.length>LIMIT)invalid();\n const top=boxes(buf);if(top[0]?.type!=='ftyp'||top.some(b=>!['ftyp','moov','mdat','free','skip','wide'].includes(b.type)))invalid();\n const moov=single(top,'moov'),m=children(buf,moov);\n if(m.some(b=>b.type==='mvex'))invalid();\n const tracks=m.filter(b=>b.type==='trak').map(trak=>{\n  const t=children(buf,trak),mdia=children(buf,single(t,'mdia')),handler=single(mdia,'hdlr');\n  return {t,mdia,kind:buf.toString('ascii',inside(buf,handler,8,4),handler.body+12)};\n });\n if(tracks.some(t=>t.kind==='soun'))return {state:'audio_present'};\n if(tracks.length!==1||tracks[0].kind!=='vide')invalid();\n const mvhd=single(m,'mvhd'),clock=timing(buf,mvhd),track=tracks[0],tkhd=single(track.t,'tkhd');\n const version=buf[inside(buf,tkhd,0,1)];if(version>1)invalid();\n const trackId=buf.readUInt32BE(inside(buf,tkhd,version?20:12,4));\n if(!trackId||trackId>=0xfffffffd)invalid();\n const minf=children(buf,single(track.mdia,'minf')),stbl=children(buf,single(minf,'stbl'));\n const dref=single(children(buf,single(minf,'dinf')),'dref');\n const refs=boxes(buf,inside(buf,dref,8,0),dref.end);\n if(refs.length!==1||refs[0].type!=='url '||buf.readUInt32BE(inside(buf,refs[0],0,4))!==1)invalid();\n const stsd=single(stbl,'stsd'),desc=boxes(buf,inside(buf,stsd,8,0),stsd.end);\n if(desc.length!==1||!['avc1','avc3','hvc1','hev1'].includes(desc[0].type))invalid();\n const offsets=stbl.filter(b=>['stco','co64'].includes(b.type));\n if(offsets.length!==1)invalid();\n const o=offsets[0],count=buf.readUInt32BE(inside(buf,o,4,4)),width=o.type==='stco'?4:8;\n const data=top.filter(b=>b.type==='mdat');\n if(!count||count>100000||data.length!==1||o.end-o.body!==8+width*count)invalid();\n for(let i=0;i<count;i++){\n  const pos=o.body+8+width*i;\n  const at=width===4?buf.readUInt32BE(pos):Number(buf.readBigUInt64BE(pos));\n  if(at<data[0].body||at>=data[0].end)invalid();\n }\n return {state:'silent',moov,mvhd,clock,trackId:trackId+1};\n}\nfunction aacSamples(audio,count){\n if(!Buffer.isBuffer(audio)||audio.length>1500000||count>2820)invalid();\n const frames=[];let offset=0;\n while(frames.length<count){\n  if(offset+7>audio.length)invalid();\n  const h=audio.subarray(offset,offset+7);\n  const length=((h[3]&3)<<11)|(h[4]<<3)|(h[5]>>5);\n  if(h[0]!==255||h[1]!==0xf1||h[2]>>6!==1||((h[2]>>2)&15)!==3||\n     (((h[2]&1)<<2)|(h[3]>>6))!==2||(h[6]&3)!==0||length<=7||offset+length>audio.length)invalid();\n  frames.push(audio.subarray(offset+7,offset+length));offset+=length;\n }\n return frames;\n}\nfunction audioTrack(id,ticks,samples,offset){\n const matrix=Buffer.from('000100000000000000000000000000000001000000000000000000000000000040000000','hex');\n const tkhd=full('tkhd',3,Buffer.alloc(8),u32(id),u32(0),u32(ticks),Buffer.alloc(12),Buffer.from([1,0,0,0]),matrix,Buffer.alloc(8));\n const edts=box('edts',full('elst',0,u32(1),u32(ticks),u32(PRIMING),u32(65536)));\n const mdhd=full('mdhd',0,Buffer.alloc(8),u32(RATE),u32(samples.length*1024),Buffer.from([0x55,0xc4,0,0]));\n const hdlr=full('hdlr',0,u32(0),Buffer.from('soun'),Buffer.alloc(12),Buffer.from('SMA Audio\\0'));\n // MPEG-4 AudioSpecificConfig 0x1190 = AAC-LC, 48 kHz, two channels.\n const esds=full('esds',0,Buffer.from('0319000100041140150000000001f4000001f40005021190060102','hex'));\n const entry=Buffer.alloc(28);entry.writeUInt16BE(1,6);entry.writeUInt16BE(2,16);entry.writeUInt16BE(16,18);entry.writeUInt32BE(RATE*65536,24);\n const sizes=Buffer.alloc(samples.length*4);samples.forEach((s,i)=>sizes.writeUInt32BE(s.length,i*4));\n const stbl=box('stbl',full('stsd',0,u32(1),box('mp4a',entry,esds)),full('stts',0,u32(1),u32(samples.length),u32(1024)),\n  full('stsc',0,u32(1),u32(1),u32(samples.length),u32(1)),full('stsz',0,u32(0),u32(samples.length),sizes),full('stco',0,u32(1),u32(offset)));\n const dinf=box('dinf',full('dref',0,u32(1),full('url ',1)));\n return box('trak',tkhd,edts,box('mdia',mdhd,hdlr,box('minf',full('smhd',0,u32(0)),dinf,stbl)));\n}\nfunction soundtrackMP4(video,audio){\n const v=inspectVideo(video);if(v.state!=='silent')return v;\n const frames=aacSamples(audio,Math.ceil((v.clock.ticks/v.clock.scale*RATE+PRIMING)/1024));\n const track=audioTrack(v.trackId,v.clock.ticks,frames,video.length+8);\n const header=Buffer.from(video.subarray(v.moov.body,v.moov.end));\n header.writeUInt32BE(v.trackId+1,v.mvhd.end-v.moov.body-4);\n const moov=box('moov',header,track),audioData=box('mdat',...frames);\n if(video.length+audioData.length+moov.length>LIMIT)invalid();\n const output=Buffer.concat([video,audioData,moov]);\n // Videodata stays in place, even with fast-start sources. Reclaim the old\n // metadata area as a free box; only the new movie header remains active.\n output.write('free',v.moov.start+4,'ascii');output.fill(0,v.moov.body,v.moov.end);\n return {state:'rendered',bytes:output};\n}\n\nconst fixture={\n  \"video\": \"AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAOxbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAtx0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAAAwAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAIAAABAAAAAAJUbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAoAAAAKABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAAB/21pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAb9zdGJsAAAAv3N0c2QAAAAAAAAAAQAAAK9hdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAMABIAAAASAAAAAAAAAABFUxhdmM2MS4xOS4xMDEgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAANWF2Y0MBZAAK/+EAGGdkAAqs2UR7ARAAAAMAEAAAAwFA8SJZYAEABmjr48siwP34+AAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAa0AAAAAAAAAAYc3R0cwAAAAAAAAABAAAACgAABAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAAGBjdHRzAAAAAAAAAAoAAAABAAAIAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAIAAAAABxzdHNjAAAAAAAAAAEAAAABAAAACgAAAAEAAAA8c3RzegAAAAAAAAAAAAAACgAAAtoAAAAOAAAADAAAAAwAAAAMAAAAFAAAAA4AAAAMAAAADAAAABQAAAAUc3RjbwAAAAAAAAABAAAD4QAAAGF1ZHRhAAAAWW1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALGlsc3QAAAAkqXRvbwAAABxkYXRhAAAAAQAAAABMYXZmNjEuNy4xMDMAAAAIZnJlZQAAA2JtZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NCByMzEwOCAzMWUxOWY5IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyMyAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAJGWIhAAR//7n4/wKbXzEcTp2GPr31tdyoujXHtijNqS8fduE+QAAAApBmiRsQQ/+qnKwAAAACEGeQniHfwr5AAAACAGeYXRDfw3oAAAACAGeY2pDfw3pAAAAEEGaaEmoQWiZTAh3//6p06EAAAAKQZ6GRREsO/8K+QAAAAgBnqV0Q38N6QAAAAgBnqdqQ38N6AAAABBBmqlJqEFsmUwIb//+p+5A\",\n  \"audio\": \"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\",\n  \"expected\": \"ed15dcb0070207c4888e3a31481225ee944cefe4cc9bf47f62df9e2e73f6b524\"\n}\n;\nconst {createHash}=require('crypto'),v=Buffer.from(fixture.video,'base64'),a=Buffer.from(fixture.audio,'base64');\nconst out=soundtrackMP4(v,a),digest=createHash('sha256').update(out.bytes).digest('hex');\nif(digest!==fixture.expected||inspectVideo(out.bytes).state!=='audio_present')throw Error('PROBE_FAILED');\nreturn [{json:{ok:true,video:'1 Sekunde',audio:'AAC',sha256:digest,can_publish:false}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        220,
+        520
+      ]
+    },
+    {
+      "id": "4ccdc9de-0e9f-4136-9522-a4f1cc55f4aa",
+      "name": "Prüfbeleg angefordert?",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ccfddb79-b8aa-44e3-911b-0ec3253fd5f0",
+              "leftValue": "={{ $('Eigene Datei prüfen').isExecuted && $('Eigene Datei prüfen').first().json.probe === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "d17fb119-3e61-42ae-9a72-58576ad5ae93",
+      "name": "Prüfbeleg speichern",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 25000
+        },
+        "url": "https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_gallery_background_v1",
+        "jsonBody": "={{ {p_action:'probe_receipt',p_input:{id:$('Eigene Datei prüfen').first().json.id,receipt:$('Eigene Datei prüfen').first().json.receipt,sha256:$json.sha256} } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        520
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FZk3cg0UNdbolH4q",
+          "name": "SMA Supabase Secret"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Galerieauftrag": {
+      "main": [
+        [
+          {
+            "node": "Ticket prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket prüfen": {
+      "main": [
+        [
+          {
+            "node": "Eigene Datei prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eigene Datei prüfen": {
+      "main": [
+        [
+          {
+            "node": "Auftrag verfügbar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auftrag verfügbar?": {
+      "main": [
+        [
+          {
+            "node": "Synthetischer Prüflauf?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthetischer Prüflauf?": {
+      "main": [
+        [
+          {
+            "node": "Testmusik und Videospur prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Kundenordner zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kundenordner zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Ordner prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Dateimetadaten lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateimetadaten lesen": {
+      "main": [
+        [
+          {
+            "node": "Dateistand prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand prüfen": {
+      "main": [
+        [
+          {
+            "node": "Originaldatei laden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Originaldatei laden": {
+      "main": [
+        [
+          {
+            "node": "Tonspur prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tonspur prüfen": {
+      "main": [
+        [
+          {
+            "node": "Musik benötigt?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Musik benötigt?": {
+      "main": [
+        [
+          {
+            "node": "SMA-Musik laden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ton vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMA-Musik laden": {
+      "main": [
+        [
+          {
+            "node": "Musikfassung erstellen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Musikfassung erstellen": {
+      "main": [
+        [
+          {
+            "node": "Fassung bereit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fassung bereit?": {
+      "main": [
+        [
+          {
+            "node": "Dateistand erneut lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Browser übernehmen lassen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dateistand erneut lesen": {
+      "main": [
+        [
+          {
+            "node": "Quelle erneut prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quelle erneut prüfen": {
+      "main": [
+        [
+          {
+            "node": "Upload reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload reservieren": {
+      "main": [
+        [
+          {
+            "node": "Schreibrecht prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schreibrecht prüfen": {
+      "main": [
+        [
+          {
+            "node": "Zielkonto erneut lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zielkonto erneut lesen": {
+      "main": [
+        [
+          {
+            "node": "Entwurfsordner prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entwurfsordner prüfen": {
+      "main": [
+        [
+          {
+            "node": "Neuer Upload?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neuer Upload?": {
+      "main": [
+        [
+          {
+            "node": "Zielordner lesen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bestehende Sitzung prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zielordner lesen": {
+      "main": [
+        [
+          {
+            "node": "Schreibziel bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schreibziel bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Datei-ID reservieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei-ID reservieren": {
+      "main": [
+        [
+          {
+            "node": "Datei-ID prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei-ID prüfen": {
+      "main": [
+        [
+          {
+            "node": "Übertragung vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übertragung vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Sitzung binden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sitzung binden": {
+      "main": [
+        [
+          {
+            "node": "Uploadsitzung speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uploadsitzung speichern": {
+      "main": [
+        [
+          {
+            "node": "Uploadziel binden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uploadziel binden": {
+      "main": [
+        [
+          {
+            "node": "Übertragung bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übertragung bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Kontoprüfung bestätigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kontoprüfung bestätigen": {
+      "main": [
+        [
+          {
+            "node": "Übertragungsstand lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übertragungsstand lesen": {
+      "main": [
+        [
+          {
+            "node": "Restliche Bytes bestimmen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restliche Bytes bestimmen": {
+      "main": [
+        [
+          {
+            "node": "Bytes benötigt?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bytes benötigt?": {
+      "main": [
+        [
+          {
+            "node": "Bytes übernehmen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hochgeladene Datei prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bytes übernehmen": {
+      "main": [
+        [
+          {
+            "node": "Musikfassung übertragen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Musikfassung übertragen": {
+      "main": [
+        [
+          {
+            "node": "Hochgeladene Datei prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hochgeladene Datei prüfen": {
+      "main": [
+        [
+          {
+            "node": "Datei zuordnen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datei zuordnen": {
+      "main": [
+        [
+          {
+            "node": "Upload abschließen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload abschließen": {
+      "main": [
+        [
+          {
+            "node": "Speicherung prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ton vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Tonentscheidung speichern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Browser übernehmen lassen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bestehende Sitzung prüfen": {
+      "main": [
+        [
+          {
+            "node": "Uploadziel binden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Isolierten Tontest starten": {
+      "main": [
+        [
+          {
+            "node": "Testmusik und Videospur prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Testmusik und Videospur prüfen": {
+      "main": [
+        [
+          {
+            "node": "Prüfbeleg angefordert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüfbeleg angefordert?": {
+      "main": [
+        [
+          {
+            "node": "Prüfbeleg speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "saveDataSuccessExecution": "none"
+  }
+}

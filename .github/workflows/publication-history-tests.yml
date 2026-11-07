@@ -34,6 +34,13 @@ on:
       - supabase/migrations/*_publication_preview_cover_plan_v1.sql
       - supabase/sql/publication-provider-cover.sql
       - supabase/migrations/*_publication_provider_cover_v1.sql
+      - n8n/publishing/*gallery-soundtrack*
+      - n8n/publishing/prepare-gallery-audio.py
+      - n8n/publishing/fixtures/gallery-music-probe.json
+      - tests/*gallery-background*
+      - tests/sql-runtime/gallery-background-flow.mjs
+      - supabase/migrations/*_gallery_music_scheduled_probe_v1.sql
+      - supabase/migrations/*_gallery_music_background_v1.sql
       - app/assets/gallery-music*
       - tests/*gallery-music*
       - supabase/sql/gallery-music*.sql
@@ -147,6 +154,7 @@ jobs:
           node tests/run-gallery-music-sql.mjs
           node tests/run-gallery-music-wasm.mjs
           node tests/run-gallery-music-receipt.mjs
+          node tests/run-gallery-background-sql.mjs
           node tests/run-music-credits-sql.mjs
           node tests/run-music-library-sql.mjs
           node tests/run-music-library-reservations-sql.mjs
