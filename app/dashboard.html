@@ -13,7 +13,7 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=13';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=1';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=2';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -203,7 +203,7 @@ frame.addEventListener('load',()=>{
     const button=doc.createElement('button');button.type='button';button.className='sma-optimize';button.textContent='Optimieren';button.dataset.portal=portal;button.setAttribute('aria-controls','smaOptimizationPage');
     button.addEventListener('click',event=>{event.stopPropagation();openOptimizer(portal,button);});card.append(button);
   }
-  dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=1',location.href).href});
+  dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=2',location.href).href});
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
 });
