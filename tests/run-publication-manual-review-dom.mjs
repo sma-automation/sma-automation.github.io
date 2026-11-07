@@ -15,19 +15,24 @@ function fixture({option=true,platform='youtube',approvalResponse,storedResponse
   return e;
  };
  const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform,preview_id:'synthetic-preview',preview_revision:1,assignment_revision:1};let currentBinding={...binding},reloadPatch={};
- let sequence=8,clock=Date.now(),timer;class TestDate extends Date{static now(){return clock;}}
+ let sequence=8,clock=Date.now(),timer,savedPreparation;class TestDate extends Date{static now(){return clock;}}
  const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-'+String(++sequence).padStart(12,'0')},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
   if(req.action==='approve'&&approvalResponse)return approvalResponse(req);
   if(req.action==='account')return {ok:true,json:async()=>({...common,stage:'account'})};
-  const response={ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
-  return req.action==='prepare'&&prepareResponse?prepareResponse(req,response):response;
+  const response={ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',approval_window:{status:'active',expires_at:new Date(clock+1800000).toISOString()},human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
+  if(req.action==='prepare'){
+   savedPreparation=await response.json();
+   if(prepareResponse)return prepareResponse(req,response);
+  }
+  return response;
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
  const view=scope.install(doc,{host:doc.body,portalName:platform,readStoredOrder:async id=>{
   reads.push(id);
+  if(!storedResponse)return {...savedPreparation,...reloadPatch};
   return storedResponse(id,{ok:true,id,binding,can_publish:false,can_upload:false,state:'approved',
-   approved_at:new Date(clock).toISOString(),target:{id:'synthetic-channel',platform},choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},approval_policy:'media-consent-2026-11-03.1'});
+   approved_at:new Date(clock).toISOString(),target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel'},choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},approval_policy:'media-consent-2026-11-03.1'});
  },session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh});
  const $=id=>doc.getElementById(id),dialog=$('publicationOrderDialog'),buttons=[...dialog.querySelectorAll('button')],approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
@@ -43,7 +48,7 @@ function fixture({option=true,platform='youtube',approvalResponse,storedResponse
  eq(t.$('order-human-review').hidden,true);
  const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
  eq(restart.hidden,false);await t.approve.handlers.click();eq(t.requests.some(r=>r.action==='approve'),false);
- await restart.handlers.click();eq(t.requests.map(r=>r.action),['account','prepare','get','account']);
+ await restart.handlers.click();eq(t.requests.map(r=>r.action),['account','prepare','account']);eq(t.reads,[t.requests[1].input.id]);
  eq(t.$('order-visibility').value,'');eq(t.$('order-final-consent').checked,false);
 }
 // The read-only return from History uses the saved ID, target and choices.
@@ -258,5 +263,47 @@ for(const patch of [{state:'cancelled'},{approved_at:'now',state:'approved'},
 {
  const t=unfinishedHistory();eq(t.resume(),true);t.advance(60001);eq(t.check.hidden,true);
  await t.check.handlers.click();eq(t.requests.length,0);eq(t.reads.length,0);
+}
+// Account preflight and order preparation are separate requests. An order may only
+// become confirmable for the target and options that were displayed to the customer.
+for(const platform of ['youtube','tiktok']){
+ const mismatches=[
+  row=>({...row,target:{...row.target,id:'different-channel'},account_check:{...row.account_check,target_id:'different-channel'}}),
+  row=>({...row,target:{...row.target,platform:'other'}}),
+  row=>({...row,account_check:{...row.account_check,target_id:'different-channel'}}),
+  row=>({...row,account_check:null}),
+  row=>({...row,choices:{...row.choices,visibility:platform==='youtube'?'public':'PUBLIC_TO_EVERYONE'}}),
+  row=>({...row,choices:{...row.choices,[platform==='youtube'?'made_for_kids':'brand_content_toggle']:true}})
+ ];
+ for(const change of mismatches){
+  let saved,changed=true;
+  const t=fixture({platform,prepareResponse:async(req,response)=>{
+   const row=await response.json();saved=changed?change(row):row;return {ok:true,json:async()=>saved};
+  },storedResponse:()=>saved});
+  await t.open();const id=t.requests[1].input.id;
+  eq(t.reads,[id]);eq(t.approve.hidden,true);eq(t.approve.disabled,true);
+  assert.match(notice(t),/gespeicherte Zielkonto|gespeicherten Portaleinstellungen/);
+  await t.approve.handlers.click();await t.status.handlers.click();eq(t.reads,[id,id]);
+  eq(t.requests.map(r=>r.action),['account','prepare']);
+  const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
+  eq(restart.hidden,false);changed=false;await restart.handlers.click();
+  eq(t.$('order-visibility').value,'');eq(t.$('order-final-consent').checked,false);
+  t.$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';
+  if(platform==='youtube'){t.$('order-made_for_kids').value='false';t.$('order-contains_synthetic_media').value='false';}
+  await submit(t);eq(t.requests.map(r=>r.action),['account','prepare','account','prepare']);
+  assert.notEqual(t.requests[3].input.id,id);eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+ }
+ // An inconsistent response is recoverable if the stored order matches the complete selection.
+ const transient=fixture({platform,prepareResponse:async(_,response)=>{
+  const row=await response.json();return {ok:true,json:async()=>({...row,choices:{visibility:'invalid'}})};
+ }});
+ await transient.open();eq(transient.reads,[transient.requests[1].input.id]);
+ eq(transient.approve.hidden,false);eq(transient.approve.disabled,true);eq(transient.requests.length,2);
+ const status=fixture({platform});await status.open();status.ready();eq(status.approve.disabled,false);
+ status.patch({choices:{visibility:'other'}});await status.status.handlers.click();
+ eq(status.approve.hidden,true);eq(status.$('order-final-consent').checked,false);
+ assert.match(notice(status),/gespeicherten Portaleinstellungen/);
+ status.patch({});await status.status.handlers.click();eq(status.approve.hidden,false);eq(status.approve.disabled,true);
+ eq(status.reads,[status.requests[1].input.id,status.requests[1].input.id]);eq(status.requests.length,2);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');
