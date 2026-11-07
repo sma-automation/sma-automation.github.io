@@ -613,9 +613,12 @@ function makeProductCard(product,userId){
     if(link){
       const copy=document.createElement('button');copy.type='button';copy.className='btn';
       copy.textContent='Produktlink kopieren';
+      const open=document.createElement('a');open.href=link;open.target='_blank';open.rel='noopener noreferrer';
+      open.textContent='Produktseite öffnen';open.hidden=true;
       const fallback=document.createElement('input');fallback.type='url';fallback.readOnly=true;fallback.hidden=true;
       fallback.setAttribute('aria-label','Öffentlicher Produktlink zum Kopieren');
       copy.addEventListener('click',async()=>{
+        open.hidden=false;
         try{
           await navigator.clipboard.writeText(link);
           copy.textContent='Produktlink kopiert';fallback.hidden=true;
@@ -624,7 +627,7 @@ function makeProductCard(product,userId){
           fallback.value=link;fallback.hidden=false;fallback.focus();fallback.select();
         }
       });
-      actions.append(copy,fallback);
+      actions.append(copy,open,fallback);
     }
   }
   row.append(media,details,actions);
