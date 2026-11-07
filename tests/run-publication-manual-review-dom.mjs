@@ -14,7 +14,7 @@ function fixture({option=true,platform='youtube'}={}){
   if(tag==='input')e.checked=false;
   return e;
  };
- const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform};let currentBinding={...binding},reloadPatch={};
+ const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform,preview_id:'synthetic-preview',preview_revision:1,assignment_revision:1};let currentBinding={...binding},reloadPatch={};
  let clock=Date.now(),timer;class TestDate extends Date{static now(){return clock;}}
  const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-000000000010'},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
@@ -22,12 +22,12 @@ function fixture({option=true,platform='youtube'}={}){
   return {ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
- scope.install(doc,{host:doc.body,portalName:platform,session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh:async()=>{}});
+ const view=scope.install(doc,{host:doc.body,portalName:platform,session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh:async()=>{}});
  const $=id=>doc.getElementById(id),dialog=$('publicationOrderDialog'),buttons=[...dialog.querySelectorAll('button')],approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
  const open=async()=>{await $('preparePublicationOrder').handlers.click();$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';if(platform==='youtube'){$('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';}await dialog.querySelector('form').handlers.submit({preventDefault(){}});};
- return {$,doc,requests,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+ return {$,doc,view,binding,requests,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
 }
 {
  const t=fixture();await t.open();
@@ -39,6 +39,30 @@ function fixture({option=true,platform='youtube'}={}){
  eq(restart.hidden,false);await t.approve.handlers.click();eq(t.requests.some(r=>r.action==='approve'),false);
  await restart.handlers.click();eq(t.requests.map(r=>r.action),['account','prepare','get','account']);
  eq(t.$('order-visibility').value,'');eq(t.$('order-final-consent').checked,false);
+}
+// A historical declaration is a suggested choice for the identical file, text and channel.
+{
+ const t=fixture(),saved={state:'prepared',binding:t.binding,target:{id:'synthetic-channel'},
+  choices:{made_for_kids:false,contains_synthetic_media:true,visibility:'public'}};
+ const show=()=>t.$('preparePublicationOrder').handlers.click();
+ t.view.rememberVideoChoices(saved);await show();
+ const reuse=t.$('order-reuse-video'),kids=t.$('order-made_for_kids'),synthetic=t.$('order-contains_synthetic_media');
+ eq(reuse.hidden,false);eq(kids.value,'');eq(synthetic.value,'');
+ eq(kids.children[0].textContent,'Bisher Nein · bitte wählen');eq(synthetic.children[0].textContent,'Bisher Ja · bitte wählen');
+ eq(t.$('order-visibility').value,'');eq(t.$('order-visibility').children[0].textContent,'Bitte auswählen');
+ kids.value='true';kids.handlers.change();eq(reuse.hidden,true);reuse.handlers.click();eq(kids.value,'true');
+ kids.value='';kids.handlers.change();reuse.handlers.click();
+ eq(kids.value,'false');eq(synthetic.value,'true');eq(reuse.hidden,true);eq(t.$('order-visibility').value,'');
+ eq(t.$('order-final-consent').checked,false);eq(t.requests.map(r=>r.action),['account']);
+ t.$('order-visibility').value='private';synthetic.value='false';await t.doc.querySelector('form').handlers.submit({preventDefault(){}});
+ eq(t.requests.at(-1).input.choices,{made_for_kids:false,contains_synthetic_media:false,visibility:'private'});
+ await show();eq(t.$('order-contains_synthetic_media').children[0].textContent,'Bisher Nein · bitte wählen');
+ for(const patch of [{state:'cancelled'},{approved_at:'today'},{target:{id:'elsewhere'}},{choices:{contains_synthetic_media:'true',made_for_kids:false}},{check_error:'FILE_CHANGED'},...['asset_id','asset_revision','assignment_revision','preview_id','preview_revision','platform'].map(key=>({binding:{...t.binding,[key]:'different'}}))]){
+  t.view.rememberVideoChoices({...saved,...patch});await show();eq(reuse.hidden,true);
+ }
+ t.view.rememberVideoChoices(saved);await show();t.changeBinding();reuse.handlers.click();
+ eq(reuse.hidden,true);eq(t.$('order-made_for_kids').value,'');eq(t.$('order-contains_synthetic_media').value,'');
+ t.view.clear();await show();eq(reuse.hidden,true);
 }
 for(const platform of ['youtube','tiktok']){
  const t=fixture({platform});await t.open();eq(t.$('order-human-review').hidden,false);eq(t.$('order-human-enabled').checked,false);eq(t.approve.disabled,true);eq(t.requests.map(x=>x.action),['account','prepare']);

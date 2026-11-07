@@ -6,7 +6,7 @@ let supabase,coverView,originalVideo,previewOwnerId;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
-import {installOrderReview} from './publication-order.mjs?v=8';
+import {installOrderReview} from './publication-order.mjs?v=9';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -463,6 +463,7 @@ async function openHistoryOrderPreview(id,owner){
  // Select only after the order, file and saved portal text have all been verified.
  assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
  renderSelectedFile();showProductContext(saved.product_context,file);fillInput(saved.input);render(saved);
+ orderReview.rememberVideoChoices(order);
  workspace.show('preview');status('Beitragsvorschau des Auftrags geladen.');
  await loadMediaCheck();await loadMagicEffect(false);lock(false);syncMedia();
 }

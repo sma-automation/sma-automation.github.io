@@ -16,7 +16,12 @@ Veröffentlichungsfreigabe stehen aus. Eine Providerbestätigung liegt weiterhin
 
 History und Auftragsdialog zeigen die Gültigkeit der Vorbereitung an. Maßgeblich
 ist die frühere der beiden Fristen für Auftrag und Kontoprüfung. Ein Neustart im
-Dialog lädt die Kontooptionen. Erst „Auftrag prüfen“ bereitet einen neuen Auftrag vor.
+Dialog lädt die Kontooptionen. Beim erneuten Öffnen desselben YouTube-Beitrags
+zeigt das Formular die bisher gewählten Angaben zu Kinderzielgruppe und
+synthetischen Inhalten. **Videoangaben übernehmen** setzt beide Felder nach
+einem Klick. Die Zuordnung gilt für dieselbe Datei- und Textversion, dieselbe
+Portalzuordnung und denselben frisch geprüften Kanal. Die Sichtbarkeit wird
+neu ausgewählt. Erst „Auftrag prüfen“ bereitet einen neuen Auftrag vor.
 Bei einer abgelaufenen Vorbereitung führt **History → Aufträge → Beitragsvorschau öffnen**
 im selben Tab direkt zur gebundenen Datei und zum gespeicherten Portaltext. Bei
 einem geänderten Datei- oder Textstand zeigt SMA einen Hinweis. Eine veraltete
