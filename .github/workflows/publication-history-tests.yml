@@ -22,6 +22,10 @@ on:
       - tests/*publication-text-edits*
       - tests/publication-hashtags.test.cjs
       - supabase/sql/publication-text-edits.sql
+      - supabase/sql/publication-draft-product-links.sql
+      - supabase/migrations/*_publication_draft_product_links_v1.sql
+      - tests/run-publication-draft-product-links-sql.mjs
+      - app/assets/publication-destination.mjs
       - supabase/migrations/*_publication_text_edits_v1.sql
       - app/assets/publication-cover-history*
       - tests/*publication-cover-history*
@@ -136,6 +140,7 @@ jobs:
           node tests/run-publication-manual-review-dom.mjs
           node tests/run-original-video-preview-dom.mjs
           node tests/run-publication-text-edits-sql.mjs
+          node tests/run-publication-draft-product-links-sql.mjs
           node tests/run-publication-text-edits-dom.mjs
           node tests/run-publication-history-sql.mjs
           node tests/run-publication-history-months-sql.mjs

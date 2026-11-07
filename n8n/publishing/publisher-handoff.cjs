@@ -65,8 +65,12 @@ function makeHandoff(response, input, now = Date.now()) {
     return handoffFailure('SAVED_TEXT_INVALID');
   }
   // Preserve the stored caption byte for byte; do not regenerate, trim or append a second shop footer.
-  const captions = ['🛒 Zum Shop: ', '🛒 Visit our shop: '].map(footer =>
-    [d.body, d.hashtags.map(t => '#' + t).join(' '), footer + r.shop_url].filter(Boolean).join('\n\n'));
+  const product = Object.hasOwn(d, 'product_id');
+  if (product && (typeof d.product_id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(d.product_id))) return handoffFailure('SAVED_TEXT_INVALID');
+  const destination = product ? r.shop_url + '&produkt=' + d.product_id : r.shop_url;
+  const footers = product ? ['🛒 Zum Produkt: ', '🛒 View product: '] : ['🛒 Zum Shop: ', '🛒 Visit our shop: '];
+  const captions = footers.map(footer =>
+    [d.body, d.hashtags.map(t => '#' + t).join(' '), footer + destination].filter(Boolean).join('\n\n'));
   if (!captions.includes(d.caption) || d.caption.split(r.shop_url).length !== 2 ||
       /(https?:|www\.|<|>)/i.test(d.title + d.body) || Buffer.byteLength(d.caption, 'utf8') > 5000 ||
       (r.platform === 'tiktok' && d.caption.length > 2200)) return handoffFailure('SAVED_TEXT_INVALID');
@@ -76,7 +80,7 @@ function makeHandoff(response, input, now = Date.now()) {
   return {
     ok:true, version:1, stage:'handoff_preview', can_publish:false, can_upload:false,
     binding:{...r},
-    draft:{platform:d.platform, title:d.title, body:d.body, caption:d.caption, hashtags:[...d.hashtags], review_notes:[...d.review_notes]},
+    draft:{platform:d.platform, title:d.title, body:d.body, caption:d.caption, hashtags:[...d.hashtags], review_notes:[...d.review_notes], ...(product ? {product_id:d.product_id} : {})},
     checks:{saved_selection:'matched', catalog_verified_at:media.verified_at, media:media.checks.map(c => ({code:c.code, status:c.status}))},
     blockers
   };

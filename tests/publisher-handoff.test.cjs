@@ -77,3 +77,16 @@ test('the generated subworkflow performs one read-only RPC, accepts no webhooks 
  assert.throws(()=>call(validate,[{json:selection},{json:selection}]),/INVALID_HANDOFF_INPUT/);
  assert.throws(()=>call(finish,[{json:stored()},{json:stored()}],prepared),/HANDOFF_UNAVAILABLE/);
 });
+
+test('product footers must match the exact ID on the saved file assignment in both languages',()=>{
+ for(const platform of ['youtube','instagram','facebook','tiktok'])for(const language of ['de','en']){
+  const response=stored(platform,language);
+  const draft=response.text;
+  draft.product_id='Article_01';
+  draft.caption=draft.caption.replace(/🛒 .+$/, (language==='en'?'🛒 View product: ':'🛒 Zum Produkt: ')+selection.shop_url+'&produkt=Article_01');
+  assert.deepEqual(run(response,{...selection,platform}).draft,draft);
+  for(const id of [undefined,null,'Other','Article_01&shop=x','Article/01']){
+   assert.equal(run({...response,text:{...draft,product_id:id}},{...selection,platform}).code,'SAVED_TEXT_INVALID');
+  }
+ }
+});
