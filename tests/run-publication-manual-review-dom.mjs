@@ -5,7 +5,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube',approvalResponse,storedResponse,prepareResponse,refresh=async()=>{}}={}){
+function fixture({option=true,platform='youtube',accountResponse,approvalResponse,storedResponse,prepareResponse,refresh=async()=>{}}={}){
  const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
@@ -19,7 +19,10 @@ function fixture({option=true,platform='youtube',approvalResponse,storedResponse
  const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-'+String(++sequence).padStart(12,'0')},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
   if(req.action==='approve'&&approvalResponse)return approvalResponse(req);
-  if(req.action==='account')return {ok:true,json:async()=>({...common,stage:'account'})};
+  if(req.action==='account'){
+   const account={...common,stage:'account'};
+   return {ok:true,json:async()=>accountResponse?accountResponse(account):account};
+  }
   const response={ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',approval_window:{status:'active',expires_at:new Date(clock+1800000).toISOString()},human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
   if(req.action==='prepare'){
    savedPreparation=await response.json();
@@ -95,6 +98,7 @@ for(const platform of ['youtube','tiktok']){
  const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
  eq(restart.hidden,false);await restart.handlers.click();
  eq(t.$('order-contains_synthetic_media').children[0].textContent,'Bisher Nein · bitte wählen');
+ t.view.clear(); // Start a fresh preview for the independent history-suggestion cases.
  for(const patch of [{state:'cancelled'},{approved_at:'today'},{target:{id:'elsewhere'}},{choices:{contains_synthetic_media:'true',made_for_kids:false}},{check_error:'FILE_CHANGED'},...['asset_id','asset_revision','assignment_revision','preview_id','preview_revision','platform'].map(key=>({binding:{...t.binding,[key]:'different'}}))]){
   t.view.rememberVideoChoices({...saved,...patch});await show();eq(reuse.hidden,true);
  }
@@ -379,5 +383,82 @@ for(const state of ['approved','checked','blocked','cancelled']){
  t.$('order-visibility').value='unlisted';t.$('order-made_for_kids').value='false';t.$('order-contains_synthetic_media').value='false';
  await submit(t);assert.notEqual(t.requests[3].input.id,t.requests[1].input.id);
  eq(t.requests[3].input.choices.visibility,'unlisted');eq(t.approve.disabled,true);
+}
+// Closing the new settings form before submitting returns to the previously saved order.
+for(const platform of ['youtube','tiktok']){
+ const t=fixture({platform});await t.open();
+ const original=t.requests[1].input;
+ t.change('order-human-enabled');t.ready();
+ const restart=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten');
+ await restart.handlers.click();
+ if(platform==='youtube')t.$('order-visibility').value='unlisted';
+ else {
+  t.change('order-commercial',true);
+  t.change('order-brand_organic_toggle',true);
+ }
+ await reopen(t);
+ eq(t.requests.map(r=>r.action),['account','prepare','account']);eq(t.reads,[original.id]);
+ eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+ eq(t.$('order-human-enabled').checked,false);eq(t.$('order-final-consent').checked,false);
+ assert.match(t.doc.body.textContent,platform==='youtube'?/Sichtbarkeit: Privat/:/Sichtbarkeit: Nur ich/);
+}
+const restartOrder=t=>[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung neu starten').handlers.click();
+for(const change of ['expired','cancelled','approved','regressed']){
+ const t=fixture();await t.open();const id=t.requests[1].input.id;await restartOrder(t);
+ if(change==='expired')t.advance(1800001);
+ else if(change==='regressed')t.patch({state:'preparing',target:null,account_check:null,approval_token:null,approval_window:null,
+  preparation_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}});
+ else t.patch({state:change,approved_at:change==='approved'?new Date().toISOString():null,approval_token:null,approval_window:null});
+ await reopen(t);eq(t.reads,[id]);eq(t.requests.length,3);eq(t.approve.hidden,true);
+ assert.match(notice(t),{expired:/abgelaufen/,cancelled:/storniert/,approved:/Freigabe ist gespeichert/,regressed:/noch unklar/}[change]);
+}
+for(const change of ['different','offline']){
+ let initial=true;
+ const t=fixture({accountResponse:account=>{
+  if(initial)return account;
+  if(change==='offline')throw Error('Offline');
+  return {...account,target:{...account.target,id:'other-channel'},account_check:{...account.account_check,target_id:'other-channel'}};
+ }});
+ await t.open();const id=t.requests[1].input.id;initial=false;await restartOrder(t);
+ await reopen(t);eq(t.reads,[id]);eq(t.requests.length,3);eq(t.approve.hidden,true);
+ assert.match(notice(t),/Zielkonto muss erneut geprüft werden/);
+}
+{
+ const t=fixture();await t.open();await restartOrder(t);t.changeBinding();await reopen(t);
+ eq(t.reads,[]);eq(t.requests.map(r=>r.action),['account','prepare','account','account']);
+ eq(t.$('order-visibility').value,'');eq(t.approve.hidden,true);
+}
+{
+ const t=fixture();await t.open();await restartOrder(t);t.view.clear();
+ await reopen(t);eq(t.reads,[]);eq(t.approve.hidden,true);
+}
+{
+ const t=unfinishedHistory('tiktok');eq(t.resume(),true);await restartOrder(t);
+ await reopen(t);eq(t.reads,[t.id]);eq(t.check.hidden,false);eq(t.approve.hidden,true);
+ eq(t.requests.map(r=>r.action),['account']);
+}
+{
+ const t=fixture();await t.open();const original=t.requests[1].input;
+ t.patch({choices:{...original.choices,visibility:'public'}});
+ await t.status.handlers.click();assert.match(notice(t),/weichen von deiner Auswahl ab/);
+ await restartOrder(t);await reopen(t);
+ eq(t.reads,[original.id,original.id]);eq(t.approve.hidden,true);eq(t.requests.length,3);
+ assert.match(notice(t),/weichen von deiner Auswahl ab/);
+}
+{
+ const t=fixture({refresh:async()=>{if(t.requests.length>2)throw Error('Dateistand nicht verfügbar.');}});
+ await t.open();const id=t.requests[1].input.id;await restartOrder(t);
+ t.$('order-visibility').value='unlisted';await submit(t);await reopen(t);
+ eq(t.reads,[id]);eq(t.requests.length,3);eq(t.approve.hidden,false);
+}
+// Once the replacement request is sent, even a lost response must resolve against its own ID.
+for(const lost of [false,true]){
+ let count=0;
+ const t=fixture({prepareResponse:async(_,response)=>{if(++count===2&&lost)timeout();return response;}});
+ await t.open();const first=t.requests[1].input.id;await restartOrder(t);
+ t.$('order-visibility').value='unlisted';t.$('order-made_for_kids').value='false';t.$('order-contains_synthetic_media').value='false';
+ await submit(t);const replacement=t.requests[3].input.id;assert.notEqual(first,replacement);
+ await reopen(t);eq(t.reads,lost?[replacement,replacement]:[replacement]);eq(t.requests.length,4);
+ eq(t.approve.disabled,true);eq(t.approve.hidden,false);assert.match(t.doc.body.textContent,/Sichtbarkeit: Nicht gelistet/);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');

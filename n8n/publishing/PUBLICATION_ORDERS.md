@@ -78,7 +78,14 @@ inzwischen abgebrochen oder freigegeben, erscheint der gespeicherte Status.
 Bei einer unterbrochenen Verbindung bleibt **Status erneut laden** verfügbar.
 Für eine andere Sichtbarkeit oder Kennzeichnung öffnet **Vorbereitung neu starten**
 die Kontooptionen. Erst der anschließende Klick auf **Auftrag prüfen** sendet die
-geänderte Auswahl. Nach dem Schließen des gesamten Tabs ist die gespeicherte
+geänderte Auswahl. Wer das Einstellungsformular vorher schließt, öffnet im
+selben Tab wieder den ursprünglich gespeicherten Auftrag mit dessen Optionen
+und Frist. Weist die erneute Kontoprüfung auf ein anderes Zielkonto hin oder
+schlägt sie fehl, fordert der Dialog vor der Freigabe eine neue Kontoprüfung.
+Nach dem Absenden einer neuen Vorbereitung bezieht sich die Wiederaufnahme
+auf deren Auftrags-ID, auch bei einer unterbrochenen Antwort.
+
+Nach dem Schließen des gesamten Tabs ist die gespeicherte
 Vorbereitung unter **History → Aufträge** erreichbar.
 
 ## Unterbrochene Vorbereitung – 7. November 2026
