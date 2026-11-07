@@ -102,13 +102,21 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    const window=entry.approval_window;
    if(window){
     previewLink=create('a','Beitragsvorschau öffnen','sma-history-preview-link');
-    previewLink.href='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
-    previewLink.target='_top';previewLink.hidden=true;
-    const expire=()=>{status.textContent='Vorbereitung abgelaufen';detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';previewLink.hidden=false;};
+    const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
+    previewLink.href=previewUrl;previewLink.target='_top';
+    const expire=()=>{
+     status.textContent='Vorbereitung abgelaufen';
+     detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';
+     previewLink.href=previewUrl;previewLink.textContent='Beitragsvorschau öffnen';
+    };
     const remaining=Date.parse(window.expires_at)-Date.now();
-    if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';previewLink.hidden=false;}
+    if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';}
     else if(window.status==='expired'||remaining<=0)expire();
-    else{detail.textContent='Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';expiryTimers.push(setTimeout(expire,remaining+1));}
+    else{
+     detail.textContent='Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';
+     previewLink.href=previewUrl+'&resume=1';previewLink.textContent='Vorbereitung fortsetzen';
+     expiryTimers.push(setTimeout(expire,remaining+1));
+    }
    }
    const dates=create('small','Erstellt: '+format(entry.created_at)+' · Stand: '+format(entry.updated_at));
    const coverDetail=create('p',historyCoverStatuses[entry.cover.status][1],'sma-history-cover-detail');

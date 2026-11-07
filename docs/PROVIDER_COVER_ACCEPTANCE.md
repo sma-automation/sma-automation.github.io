@@ -29,6 +29,14 @@ Dateiliste wird anhand der serverseitigen Auftragsprüfung mit dem Kundenordner
 abgeglichen. Ist der Abgleich vorübergehend nicht möglich, öffnet **Vorschau
 erneut laden** denselben Auftrag nach einer erneuten Prüfung.
 
+Solange die Vorbereitung gültig ist, öffnet **History → Aufträge →
+Vorbereitung fortsetzen** den Freigabedialog des gespeicherten Auftrags. Die
+Vorschau prüft die Auftrags-ID, die aktuelle Datei und den gespeicherten
+Portaltext. Der Dialog zeigt das gebundene Zielkonto und die gewählten
+Portaleinstellungen. Alle persönlichen Bestätigungen beginnen leer. Der Klick
+legt keinen zweiten Auftrag an. Läuft die Frist
+beim Öffnen ab, bleibt die Beitragsvorschau für einen Neustart verfügbar.
+
 Die beiden Werbeentwürfe am Zehn-Sekunden-Original wurden anhand der vorhandenen
 241 Einzelbilder und des vom Kunden beschriebenen Produktzwecks geprüft.
 Am Anfang berührt ein Finger die Metallklinke. Das Öffnen ausschließlich mit

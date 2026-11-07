@@ -7,7 +7,7 @@ let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
-import {installOrderReview} from './publication-order.mjs?v=9';
+import {installOrderReview} from './publication-order.mjs?v=10';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -458,6 +458,13 @@ async function openHistoryOrderPreview(id,owner){
  const saved=await fileRpc('get',{asset_id:file.id,platform:selectedPortal});
  if(saved.status!=='completed'||saved.id!==binding.preview_id||saved.revision!==binding.preview_revision||
     saved.assignment_revision!==binding.assignment_revision)throw Error(changed);
+ const resume=params.get('resume')==='1';
+ if(resume){
+  // Re-read the same order after the file lookup. Another tab may have acted meanwhile.
+  order=await readHistoryOrder(id);
+  if(order.check_error==='FILE_REFRESH_REQUIRED')throw fileError('FILE_REFRESH_REQUIRED');
+  if(order.check_error||Object.keys(binding).some(key=>order.binding[key]!==binding[key]))throw Error(changed);
+ }
  const draft=saved.preview?.drafts?.find(d=>d.platform===selectedPortal);
  if(!draft||!order.draft||saved.preview.shop_url!==binding.shop_url||
     ['platform','title','body','caption','hashtags','review_notes'].some(key=>JSON.stringify(draft[key])!==JSON.stringify(order.draft[key])))throw Error(changed);
@@ -467,7 +474,12 @@ async function openHistoryOrderPreview(id,owner){
  renderSelectedFile();showProductContext(saved.product_context,file);fillInput(saved.input);render(saved);
  orderReview.rememberVideoChoices(order);
  workspace.show('preview');status('Beitragsvorschau des Auftrags geladen.');
- await loadMediaCheck();await loadMagicEffect(false);lock(false);syncMedia();
+ await loadMediaCheck();await loadMagicEffect(false);
+ if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
+ lock(false);syncMedia();
+ if(resume&&!orderReview.resumePrepared(order)){
+  status('Die gespeicherte Vorbereitung kann nicht fortgesetzt werden. Du kannst sie für diesen Beitrag neu starten.');
+ }
 }
 
 async function loadHistoryPreview(){

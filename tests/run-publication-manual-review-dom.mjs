@@ -40,6 +40,28 @@ function fixture({option=true,platform='youtube'}={}){
  await restart.handlers.click();eq(t.requests.map(r=>r.action),['account','prepare','get','account']);
  eq(t.$('order-visibility').value,'');eq(t.$('order-final-consent').checked,false);
 }
+// The read-only return from History uses the saved ID, target and choices.
+for(const platform of ['youtube','tiktok']){
+ const t=fixture({platform}),expiry=new Date(Date.now()+60000).toISOString();
+ const saved={ok:true,id:'ab660000-0000-4000-9000-000000000099',binding:t.binding,state:'prepared',approved_at:null,
+  approval_window:{status:'active',expires_at:expiry},approval_policy:'media-consent-2026-11-03.1',
+  approval_token:'saved-token',can_upload:false,can_publish:false,target:{id:'saved-channel',platform},
+  choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},draft:{title:'Saved title',caption:'Saved caption'}};
+ for(const patch of [{approval_window:null},{approval_window:{status:'recheck',expires_at:expiry}},
+  {approval_window:{status:'active',expires_at:new Date(0).toISOString()}},{state:'cancelled'},
+  {approved_at:expiry},{check_error:'FILE_CHANGED'},{approval_token:null},{can_upload:true},
+  {target:{id:'foreign',platform:'other'}}]){
+  eq(t.view.resumePrepared({...saved,...patch}),false);eq(!!t.$('publicationOrderDialog').open,false);
+ }
+ eq(t.view.resumePrepared(saved),true);
+ eq(t.$('publicationOrderDialog').open,true);eq(t.approve.disabled,true);
+ eq(t.$('order-final-consent').checked,false);eq(t.$('order-review-media_rights').checked,false);
+ eq(t.requests.length,0);assert.match(t.doc.body.textContent,/Saved caption/);assert.match(t.doc.body.textContent,/saved-channel/);
+ for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])t.change('order-review-'+key);
+ t.change('order-final-consent');eq(t.requests.length,0);eq(t.approve.disabled,false);
+ await t.approve.handlers.click();
+ eq(t.requests.map(r=>r.action),['approve']);eq(t.requests[0].input.id,saved.id);eq(t.requests[0].input.approval_token,'saved-token');
+}
 // A historical declaration is a suggested choice for the identical file, text and channel.
 {
  const t=fixture(),saved={state:'prepared',binding:t.binding,target:{id:'synthetic-channel'},
