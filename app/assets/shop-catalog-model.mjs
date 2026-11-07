@@ -5,6 +5,11 @@ const api=catalogOrigin+'/functions/v1/sma-shop-produkte';
 const validSlug=value=>typeof value==='string'&&value.length<=63&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 
+export function publicProductUrl(slug,id){
+ if(!validSlug(slug)||typeof id!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(id))return null;
+ return 'https://sma-automation.com/app/shop.html?'+new URLSearchParams({shop:slug,produkt:id});
+}
+
 export function createShopCatalog(value){
  const url=safeShopLink(value);
  if(!url||url.trim()!==url)return null;

@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '../app/shop-manager.html'), 'utf8');
 const moduleCode = html.split('<script type="module">')[1].split('</script>')[0];
-const source = moduleCode.replace(/^import .*;$/m, '').split('if(window.self===window.top)')[0];
+const source = moduleCode.replace(/^import .*;$/gm, '').split('if(window.self===window.top)')[0];
 
 class Element {
   constructor(tag='div') {

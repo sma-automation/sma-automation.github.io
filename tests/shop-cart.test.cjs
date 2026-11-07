@@ -12,6 +12,7 @@ class Element{
  constructor(){this.children=[];this.textContent='';this.style={};this.dataset={};this.events={};this.classList={add(){},remove(){},contains(){return false}}}
  append(...children){this.children.push(...children)}
  replaceChildren(...children){this.children=children}
+ removeAttribute(name){delete this[name]}
  setAttribute(){}
  addEventListener(type,cb){this.events[type]=cb}
  querySelector(){return new Element()}
@@ -19,14 +20,14 @@ class Element{
  scrollIntoView(){}
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
-async function boot({storage=new Map(),slug='sma-testkunde',products=initial,blocked=false,failFetch=false,enabled=false,checkoutFetch,confirm=true}={}){
- const redirects=[],requests=[];
+async function boot({storage=new Map(),slug='sma-testkunde',products=initial,blocked=false,failFetch=false,enabled=false,checkoutFetch,confirm=true,linkQuery='',catalogFetch}={}){
+ const redirects=[],requests=[],reads=[];
  const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};
- const context={URL,URLSearchParams,Intl,console,setTimeout,clearTimeout,AbortController,
-  location:{search:'?shop='+slug},document:{getElementById:get,createElement:()=>new Element(),activeElement:new Element(),body:new Element(),addEventListener(){}},
+ const context={URL,URLSearchParams,Intl,console,setTimeout,clearTimeout,AbortController,AbortSignal,
+  location:{search:'?shop='+slug+linkQuery},document:{getElementById:get,createElement:()=>new Element(),activeElement:new Element(),body:new Element(),addEventListener(){}},
   window:{scrollTo(){},confirm(){assert.equal(enabled,true);return confirm},location:{assign(url){redirects.push(url)}}},
   localStorage:{getItem(k){if(blocked)throw Error('blocked');return storage.get(k)||null},setItem(k,v){if(blocked)throw Error('blocked');storage.set(k,v)},removeItem(k){if(blocked)throw Error('blocked');storage.delete(k)}},
-  async fetch(url,options){if(options?.method==='POST'){requests.push(JSON.parse(options.body));return checkoutFetch(url,options)}if(failFetch)throw new Error('offline');const q=new URL(url).searchParams;const list=q.has('suche')?products.filter(p=>p.name.includes(q.get('suche'))):products;const page=Number(q.get('seite'))||1;return {ok:true,json:async()=>({ok:true,shop:{name:slug},gesamt:list.length,seiten:Math.ceil(list.length/10),produkte:list.slice((page-1)*10,page*10)})}}
+  async fetch(url,options){if(options?.method==='POST'){requests.push(JSON.parse(options.body));return checkoutFetch(url,options)}reads.push([url,options]);if(catalogFetch)return catalogFetch(url,options);if(failFetch)throw new Error('offline');const q=new URL(url).searchParams;const list=q.has('suche')?products.filter(p=>p.name.includes(q.get('suche'))):products;const page=Number(q.get('seite'))||1;return {ok:true,json:async()=>({ok:true,shop:{name:slug},gesamt:list.length,seiten:Math.ceil(list.length/10),produkte:list.slice((page-1)*10,page*10)})}}
  };
  vm.runInNewContext(script.replace(/const CHECKOUT_PUBLIC_ENABLED = (?:true|false);/,'const CHECKOUT_PUBLIC_ENABLED = '+enabled+';'),context);await settle();
  const add=index=>get('grid').children[index].children[1].children.at(-1).onclick();
@@ -34,7 +35,7 @@ async function boot({storage=new Map(),slug='sma-testkunde',products=initial,blo
  const change=(row,delta)=>get('cartLines').children[row].children[1].children[2].children[delta>0?2:0].onclick();
  const total=()=>Number(String(get('cartTotal').textContent).replace(/[^0-9,]/g,'').replace(',','.'));
  const count=()=>Number(get('cartCount').textContent);
- return {get,add,open,change,total,count,storage,redirects,requests,checkout:()=>get('checkoutButton').events.click()};
+ return {get,add,open,change,total,count,storage,redirects,requests,reads,checkout:()=>get('checkoutButton').events.click()};
 }
 test('cart survives reload after add, increase and decrease, then clears when emptied',async()=>{
  const a=await boot();a.add(0);a.add(1);a.open();assert.equal(a.total(),74.8);
@@ -147,3 +148,35 @@ test('frontend and actual public handler agree on two products and independent q
  assert.equal(a.redirects[0],'https://test-store.myshopify.com/cart/58648962433355:2,58641727521099:1');
 });
 
+
+const single=(p,patch={})=>({ok:true,shop:{slug:'sma-testkunde',name:'Testshop'},seite:1,pro_seite:10,
+ gesamt:1,seiten:1,produkt_filter:p.produkt_id,produkte:[p],...patch});
+test('a direct product link opens the matching detail and preserves other items in the merchant cart',async()=>{
+ const normal=await boot();normal.add(0);
+ const p=initial[1],shop=await boot({storage:normal.storage,linkQuery:'&produkt=p1',catalogFetch:async()=>({ok:true,json:async()=>single(p)})});
+ assert.equal(shop.reads.length,1);const [url,options]=shop.reads[0];assert.equal(new URL(url).search,'?shop=sma-testkunde&produkt=p1');
+ assert.equal(options.method,'GET');assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');
+ assert.equal(shop.get('linkedStatus').hidden,true);assert.equal(shop.get('galleryTitle').textContent,p.name);
+ assert.ok(shop.get('linkedProduct').children.includes(shop.get('galleryPanel')));assert.equal(shop.count(),1);
+ shop.get('galleryAdd').onclick();assert.equal(shop.count(),2);assert.equal(shop.requests.length,0);
+ assert.equal(shop.get('backToCatalog').href,'?shop=sma-testkunde');
+});
+test('invalid links, missing products and mismatched responses cannot open another product',async()=>{
+ for(const query of ['&produkt=','&produkt=..','&produkt=p1&produkt=p2','&shop=anderer&produkt=p1']){
+  const b=await boot({linkQuery:query});assert.equal(b.reads.length,0);assert.match(b.get('linkedStatus').textContent,/ungültig/);
+ }
+ const p=initial[1];
+ for(const response of [{status:404,ok:false},{ok:true,json:async()=>single(p,{shop:{slug:'fremd'}})},
+  {ok:true,json:async()=>single(p,{produkt_filter:undefined})},{ok:true,json:async()=>single(initial[0],{produkt_filter:'p1'})}]){
+  const b=await boot({linkQuery:'&produkt=p1',catalogFetch:async()=>response});
+  assert.equal(b.reads.length,1);assert.equal(b.get('linkedProduct').children.length,0);
+  assert.match(b.get('linkedStatus').textContent,/nicht verfügbar|nicht geladen/);assert.equal(b.requests.length,0);
+ }
+});
+test('an unpriced or unavailable linked product does not offer a purchase',async()=>{
+ for(const p of [{...initial[1],preis:null},{...initial[1],bestand:0},{...initial[1],shopify_aktiv:false}]){
+  const b=await boot({linkQuery:'&produkt=p1',catalogFetch:async()=>({ok:true,json:async()=>single(p)})});
+  assert.equal(b.get('galleryAdd').disabled,true);assert.equal(b.requests.length,0);
+  if(p.preis===null)assert.equal(b.get('galleryPrice').textContent,'Preis nicht verfügbar');
+ }
+});

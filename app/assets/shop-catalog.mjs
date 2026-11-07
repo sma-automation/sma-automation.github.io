@@ -1,4 +1,4 @@
-import {catalogFromSearch,fetchCatalog} from './shop-catalog-model.mjs?v=1';
+import {catalogFromSearch,fetchCatalog,publicProductUrl} from './shop-catalog-model.mjs?v=2';
 
 // Public catalog only: no session, storage, account API, cart or checkout.
 export function mountShopCatalog({doc=document,search=doc.defaultView.location.search,request=fetchCatalog}={}){
@@ -13,7 +13,12 @@ export function mountShopCatalog({doc=document,search=doc.defaultView.location.s
   const placeholder=()=>{const span=doc.createElement('span');span.textContent='Kein Produktbild';photo.replaceChildren(span);};
   if(product.image){const img=doc.createElement('img');img.src=product.image;img.alt=product.title;img.loading='lazy';img.referrerPolicy='no-referrer';img.addEventListener('error',placeholder,{once:true});photo.append(img);}else placeholder();
   const copy=doc.createElement('div'),title=doc.createElement('h2'),availability=doc.createElement('p');
-  title.textContent=product.title;title.tabIndex=-1;availability.className='availability';
+  const href=publicProductUrl(config.slug,product.id);
+  if(href){
+   const link=doc.createElement('a');link.href=href;link.target='_blank';link.rel='noopener noreferrer';
+   link.textContent=product.title;title.append(link);
+  }else title.textContent=product.title;
+  title.tabIndex=-1;availability.className='availability';
   availability.textContent=!product.ready?'Noch nicht bestellbar':product.stock===null?'Verfügbarkeit im Shop prüfen':product.stock>0?product.stock+' verfügbar':'Derzeit nicht lieferbar';
   copy.append(title,availability);
   const amount=doc.createElement('span');amount.className='price';amount.textContent='Preis im Shop';

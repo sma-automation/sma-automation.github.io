@@ -71,3 +71,10 @@ test('disabled shop and invalid responses fail closed and invalid slugs never se
  await assert.rejects(fetchCatalog({slug:'../private',fetcher:async()=>{called=true;}}),{code:'INVALID_REQUEST'});
  assert.equal(called,false);
 });
+
+test('product links encode a public shop and an exact SMA product ID',async()=>{
+ const {publicProductUrl}=await ready;
+ assert.equal(publicProductUrl('mein-shop','ABC_01-2'),url+'&produkt=ABC_01-2');
+ for(const id of ['A/B','A?shop=x','#item','',null,'a'.repeat(81)])assert.equal(publicProductUrl('mein-shop',id),null);
+ assert.equal(publicProductUrl('other&shop=x','ABC'),null);
+});
