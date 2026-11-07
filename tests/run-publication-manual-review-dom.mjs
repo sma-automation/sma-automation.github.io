@@ -17,7 +17,9 @@ function fixture({option=true,platform='youtube',accountResponse,approvalRespons
  const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform,preview_id:'synthetic-preview',preview_revision:1,assignment_revision:1};let currentBinding={...binding},reloadPatch={},dirty=false;
  let sequence=8,clock=Date.now(),timer,savedPreparation;class TestDate extends Date{static now(){return clock;}}
  const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-'+String(++sequence).padStart(12,'0')},fetch:async(_url,opts)=>{
-  const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
+  const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{version:1,platform,target_id:'synthetic-channel',display_name:'Synthetic',permissions:platform==='youtube'?['youtube.upload']:['video.publish','user.info.basic'],
+   policy:platform==='youtube'?{}:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60},
+   checked_at:new Date(clock).toISOString(),expires_at:new Date(clock+300000).toISOString()}};
   if(req.action==='approve'&&approvalResponse)return approvalResponse(req);
   if(req.action==='account'){
    const account={...common,stage:'account'};
@@ -460,5 +462,77 @@ for(const lost of [false,true]){
  await submit(t);const replacement=t.requests[3].input.id;assert.notEqual(first,replacement);
  await reopen(t);eq(t.reads,lost?[replacement,replacement]:[replacement]);eq(t.requests.length,4);
  eq(t.approve.disabled,true);eq(t.approve.hidden,false);assert.match(t.doc.body.textContent,/Sichtbarkeit: Nicht gelistet/);
+}
+function chooseOriginal(t,platform){
+ t.$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';
+ if(platform==='youtube'){
+  t.$('order-made_for_kids').value='false';t.$('order-contains_synthetic_media').value='false';
+ }
+}
+for(const platform of ['youtube','tiktok']){
+ const t=fixture({platform});await t.open();const id=t.requests[1].input.id;
+ t.ready();t.advance(60000);await restartOrder(t);chooseOriginal(t,platform);await submit(t);
+ eq(t.requests.map(r=>r.action),['account','prepare','account']);eq(t.reads,[id]);
+ eq(t.approve.hidden,false);eq(t.approve.disabled,true);eq(t.$('order-final-consent').checked,false);
+ assert.match(notice(t),/ursprüngliche Frist/);
+ await reopen(t);eq(t.reads,[id,id]);eq(t.requests.length,3);
+ t.advance(1740001);eq(t.approve.hidden,true);
+}
+// A concurrent transition changes what is displayed; it never initiates a new write by itself.
+for(const state of ['approved','checking','checked','blocked','cancelled']){
+ const t=fixture();await t.open();const id=t.requests[1].input.id;await restartOrder(t);
+ t.patch({state,approval_token:null,approval_window:null,approved_at:state==='cancelled'?null:new Date().toISOString()});
+ chooseOriginal(t,'youtube');await submit(t);eq(t.reads,[id]);eq(t.requests.length,3);
+ eq(t.approve.hidden,true);assert.match(notice(t),state==='cancelled'?/storniert/:/Freigabe ist gespeichert/);
+}
+{
+ const t=fixture();await t.open();await restartOrder(t);t.patch({check_error:'FILE_CHANGED'});
+ chooseOriginal(t,'youtube');await submit(t);eq(t.requests.length,3);eq(t.approve.disabled,true);
+ assert.match(t.doc.body.textContent,/Datei wurde geändert/);
+}
+for(const windowStatus of ['expired','recheck']){
+ let count=0;const t=fixture({prepareResponse:async(_,response)=>{count++;return response;}});
+ await t.open();const old=t.requests[1].input.id;await restartOrder(t);
+ t.patch({approval_window:{status:windowStatus,expires_at:new Date(Date.now()+60000).toISOString()}});
+ chooseOriginal(t,'youtube');await submit(t);
+ eq(t.reads,[old]);eq(count,2);assert.notEqual(t.requests[3].input.id,old);
+ eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+}
+for(const change of ['duration','privacy','permissions','reordered']){
+ let first=true;
+ const t=fixture({platform:'tiktok',accountResponse:row=>{
+  if(first)return row;
+  const e=row.account_check,policy={...e.policy};
+  if(change==='duration')policy.max_duration_sec=30;
+  if(change==='privacy')policy.privacy_levels=['SELF_ONLY','MUTUAL_FOLLOW_FRIENDS'];
+  if(change==='reordered')return {...row,account_check:{...e,policy:Object.fromEntries(Object.entries(policy).reverse()),permissions:[...e.permissions].reverse()}};
+  return {...row,account_check:{...e,policy,permissions:change==='permissions'?['video.publish']:e.permissions}};
+ },prepareResponse:async(_,response)=>{const row=await response.json();return {ok:true,json:async()=>({...row,choices:Object.fromEntries(Object.entries(row.choices).reverse())})};}});
+ await t.open();first=false;await restartOrder(t);chooseOriginal(t,'tiktok');await submit(t);
+ eq(t.reads,[t.requests[1].input.id]);eq(t.requests.length,change==='reordered'?3:4);eq(t.approve.disabled,true);
+}
+{
+ let saved,offline=true;
+ const t=fixture({prepareResponse:async(_,response)=>{saved=await response.json();return response;},
+  storedResponse:()=>{if(offline)throw Error('Offline');return saved;}});
+ await t.open();await restartOrder(t);chooseOriginal(t,'youtube');await submit(t);
+ eq(t.requests.length,3);eq(t.approve.hidden,true);eq(t.doc.querySelector('form').hidden,false);
+ offline=false;await submit(t);eq(t.requests.length,3);eq(t.reads,[saved.id,saved.id]);
+ eq(t.approve.disabled,true);eq(t.approve.hidden,false);
+}
+{
+ const t=fixture();await t.open();await restartOrder(t);
+ t.patch({choices:{visibility:'unlisted'},approval_window:{status:'expired',expires_at:new Date().toISOString()}});
+ chooseOriginal(t,'youtube');await submit(t);eq(t.requests.length,3);eq(t.approve.hidden,true);
+ assert.match(notice(t),/gespeicherten Portaleinstellungen/);
+}
+for(const interrupt of ['logout','edit']){
+ let saved,finish,started;const reading=new Promise(resolve=>started=resolve);
+ const t=fixture({prepareResponse:async(_,response)=>{saved=await response.json();return response;},
+  storedResponse:()=>{started();return new Promise(resolve=>finish=resolve);}});
+ await t.open();await restartOrder(t);chooseOriginal(t,'youtube');
+ const pending=submit(t);await reading;await submit(t);eq(t.reads,[saved.id]);
+ if(interrupt==='logout')t.view.clear();else t.changeBinding();
+ finish(saved);await pending;eq(t.requests.length,3);eq(t.approve.hidden,true);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');

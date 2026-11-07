@@ -85,6 +85,16 @@ schlägt sie fehl, fordert der Dialog vor der Freigabe eine neue Kontoprüfung.
 Nach dem Absenden einer neuen Vorbereitung bezieht sich die Wiederaufnahme
 auf deren Auftrags-ID, auch bei einer unterbrochenen Antwort.
 
+Wählt der Kunde im selben Tab für YouTube oder TikTok erneut dieselben Optionen
+und klickt auf **Auftrag prüfen**, liest SMA die bisherige Auftrags-ID. Stimmen
+Datei, Textstand, Zielkonto, Berechtigungen und Portalvorgaben überein, wird die
+noch gültige Vorbereitung mit ihrer ursprünglichen Frist angezeigt. Eine bereits
+gespeicherte Freigabe oder Stornierung erscheint als Status. Bei einer
+unterbrochenen Leseanfrage kann der Kunde **Auftrag prüfen** erneut wählen.
+
+Bei geänderter Auswahl, abgelaufener Vorbereitung oder geänderten Kontovorgaben
+kann SMA nach dem ausdrücklichen Klick eine neue Vorbereitung anfordern.
+
 Nach dem Schließen des gesamten Tabs ist die gespeicherte
 Vorbereitung unter **History → Aufträge** erreichbar.
 
