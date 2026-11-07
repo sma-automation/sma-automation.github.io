@@ -152,6 +152,12 @@ der gespeicherte Auftrag in **History → Aufträge** zu finden.
 Nach gespeicherter Freigabe führt **Freigegebenen Auftrag in der History öffnen**
 zum aufgeklappten Eintrag. Der Dialog zeigt den Freigabezeitpunkt in Wiener Zeit.
 
+Bei YouTube und TikTok sendet **Auftrag prüfen** die zuvor angezeigte Zielkonto-ID mit.
+Vor dem Anlegen eines Auftrags gleicht SMA im Freigabejournal Kunde, Datei,
+Dateiversion, Portal und Zielkonto ab. Bei einem Treffer entsteht kein weiterer
+Auftrag. Die Kontoanbindung durch den Worker und die Prüfung bei der endgültigen
+Freigabe sichern auch ältere Clients und zeitgleich vorbereitete Aufträge ab.
+
 Meldet SMA für dieselbe Dateiversion, dass am selben Portal und Zielkonto bereits
 ein Auftrag freigegeben wurde, liest der Dialog die vom Doppelposting-Schutz
 zurückgegebene Auftrags-ID im angemeldeten Kundenkonto. Der Link öffnet den

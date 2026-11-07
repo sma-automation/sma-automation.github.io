@@ -115,13 +115,18 @@ export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomU
   }
   return {
     account:platform=>call('account',{id:uuid(),platform}),
-    prepare(binding,choices,savedId) {
-      const input={...binding,choices};const signature=JSON.stringify(input);
+    prepare(binding,choices,savedId,expectedTargetId) {
+      const input={...binding,choices};
+      if(expectedTargetId)input.expected_target_id=expectedTargetId;
+      const signature=JSON.stringify(input);
       if(savedId)attempt={signature,id:savedId};
       else if(!attempt||attempt.signature!==signature)attempt={signature,id:uuid()};
       const id=attempt.id;
       return call('prepare',{id,...input}).catch(error=>{
-        if(error?.rejected)throw error;
+        if(error?.rejected){
+          if(error.code==='DUPLICATE_PUBLICATION'&&expectedTargetId)error.duplicateRequestId=id;
+          throw error;
+        }
         throw Object.assign(Error(orderError(),{cause:error}),{preparationId:id});
       });
     },
@@ -288,10 +293,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     link.href='dashboard.html#auftrag/'+row.id;link.target='_top';
     details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),link);
   }
-  function showDuplicate(row){
+  function showDuplicate(row,targetId){
     // The journal identifies duplicate approvals by file version, platform and target.
     // Caption revisions and visibility belong to the independently approved order.
-    if(!recordedApproval(row)||!order?.target?.id||row.target?.id!==order.target.id||
+    if(!recordedApproval(row)||!targetId||row.target?.id!==targetId||
        row.target.platform!==context.binding.platform||
        !['asset_id','asset_revision','platform'].every(k=>context.binding[k]&&row.binding?.[k]===context.binding[k]))throw Error(orderError('REQUEST_CONFLICT'));
     if(typeof row.draft?.title==='string'&&row.draft.title)details.append(make('h3',row.draft.title));
@@ -411,7 +416,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     if(pending.duplicate)details.replaceChildren();
     try{
       unchanged();
-      if(pending.duplicate&&(typeof pending.id!=='string'||!orderIdPattern.test(pending.id)||pending.id===order?.id))throw Error(orderError('REQUEST_CONFLICT'));
+      if(pending.duplicate&&(typeof pending.id!=='string'||!orderIdPattern.test(pending.id)||pending.id===pending.requestId))throw Error(orderError('REQUEST_CONFLICT'));
       const result=await readStoredOrder(pending.id);
       if(generation!==epoch||pending!==recovery)return;
       unchanged();
@@ -421,7 +426,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       }
       stored=validatedOrder(result,pending.id);
       if(pending.duplicate){
-        showDuplicate(stored);
+        showDuplicate(stored,pending.targetId);
         return; // Keep status refresh read-only for the other order.
       }
       if((order?.state==='prepared'||pending.state==='prepared')&&stored.state==='preparing')throw Error(orderError('REQUEST_CONFLICT'));
@@ -486,7 +491,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(generation!==epoch)return;
       if(!sentApproval&&offerLinkRepair(e))return;
       notice.textContent=e.message||orderError();
-      const duplicate=sentApproval&&e.rejected&&e.code==='DUPLICATE_PUBLICATION';
+      const duplicate=e.rejected&&e.code==='DUPLICATE_PUBLICATION'&&(sentApproval||!!e.duplicateRequestId);
       preparationId=e.preparationId||preparationId;
       if(choices&&preparationId&&!e.rejected){
         if(preparationToResume?.id!==preparationId){
@@ -496,6 +501,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       }else if(sentApproval||duplicate){
         preparationToResume=null;
         recovery={id:duplicate?e.existingId:order.id,duplicate,code:e.rejected?e.code:null};
+        if(duplicate){
+          recovery.requestId=e.duplicateRequestId||order.id;
+          recovery.targetId=sentApproval?order.target?.id:account?.target?.id;
+        }
       }
       if(recovery){
         await readRecovery(generation);
@@ -583,7 +592,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
     // Once this write is sent, a lost response belongs to the new request.
     if(prior&&(prior.persisted||!sameOptions(choices,prior.choices)))preparationToResume=null;
-    return client.prepare(context.binding,choices);
+    return client.prepare(context.binding,choices,undefined,account?.target.id);
   }
   controls.addEventListener('submit',event=>{event.preventDefault();if(working||order||recovery||!controls.reportValidity())return;
     if(commercial?.checked&&!fields.get('brand_content_toggle').checked&&!fields.get('brand_organic_toggle').checked){notice.textContent='Wähle eigene Marke, Werbung für Dritte oder beides.';return;}

@@ -34,6 +34,10 @@ try{
  // Install the actual history projections and test the same deadline in both customer reads.
  await db.exec((await src('publication-provider-cover')).split('create or replace function')[0]);
  for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window','publication-pending-preparation','publication-history-order-caption','publication-history-order-page'])await db.exec(await src(f));
+ const existingApproval=await src('publication-existing-approval');
+ eq(existingApproval,await readFile(new URL('../supabase/migrations/20261107231249_publication_existing_approval_v1.sql',import.meta.url),'utf8'));
+ await db.exec(existingApproval);
+ await assert.rejects(()=>db.exec(existingApproval),/PUBLICATION_EXISTING_APPROVAL_BASELINE_CHANGED/);n++;
  const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
  for(const [age,expected] of [['1 minute','active'],['30 minutes','expired'],['1 day','expired']]){
@@ -104,6 +108,41 @@ try{
  eq((await request('approve',approval)).approved_at,approved.approved_at);eq((await request('approve',{...approval,review:base})).code,'FINAL_APPROVAL_REQUIRED');
  const count=async t=>(await db.query('select count(*)::int n from sma_private.'+t)).rows[0].n;
  eq(await count('publication_journal_v1'),1);eq(await count('publication_provider_permissions_v1'),0);eq(await count('publication_provider_attempts_v1'),0);
+ // A new request for a later caption should return the original before inserting a row.
+ await db.exec('begin');
+ const freshId=id(40), later={...selected,preview_id:id(3),preview_revision:2,assignment_revision:2};
+ const prepareInput={id:freshId,...later,choices,expected_target_id:target.id};
+ async function assignLaterDraft(platform){
+  await db.exec("update public.sma_kunden set shop_oeffentlich=true,shop_slug='fixture' where id=91");
+  await db.query(`insert into sma_private.publication_previews_v1(id,user_id,customer_id,input,shop_url,status,revision)
+   values($1,$2,91,'{}','https://sma-automation.com/app/shop.html?shop=fixture','completed',2)`,[later.preview_id,uid]);
+  await db.query(`insert into sma_private.publication_assignments_v1(asset_id,platform,preview_id,preview_revision,asset_revision,revision,draft)
+   values($1,$4,$2,2,$3,2,'{"title":"Later caption"}')`,[id(1),later.preview_id,rev,platform]);
+ }
+ await assignLaterDraft('youtube');
+ const existing={ok:false,code:'DUPLICATE_PUBLICATION',existing_order_id:approved.id};
+ eq(await request('prepare',prepareInput),existing);
+ eq(await request('prepare',{...prepareInput,choices:{...choices,visibility:'public'}}),existing);
+ eq(await count('publication_orders_v1'),1);
+ eq((await request('prepare',{...prepareInput,asset_revision:'outdated'})).code,'ORDER_CHANGED');
+ eq((await request('prepare',prepareInput,other)).code,'FILE_UNAVAILABLE');
+ for(const invalid of [null,42,{},'ab','bad id','a'.repeat(201)]){
+  eq((await request('prepare',{...prepareInput,expected_target_id:invalid})).code,'INVALID_INPUT');
+ }
+ eq((await request('prepare',{...prepareInput,platform:'facebook'})).code,'INVALID_INPUT');
+ eq((await request('approve',{...approval,expected_target_id:target.id})).code,'INVALID_INPUT');
+ eq((await request('get',{id:approved.id,expected_target_id:target.id})).code,'INVALID_INPUT');
+ await db.exec('savepoint changed_owner');
+ await db.query('update sma_private.publication_orders_v1 set user_id=$1 where id=$2',[other,approved.id]);
+ eq(await request('prepare',prepareInput),{ok:false,code:'REQUEST_CONFLICT'});
+ await db.exec('rollback to changed_owner');
+ // No match and clients without a target hint still use ordinary unbound preparation.
+ const alternative=await request('prepare',{...prepareInput,expected_target_id:'another-channel'});
+ eq(alternative.state,'preparing');eq(alternative.target,null);eq(alternative.approved_at,null);
+ eq((await request('prepare',{...prepareInput,expected_target_id:'another-channel'})).id,freshId);
+ const legacy=await request('prepare',{id:id(41),...later,choices});eq(legacy.state,'preparing');
+ eq(await count('publication_orders_v1'),3);eq(await count('publication_journal_v1'),1);
+ eq(await count('publication_provider_attempts_v1'),0);await db.exec('rollback');
  // A later text revision for the same asset version and target collides with the first approval.
  await db.exec('begin');
  const secondId=id(11);
@@ -146,6 +185,9 @@ try{
  const ttApproval={...approval,review:{...base,tiktok_music_terms:true,human_review:{...human,...tt.human_review_option}}};
  eq((await request('approve',{...ttApproval,review:{...ttApproval.review,tiktok_music_terms:false}})).code,'FINAL_APPROVAL_REQUIRED');
  await db.exec('delete from sma_private.publication_journal_v1');tt=await request('approve',ttApproval);eq(tt.state,'approved');eq(tt.media_check.human_review.method,'customer_attestation');
+ await assignLaterDraft('tiktok');
+ eq(await request('prepare',{...prepareInput,platform:'tiktok',expected_target_id:ttTarget.id,choices:ttChoices}),existing);
+ eq(await count('publication_orders_v1'),1);
  const ttClaim=await worker('claim');tt=await worker('finish_check',{...data,target:ttTarget,account_check:ttEvidence},ttClaim.lease_id);eq(tt.state,'checked');eq(tt.blockers,[]);
  eq((await provider({...data,target:ttTarget,account_check:ttEvidence,size_bytes:2000})).code,'UPLOAD_TEST_APPROVAL_REQUIRED');await db.exec('rollback');
  // A late machine finding blocks a previously accepted manual attestation.
