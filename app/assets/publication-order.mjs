@@ -250,6 +250,17 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
     approve.hidden=r.state!=='prepared';setWorking(false);
   }
+  function resumePrepared(previous){
+    if(previous.state!=='prepared'||previous.approved_at!==null||previous.check_error||
+       previous.approval_window?.status!=='active'||preparationEnded(previous)||
+       previous.can_upload!==false||previous.can_publish!==false||!previous.approval_token||
+       !previous.target?.id||previous.target.platform!==previous.binding?.platform)return false;
+    context=getContext();
+    showOrder(previous);
+    dialog.showModal();
+    onOpen();
+    return true;
+  }
   function unchanged(){const next=getContext();if(JSON.stringify(next.binding)!==JSON.stringify(context.binding))throw Error(orderError('ORDER_CHANGED'));}
   async function run(action) {
     if(working)return;setWorking(true);notice.textContent='Auftrag wird geprüft …';const generation=epoch;
@@ -290,7 +301,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   approve.addEventListener('click',()=>run(()=>client.approve(order,consent.checked,reviewValues())));
   statusButton.addEventListener('click',()=>run(()=>client.get(order.id)));
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',clearExpiryTimer);dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
-  return {rememberVideoChoices,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {

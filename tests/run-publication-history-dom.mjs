@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {mock} from 'node:test';
 import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 import {mountPublicationHistory} from '../app/assets/publication-history-dashboard.mjs';
 const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImmediate(r));
@@ -226,5 +227,20 @@ await test('expired preparation shows the next step without exposing approval co
  assert.equal(link.textContent,'Beitragsvorschau öffnen');assert.equal(link.hidden,false);
  assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+entry(1).id);
  assert.equal(link.getAttribute('target'),'_top');assert.equal(f.$('ol button'),null);f.view.destroy();
+});
+await test('active preparation links to the same order and falls back to preview at expiry',async()=>{
+ const now=Date.now();
+ mock.timers.enable({apis:['Date','setTimeout'],now});
+ const expires=new Date(now+60000).toISOString();
+ const f=fixture({request:()=>result([entry(1,{status:'prepared',approval_window:{status:'active',expires_at:expires}})])});
+ try{
+  await tick();
+  const link=f.$('ol a'),preview='/app/publication-preview.html?wide=1&portal=youtube&order='+entry(1).id;
+  assert.equal(link.hidden,false);assert.equal(link.textContent,'Vorbereitung fortsetzen');
+  assert.equal(link.getAttribute('href'),preview+'&resume=1');
+  mock.timers.tick(60001);
+  assert.equal(link.textContent,'Beitragsvorschau öffnen');assert.equal(link.getAttribute('href'),preview);
+  assert.deepEqual(f.calls,[{}]);
+ }finally{f.view.destroy();mock.timers.reset();}
 });
 console.log(`${passed} history DOM scenarios passed.`);
