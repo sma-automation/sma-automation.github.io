@@ -1,8 +1,9 @@
+import {mountGalleryMusic} from './gallery-music-worker.mjs?v=1';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
-let supabase,coverView,originalVideo,previewOwnerId;
+let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
@@ -221,7 +222,7 @@ async function loadAssetPreview({retry=false,refresh=false}={}){
  }finally{if(mediaViewController===controller)mediaViewController=null;}
 }
 $('retryAssetPreview').addEventListener('click',()=>loadAssetPreview({retry:true}));
-window.addEventListener('pagehide',()=>{originalVideo?.destroy();coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
+window.addEventListener('pagehide',()=>{galleryMusic?.destroy();originalVideo?.destroy();coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
 function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
@@ -236,12 +237,13 @@ function readableFilename(name){
 function describeFile(file){
  const video=file.media_kind==='video';
  const kind=video?'Video':'Bild';
- const variant={original:video?'Originalvideo':'Originalbild',clip:'Videoausschnitt',cover:'Titelbild',export:video?'Bearbeitetes Video':'Bearbeitetes Bild'}[file.display?.variant]||kind;
+ const musicVersion=video&&file.name?.endsWith(' – mit SMA-Musik.mp4');
+ const variant=musicVersion?'Video mit SMA-Musik':{original:video?'Originalvideo':'Originalbild',clip:'Videoausschnitt',cover:'Titelbild',export:video?'Bearbeitetes Video':'Bearbeitetes Bild'}[file.display?.variant]||kind;
  const duration=video&&Number.isFinite(file.duration_ms)&&file.duration_ms>0
   ? Math.max(0.1,Math.round(file.duration_ms/100)/10).toLocaleString('de-DE')+' Sek.' : '';
  const modified=new Date(file.modified_at);
  const fallback=Number.isFinite(modified.getTime())?kind+' vom '+modified.toLocaleDateString('de-AT')+' · '+modified.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):kind;
- const title=file.display?.product||file.display?.draft_title||readableFilename(file.display?.source_name)||readableFilename(file.name)||fallback;
+ const title=file.display?.product||file.display?.draft_title||readableFilename((file.display?.source_name||'').replace(/ – mit SMA-Musik\.mp4$/,''))||readableFilename((file.name||'').replace(/ – mit SMA-Musik\.mp4$/,''))||fallback;
  return {title,version:[variant,duration].filter(Boolean).join(' · ')};
 }
 async function optimizerCatalog(){
@@ -362,7 +364,7 @@ $('chooseGeneralTemplate').addEventListener('click',()=>requestFileSelection('')
 $('confirmFileSwitch').addEventListener('click',()=>pendingAssetId!==null?requestFileSelection(pendingAssetId,true):undefined);
 $('cancelFileSwitch').addEventListener('click',()=>{pendingAssetId=null;$('fileSwitchNotice').hidden=true;});
 async function loadFiles(preferredId=null){
- const r=await optimizerCatalog();if(signedOut)return;assets=r.files||[];const old=preferredId??selectedAsset?.id??'';
+ const r=await optimizerCatalog();if(signedOut)return;void galleryMusic?.wake();assets=r.files||[];const old=preferredId??selectedAsset?.id??'';
  selectedAsset=assets.find(f=>f.id===old&&fileFitsPortal(f))||null;
  assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;renderSelectedFile(!!selectedAsset&&mediaViewKey===selectedAsset.id+':'+selectedAsset.revision);renderFilePicker();
  if(old&&!selectedAsset){clearDraft();resetMediaCheck(messages.FILE_UNAVAILABLE);throw Error(messages.FILE_UNAVAILABLE);}
@@ -707,8 +709,13 @@ lock(true);status('Deine Dateien werden geladen …');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){galleryMusic?.destroy();coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
+ if(selectedPortal&&!params.has('order')&&window.top===window){
+  galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:text=>{if(!signedOut)$('galleryMusicStatus').textContent=text;},
+   onComplete:async()=>{const list=await optimizerCatalog();if(!signedOut&&(await session()).user.id===coverOwner){assets=list.files||[];renderFilePicker();}}
+  });
+ }
  coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
   if(!['youtube','tiktok'].includes(selectedPortal))return fetchAssetThumbnail(f,(await session()).access_token,signal);
   const blob=await (await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner);

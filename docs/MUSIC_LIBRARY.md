@@ -79,9 +79,37 @@ Der Technikton bleibt ein privater Kunden-Track. 79 isolierte SQL- und
 Ablaufprüfungen einschließlich Zahlungsrückmeldung und 601 Repository-Tests
 sind bestanden.
 
-Die automatische Vertonung beim Eingang eines neuen Galerievideos ist weiterhin
-offen. Dafür kann SMA künftig die bereits geprüften Katalogberechtigungen und
-den getrennt erprobten Zuschnitt verwenden.
+### Automatische Musik für neue Galerieclips
+
+Beim ersten Eingang einer unterstützten MP4 im Dateikatalog merkt SMA das Video
+für das zugehörige Kundenkonto vor. Ein geöffnetes Kundendashboard oder eine
+eigenständig geöffnete Portaloptimierung übernimmt die Verarbeitung. Ohne
+offenen Browser wartet der Auftrag. Ältere Galeriedateien werden beim nächsten
+Ordnerabgleich nicht nachträglich eingeplant.
+
+SMA wählt einen für das Konto verfügbaren Track aus dem zentralen SMA-Katalog.
+Bei Alpha und Beta muss der Titel bereits freigeschaltet sein. Der automatische
+Ablauf kauft weder Credits noch Tracks. Fehlt ein Titel, wartet das Video.
+Die persönliche Kundenbibliothek und der Technik-Testton sind keine Quelle.
+
+Die Tonprüfung liest die tatsächlichen Medienstreams. Jede bestehende Audiospur
+bleibt erhalten, auch eine leise oder stumme Spur. Für eine MP4 mit einer
+einzelnen Videospur ohne Audio kopiert SMA die Bildspur, wiederholt oder kürzt
+die Musik auf Videolänge und erzeugt eine AAC-Spur bei 25 % Lautstärke.
+Der erste Ausbau unterstützt bis zu 60 Sekunden und 24 MB pro Ein- und
+Ausgabedatei. Die Fassung erscheint als **Video mit SMA-Musik** in der Galerie,
+das Original bleibt separat verfügbar.
+
+Wiederholungen verwenden dieselbe Upload-ID und ab der Reservierung dieselbe
+erwartete Prüfsumme. Mehrere Tabs teilen einen Bearbeitungsplatz je Konto. Eine
+verifizierte fertige Datei wird bei der Wiederaufnahme erkannt. Ein abgelaufener
+Upload mit unklarem Ergebnis endet mit einem Hinweis zur Prüfung des Kundenordners.
+Die Ausgabe startet keine weitere automatische Vertonung.
+
+Geprüft mit der FFmpeg-Browserlaufzeit, synthetischen kürzeren und längeren
+Tracks sowie einer lokalen Kopie des Türgriff-Originals (241 Bilder, 10,041667 s;
+AAC 10,040998 s). Beim vorhandenen Drei-Sekunden-Export blieb die Tonspur erhalten.
+Der erste vollständige Kundendurchlauf mit einem produzierten SMA-Master steht aus.
 
 ## Bedienung
 

@@ -1,4 +1,4 @@
-import {createCatalogAPI} from './music-catalog.mjs?v=1';
+import {createCatalogAPI} from './music-catalog.mjs?v=2';
 import {inspectMusic,readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
 const origin='https://bnvnmdxosbnuzedokqgh.supabase.co',key='sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
 export function readMusicTrack(t,owner){
