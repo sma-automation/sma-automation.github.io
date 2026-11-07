@@ -146,3 +146,17 @@ Der nächste Schritt für den privaten YouTube-Test ist die offene Medienkennzei
 Die neun bestehenden Aufträge bleiben unverändert. Keine Operatorberechtigung,
 kein Provider- oder Coverversuch. PR #57/#69, n8n-Originalentwürfe und
 Shopify-Testmodus bleiben unangetastet.
+
+## Produktangaben für neue Textentwürfe
+
+Die Portaloptimierung kann eine kundenseitig bestätigte Produktbeschreibung mit dem
+Dateiinhalt kombinieren. Eine bestätigte SHA-256-Zuordnung gilt auch für abgeschlossene
+Editor-Exporte, wenn Dateistand, Größe, Prüfsumme und Kundenkonto zusammenpassen.
+Weitere Artikel lassen sich anhand des vollständigen Dateinamens ohne Endung oder
+einer lesbaren Aufschrift einem aktiven Katalogartikel zuordnen. Verglichen werden
+Produktname, SKU und SMA-Artikelnummer. Mehrere Treffer führen beim Magic Effect
+zur Rückfrage im vorhandenen Beschreibungsfeld.
+
+Bei einem vollständig gesichteten Export kann der Magic Effect die gespeicherte
+Bildbeschreibung verwenden. Produktzweck und Themengebiet stammen aus den
+Produktangaben. Ein neuer Text durchläuft weiterhin den regulären Inhaltsabgleich.

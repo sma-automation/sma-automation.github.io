@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {checkProductContext} from './sql-runtime/product-context-checks.mjs';
 import {checkExportReference} from './sql-runtime/export-reference-checks.mjs';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
@@ -78,5 +79,6 @@ try {
   assert.equal(await first("select sma_private.publication_video_technical_valid_v1($1,'extracted') value",[JSON.stringify(tech)]),false);
   assert.equal(await first("select sma_private.publication_video_technical_valid_v1($1,'transcribed') value",[JSON.stringify(tech)]),true);
   await checkExportReference({db,load,first,probe,save});
+  await checkProductContext({db,load,first});
   console.log('Export probe and reference SQL passed for both portals, isolation, stale evidence and legacy validation.');
 } finally { await db.close(); }

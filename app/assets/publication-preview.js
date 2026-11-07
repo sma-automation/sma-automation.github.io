@@ -61,7 +61,44 @@ function sourceInput(){
  // Keep the existing caption API contract without asking customers for audience or goal.
  return {source_text:$('source_text').value.trim(),audience:english?'People interested in the content shown':'Interessierte am gezeigten Inhalt',goal:english?'Maximize relevant reach with accurate, content-specific text':'Größtmögliche relevante Reichweite mit sachlich richtigen, zum Inhalt passenden Texten',language:$('language').value,media_kind:selectedAsset?selectedAsset.media_kind:selectedPortal==='youtube'?'video':$('media_kind').value,platforms:selectedPortal?[selectedPortal]:[...document.querySelectorAll('[name=platforms]')].filter(c=>c.checked).map(c=>c.value)};
 }
-function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=input[k]||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
+// Product facts stay separate from observations and from text entered by the customer.
+const productPrefix='SMA-Produktangaben (Kunden-/Katalogdaten): ';
+const sourceSeparator='\nDateiinhalt: ';
+function originalSource(text){
+ if(typeof text!=='string'||!text.startsWith(productPrefix))return text;
+ const split=text.indexOf(sourceSeparator);
+ if(split<0)return text;
+ try{
+  const facts=JSON.parse(text.slice(productPrefix.length,split));
+  if(typeof facts.Produkt==='string'&&typeof facts.Einsatzzweck==='string')return text.slice(split+sourceSeparator.length);
+ }catch{}
+ return text;
+}
+function showProductContext(value,file){
+ const note=$('productContext');
+ note.hidden=true;note.textContent='';
+ if(!value||!file||value.asset_id!==file.id||value.asset_revision!==file.revision)return null;
+ if(value.state==='ambiguous'){
+  note.textContent='Mehrere Produkte passen zu dieser Datei. Ergänze Produktname und Einsatzzweck in der Beschreibung.';
+ }else if(value.state==='matched'&&typeof value.name==='string'&&typeof value.purpose==='string'){
+  note.textContent=['Produkt: '+value.name,value.topic&&'Thema: '+value.topic,value.purpose].filter(Boolean).join(' · ');
+ }else{return null;}
+ note.hidden=false;return value;
+}
+async function getDraftProduct(context){
+ if(!context)return null;
+ const data=await fileRpc('product',{asset_id:context.asset_id,asset_revision:context.asset_revision,platform:context.platform});
+ assertFileContext(context);
+ return showProductContext(data.product_context,selectedAsset);
+}
+function attachProduct(input,product){
+ if(product?.state!=='matched')return input;
+ const info={Produkt:product.name,Thema:product.topic||'',Einsatzzweck:product.purpose};
+ const source=productPrefix+JSON.stringify(info)+sourceSeparator+input.source_text;
+ if(source.length>8000)throw Error('Die Produktangaben und die Dateibeschreibung sind zusammen zu lang. Bitte kürze die Dateibeschreibung.');
+ return {...input,source_text:source};
+}
+function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
 function syncMedia(){if(selectedAsset){$('media_kind').value=selectedAsset.media_kind;$('media_kind').disabled=true;}else{$('media_kind').disabled=false;}if(selectedPortal){for(const c of document.querySelectorAll('[name=platforms]'))c.checked=c.value===selectedPortal;if(selectedPortal==='youtube'){$('media_kind').value='video';$('media_kind').disabled=true;}}const yt=document.querySelector('[name=platforms][value=youtube]');yt.disabled=$('media_kind').value==='image';if(yt.disabled)yt.checked=false;}
 function caption(d,body,tags=d.hashtags){return [body.trim(),tags.map(x=>'#'+x).join(' '),(current.preview.language==='en'?'🛒 Visit our shop: ':'🛒 Zum Shop: ')+current.preview.shop_url].filter(Boolean).join('\n\n');}
 function render(data){
@@ -160,6 +197,7 @@ function renderVideoMetadata(){
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
 }
 function renderSelectedFile(){
+ showProductContext(null,null);
  originalVideo?.setContext(selectedAsset);
  renderVideoMetadata();
  void coverView?.setContext(selectedAsset);
@@ -320,10 +358,11 @@ $('reviewContent').addEventListener('click',async()=>{
   if(selectedAsset?.id===file.id){await loadMediaCheck();$('mediaPanel').open=true;}
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
-async function loadLatest(){lock(true);try{
+async function loadLatest(){const file=selectedAsset;lock(true);try{
  await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
- if(signedOut)return;
+ if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
+ showProductContext(data.product_context,file);
  if(data.status==='empty'){clearDraft();status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
@@ -439,11 +478,20 @@ async function runMagicAction(mode,replace=false){
  status(mode==='text'?'Magic Effect: Datei erkennen und Beitragstext vorbereiten …':'Magic Effect: Inhalt erkennen und übernehmen …');
  try{
   await ensureFreshFile(context);
-  if(magicState?.status!=='completed')await recognizePhoto({withinAutomatic:true});
-  if(signedOut||!photoStillSelected(file))return;
-  if(magicState?.status!=='completed')throw Error($('magicStatus').textContent||'Die Erkennung ist noch nicht abgeschlossen. Bitte versuche es erneut.');
-  if(magicState.result.subject_type==='unclear')throw Error('Das Motiv ist nicht sicher erkennbar. Bitte ergänze den Inhalt selbst oder wähle ein deutlicheres Foto.');
-  $('source_text').value=magicState.result.source_text;
+  const product=await getDraftProduct(context);
+  if(product?.state==='ambiguous'){
+   $('sourcePanel').open=true;workspace?.show('source');$('source_text').focus();
+   throw Error('Welches Produkt ist im Beitrag zu sehen? Ergänze Produktname und Einsatzzweck in der Beschreibung.');
+  }
+  if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
+   $('source_text').value=product.visual;
+  }else{
+   if(magicState?.status!=='completed')await recognizePhoto({withinAutomatic:true});
+   if(signedOut||!photoStillSelected(file))return;
+   if(magicState?.status!=='completed')throw Error($('magicStatus').textContent||'Die Erkennung ist noch nicht abgeschlossen. Bitte versuche es erneut.');
+   if(magicState.result.subject_type==='unclear')throw Error('Das Motiv ist nicht sicher erkennbar. Bitte ergänze den Inhalt selbst oder wähle ein deutlicheres Foto.');
+   $('source_text').value=magicState.result.source_text;
+  }
   sourceDirty=true;automaticInputSignature=JSON.stringify(sourceInput());if(!workspace)$('sourcePanel').open=true;
   if(mode==='text')await generatePreview({withinAutomatic:true});
   else{workspace?.show('source');status('Der erkannte Inhalt ist übernommen. Du kannst die Angaben bearbeiten oder unter „Text für '+(names[selectedPortal]||'das Portal')+'“ automatisch den Beitragstext erstellen.');}
@@ -478,15 +526,21 @@ $('loadLatest').addEventListener('click',async()=>{if(!busy){await loadLatest();
 async function generatePreview({withinAutomatic=false}={}){
  if(signedOut||(busy&&!withinAutomatic))return false;const input=sourceInput();if(!input.platforms.length){status(messages.INVALID_INPUT,true);return;}
  const context=selectedAsset?fileContext():null;
- const signature=JSON.stringify({input,asset_id:context?.asset_id,asset_revision:context?.asset_revision});if(!attempt||attempt.signature!==signature||attempt.finished)attempt={signature,id:crypto.randomUUID(),finished:false};
- const request=attempt;
+
  lock(true);status('Eigene Texte je Portal werden erstellt und der Shop-Link wird geprüft …');
  try{
-  await ensureFreshFile(context);let data=request.preview;
+  await ensureFreshFile(context);
+  const product=await getDraftProduct(context);
+  if(product?.state==='ambiguous'&&(withinAutomatic||!sourceDirty))throw Error('Bitte ergänze den zutreffenden Produktnamen und Einsatzzweck in der Dateibeschreibung.');
+  const draftInput=attachProduct(input,product);
+  const signature=JSON.stringify({input:draftInput,asset_id:context?.asset_id,asset_revision:context?.asset_revision});
+  if(!attempt||attempt.signature!==signature||attempt.finished)attempt={signature,id:crypto.randomUUID(),finished:false};
+  const request=attempt;
+  let data=request.preview;
   if(!data){
    const auth=await session();assertFileContext(context);
    status('Eigene Texte je Portal werden erstellt und der Shop-Link wird geprüft …');
-   try{const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({...input,request_id:request.id}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(110000)});if(!response.ok)throw Error('NETWORK');data=await response.json();}
+   try{const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({...draftInput,request_id:request.id}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(110000)});if(!response.ok)throw Error('NETWORK');data=await response.json();}
    catch{assertFileContext(context);status('Die Rückmeldung dauert länger. Der gespeicherte Status wird geprüft …');data=await waitForResult(request.id);}
    if(!data?.ok){request.finished=true;throw Error(errorText(data));}if(data.status==='processing')data=await waitForResult(data.id);
    assertFileContext(context);

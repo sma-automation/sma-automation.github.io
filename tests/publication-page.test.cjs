@@ -441,3 +441,47 @@ test('targeted metadata refresh reports pending or changed file and never replac
  for(const changed of [false,true]){let refresh=false;const file={...ownFile,duration_ms:null};const p=await boot({portal:'youtube',asset:file.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[{...file,revision:refresh&&changed?'new-revision':file.revision}]}:{ok:true,status:'empty'},fetchResponse:async()=>{refresh=true;return {ok:true};}});p.get('source_text').value='Behalten';await p.get('refreshVideoMetadata').events.click();assert.equal(p.get('source_text').value,'Behalten');assert.equal(p.get('videoMetadataPanel').hidden,false);assert.match(p.get('status').textContent,changed?/Datei wurde geändert/:/noch nicht bereitgestellt/);assert.equal(p.get('refreshVideoMetadata').disabled,false);}
 });
 test('targeted metadata refresh serializes clicks and discards signed-out responses',async()=>{let release;const file={...ownFile,duration_ms:null};const p=await boot({portal:'youtube',asset:file.id,files:[file],fetchResponse:()=>new Promise(r=>release=r)});const first=p.get('refreshVideoMetadata').events.click();await new Promise(r=>setImmediate(r));await p.get('refreshVideoMetadata').events.click();assert.equal(p.calls.filter(c=>c.url).length,1);p.signOut();release({ok:true});await first;assert.equal(p.get('videoMetadataPanel').hidden,true);assert.equal(p.get('refreshVideoMetadata').disabled,true);assert.match(p.get('status').textContent,/melde dich/);});
+
+const confirmedProduct={
+ state:'matched',method:'media',asset_id:supportedVideo.id,asset_revision:supportedVideo.revision,
+ name:'Mobiler Türgriff fürs Hotel',topic:'Reisehygiene',purpose:'Die gemeinsam genutzte Klinke lässt sich ohne direkten Handkontakt betätigen.',
+ visual:'Eine Hand setzt ein rotes Zusatzgerät an eine verchromte Türklinke.'
+};
+function productFiles(product,saved={ok:true,status:'empty'}){
+ return a=>['get','product'].includes(a.p_action)?{...saved,product_context:product}:videoFiles(a);
+}
+test('a confirmed video reuses its reviewed scene and supplies product facts to the portal writer',async()=>{
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:productFiles(confirmedProduct),
+  formTracksDom:true,fetchResponse:async()=>instagramResult});
+ assert.match(p.get('productContext').textContent,/Reisehygiene/);
+ await p.get('magicText').click();
+ const requests=p.calls.filter(c=>c.url);
+ assert.equal(requests.length,1);assert.ok(isCaption(requests[0].url));
+ const input=JSON.parse(requests[0].options.body);
+ assert.ok(input.source_text.includes(confirmedProduct.purpose));
+ assert.ok(input.source_text.endsWith(confirmedProduct.visual));
+ assert.deepEqual(input.platforms,['instagram']);
+ assert.equal(p.get('source_text').value,confirmedProduct.visual);
+ p.signOut();assert.equal(p.get('productContext').hidden,true);
+ assert.equal(p.get('productContext').textContent,'');
+ const saved={...instagramResult,input:{...input}};
+ const reopened=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:productFiles(confirmedProduct,saved)});
+ assert.equal(reopened.get('source_text').value,confirmedProduct.visual);
+});
+test('ambiguous products ask in the source field and allow an explicit customer description',async()=>{
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,
+  filesRpc:productFiles({...confirmedProduct,state:'ambiguous'}),formTracksDom:true,fetchResponse:async()=>instagramResult});
+ await p.get('magicText').click();
+ assert.equal(p.calls.some(c=>c.url),false);assert.equal(p.get('source_text').focused,true);
+ p.get('source_text').value='Die gezeigte Reisetasche hat einen Schultergurt.';
+ p.get('previewForm').events.input();await p.run();
+ assert.equal(JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body).source_text,p.get('source_text').value);
+});
+test('a product result from another file revision cannot supply draft facts',async()=>{
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:productFiles({...confirmedProduct,asset_revision:'other'}),
+  fetchResponse:async()=>instagramResult});
+ assert.equal(p.get('productContext').hidden,true);
+ p.get('source_text').value='Ein Reisender hält eine Tasche mit Schultergurt.';
+ await p.run();const input=JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body);
+ assert.equal(input.source_text,p.get('source_text').value);
+});
