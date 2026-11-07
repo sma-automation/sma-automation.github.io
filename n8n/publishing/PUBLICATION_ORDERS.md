@@ -41,6 +41,21 @@ Bestandsprüfung abgeschlossen. PR #57/#69 separat offen, unveröffentlichte
 n8n-Originalentwürfe und Shopify-Testmodus erhalten; keine kostenpflichtigen
 Änderungen freigegeben.
 
+## Verbindungsabbruch bei der Freigabe – 7. November 2026
+
+Wenn nach einem Klick auf **Veröffentlichung freigeben** eine eindeutige Antwort
+fehlt, liest der Dialog den gespeicherten Stand derselben Auftrags-ID. Bei einer
+gemeldeten Doppelung liest er den bereits freigegebenen Auftrag. Beide Abfragen
+verwenden den bestehenden Kunden-RPC `sma_publication_order_v1` mit `get`.
+Die Fehlerbehandlung sendet keine weitere Freigabe und ruft keinen n8n-Dispatcher auf.
+
+Ist die Freigabe gespeichert, zeigt der Dialog den Auftragsstand. Ist der
+Auftrag noch vorbereitet, beginnt die Bestätigung erneut mit leeren Feldern.
+Bei einer unterbrochenen Statusabfrage bleibt **Status erneut laden** verfügbar.
+Auch nach Schließen und erneutem Öffnen des Dialogs für dieselbe Auswahl läuft
+die ausstehende Klärung über den Leseweg. Nach einem Neuladen der Seite ist
+der gespeicherte Auftrag in **History → Aufträge** zu finden.
+
 ## Historischer Ausgangsstand – 3. November 2026
 
 Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Die getrennten Medienbestätigungen aus #53 sind veröffentlicht und im echten TikTok-Vorbereitungsdialog geprüft.

@@ -8,6 +8,8 @@ const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').spl
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
 async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:'fixture-owner'}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
+ const rpc=client.rpc;
+ client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
@@ -556,6 +558,17 @@ test('a concurrently cancelled, approved or changed order cannot resume',async()
   assert.equal(p.orderOptions.resumeOrder,undefined);assert.equal(p.get('status').dataset.error,'true');
   assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
  }
+});
+test('approval recovery reads only the exact order and discards a result after logout',async()=>{
+ let release;
+ const p=await boot({portal:'youtube',orderResponse:()=>new Promise(resolve=>{release=resolve;})});
+ const before=p.calls.length;
+ const pending=p.orderOptions.readStoredOrder(historyOrderId);
+ await new Promise(r=>setImmediate(r));
+ p.signOut();release(historyOrder);
+ await assert.rejects(pending,/melde/);
+ assert.deepEqual(JSON.parse(JSON.stringify(p.calls.slice(before))),[{name:'sma_publication_order_v1',p_action:'get',p_input:{id:historyOrderId}}]);
+ await assert.rejects(p.orderOptions.readStoredOrder(historyOrderId));assert.equal(p.calls.length,before+1);
 });
 test('history deep link fails safely on stale media, stale text, wrong account and invalid links',async()=>{
  for(const options of [{orderId:'invalid'}, {order:{ok:false,code:'ORDER_UNAVAILABLE'}},{order:{...historyOrder,state:'cancelled'}},

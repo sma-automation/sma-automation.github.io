@@ -7,7 +7,7 @@ let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
-import {installOrderReview} from './publication-order.mjs?v=10';
+import {installOrderReview} from './publication-order.mjs?v=11';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -423,16 +423,22 @@ $('reviewContent').addEventListener('click',async()=>{
   if(selectedAsset?.id===file.id){await loadMediaCheck();$('mediaPanel').open=true;}
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
-async function readHistoryOrder(id){
- const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
- const unavailable='Die Beitragsvorschau für diesen Auftrag ist in deinem Konto nicht verfügbar.';
- if(!workspace||!uuid.test(id))throw Error(unavailable);
- const {data:order,error}=await supabase.rpc('sma_publication_order_v1',{p_action:'get',p_input:{id}});
- const binding=order?.binding;
+const orderUuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+async function readStoredOrder(id){
+ if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
+ const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:'get',p_input:{id}})
+  .abortSignal(AbortSignal.timeout(20000));
  if(error)throw fileError('FILE_SYNC_UNAVAILABLE');
+ if(signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
+ return data;
+}
+async function readHistoryOrder(id){
+ const unavailable='Die Beitragsvorschau für diesen Auftrag ist in deinem Konto nicht verfügbar.';
+ if(!workspace||!orderUuid.test(id))throw Error(unavailable);
+ const order=await readStoredOrder(id),binding=order?.binding;
  if(!order?.ok||order.id!==id||order.state!=='prepared'||order.approved_at!=null||
-    order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!uuid.test(binding.asset_id)||
-    !uuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
+    order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!orderUuid.test(binding.asset_id)||
+    !orderUuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Error(unavailable);
  return order;
 }
@@ -710,7 +716,7 @@ $('save').addEventListener('click',async()=>{
  }catch(e){if(!signedOut){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}}finally{lock(false);syncMedia();}
 });
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
-if(selectedPortal)orderReview=installOrderReview(document,{session,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
+if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
  getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(dirty||sourceDirty)throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},
