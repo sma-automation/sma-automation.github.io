@@ -141,6 +141,17 @@ test('customer file browser selects the actual photo by ID and loads its recogni
  assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);
  assert.equal(p.calls.filter(c=>c.url).length,0);
 });
+test('optimizer gallery pages four files and searches across every page',async()=>{
+ const files=Array.from({length:9},(_,i)=>({...ownFile,id:'file-'+i,name:'Clip '+i+'.mp4'}));
+ const p=await boot({portal:'youtube',wide:true,files});
+ assert.equal(p.get('filePickerList').children.length,4);
+ p.get('fileNext').click();p.get('fileNext').click();
+ assert.equal(p.get('filePickerList').children.length,1);
+ assert.equal(p.get('filePageCount').textContent,'Seite 3 von 3');
+ p.get('fileSearch').value='Clip 0';p.get('fileSearch').events.input();
+ assert.equal(p.get('filePageCount').textContent,'Seite 1 von 1');
+ assert.match(p.get('filePickerList').querySelector('strong').textContent,/Clip 0/);
+});
 test('file browser searches filenames, paginates ten at a time, and never turns names into markup',async()=>{
  const files=Array.from({length:12},(_,i)=>({...ownFile,id:'file-'+i,name:i===11?'<img src=x onerror=alert(1)>.mp4':'Clip '+i+'.mp4'}));
  const p=await boot({portal:'instagram',files});p.get('browseFiles').events.click();

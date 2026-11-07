@@ -5,8 +5,8 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=10';
-import {installOrderReview} from './publication-order.mjs?v=7';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=11';
+import {installOrderReview} from './publication-order.mjs?v=8';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -267,10 +267,11 @@ function renderFilePicker(){
   return [file.name,label.title,label.version,file.display?.draft_title].some(value=>value?.toLocaleLowerCase('de').includes(query));
  });
  if(workspace)$('workspaceFiles').classList.toggle('has-files',visible.length>0);
- const count=Math.max(1,Math.ceil(visible.length/10));filePickerPage=Math.min(filePickerPage,count-1);
+ const pageSize=workspace?4:10;
+ const count=Math.max(1,Math.ceil(visible.length/pageSize));filePickerPage=Math.min(filePickerPage,count-1);
  $('filePickerList').replaceChildren();
  $('filePickerCount').textContent=!assets.length?'Noch keine Dateien geladen. Klicke auf „Dateien aktualisieren“.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
- for(const file of visible.slice(filePickerPage*10,filePickerPage*10+10)){
+ for(const file of visible.slice(filePickerPage*pageSize,(filePickerPage+1)*pageSize)){
   const description=describeFile(file);
   const row=document.createElement('li');row.className='file-picker-row';
   const info=document.createElement('details');info.className='file-picker-info';const summary=document.createElement('summary');summary.textContent='Dateidetails';info.append(summary);const name=document.createElement('strong');name.textContent=workspace?'Dateiname: '+file.name:file.name;
@@ -370,7 +371,7 @@ function resetMediaCheck(message='Wähle zuerst eine Datei aus.'){
  selectedMediaFacts=null;workspace?.refreshPreview();
  reviewStatus=null;$('contentReviewStatus').textContent=selectedAsset?'Für diese Datei liegt noch kein Prüfergebnis vor.':'Wähle zuerst eine Datei aus.';syncReviewButton();
  $('mediaSummary').textContent='Medienprüfung · '+(selectedAsset?'noch offen':'Datei auswählen');
- $('mediaStatus').textContent=message;$('mediaFacts').textContent='';$('mediaChecks').replaceChildren();$('mediaScope').textContent='';$('mediaRecommendations').replaceChildren();$('mediaRecommendationsPanel').hidden=true;$('mediaPanel').open=!!workspace;
+ $('mediaStatus').textContent=message;$('mediaFacts').textContent='';$('mediaChecks').replaceChildren();$('mediaScope').textContent='';$('mediaRecommendations').replaceChildren();$('mediaRecommendationsPanel').hidden=true;$('mediaPanel').open=false;
 }
 async function loadMediaCheck(){
  resetMediaCheck();if(!selectedAsset)return;
@@ -388,7 +389,7 @@ async function loadMediaCheck(){
   if(Array.isArray(m.recommendations)){for(const item of m.recommendations){if(!item||!['matches','suggested','unknown'].includes(item.status)||typeof item.message!=='string')continue;const li=document.createElement('li');li.textContent=item.message;$('mediaRecommendations').append(li);}}
   $('mediaRecommendationsPanel').hidden=!$('mediaRecommendations').children.length;
   if(m.content_review)renderReview(m.content_review,file);
-  $('mediaPanel').open=!!workspace||changes;
+  if(changes)$('mediaPanel').open=true;
  }catch(e){if(selectedAsset?.id===file.id)resetMediaCheck(e.message);}
 }
 function syncReviewButton(){ $('reviewContent').disabled=busy||!selectedAsset||selectedAsset.media_kind==='video'||reviewStatus==='completed'||reviewStatus==='processing'; }
@@ -694,7 +695,7 @@ $('save').addEventListener('click',async()=>{
  }catch(e){if(!signedOut){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}}finally{lock(false);syncMedia();}
 });
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
-if(selectedPortal)orderReview=installOrderReview(document,{session,portalName:names[selectedPortal],host:workspace?$('workspacePreview'):$('save').parentElement,
+if(selectedPortal)orderReview=installOrderReview(document,{session,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
  getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(dirty||sourceDirty)throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},

@@ -23,6 +23,7 @@ jobs:
       - name: Check chapters and existing dashboard flows
         run: |
           node --test tests/*.test.cjs
+          node tests/run-optimizer-layout.mjs
           node tests/run-dashboard-chapters-dom.mjs
           node tests/run-publication-history-dom.mjs
           node tests/run-website-setup-dom.mjs

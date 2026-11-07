@@ -62,7 +62,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const viewFile = button('workspaceViewFile', 'Ausgewählte Datei ansehen', () => show('preview'));
   viewFile.setAttribute('aria-controls', preview.id);
   viewFile.disabled = true;
-  files.append(viewFile);
+  galleryActions.append(viewFile);
 
   const previewBack = button('workspacePreviewBack', '← Datei', () => {
     show('files'); viewFile.focus();
@@ -82,7 +82,11 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const detailTab = button('workspaceDetailTab', 'Dateidetails', () => previewTab('details'));
   postTab.setAttribute('aria-controls', postView.id); detailTab.setAttribute('aria-controls', detailView.id);
   previewTabs.append(postTab, detailTab);
-  preview.append(previewNav, previewHeading, previewName, previewTabs, postView, detailView);
+  const headingRow = make('div', 'workspacePreviewHeader');
+  const headingText = make('div');
+  headingText.append(previewHeading, previewName);
+  headingRow.append(headingText);
+  preview.append(previewNav, headingRow, previewTabs, postView, detailView);
   const post = make('article', 'workspacePost');
   post.setAttribute('aria-label', 'Darstellung des Beitrags');
   post.dataset.portal = portalName.toLowerCase();

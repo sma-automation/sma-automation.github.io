@@ -4,7 +4,7 @@ body.wide #optimizerToolbar{display:flex;align-items:stretch;flex-wrap:wrap;gap:
 body.wide #optimizerToolbar button{display:block;flex:0 1 auto;border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;color:#627087;font-size:14px;line-height:1.4;font-weight:600;padding:13px 11px 16px;margin:0 0 -1px;min-height:48px}
 body.wide #optimizerToolbar button[aria-pressed=true]{color:#3157cd;border-bottom-color:#4065d8}
 body.wide #optimizerToolbar button:hover{background:#f2f4f8}
-body.wide #workspaceFiles,body.wide #workspaceMedia{background:transparent;border:0;border-radius:0;margin:0;padding:0;min-height:470px}
+body.wide #workspaceFiles,body.wide #workspaceMedia{background:transparent;border:0;border-radius:0;margin:0;padding:0;min-height:0}
 body.wide #workspaceSource,body.wide #workspaceText{min-height:470px}
 body.wide .file-picker-body{padding:0}
 body.wide #filePickerList{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 16px;padding:0;margin:0;list-style:none}
@@ -12,7 +12,7 @@ body.wide #filePickerList .file-picker-row{display:flex;flex-direction:column;al
 body.wide #filePickerList .gallery-select{position:relative;display:block;width:100%;padding:0;border:0;border-radius:7px;background:#e7ebf3;overflow:hidden;line-height:1}
 body.wide #filePickerList .gallery-select[aria-pressed=true]{outline:3px solid #4065d8;outline-offset:3px}
 body.wide #filePickerList .gallery-select[aria-pressed=true]::after{content:'✓';position:absolute;top:9px;right:9px;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#4065d8;color:#fff;font-size:17px}
-body.wide #filePickerList .gallery-visual{aspect-ratio:3/4;font-size:32px}
+body.wide #filePickerList .gallery-visual{aspect-ratio:3/4;max-height:230px;font-size:32px}
 body.wide #filePickerList .gallery-label{position:absolute;bottom:10px;left:10px;max-width:calc(100% - 20px);background:#17233bde;color:#fff;border-radius:4px;padding:5px 8px;font-size:12px;line-height:1.35;font-weight:400}
 body.wide #filePickerList .gallery-caption{display:grid;gap:2px;min-width:0;overflow-wrap:anywhere;line-height:1.4}
 body.wide #filePickerList .gallery-caption strong{font-size:15px;color:#152239}
@@ -24,7 +24,7 @@ body.wide #filePickerList .file-picker-info small{display:block;font-size:12px;m
 body.wide #workspaceSearch{max-width:420px;margin-bottom:20px}
 body.wide #filePickerCount{margin:0 0 16px;font-size:13px;color:#65718a}
 body.wide #workspaceFiles.has-files:not(.folder-view) #filePickerCount{display:none}
-body.wide #workspaceFiles:not(.has-files) #filePickerCount{display:grid;place-items:center;min-height:320px;text-align:center}
+body.wide #workspaceFiles:not(.has-files) #filePickerCount{display:grid;place-items:center;padding:18px 0;text-align:center}
 body.wide #filePickerPages{justify-content:flex-start;gap:18px;font-size:13px;margin-top:22px}
 body.wide #fileSwitchNotice{margin:0 0 20px}
 body.wide #portalStatus:empty,body.wide #filePickerStatus:empty{display:none}
@@ -41,8 +41,8 @@ body.wide #assetPreview{max-width:640px;background:transparent;border:0;padding:
 body.wide #assetPreviewMedia img,body.wide #assetPreviewMedia video{max-height:500px}
 body.wide .draft textarea{min-height:240px}
 body.wide #workspaceTextEmpty{padding:45px 0}
-@media(max-width:1050px){body.wide #filePickerList{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:650px){body.wide #filePickerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}body.wide #optimizerToolbar{gap:0 5px}body.wide #optimizerToolbar button{font-size:13px;padding:11px 8px 13px;min-height:46px}body.wide #filePickerList .gallery-label{font-size:11px}body.wide #workspaceFiles,body.wide #workspaceSource,body.wide #workspaceText,body.wide #workspaceMedia{min-height:380px}body.wide input,body.wide textarea{font-size:16px}}
+
+@media(max-width:650px){body.wide #filePickerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}body.wide #optimizerToolbar{gap:0 5px}body.wide #optimizerToolbar button{font-size:13px;padding:11px 8px 13px;min-height:46px}body.wide #filePickerList .gallery-label{font-size:11px}body.wide #workspaceSource,body.wide #workspaceText{min-height:0}body.wide input,body.wide textarea{font-size:16px}}
 
 /* One readable type scale across tabs, controls, hints and checks. */
 html:has(body.wide){background:#fff}
@@ -187,7 +187,7 @@ body.wide #workspaceStatus #portalStatus{font-size:13px;font-weight:400;line-hei
 body.wide{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
 body.wide :is(h1,h2,h3,button,input,select,textarea){font-family:inherit}
 body.wide #workspaceViewFile,body.wide #workspacePreviewBack{display:flex;align-items:center;gap:10px;width:auto;max-width:100%;min-height:48px;padding:12px 17px;border:0;border-radius:9px;background:#4065d8;color:#fff;font-size:14px;font-weight:500;line-height:1.5}
-body.wide #workspaceViewFile{margin:22px 0 0 auto}
+body.wide #workspaceViewFile{margin:0}
 body.wide #workspaceViewFile::after{content:'◉';font-size:18px}
 body.wide #workspacePreview{border:0;border-radius:0;padding:0;margin:0;background:transparent;--optimizer-type:14px;--optimizer-weight:400;font-size:14px;font-weight:400}
 body.wide #workspacePreviewBack{margin:0 0 20px;white-space:nowrap}
@@ -252,12 +252,7 @@ body.wide.post-preview-open:not(.embedded) main {
   --post-width: 600px;
   width: min(var(--post-width), calc(100% - 32px));
   padding: 0;
-  margin: clamp(16px, 3vh, 32px) auto 36px;
-}
-body.wide.post-preview-open:not(.embedded) main:has(#workspacePost[data-portal=instagram]) { --post-width: 460px; }
-body.wide.post-preview-open:not(.embedded) main:has(#workspacePost[data-portal=tiktok]),
-body.wide.post-preview-open:not(.embedded) main:has(#workspacePost[data-portal=youtube][data-media-kind=video][data-orientation=portrait]) {
-  --post-width: clamp(320px, 44svh, 390px);
+  margin: 12px auto 20px;
 }
 body.wide.post-preview-open:not(.embedded) main > header { display: none; }
 body.wide:not(.embedded) #workspacePreviewNav {
@@ -266,7 +261,7 @@ body.wide:not(.embedded) #workspacePreviewNav {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 16px;
-  margin: 0 0 18px;
+  margin: 0 0 8px;
 }
 body.wide:not(.embedded) #workspacePreviewNav #back {
   display: inline-flex;
@@ -278,14 +273,81 @@ body.wide:not(.embedded) #workspacePreviewNav #back {
 }
 body.wide:not(.embedded) #workspacePreviewNav #back:hover { text-decoration: underline; }
 body.wide:not(.embedded) #workspacePreviewBack { min-height: 40px; margin: 0; padding: 8px 14px; }
-body.wide:not(.embedded) #workspacePreviewName { margin-bottom: 12px; font-size: 13px; }
-body.wide:not(.embedded) #workspacePreviewTabs { flex-wrap: wrap; gap: 0 20px; margin-bottom: 16px; }
+body.wide:not(.embedded) #workspacePreviewName { margin-bottom: 0; font-size: 13px; }
+body.wide:not(.embedded) #workspacePreviewTabs { flex-wrap: wrap; gap: 0 20px; margin-bottom: 8px; }
 body.wide:not(.embedded) #workspacePost { max-width: none; }
-body.wide:not(.embedded) #workspacePost[data-portal=youtube][data-media-kind=video] #assetPreviewMedia {
-  max-height: min(80svh, 720px);
+body.wide #workspacePost[data-portal=youtube][data-media-kind=video] #assetPreviewMedia {
   aspect-ratio: var(--media-aspect, 16 / 9);
 }
-body.wide:not(.embedded) #workspacePost[data-orientation=portrait] { --original-video-max-height: min(80svh, 720px); }
 body.wide:not(.embedded) #workspacePreviewNotice { margin: 10px 0 0; }
 
 body.wide #workspacePost #assetPreview:has(#originalVideoPreview video:not([hidden])) #assetPreviewStatus[data-cover]{display:none}
+
+/* Keep the entry actions in reach while the selected file or caption grows. */
+body.wide .optimizer-help summary, .order-caption summary { cursor: pointer; color: #3157cd; }
+body.wide #workspacePreviewHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 14px;
+}
+body.wide #workspacePreviewHeader > div { min-width: 0; }
+body.wide #workspacePreviewHeader #preparePublicationOrder { margin: 0; padding: 8px 14px; min-height: 40px; }
+body.wide #workspacePreviewHeader #workspacePreviewName { margin: 2px 0 0; }
+body.wide #workspacePostProfile { padding: 8px 12px; }
+body.wide #workspacePostAvatar { width: 28px; height: 28px; font-size: 18px; }
+body.wide #workspacePost #assetPreviewStatus { padding: 6px 10px; }
+body.wide #workspacePost #originalVideoPreview { text-align: center; }
+body.wide #workspacePost #originalVideoPreview > button { margin: 4px 0 8px; padding: 7px 12px; }
+body.wide #workspacePost #originalVideoPreview > p { color: #e2e7f1; font-size: 13px; line-height: 1.4; padding: 4px 10px 8px; margin: 0; }
+body.wide #workspacePost #originalVideoPreview > p:empty { display: none; }
+body.wide #workspacePostBody { padding: 12px 16px; }
+body.wide #workspacePreviewFacts :is(dt,dd) { padding-block: 6px; }
+body.wide #workspacePost { --stage-height: min(45svh, 380px); --original-video-max-height: var(--stage-height); }
+body.wide #workspacePost #assetPreviewMedia { max-height: var(--stage-height); }
+@media (min-width: 660px) {
+  body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]) {
+    display: grid;
+    grid-template-columns: clamp(168px, 27svh, 250px) minmax(0, 1fr);
+    max-width: 600px;
+    --stage-height: min(50svh, 460px);
+  }
+  body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]) #workspacePostProfile { grid-column: 1 / -1; }
+  body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]) #assetPreview { align-self: start; }
+}
+@media (max-width: 659px) {
+  body.wide.post-preview-open:not(.embedded) main { --post-width: 420px; margin-top: 6px; }
+  body.wide #workspacePost { --stage-height: min(36svh, 310px); }
+  body.wide #workspacePreviewName { font-size: 13px; }
+}
+
+/* Portal settings use one row per choice where labels and controls fit. */
+#publicationOrderDialog {
+  width: min(650px, calc(100vw - 24px));
+  max-height: min(720px, calc(100dvh - 24px));
+  top: 12px;
+  bottom: auto;
+  margin: 0 auto;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid #dfe5ef;
+  border-radius: 14px;
+  padding: clamp(14px, 2vw, 22px);
+  color: #17233b;
+}
+#publicationOrderDialog::backdrop { background: #17233b66; }
+#publicationOrderDialog :is(h2,h3,p,ul,fieldset) { margin-block: 6px 10px; }
+#publicationOrderDialog p:empty { display: none; }
+#publicationOrderDialog label { margin: 8px 0; }
+#publicationOrderDialog input[type=checkbox] { margin-right: 8px; }
+#publicationOrderDialog .order-options { display: grid; gap: 8px; margin-block: 12px; }
+#publicationOrderDialog .order-options label { margin: 0; }
+#publicationOrderDialog .order-option { display: grid; align-items: center; gap: 4px 14px; }
+#publicationOrderDialog select { padding: 7px 10px; }
+#publicationOrderDialog .actions { gap: 8px; }
+#publicationOrderDialog .actions button { width: auto; }
+#publicationOrderDialog pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.5; background: #f5f7fc; padding: 10px; border-radius: 8px; }
+@media (min-width: 520px) {
+  #publicationOrderDialog .order-option { grid-template-columns: minmax(0, 1fr) minmax(10rem, 44%); }
+}
