@@ -539,6 +539,11 @@ test('history opens the specific prepared order directly as a saved post preview
  assert.equal(p.calls.some(c=>c.url||!['get','list','check'].includes(c.p_action)),false);
  assert.equal(p.orderOptions.getContext().binding.preview_id,historySaved.id);assert.equal(p.orderOptions.previousOrder.id,historyOrderId);
 });
+test('only a valid order preview links back to the same history order',async()=>{
+ const p=await historyView();assert.equal(p.get('back').href,'dashboard.html#auftrag/'+historyOrderId);assert.equal(p.get('back').textContent,'← Zurück zum Auftrag');
+ const bad=await historyView({orderId:'invalid'});assert.doesNotMatch(bad.get('back').href||'',/#auftrag/);
+ const normal=await boot({portal:'youtube',wide:true});assert.doesNotMatch(normal.get('back').href||'',/#auftrag/);
+});
 test('unfinished history previews use only reads and reject inconsistent account evidence',async()=>{
  const pending={...historyOrder,state:'preparing',target:null,approval_token:null,preparation_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}};
  const p=await historyView({resume:true,order:pending});

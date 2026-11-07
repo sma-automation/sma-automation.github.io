@@ -6,10 +6,16 @@ const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImme
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',cover:{status:'not_recorded',updated_at:null},...extra});
 const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:3,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
-function fixture({active=true,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors,requestAnalyses}={}){
+function fixture({active=true,hash='',requestOrderPage,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors,requestAnalyses}={}){
  const {document:doc,window}=parseHTML('<html><head></head><body><section id="page-history" class="'+(active?'active':'')+'"><div class="grid">'+Array.from({length:3},()=>'<div class="card"><div class="card-title">Old metric</div><div class="big-value">–</div><div class="muted">Old detail</div></div>').join('')+'</div><div class="card"><div class="card-title">Aktivitätsverlauf</div><p>Old intro</p><div id="historyActivitySlot" class="empty-state"></div></div><div class="card"><div class="card-title">Monatsarchiv</div><p>Old archive</p><div id="historyMonthSlot" style="display:flex"></div></div></section></body></html>');
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
- const view=mountPublicationHistory({doc,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
+ const route={hash,pathname:'/app/dashboard.html',search:''};
+ Object.defineProperty(window,'location',{value:route,configurable:true});
+ Object.defineProperty(window,'history',{value:{replaceState(){route.hash='';}},configurable:true});
+ const historyNav=doc.createElement('button');historyNav.dataset.page='history';
+ historyNav.addEventListener('click',()=>doc.getElementById('page-history').classList.add('active'));
+ doc.body.prepend(historyNav);
+ const view=mountPublicationHistory({doc,requestOrderPage,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
  const page=doc.getElementById('page-history');
  return {doc,window,page,view,calls,$:s=>page.querySelector(s),owner(id,notify=true){owner=id;if(notify)callback(id);},focus(){window.dispatchEvent(new window.Event('focus'));},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));},get unsubscribed(){return unsubscribed;}};
 }
@@ -274,6 +280,32 @@ await test('a failed period read exposes the orders retry and a new chapter sele
  assert.equal(f.$('#historyOrderCard').hidden,false);assert.match(f.$('#historyActivitySlot [role=status]').textContent,/nicht geladen/);
  assert.equal(reads,0);await openChapter(f,'Portaltexte');assert.equal(f.calls.length,2);assert.equal(reads,1);
  assert.equal(f.$('#historyTextCard ol').children.length,1);f.view.destroy();
+});
+await test('return targets the saved row on page six and crosses batches in both directions',async()=>{
+ const rows=Array.from({length:28},(_,i)=>entry(i+1)),id=rows[26].id,calls=[];
+ const first=rows.slice(0,20),next={before_at:first[19].created_at,before_id:first[19].id};
+ const fetchPage=(order,page)=>{
+  calls.push([order,page]);const target=page??6;
+  return {...result(target>4?rows.slice(20):first,target>4?null:next,{summary:{orders:28,platforms:['youtube'],public_confirmed:0}}),order_page:target};
+ };
+ const f=fixture({active:false,hash:'#auftrag/'+id,requestOrderPage:fetchPage});await tick();
+ assert.deepEqual(calls,[[id,null]]);assert.deepEqual(f.calls,[]);assert.equal(f.page.classList.contains('active'),true);
+ assert.match(f.$('#historyActivitySlot [role=status]').textContent,/26–28.*Seite 6/);
+ const details=Array.from(f.doc.querySelectorAll('ol li details'));assert.equal(details.filter(e=>e.open).length,1);assert.equal(details[1].open,true);
+ const prev=f.$('[aria-label="Vorherige Aufträge"]'),more=f.$('[aria-label="Weitere Aufträge"]');
+ prev.click();await tick();prev.click();await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/16–20.*Seite 4/);
+ more.click();await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/21–25.*Seite 5/);
+ assert.deepEqual(calls,[[id,null],[id,4],[id,5]]);
+ button(f,'Aktueller Monat').click();await tick();assert.deepEqual(f.calls,[{}]);assert.equal(f.window.location.hash,'');f.view.destroy();
+});
+await test('unknown, mismatched and late order returns never open a different row',async()=>{
+ const id=entry().id;
+ for(const response of [{ok:false,code:'ORDER_UNAVAILABLE'},{...result([entry(2)]),order_page:1},{...result(),order_page:7}]){
+  const f=fixture({hash:'#auftrag/'+id,requestOrderPage:()=>response});await tick();assert.equal(f.$('ol').children.length,0);
+  assert.match(f.$('#historyActivitySlot [role=status]').textContent,/nicht verfügbar|nicht geladen/);f.view.destroy();
+ }
+ const gate=deferred(),f=fixture({hash:'#auftrag/'+id,requestOrderPage:()=>gate.promise});await tick();f.owner('other');
+ gate.resolve({...result(),order_page:1});await tick();assert.equal(f.$('ol').children.length,0);f.view.destroy();
 });
 await test('expired preparation shows the next step without exposing approval controls',async()=>{
  const f=fixture({request:()=>result([entry(1,{status:'prepared',approval_window:{status:'expired',expires_at:'2026-11-07T11:02:26Z'}})])});
