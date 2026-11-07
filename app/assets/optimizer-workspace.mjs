@@ -1,6 +1,7 @@
 // Reuse the live forms and their handlers; only the workspace arrangement changes.
 export function createOptimizerWorkspace(doc, portalName, onGallery, options = {}) {
   const $ = id => doc.getElementById(id);
+  const describe = options.describeFile || (file => ({title:file.name,version:file.media_kind==='video'?'Video':'Bild'}));
   const main = doc.querySelector('main');
   const make = (tag, id, label) => {
     const node = doc.createElement(tag);
@@ -107,7 +108,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const file = selectedFile || {};
     const info = data.facts || {};
     post.dataset.mediaKind = file.media_kind || '';
-    previewName.textContent = file.name || '';
+    const description = selectedFile ? describe(file) : null;
+    previewName.textContent = description ? [description.title, description.version].join(' · ') : '';
     postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
     postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
     postTags.textContent = (draft.hashtags || []).map(tag => '#' + tag).join(' ');
@@ -213,8 +215,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     textAvailable(value) { empty.hidden = value; if (!value) clearPreview(); else if (active === 'preview') refreshPreview(); },
     selection(file) {
       selectedFile = file; clearPreview();
-      selectedName.textContent = file?.name || 'Noch keine Datei ausgewählt';
-      selectedKind.textContent = file ? (file.media_kind === 'video' ? 'Video' : 'Bild') + ' · ' + portalName : '';
+      const description = file ? describe(file) : null;
+      selectedName.textContent = description?.title || 'Noch keine Datei ausgewählt';
+      selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
       viewFile.disabled = !file;
       if (active === 'preview') {
         if (file) refreshPreview();

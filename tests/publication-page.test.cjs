@@ -485,3 +485,27 @@ test('a product result from another file revision cannot supply draft facts',asy
  await p.run();const input=JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body);
  assert.equal(input.source_text,p.get('source_text').value);
 });
+
+test('optimizer gallery shows a searchable human title and version before a file is chosen',async()=>{
+ const opaque='AQMhklsQz6e9lapBGlhaRyVnvjCXzquTPscWTmICBtNzIqjE1F';
+ const original={...supportedVideo,name:opaque+'.mp4',duration_ms:10041,
+  display:{product:'Mobiler Türgriff fürs Hotel',draft_title:'Mein Griff für unterwegs',variant:'original'}};
+ const clip={...original,id:'export-clip',name:'SMA-Export-2.mp4',duration_ms:2999,display:{...original.display,variant:'clip'}};
+ const p=await boot({portal:'youtube',wide:true,files:[original,clip,{...photo,name:'Sommer_am_See.jpg'}]});
+ assert.ok(p.calls.find(c=>c.p_action==='list'&&c.p_input.platform==='youtube'));
+ const search=value=>{p.get('fileSearch').value=value;p.get('fileSearch').events.input();return p.get('filePickerList').children;};
+ const hits=search('türgriff');assert.equal(hits.length,2);
+ assert.equal(hits[0].querySelector('strong').textContent,'Mobiler Türgriff fürs Hotel');
+ assert.equal(hits[0].querySelector('small').textContent,'Originalvideo · 10 Sek.');
+ assert.equal(hits[1].querySelector('small').textContent,'Videoausschnitt · 3 Sek.');
+ assert.match(hits[0].querySelector('button')['aria-label'],/Mobiler Türgriff.*Originalvideo/);
+ assert.equal(search('AQMhkl').length,1);assert.equal(search('unterwegs').length,2);
+ assert.equal(search('Sommer am See')[0].querySelector('strong').textContent,'Sommer am See');
+});
+test('optimizer falls back to media and date for unknown generated filenames',async()=>{
+ const p=await boot({portal:'youtube',wide:true,files:[{...supportedVideo,name:'SMA-Export-c6428ddf-06a0-4d2c-a239-e10037a7ad0b.mp4',modified_at:'2026-11-01T12:34:00Z'}]});
+ const row=p.get('filePickerList').children[0];
+ assert.match(row.querySelector('strong').textContent,/^Video vom/);
+ assert.doesNotMatch(row.querySelector('button')['aria-label'],/c6428ddf/);
+ assert.match(row.querySelector('details').querySelector('strong').textContent,/Dateiname: SMA-Export/);
+});
