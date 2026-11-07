@@ -90,6 +90,31 @@ Dateirevision, Bytezahl und Prüfsumme. Die privaten Schreibrechte liegen beim
 Administrator. Neue und bestehende Magic-Effect-Ergebnisse behalten ihren
 eigenen Prüfweg. Der lokale Messweg besteht unabhängig von einer Transkription.
 
+## Kontoprüfung und Original-Cover am 07.11.2026
+
+Im angemeldeten SMA-Kundenbereich wurden die aktuellen Kontoprüfungen für
+denselben 3-s-Export einzeln geöffnet. Der YouTube-Dialog zeigte den verbundenen
+Kanal und die Option **Privat**. TikTok gab **Nur ich**, **Freunde** und
+**Follower** sowie ein Videolimit von 3600 Sekunden zurück. Duette und Stitch
+waren kontoseitig deaktiviert. Beide Beitragsvorschauen enthielten den gespeicherten
+Testtext und den zugeordneten Shop-Link. Diese Beobachtungen gelten für den
+Zeitpunkt der Prüfung. Die Freigabe prüft das Zielkonto erneut.
+
+Im Editor wurde die vorhandene PNG über **Export → Gespeicherte Ergebnisse →
+Cover herunterladen** abgerufen. Die Datei ist als PNG mit 720 × 1280 Pixeln
+vollständig lesbar. Die 465264 Bytes stimmen in SHA-256 mit der oben aufgeführten
+Coverrevision überein. Der bestehende Cover-Adapter validierte die Originalbytes
+gegen den aktuellen, lesend berechneten Coverplan. Der Plan verwendet 1000 ms
+bei einer Exportdauer von 3000 ms. Der Katalogabruf im Portal war um 11:52 Uhr
+(Wien) erfolgreich. Die Abschlussabfrage ergab neun bestehende Aufträge, null
+Operatorfreigaben, null Provider- und null Coverversuche.
+
+Für den ersten privaten YouTube-Test wurde die Zielgruppe des technischen Tests
+als „nicht speziell für Kinder“ vorgemerkt. Die Pflichtangabe zur realistischen
+Veränderung bzw. synthetischen Herkunft der Türszene ist offen. Der gespeicherte
+Testton belegt allein die Entstehung der Tonspur. Für TikTok ist vor einer
+Auftragsvorbereitung die zutreffende Werbekennzeichnung des Beitrags zu klären.
+
 ## Nächster ausführbarer Schritt und Grenzen
 
 1. Automatischer Textvergleich abgeschlossen. Die beiden gespeicherten Entwürfe
@@ -100,9 +125,8 @@ eigenen Prüfweg. Der lokale Messweg besteht unabhängig von einer Transkription
    die vollständige lokale Messung und die Sichtbeobachtungen gebunden. Eine
    Abweichung im Text erfordert eine neue Prüfung. Die Methode erfasst exakt
    bekannte Formulierungen. Persönliche Inhalts- und Rechteerklärungen stehen aus.
-2. Erst danach das aktuelle Zielkonto samt erlaubten Optionen lesen und den
-   konkreten Auftrag vorbereiten. Alte Kontonachweise aus stornierten Aufträgen
-   sind keine frische Zielkontobestätigung.
+2. Die Herkunft der Türszene klären und die zutreffende YouTube-Kennzeichnung
+   im privaten Testauftrag setzen. Bei der Vorbereitung das Zielkonto frisch prüfen.
 3. Kundenseitige Inhalts-/Rechtebestätigungen und die ausdrückliche Freigabe
    dieses konkreten Tests einholen. Die Assistenzsichtung bestätigt nicht, dass
    der Kunde selbst alle persönlichen Prüfaussagen erfüllt hat.
@@ -118,7 +142,7 @@ eigenen Prüfweg. Der lokale Messweg besteht unabhängig von einer Transkription
    unabhängig bestätigte Coverdatei ableiten. History anschließend lesen.
 
 Migration `20261107102147_publication_export_reference_v1.sql` ist installiert.
-Der nächste Schritt für einen echten Test ist die Prüfung des konkreten Zielkontos.
+Der nächste Schritt für den privaten YouTube-Test ist die offene Medienkennzeichnung.
 Die neun bestehenden Aufträge bleiben unverändert. Keine Operatorberechtigung,
 kein Provider- oder Coverversuch. PR #57/#69, n8n-Originalentwürfe und
 Shopify-Testmodus bleiben unangetastet.
