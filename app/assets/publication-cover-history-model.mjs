@@ -30,7 +30,10 @@ export function readPublicationCoverHistory(value){
   if(w!=null&&(typeof w!=='object'||!['active','expired','recheck'].includes(w.status)||!timestamp(w.expires_at)))throw Error('INVALID_HISTORY');
   const pending=value.entries[i].preparation_window;
   if(pending!=null&&(w!=null||!['active','expired'].includes(pending.status)||!timestamp(pending.expires_at)))throw Error('INVALID_HISTORY');
-  return {...entry,...(pending&&entry.status==='preparing'?{preparation_window:{status:pending.status,expires_at:pending.expires_at}}:{}),...(w&&entry.status==='prepared'?{approval_window:{status:w.status,expires_at:w.expires_at}}:{}),cover:{status:c.status,updated_at:c.updated_at}};
+  const caption=value.entries[i].order_caption;
+  const hasCaption=typeof caption==='string'&&caption.length<=5000&&caption.trim().length>0
+    &&new TextEncoder().encode(caption).byteLength<=5000;
+  return {...entry,order_caption:hasCaption?caption:null,...(pending&&entry.status==='preparing'?{preparation_window:{status:pending.status,expires_at:pending.expires_at}}:{}),...(w&&entry.status==='prepared'?{approval_window:{status:w.status,expires_at:w.expires_at}}:{}),cover:{status:c.status,updated_at:c.updated_at}};
  });
  return result;
 }

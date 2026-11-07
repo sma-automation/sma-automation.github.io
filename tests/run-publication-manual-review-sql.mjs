@@ -33,7 +33,7 @@ try{
  const provider=async(d={})=>asRole('service_role',async()=>(await db.query("select public.sma_publication_provider_v1('begin',$1,null,$2) r",[id(10),d])).rows[0].r);
  // Install the actual history projections and test the same deadline in both customer reads.
  await db.exec((await src('publication-provider-cover')).split('create or replace function')[0]);
- for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window','publication-pending-preparation'])await db.exec(await src(f));
+ for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window','publication-pending-preparation','publication-history-order-caption'])await db.exec(await src(f));
  const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
  for(const [age,expected] of [['1 minute','active'],['30 minutes','expired'],['1 day','expired']]){

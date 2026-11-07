@@ -12,6 +12,20 @@ test('cover history accepts only projected status and date, keeps video status i
  }
  assert.doesNotMatch(historyCoverStatuses.timestamp_sent[0],/bestätigt/);assert.match(historyCoverStatuses.timestamp_sent[1],/nicht separat/);
 });
+test('order caption keeps exact plain text and ignores unavailable or malformed snapshots',async()=>{
+ const {readPublicationCoverHistory}=await model;
+ const entry=row({status:'not_recorded',updated_at:null});
+ for(const caption of ['Erste Zeile.\n\n#SMA\nhttps://example.test/alt','😀'.repeat(1250)]){
+  assert.equal(readPublicationCoverHistory(response({...entry,order_caption:caption})).entries[0].order_caption,caption);
+ }
+ for(const value of [undefined,null,{},['Text'],'  \n','😀'.repeat(1251)]){
+  const result=readPublicationCoverHistory(response({...entry,order_caption:value}));
+  assert.equal(result.entries[0].order_caption,null);assert.equal(result.entries[0].status,entry.status);
+ }
+ const sql=fs.readFileSync('supabase/sql/publication-history-order-caption.sql','utf8');
+ const migrations=fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('_publication_history_order_caption_v1.sql'));
+ assert.equal(migrations.length,1);assert.equal(fs.readFileSync('supabase/migrations/'+migrations[0],'utf8'),sql);
+});
 test('cover history rejects missing, wrong-portal, ambiguous and malformed statuses',async()=>{
  const {readPublicationCoverHistory}=await model;
  for(const cover of [null,[],{}, {status:'published',updated_at:date},{status:'__proto__',updated_at:date},{status:'complete',updated_at:null},{status:'none',updated_at:'yesterday'},{status:'not_recorded',updated_at:date},{status:'timestamp_sent',updated_at:date}])assert.throws(()=>readPublicationCoverHistory(response(row(cover))));

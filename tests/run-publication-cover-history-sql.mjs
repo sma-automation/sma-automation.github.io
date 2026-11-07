@@ -11,7 +11,7 @@ try{
  await db.exec(await readFile(new URL('./sql-runtime/publication-history-fixture.sql',import.meta.url),'utf8'));
  // Exact installed cover table DDL; no dispatcher or provider functions needed.
  await db.exec((await sql('publication-provider-cover.sql')).split('create or replace function')[0]);
- for(const f of ['publication-history.sql','publication-history-months.sql','publication-cover-history.sql'])await db.exec(await sql(f));
+ for(const f of ['publication-history.sql','publication-history-months.sql','publication-cover-history.sql','publication-history-order-caption.sql'])await db.exec(await sql(f));
  await db.query('insert into public.sma_kunden values(91,$1,true,true,false),(92,$2,true,true,false)',[uid,other]);
  const read=async(input={month:null},owner=uid,version=3)=>{await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);try{return (await db.query(`select public.sma_publication_history_v${version}($1) as r`,[input])).rows[0].r;}finally{await db.exec('reset role');}};
  const binding={platform:'youtube',media_kind:'video',asset_id:id(40),asset_revision:'sha256:'+'a'.repeat(64)+':4'};
@@ -21,6 +21,25 @@ try{
  for(const input of [null,[],{user_id:other},{order_id:id(1)},{month:'2026-99'},{before_id:id(1)}])eq((await read(input)).code,'INVALID_INPUT');
  await insert(1);await insert(2,other,92);await insert(3,uid,92);await insert(4,other,91);
  eq((await read()).entries.map(e=>e.id),[id(1)]);eq((await read({},other)).entries.map(e=>e.id),[id(2)]);
+ // The immutable order is the only source. Rows with the wrong owner or customer stay invisible.
+ const historicalCaption='Die ursprüngliche Fassung.\n\n#Video\n\nZum Shop: https://example.test/?produkt=alt';
+ const setDraft=(n,draft)=>db.query('update sma_private.publication_orders_v1 set draft=$2 where id=$1',[id(n),draft]);
+ const captionDraft={platform:'youtube',title:'Fixture',caption:historicalCaption,review_notes:['DO_NOT_EXPOSE']};
+ await setDraft(1,captionDraft);
+ for(const n of [2,3,4])await setDraft(n,{...captionDraft,caption:'other '+n});
+ eq((await read()).entries.map(e=>e.order_caption),[historicalCaption]);
+ eq((await read({},other)).entries.map(e=>e.order_caption),['other 2']);
+ for(const status of ['prepared','blocked','cancelled']){
+  await db.exec('begin');
+  await db.query('update sma_private.publication_orders_v1 set state=$2 where id=$1',[id(1),status]);
+  eq((await read()).entries[0].order_caption,historicalCaption);
+  await db.exec('rollback');
+ }
+ for(const draft of [{...captionDraft,platform:'tiktok'},{body:'Nur der heutige Text'},{...captionDraft,caption:' \n '},{...captionDraft,caption:{}},{...captionDraft,caption:'😀'.repeat(1251)}]){
+  await setDraft(1,draft);eq((await read()).entries[0].order_caption,null);
+ }
+ await setDraft(1,{...captionDraft,caption:'😀'.repeat(1250)});eq((await read()).entries[0].order_caption,'😀'.repeat(1250));
+ await setDraft(1,captionDraft);
  const cover=async()=>{const r=await read();readPublicationCoverHistory(r);checks++;return r.entries.find(e=>e.id===id(1)).cover;};
  eq(await cover(),{status:'not_recorded',updated_at:null});
  await db.exec('begin');await db.exec("update sma_private.publication_orders_v1 set binding=jsonb_set(binding,'{platform}','\"instagram\"')");eq((await cover()).status,'not_applicable');await db.exec('rollback');
