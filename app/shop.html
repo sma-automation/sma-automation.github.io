@@ -35,6 +35,18 @@
 .cart-summary .disclaimer{line-height:1.55}
 @media(max-width:420px){.cart-summary{padding-bottom:calc(22px + env(safe-area-inset-bottom))}}
 @media(max-width:370px){.logo-copy b{max-width:140px!important;font-size:15px}.cart-trigger{padding:10px 7px}.product-data{padding:10px;gap:6px}.product-name{font-size:13px}}
+[hidden]{display:none!important}
+.product-name a{color:inherit;text-decoration:none}.product-name a:hover,.product-name a:focus-visible{text-decoration:underline}
+.product-route .hero,.product-route section[aria-labelledby="catalogTitle"],.product-route .head-search{display:none}
+.back-to-catalog{display:inline-block;margin:12px 0 18px;color:var(--blue);font-weight:650;text-decoration:none}
+.back-to-catalog:hover{text-decoration:underline}
+#linkedProduct .dialog{width:100%;max-height:none;overflow:visible;border:1px solid var(--line);box-shadow:0 8px 30px #142e5310;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"image heading" "image description" "thumbs action";align-items:start}
+#linkedProduct .dialog-head{grid-area:heading;position:static;background:none}
+#linkedProduct .gallery-img{grid-area:image;height:clamp(260px,38vw,460px);border-radius:20px 0 0 0}
+#linkedProduct .thumbs{grid-area:thumbs}#linkedProduct .dialog-copy{grid-area:description;overflow-wrap:anywhere}
+#linkedProduct .dialog-action{grid-area:action;align-self:end;flex-wrap:wrap}
+#linkedProduct .stock{display:block;margin-top:4px}
+@media(max-width:700px){#linkedProduct .dialog{grid-template-columns:minmax(0,1fr);grid-template-areas:"heading" "image" "thumbs" "description" "action"}#linkedProduct .gallery-img{border-radius:0;height:clamp(220px,70vw,360px)}}
 </style>
 </head>
 <body>
@@ -45,6 +57,10 @@
   <button class="cart-trigger" id="cartOpen" type="button" aria-label="Warenkorb öffnen"><span aria-hidden="true">🛒</span><span class="cart-label">Warenkorb</span><span class="cart-pill" id="cartCount">0</span></button>
 </div></header>
 <main class="wrap">
+  <section id="linkedProduct" aria-label="Produktdetails" hidden>
+    <a id="backToCatalog" class="back-to-catalog" hidden>← Alle Produkte</a>
+    <p id="linkedStatus" role="status" aria-live="polite">Produkt wird geladen …</p>
+  </section>
   <section class="hero"><div><div class="eyebrow">DEIN SHOP · DIREKT AUS SMA</div><h1>Alles entdecken.<br>Einfach einkaufen.</h1><p id="heroDescription">Entdecke unsere Produkte mit Bildern und Beschreibungen. SMA-Warenkorb mit geprüfter Händlerzuordnung. Die Kasse wird erst nach ausdrücklicher Freigabe aktiviert.</p></div><div class="hero-orbit" aria-hidden="true"></div></section>
   <section aria-labelledby="catalogTitle"><div class="section-head"><div><h2 id="catalogTitle">Unsere Produkte</h2><p id="resultText">Entdecke den Katalog</p></div><span class="sort" style="display:flex;align-items:center">Neueste zuerst</span></div>
     <div class="mobile-search" style="display:none;align-items:center;border:1px solid var(--line);padding:0 13px;border-radius:11px;background:#fff;margin:0 0 14px"><span aria-hidden="true">⌕</span><input id="queryMobile" type="search" autocomplete="off" placeholder="Produkte suchen …" aria-label="Produkte suchen" style="height:46px;width:100%;border:0;outline:0;padding:0 10px;background:transparent;min-width:0"></div>
@@ -56,7 +72,7 @@
   <footer class="footer">SMA · Kunden-Shop · Für Handy, Tablet und PC</footer>
 </main>
 <nav class="mobile-nav" aria-label="Mobile Shop-Navigation"><button id="mobileDiscover" class="active" type="button"><span class="ni">▦</span>Entdecken</button><button id="mobileCart" type="button"><span class="ni">🛒</span><span id="mobileCartLabel">Warenkorb</span></button><button id="mobileInfo" type="button"><span class="ni">ⓘ</span>Shop-Info</button></nav>
-<div class="overlay" id="galleryOverlay" role="presentation"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="galleryTitle"><div class="dialog-head"><div><h2 id="galleryTitle"></h2><p id="galleryCounter"></p></div><button class="close" id="galleryClose" aria-label="Galerie schließen">×</button></div><div id="galleryImage" class="gallery-img"></div><div id="galleryThumbs" class="thumbs"></div><div id="galleryDescription" class="dialog-copy"></div><div class="dialog-action"><div id="galleryPrice" class="price"></div><button class="add" id="galleryAdd">In den Warenkorb</button></div></section></div>
+<div class="overlay" id="galleryOverlay" role="presentation"><section class="dialog" id="galleryPanel" role="dialog" aria-modal="true" aria-labelledby="galleryTitle"><div class="dialog-head"><div><h2 id="galleryTitle"></h2><p id="galleryCounter"></p></div><button class="close" id="galleryClose" aria-label="Galerie schließen">×</button></div><div id="galleryImage" class="gallery-img"></div><div id="galleryThumbs" class="thumbs"></div><div id="galleryDescription" class="dialog-copy"></div><div class="dialog-action"><div><div id="galleryPrice" class="price"></div><small class="stock" id="galleryStock"></small></div><button class="add" id="galleryAdd">In den Warenkorb</button></div></section></div>
 <div class="overlay" id="cartOverlay" role="presentation" style="padding:0"><section class="cart-sheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle"><div class="cart-top"><div><h2 id="cartTitle">Dein Warenkorb</h2><div class="muted" style="font-size:12px;color:var(--muted)">Produkte dieses Shops</div></div><button class="close" id="cartClose" aria-label="Warenkorb schließen">×</button></div><div class="cart-list" id="cartLines"></div><div class="cart-summary"><div class="sumrow"><span>Zwischensumme (ohne Versand)</span><b id="cartTotal">0,00 €</b></div><button class="checkout" type="button" id="checkoutButton" disabled>Kasse noch nicht aktiviert</button><div class="checkout-status" id="checkoutStatus" role="status" aria-live="polite"></div><p class="disclaimer" id="checkoutHint">Die sichere Bezahlung ist noch nicht freigegeben.</p></div></section></div>
 <div class="overlay" id="infoOverlay"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="infoTitle"><div class="dialog-head"><h2 id="infoTitle">Über diesen Shop</h2><button class="close" id="infoClose" aria-label="Schließen">×</button></div><div class="info-box"><p><b>Jeder SMA-Unternehmer bekommt seinen eigenen öffentlichen Shop.</b> Endkunden sehen nur dessen veröffentlichte Produkte – ohne SMA-Anmeldung.</p><p>Die Produkte stammen aus SMA. Der SMA-Warenkorb wird erst nach Freigabe des Händlers und des Gesamtsystems mit der sicheren Shopify-Kasse verbunden. Shopify verarbeitet Bezahlung und Checkout.</p><p>Vor dem Live-Verkauf müssen Zahlungsanbieter, Bestellrückmeldung, Steuer-/Versandregeln und Händlerangaben vollständig geprüft sein.</p></div></section></div>
 <script>
@@ -79,6 +95,7 @@ const euros=(amount,currency='EUR')=>{
 };
 const urlParams=new URLSearchParams(location.search);
 const slug=(urlParams.get('shop')||'').trim().toLowerCase();
+const linkedId=urlParams.get('produkt');
 // Bewusst kein checkout_test und kein "sma-testkunde"-Sonderzugang.
 // Kunden kaufen über ihren individuellen ?shop=<shop-slug> ein.
 if(CHECKOUT_PUBLIC_ENABLED){
@@ -167,7 +184,10 @@ function showCard(p){
  const photo=document.createElement('button');photo.type='button';photo.className='product-image';photo.title='Produktbilder und Details ansehen';photo.setAttribute('aria-label',p.title+' Details');photo.append(image(p.images[0],p.title));photo.onclick=()=>showGallery(p.id);
  const body=document.createElement('div');body.className='product-data';
  const category=document.createElement('span');category.className='category';category.textContent=p.category;
- const title=document.createElement('h3');title.className='product-name';title.textContent=p.title;
+ const title=document.createElement('h3');title.className='product-name';
+ if(/^[A-Za-z0-9_-]{1,80}$/.test(p.id)){
+  const link=document.createElement('a');link.href='?'+new URLSearchParams({shop:slug,produkt:p.id});link.textContent=p.title;title.append(link);
+ }else title.textContent=p.title;
  const desc=document.createElement('p');desc.className='product-desc';desc.textContent=p.description||'Weitere Produktinformationen werden ergänzt.';
  const price=document.createElement('div');price.className='price-row';
  const amount=document.createElement('span');amount.className='price';amount.textContent=euros(p.price,p.currency);
@@ -213,7 +233,60 @@ function searchInput(v){
  clearTimeout(timer);timer=setTimeout(()=>{if(clean&&!/^[\p{L}\p{N} .-]+$/u.test(clean.trim())){setResult('Suche: nur Buchstaben, Zahlen, Leerzeichen, Punkt und Bindestrich.');return}search=clean.trim();loadPage(1)},350)
 }
 $('queryDesktop').addEventListener('input',e=>searchInput(e.target.value));$('queryMobile').addEventListener('input',e=>searchInput(e.target.value));
-function showGallery(id){const p=knownProducts.get(id);if(!p)return;currentGallery=p;$('galleryTitle').textContent=p.title;$('galleryCounter').textContent=p.images.length+(p.images.length===1?' Bild':' Bilder')+' · Produktdetails';$('galleryDescription').replaceChildren();const b=document.createElement('b');b.textContent='Beschreibung';const d=document.createElement('p');d.textContent=p.description||'Weitere Produktinformationen werden ergänzt.';const meta=document.createElement('small');meta.style.color='var(--muted)';meta.textContent=p.category;$('galleryDescription').append(b,d,meta);$('galleryPrice').textContent=euros(p.price,p.currency);$('galleryAdd').disabled=p.stock<=0||!p.shopifyReady;$('galleryAdd').textContent=!p.shopifyReady?'Noch nicht bestellbar':'In den Warenkorb';$('galleryAdd').onclick=()=>{addToCart(p.id);closeOverlay('galleryOverlay');openCart()};renderGalleryImage(0);openOverlay('galleryOverlay')}
+function showGallery(id){
+ const p=knownProducts.get(id);if(!p)return;
+ renderGallery(p);openOverlay('galleryOverlay');
+}
+function renderGallery(p){
+ currentGallery=p;$('galleryTitle').textContent=p.title;
+ $('galleryCounter').textContent=p.images.length+(p.images.length===1?' Bild':' Bilder')+' · Produktdetails';
+ const heading=document.createElement('b');heading.textContent='Beschreibung';
+ const description=document.createElement('p');description.textContent=p.description||'Weitere Produktinformationen werden ergänzt.';
+ const category=document.createElement('small');category.style.color='var(--muted)';category.textContent=p.category;
+ $('galleryDescription').replaceChildren(heading,description,category);
+ $('galleryPrice').textContent=p.price===null?'Preis nicht verfügbar':euros(p.price,p.currency);
+ $('galleryStock').textContent=p.stock>0?p.stock+' verfügbar':'Derzeit nicht lieferbar';
+ $('galleryAdd').disabled=p.stock<=0||!p.shopifyReady;
+ $('galleryAdd').textContent=!p.shopifyReady?'Noch nicht bestellbar':p.stock<=0?'Nicht verfügbar':'In den Warenkorb';
+ $('galleryAdd').onclick=()=>{
+  addToCart(p.id);
+  if(linkedId===null)closeOverlay('galleryOverlay');
+  openCart();
+ };
+ renderGalleryImage(0);
+}
+async function loadLinkedProduct(){
+ const host=$('linkedProduct'),status=$('linkedStatus'),back=$('backToCatalog');
+ document.body.classList.add('product-route');host.hidden=false;
+ const validShop=urlParams.getAll('shop').length===1&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)&&slug.length<=63;
+ if(validShop){back.href='?'+new URLSearchParams({shop:slug});back.hidden=false;}
+ if(!validShop||urlParams.getAll('produkt').length!==1||!/^[A-Za-z0-9_-]{1,80}$/.test(linkedId)){
+  status.textContent='Dieser Produktlink ist ungültig.';return;
+ }
+ try{
+  const response=await fetch(API+'?'+new URLSearchParams({shop:slug,produkt:linkedId}),{
+   method:'GET',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',
+   headers:{Accept:'application/json'},signal:AbortSignal.timeout(10000)
+  });
+  if(response.status===404){status.textContent='Dieses Produkt ist in diesem Shop nicht verfügbar.';return;}
+  if(!response.ok)throw Error();
+  const result=await response.json(),raw=result?.produkte?.[0];
+  if(result?.ok!==true||result.shop?.slug!==slug||result.produkt_filter!==linkedId||result.gesamt!==1||
+     !Array.isArray(result.produkte)||result.produkte.length!==1||raw?.produkt_id!==linkedId)throw Error();
+  const product=normalized(raw);
+  if(!((typeof raw.preis==='number'||typeof raw.preis==='string'&&/^\d+(?:\.\d{1,2})?$/.test(raw.preis))&&
+       Number.isFinite(Number(raw.preis))&&Number(raw.preis)>=0&&/^[A-Z]{3}$/.test(raw.waehrung))){
+   product.price=null;product.shopifyReady=false;
+  }
+  $('merchantName').textContent=result.shop.name||'SMA Shop';document.title=product.title+' · '+$('merchantName').textContent;
+  shopAvailable=true;knownProducts.set(product.id,product);reconcileCart([product],false);
+  renderGallery(product);
+  const panel=$('galleryPanel');panel.removeAttribute('role');panel.removeAttribute('aria-modal');
+  $('galleryClose').hidden=true;host.append(panel);status.hidden=true;
+ }catch{
+  status.textContent='Das Produkt konnte nicht geladen werden. Bitte versuche es erneut.';
+ }
+}
 function renderGalleryImage(i){if(!currentGallery)return;const p=currentGallery;const url=p.images[i];$('galleryImage').replaceChildren(image(url,p.title+' Bild '+(i+1)));$('galleryThumbs').replaceChildren();p.images.forEach((u,index)=>{const btn=document.createElement('button');btn.type='button';btn.className='thumb'+(index===i?' active':'');btn.setAttribute('aria-label','Bild '+(index+1)+' anzeigen');btn.append(image(u,''));btn.onclick=()=>renderGalleryImage(index);$('galleryThumbs').append(btn)})}
 function addToCart(id){
  if(checkoutBusy)return;
@@ -376,12 +449,12 @@ async function startCheckout(){
  }
 }
 $('checkoutButton').addEventListener('click',startCheckout);
-$('cartOpen').onclick=openCart;$('mobileCart').onclick=openCart;$('mobileDiscover').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});$('mobileInfo').onclick=()=>openOverlay('infoOverlay');$('cartClose').onclick=()=>closeOverlay('cartOverlay');$('infoClose').onclick=()=>closeOverlay('infoOverlay');$('galleryClose').onclick=()=>closeOverlay('galleryOverlay');
+$('cartOpen').onclick=openCart;$('mobileCart').onclick=openCart;$('mobileDiscover').onclick=()=>{if(linkedId!==null&&!$('backToCatalog').hidden)window.location.assign($('backToCatalog').href);else window.scrollTo({top:0,behavior:'smooth'});};$('mobileInfo').onclick=()=>openOverlay('infoOverlay');$('cartClose').onclick=()=>closeOverlay('cartOverlay');$('infoClose').onclick=()=>closeOverlay('infoOverlay');$('galleryClose').onclick=()=>closeOverlay('galleryOverlay');
 for(const id of ['galleryOverlay','cartOverlay','infoOverlay'])$(id).addEventListener('click',e=>{if(e.target===$(id))closeOverlay(id)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){for(const id of ['galleryOverlay','cartOverlay','infoOverlay'])if($(id).classList.contains('open')){closeOverlay(id);break}}});
 restoreCart();
 updateCheckoutButton();
-updateCartCount();loadPage(1);
+updateCartCount();if(linkedId!==null)loadLinkedProduct();else loadPage(1);
 })();
 </script>
 </body>

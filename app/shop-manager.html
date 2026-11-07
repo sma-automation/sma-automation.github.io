@@ -145,6 +145,7 @@ body.gallery-open{overflow:hidden}
 .order-item .amount{font-size:18px;margin-top:0}
 .order-item .badges{margin-top:5px;gap:5px}
 @media(max-width:650px){.shop-sections button{flex:1}.order-item{display:flex;gap:10px}.order-item .amount{font-size:16px}.order-item .badge{font-size:10px}}
+.product-actions input[type="url"]{max-width:100%;min-width:0;width:13rem;font:inherit}
 </style>
 <style>.main{margin-left:0;width:100%}.content{padding:0}.section{margin-top:16px}.app{display:block}.card{box-shadow:none}body{background:#f4f6f9}</style></head>
 <body>
@@ -215,6 +216,7 @@ body.gallery-open{overflow:hidden}
 </div>
 
 <script type="module">
+import {publicProductUrl} from './assets/shop-catalog-model.mjs?v=2';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Dieser Publishable Key darf im Browser verwendet werden. Niemals einen Secret-/Service-Role-Key einfügen.
@@ -256,6 +258,7 @@ const signedCache = new Map();
 let productsState=[];
 let currentUserId='';
 let currentCustomerId='';
+let publicShopSlug=null;
 let stockRequestsState=new Map();
 let stockRequestsError=false;
 const STOCK_REQUEST_FIELDS='id,sma_produkt_id,gewuenscht_verfuegbar,status,created_at';
@@ -605,6 +608,25 @@ function makeProductCard(product,userId){
   edit.textContent='Details & Marktplätze';
   edit.addEventListener('click',()=>window.parent.postMessage({type:'sma-product-details',id:product.sma_produkt_id},window.location.origin));
   actions.append(amount,edit);
+  if(publicShopSlug&&product.aktiv===true&&product.kunde_id===currentCustomerId){
+    const link=publicProductUrl(publicShopSlug,product.sma_produkt_id);
+    if(link){
+      const copy=document.createElement('button');copy.type='button';copy.className='btn';
+      copy.textContent='Produktlink kopieren';
+      const fallback=document.createElement('input');fallback.type='url';fallback.readOnly=true;fallback.hidden=true;
+      fallback.setAttribute('aria-label','Öffentlicher Produktlink zum Kopieren');
+      copy.addEventListener('click',async()=>{
+        try{
+          await navigator.clipboard.writeText(link);
+          copy.textContent='Produktlink kopiert';fallback.hidden=true;
+        }catch{
+          copy.textContent='Produktlink kopieren';
+          fallback.value=link;fallback.hidden=false;fallback.focus();fallback.select();
+        }
+      });
+      actions.append(copy,fallback);
+    }
+  }
   row.append(media,details,actions);
   return row;
 }
@@ -856,7 +878,7 @@ function renderOrders(orders){
 }
 
 // Daten werden seitenweise aus Supabase geladen, damit auch große Shops vollständig erreichbar bleiben.
-const PRODUKT_FELDER='sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at';
+const PRODUKT_FELDER='kunde_id,sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at';
 const BESTELL_FELDER='id,markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung,ist_testbestellung';
 
 function showLoading(elementId,message){
@@ -1009,7 +1031,7 @@ if(sessionError||!session){
   goLogin();
 }else{
   const {data:kunde,error:kundeError}=await supabase.from('sma_kunden')
-    .select('kunde_id,kunde_name,kunde_email,paket,aktiv,zahlung_bestaetigt,demo_delta_aktiv,shop_slug')
+    .select('kunde_id,kunde_name,kunde_email,paket,aktiv,zahlung_bestaetigt,demo_delta_aktiv,shop_slug,shop_oeffentlich')
     .eq('user_id',session.user.id).single();
   if(kundeError||!kunde){
     showBlocked('Für dieses Benutzerkonto wurden keine SMA-Kundendaten gefunden.');
@@ -1020,6 +1042,7 @@ if(sessionError||!session){
     }else{
       currentUserId=session.user.id;
       currentCustomerId=kunde.kunde_id;
+      publicShopSlug=kunde.shop_oeffentlich===true?kunde.shop_slug:null;
       if(kunde.shop_slug==='sma-testkunde')document.getElementById('checkoutTestLink').classList.remove('hidden');
       // Produkte mit zehn, Bestellungen mit fünf Einträgen je Seite laden.
       await Promise.all([loadProductsPage(1),loadOrdersPage(1)]);

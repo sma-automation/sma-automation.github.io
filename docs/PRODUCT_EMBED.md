@@ -12,9 +12,25 @@ Die Produktliste zeigt ein Produkt pro Zeile, Bild, Namen, Preis und Verfügbark
 
 Die Liste lädt beim Aufruf und nach „Aktualisieren“ den aktuellen SMA-Katalog. Es gibt keine Hintergrundabfrage, Datenkopie auf der Kundenwebseite oder dauerhafte Echtzeitverbindung. Bei Fehlern verschwinden alte Preise und Bestände. Eine inzwischen leere letzte Seite führt einmalig zurück zu Seite 1. Fehlende Preise werden nicht als kostenlos und unbekannte Bestände nicht als verfügbar ausgegeben.
 
+## Direkter Produktlink
+
+Im **Shop → Produkte** kann der Händler bei einem aktiven Artikel im öffentlichen
+Shop **Produktlink kopieren** wählen. Bei gesperrter Zwischenablage erscheint der
+Link in einem markierten Feld. Der Produktname im öffentlichen Sortiment und
+in der eingebetteten Liste führt ebenfalls zu dieser Artikelansicht.
+
+Die Adresse folgt dem Muster `/app/shop.html?shop=<shop-slug>&produkt=<sma-produkt-id>`.
+Der öffentliche Leseendpunkt prüft den Shopzugang und sucht nach der exakten
+Produkt-ID innerhalb des Händlerkontos. Die Position in der Liste und der
+Produktname dürfen sich ändern. Ein fehlender oder inaktiver Artikel zeigt
+einen Hinweis und den Rückweg ins Sortiment. Die Seite übernimmt Galerie,
+Beschreibung, Preis, Verfügbarkeit und Warenkorb des Händlers.
+Das Öffnen eines Links löst ausschließlich den Produktabruf aus.
+Bestehende Portaltexte enthalten ihren bisher gespeicherten Shop-Link.
+
 ## Anbindung und Grenzen
 
-- Verwendet ausschließlich die vorhandene öffentliche GET-Funktion `sma-shop-produkte`, Version 3. Deren Code wurde vor der Integration gelesen: öffentlicher, aktiver Shop und gültiger Zugang; Produkte nach `user_id` **und** `kunde_id` sowie `aktiv:true` begrenzt. Keine Änderung oder neue Bereitstellung der Edge Function.
+- Die ursprüngliche Listeneinbettung verwendete die öffentliche GET-Funktion `sma-shop-produkte` in Version 3. Dabei galten folgende Filter: öffentlicher, aktiver Shop und gültiger Zugang; Produkte nach `user_id` **und** `kunde_id` sowie `aktiv:true` begrenzt. Der zusätzliche Produktfilter ist unter `supabase/functions/sma-shop-produkte/index.ts` versioniert.
 - Browseranfragen senden keine Zugangsdaten, folgen keinen Weiterleitungen und haben zehn Sekunden Zeitlimit. Shop-Slug, Seitennummer, Rückgabe-Shop, Seitengröße, Produktanzahl und Produkt-IDs werden geprüft. Ungültige oder doppelte URL-Parameter erzeugen keinen Katalogaufruf.
 - Einbau- und Shopziele sind fest auf `https://sma-automation.com` begrenzt. Der Code enthält nur den öffentlichen Shop-Slug. Keine Kunden-ID, Session, Schlüssel, Trackingparameter oder Anwendungsskripte werden auf die externe Webseite kopiert.
 - Produkttexte werden ausschließlich als Textknoten eingefügt. Bilder sind auf signierte URLs des vorhandenen Projekt-Buckets `sma-produktbilder` begrenzt. Die Content Security Policy erlaubt nur die benötigten lokalen Skripte/Stile, den bestehenden Produkt-Endpunkt und diesen Bildpfad. Keine Kommunikation mit dem übergeordneten Fenster und keine automatische Navigation.

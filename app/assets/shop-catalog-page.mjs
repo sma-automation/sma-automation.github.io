@@ -1,2 +1,2 @@
-import {mountShopCatalog} from './shop-catalog.mjs?v=1';
+import {mountShopCatalog} from './shop-catalog.mjs?v=2';
 mountShopCatalog();

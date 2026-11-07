@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '../app/shop-manager.html'), 'utf8');
 const moduleCode = html.split('<script type="module">')[1].split('</script>')[0];
-const source = moduleCode.replace(/^import .*;$/m, '').split('if(window.self===window.top)')[0];
+const source = moduleCode.replace(/^import .*;$/gm, '').split('if(window.self===window.top)')[0];
 
 class Element {
   constructor(tag='div') {
@@ -19,8 +19,10 @@ class Element {
   setAttribute(name,value){this[name]=value;}
   addEventListener(name,fn){this.events[name]=fn;}
   querySelector(){return null;}
+  focus(){this.focused=true;}
+  select(){this.selected=true;}
 }
-function harness(){
+function harness(extraGlobals={}){
   const nodes=new Map(),timers=new Map(),queries=[],docEvents={},winEvents={};
   let timerId=0,now=100000,respond=()=>({data:[],error:null});
   const document={hidden:false,activeElement:null,
@@ -42,7 +44,7 @@ function harness(){
     };return builder;
   }};
   class Clock extends Date {static now(){return now;}}
-  const context=vm.createContext({document,window:{addEventListener:(e,f)=>winEvents[e]=f},
+  const context=vm.createContext({...extraGlobals,document,window:{addEventListener:(e,f)=>winEvents[e]=f},
     createClient:()=>supabase,Intl,AbortController,AbortSignal,Date:Clock,console,
     setTimeout:(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},
     clearTimeout:id=>timers.delete(id)});
@@ -50,6 +52,7 @@ function harness(){
     globalThis.api={makeStockEditor,makeProductCard,renderProductList,refreshStock,stockRefreshDelay,scheduleStockRefresh,
       acceptStockRequests,readStockRequests,editors:stockEditors,requests:()=>stockRequestsState,
       init(products){currentUserId='owner';currentCustomerId='customer';productsState=products;},
+      publicShop(slug){publicShopSlug=slug;},
       setProducts(products){productsState=products;paginationState.products.request++;},
       fast(){stockFastUntil=Date.now()+120000;},
       state(){return {products:productsState,error:stockRequestsError,running:stockRefreshRunning,page:paginationState.products.page};}
@@ -163,4 +166,18 @@ test('an uncertain save automatically recovers when the open request is found',a
   assert.match(e.feedback.textContent,/bereits offen/);
   h.respond(q=>({data:q.table==='sma_produkte'?[p]:[request('processing')],error:null}));await h.api.refreshStock();
   assert.match(e.feedback.textContent,/verarbeitet/);assert.equal(e.save.disabled,true);
+});
+
+test('only active products in the current public shop expose a copyable link with a manual fallback',async()=>{
+ const {publicProductUrl}=await import('../app/assets/shop-catalog-model.mjs');
+ let copied,denied=false;
+ const h=harness({publicProductUrl,navigator:{clipboard:{async writeText(url){if(denied)throw Error();copied=url;}}}});
+ h.api.init([]);const p={...product(),kunde_id:'customer',aktiv:true};
+ const actions=value=>h.api.makeProductCard(value,'owner').children.at(-1).children;
+ assert.ok(!actions(p).some(b=>b.textContent==='Produktlink kopieren'));
+ h.api.publicShop('mein-shop');
+ for(const mismatch of [{...p,aktiv:false},{...p,kunde_id:'foreign'}])assert.ok(!actions(mismatch).some(b=>b.textContent==='Produktlink kopieren'));
+ const buttons=actions(p),copy=buttons.find(b=>b.textContent==='Produktlink kopieren'),field=buttons.at(-1);
+ await copy.events.click();assert.equal(copied,'https://sma-automation.com/app/shop.html?shop=mein-shop&produkt=product-1');
+ denied=true;await copy.events.click();assert.equal(field.hidden,false);assert.equal(field.selected,true);assert.equal(field.value,copied);
 });
