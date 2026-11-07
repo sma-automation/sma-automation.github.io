@@ -50,21 +50,19 @@ await test('all twelve dashboard areas have tabs directly after their original h
  for(const [name,tabs] of f.view.controllers){for(const entry of tabs.entries){entry.button.click();assert.equal(tabs.selected,entry.key);if(entry.panel){assert.equal(entry.panel.hidden,false);assert.equal(tabs.entries.filter(e=>e.panel&&!e.panel.hidden).length,1);}}}
  f.destroy();
 });
-await test('only the repeated page title disappears across all areas and translated views',async()=>{
+await test('keeps the large content heading ahead of the tabs when the shell title changes',async()=>{
  const f=fixture(), title=f.$('.topbar-title');
- assert.equal(title.getAttribute('aria-level'),'1');
  for(const root of f.doc.querySelectorAll('[data-sma-chapters]')){
   const heading=root.querySelector('.page-head > h1');
   title.textContent=heading.textContent;await tick();
-  assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),true,root.id);
-  assert.equal(f.doc.querySelectorAll('h1[data-sma-duplicate-heading]').length,1);
+  assert.equal(heading.hidden,false,root.id);
+  assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),false,root.id);
+  assert.equal(heading.nextElementSibling,root.querySelector('.sma-chapters'));
  }
- const heading=f.$('#page-publishing .page-head > h1');
- heading.textContent='Publishing';title.textContent='Publishing';await tick();
- assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),true);
- assert.equal(f.$('#page-publishing [data-chapter="files"] h1').hasAttribute('data-sma-duplicate-heading'),false);
- title.textContent='';await tick();assert.equal(heading.hasAttribute('data-sma-duplicate-heading'),false);
- f.destroy();assert.equal(title.hasAttribute('role'),false);
+ title.textContent='Publishing';f.$('#page-publishing .page-head > h1').textContent='Publishing';await tick();
+ assert.equal(f.$('#page-publishing .page-head > h1').hidden,false);
+ assert.equal(f.$('#page-publishing [data-chapter="files"] h1').textContent,'Dateien');
+ f.destroy();
 });
 await test('switches preserve exact form nodes, unsaved values, listeners and generated results',()=>{
  const f=fixture(),tabs=f.view.controllers.get('content'),result=f.$('#contentOptimizerResult');

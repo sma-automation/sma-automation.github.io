@@ -13,7 +13,8 @@
 [data-sma-chapters]>.grid:empty,[data-sma-chapters]>.platform-list:empty{display:none!important}
 [data-sma-chapters]>.page-head{margin-bottom:22px}
 [data-sma-chapters]>.page-head h1{margin-bottom:18px}
-h1[data-sma-duplicate-heading]{display:none!important}
+/* Keep the shell controls aligned and use the content h1 as the chapter title. */
+.topbar-title{visibility:hidden!important}
 [data-sma-chapters]>.page-head>.sma-chapters{width:100%}
 [data-sma-chapters]>.page-head>.sma-chapters+p{margin-top:0}
 #page-publishing.sma-optimizing .sma-chapters{display:none!important}
