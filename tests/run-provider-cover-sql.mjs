@@ -7,6 +7,9 @@ try{
  // Synthetic media evidence only, isolated in this in-memory database. Actual journal/consent/account checks remain installed.
  await db.exec("create function sma_private.publication_order_current_v1(j sma_private.publication_orders_v1) returns jsonb language sql as $$select '{\"ok\":true}'::jsonb$$; create function sma_private.publication_order_media_v1(j sma_private.publication_orders_v1,m jsonb,a jsonb) returns jsonb language sql as $$select '{\"checks\":[{\"code\":\"PORTAL_TEXT_COMPARISON\",\"status\":\"pass\"}]}'::jsonb$$;");
  await db.exec(await src('publication-provider-cover.sql'));
+ const editorBaseline=await src('publication-editor-music-cover.sql');
+ await db.exec(editorBaseline.slice(editorBaseline.indexOf('create or replace function sma_private.publication_editor_result_v1(')));
+ await db.exec(await src('publication-preview-cover-plan.sql'));
  await db.query("insert into public.sma_kunden values(91,$1,true,true,false,'fixture91','fixture91@example.test'),(92,$2,true,true,false,'fixture92','fixture92@example.test')",[uid,other]);
  for(const [k,mime,kind] of [[1,'video/mp4','video'],[2,'image/png','image']])await db.query("insert into sma_private.publication_files_v1(id,user_id,customer_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,duration_ms) values($1,$2,91,$3,'Synthetic',$4,$5,$6,now(),2000,4000)",[id(k),uid,'synthetic_drive_'+k,kind,mime,rev]);
  await db.query("insert into sma_private.publication_editor_exports_v1(id,user_id,customer_id,asset_id,asset_revision,draft_revision,settings,outputs,media_asset_id,cover_asset_id,completed_at) values($1,$2,91,$3,$4,1,$5,$6,$3,$7,now())",[id(3),uid,id(1),rev,{start_ms:1000,end_ms:5000,cover_ms:2500},{media:{sha256:hash,size_bytes:2000},cover:{sha256:hash,size_bytes:2000}},id(2)]);
@@ -14,15 +17,29 @@ try{
  await db.query("insert into sma_private.publication_orders_v1(id,user_id,customer_id,binding,draft,choices,target,state) values($1,$2,91,$3,'{\"title\":\"Synthetic\",\"caption\":\"Synthetic\"}',$4,$5,'prepared')",[id(10),uid,binding,choices,target]);
  const evidence=()=>({version:1,platform:'youtube',target_id:target.id,target_revision:target.source_revision,display_name:'Synthetic',permissions:['youtube.upload'],policy:{},checked_at:new Date().toISOString(),expires_at:new Date(Date.now()+240000).toISOString()}),data=()=>({target,account_check:evidence(),drive_verified:true,text_verified:true,size_bytes:2000}),run=async(action,d={},lease=null)=>{await db.exec('set role service_role');try{return (await db.query('select public.sma_publication_provider_cover_v1($1,$2,$3,$4) r',[action,id(10),lease,d])).rows[0].r;}finally{await db.exec('reset role');}},count=async table=>(await db.query('select count(*)::int n from sma_private.'+table)).rows[0].n;
  const plan=async()=>(await db.query('select sma_private.publication_cover_plan_v1(j) p from sma_private.publication_orders_v1 j where id=$1',[id(10)])).rows[0].p;
+ async function previewCover(file=id(1),revision=rev,owner=uid){
+  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);
+  await db.exec('set role authenticated');
+  try{return (await db.query('select public.sma_publication_editor_result_v1($1,$2) as result',[file,revision])).rows[0].result;}
+  finally{await db.exec('reset role');}
+ }
+ const preview=await previewCover();
+ eq(preview.can_publish,false);
+ eq(preview.cover,{asset_id:id(2),asset_revision:rev,name:'Synthetic',position_ms:1500,size_bytes:2000});
+ eq((await previewCover(id(2))).cover,null);
+ eq((await previewCover(id(1),'old')).code,'FILE_CHANGED');
+ eq((await previewCover(id(1),rev,other)).code,'FILE_UNAVAILABLE');
+ eq(await count('publication_orders_v1'),1);
+ eq(await count('publication_provider_attempts_v1'),0);
  eq((await plan()).position_ms,1500);eq((await plan()).duration_ms,4000);eq((await run('context')).cover,null);
- for(const [settings,position] of [[{start_ms:1000,end_ms:5000,cover_ms:1000},0],[{start_ms:1000,end_ms:5000,cover_ms:4999},3966],[{start_ms:1000,end_ms:null,cover_ms:2500},1500]]){await db.exec('begin');await db.query('update sma_private.publication_editor_exports_v1 set settings=$1',[settings]);eq((await plan()).position_ms,position);await db.exec('rollback');}
+ for(const [settings,position] of [[{start_ms:1000,end_ms:5000,cover_ms:1000},0],[{start_ms:1000,end_ms:5000,cover_ms:4999},3966],[{start_ms:1000,end_ms:null,cover_ms:2500},1500]]){await db.exec('begin');await db.query('update sma_private.publication_editor_exports_v1 set settings=$1',[settings]);eq((await plan()).position_ms,position);eq((await previewCover()).cover.position_ms,position);await db.exec('rollback');}
  eq((await run('provider_begin',data())).code,'FINAL_APPROVAL_REQUIRED');eq(await count('publication_provider_covers_v1'),0);
  await db.query("update sma_private.publication_orders_v1 set state='checked',approved_at=now(),approval_review=$1",[{policy_version:'media-consent-2026-11-03.1',content_checked:true,media_rights:true,music_rights:true,tiktok_music_terms:false,tiktok_branded_terms:false}]);
  eq((await run('provider_begin',data())).code,'PUBLICATION_RESERVATION_REQUIRED');await db.query('insert into sma_private.publication_journal_v1(customer_id,asset_id,asset_revision,platform,target_id,order_id) values(91,$1,$2,$3,$4,$5)',[id(1),rev,'youtube',target.id,id(10)]);
  eq((await run('provider_begin',data())).code,'UPLOAD_TEST_APPROVAL_REQUIRED');eq(await count('publication_provider_attempts_v1'),0);
  await db.exec("insert into sma_private.publication_provider_permissions_v1(order_id,fingerprint,expires_at) select id,sma_private.publication_provider_fingerprint_v1(j),now()+interval '1 hour' from sma_private.publication_orders_v1 j");
  eq((await run('provider_begin',{...data(),account_check:null})).code,'TARGET_PERMISSIONS_REQUIRED');eq((await run('provider_begin',{...data(),drive_verified:false})).code,'FILE_CHANGED');
- for(const mutation of ["available=false","customer_id=92,user_id='"+other+"'","revision='sha256:"+'b'.repeat(64)+":2'","size_bytes=1999","mime_type='image/jpeg'"]){await db.exec('begin');await db.query('update sma_private.publication_files_v1 set '+mutation+' where id=$1',[id(2)]);eq((await run('provider_begin',data())).code,'COVER_UNAVAILABLE');eq(await count('publication_provider_attempts_v1'),0);await db.exec('rollback');}
+ for(const mutation of ["available=false","customer_id=92,user_id='"+other+"'","revision='sha256:"+'b'.repeat(64)+":2'","size_bytes=1999","mime_type='image/jpeg'"]){await db.exec('begin');await db.query('update sma_private.publication_files_v1 set '+mutation+' where id=$1',[id(2)]);eq((await previewCover()).code,'COVER_UNAVAILABLE');eq((await run('provider_begin',data())).code,'COVER_UNAVAILABLE');eq(await count('publication_provider_attempts_v1'),0);await db.exec('rollback');}
  const init=await run('provider_begin',data());eq(init.operation,'init');eq(init.cover.position_ms,1500);eq(await count('publication_provider_covers_v1'),1);eq((await run('provider_begin',data())).code,'PROVIDER_RUNNING');eq((await run('cover_begin',data())).code,'COVER_NOT_READY');
  // Simulate only a normalized completed video/status receipt. No HTTP exists in this test.
  const receipt={platform:'youtube',target_id:target.id,provider_id:'synthetic_1',route:'youtube_video',state:'complete',expected_visibility:'private',visibility:'private',publicly_available:false,url:'https://www.youtube.com/watch?v=synthetic_1',upload_retry_allowed:false,can_upload:false,can_publish:false};

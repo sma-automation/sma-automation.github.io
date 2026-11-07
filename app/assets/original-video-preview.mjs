@@ -8,7 +8,7 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  let file=null,key='',generation=0,controller=null,url=null,disposed=false;
  const stop=()=>{try{video.pause();}catch{}};
  function release(){stop();video.removeAttribute('src');try{video.load();}catch{}video.hidden=true;if(url)revokeURL(url);url=null;thumbnailHost.style.display='';}
- function reset(){generation++;controller?.abort();controller=null;release();button.disabled=false;button.hidden=false;status.textContent='';}
+ function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.disabled=false;button.hidden=false;status.textContent='';}
  const current=g=>!disposed&&g===generation;
  async function owner(g){if(!current(g))return false;if(await getOwnerId()!==expectedOwnerId){if(current(g)){reset();file=null;key='';box.hidden=true;}return false;}return current(g);}
  button.addEventListener('click',async()=>{
@@ -22,5 +22,9 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  });
  video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=false;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});
  function invalidateOwner(id){if(id!==expectedOwnerId){reset();file=null;key='';box.hidden=true;}}
- return {setContext(next){const nextKey=next?JSON.stringify([next.id,next.revision,next.media_kind,next.mime_type,next.size_bytes,next.duration_ms]):'';if(disposed||nextKey===key)return;reset();file=next?{...next}:null;key=nextKey;box.hidden=!originalVideoSupported(file);},invalidateOwner,stop,destroy(){if(disposed)return;reset();disposed=true;file=null;key='';box.hidden=true;}};
+ function setPoster(selected,poster){
+  if(disposed||!file||selected?.id!==file.id||selected.revision!==file.revision)return;
+  if(poster)video.setAttribute('poster',poster);else video.removeAttribute('poster');
+ }
+ return {setPoster,setContext(next){const nextKey=next?JSON.stringify([next.id,next.revision,next.media_kind,next.mime_type,next.size_bytes,next.duration_ms]):'';if(disposed||nextKey===key)return;reset();file=next?{...next}:null;key=nextKey;box.hidden=!originalVideoSupported(file);},invalidateOwner,stop,destroy(){if(disposed)return;reset();disposed=true;file=null;key='';box.hidden=true;}};
 }
