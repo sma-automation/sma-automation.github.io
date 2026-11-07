@@ -94,6 +94,6 @@ sie ist keine persönliche Kundenerklärung. Die konkrete Vorbereitung der
 Provider-/Coverabnahme samt separat geprüftem 3-s-Export, passendem Testtext und
 noch fehlenden Nachweisen steht in
 [PROVIDER_COVER_ACCEPTANCE.md](PROVIDER_COVER_ACCEPTANCE.md).
-Der Kurzexport braucht eigene gebundene Nachweise; eine Uploadfreigabe allein
-genügt dafür noch nicht. Zusätzliche Analysewerkzeuge bleiben bis zur Finanzierung
+Die eigenen Portaltexte und der technische Nachweis sind für den Kurzexport
+gespeichert. Der gebundene Portaltextvergleich ist weiterhin offen. Zusätzliche Analysewerkzeuge bleiben bis zur Finanzierung
 vertagt; die Selbstauskunft darf nicht als automatische Vollanalyse beworben werden.

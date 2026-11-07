@@ -1,7 +1,7 @@
 # Vorbereitung der echten Provider-/Coverabnahme
 
 Stand: 07.11.2026 (Wien). **Noch keine Uploadfreigabe und kein uploadbereiter
-Auftrag.** Diese Vorbereitung wurde ausschließlich lesend und lokal ausgeführt.
+Auftrag.** Die erste Sichtung aus PR #118 erfolgte lokal. Der Speicherstand folgt unten.
 Sie ersetzt keine persönlichen Erklärungen und keine gespeicherten Mediennachweise.
 
 ## Zwei unterschiedliche Dateien
@@ -31,7 +31,7 @@ Original, Export und neutrale Testdatei dürfen nicht verwechselt werden.
 | PNG laut gespeichertem Export/Katalog | 465264 Bytes, 720 × 1280 |
 | Gewählter Bildzeitpunkt | 1000 ms im fertigen Video |
 
-## Tatsächlich geprüft
+## Erste Sichtung aus PR #118
 
 - Die vorhandene angemeldete Vorschau lud den Export über den bestehenden
   Editor-Quellweg. Die heruntergeladenen Videobytes stimmen in Größe und SHA-256
@@ -57,7 +57,7 @@ Private Videobytes, Audiodaten, Einzelbilder und Vorschaubilder werden nicht
 im öffentlichen Repository gespeichert. Es wurde kein kostenpflichtiger
 Analyseaufruf ausgelöst.
 
-## Passender Testtext, noch nicht im Portal gespeichert
+## Gespeicherter Testtext für YouTube und TikTok
 
 Titel: **SMA-Cover-Test: Rotes Tür-Zusatzgerät**
 
@@ -67,16 +67,34 @@ Tür-Zusatzgeräts.**
 
 Dieser Text enthält keine Aussage über Abnehmen, Verstauen oder Schutzwirkung.
 Die Texte des vollständigen Originals dürfen nicht ungeprüft übernommen werden.
-Ein Shop-Link würde durch den regulären Kundenweg ergänzt und gehört vor der
-Freigabe zur vollständigen Beitragsprüfung; er wird hier nicht erfunden.
+Die gespeicherte Caption enthält den Shop-Link des zugeordneten Kundenkontos.
+
+## Speicherstand vom 07.11.2026
+
+Beide Portale lesen ihren eigenen Entwurf in Revision 1 für die aufgeführte
+Dateiversion. Die Texte wurden als Assistenzentwürfe administrativ importiert.
+Der Import prüfte den frischen Katalogeintrag, den abgeschlossenen Export, die
+aktive Kundenzuordnung und den aktuellen Shop. Die bestehende Vorschaufunktion
+speicherte jeden Entwurf. Die Rückgabe der regulären Zuordnungsfunktion
+bestätigte für beide Portale die vollständige Caption.
+
+Das vorhandene Programm `n8n/publishing/video-extract.py` dekodierte lokal
+die geprüften MP4-Bytes. Die Messwerte und die Herkunft der Sichtbeobachtungen
+sind am privaten Export gespeichert. Die Medienprüfung beider Portale meldet
+`BINARY_INSPECTION=pass`. TikTok bestätigt zusätzlich Codec, Bildrate und
+Abmessungen. Die Bildabstände liegen zwischen 33333 und 33334 Mikrosekunden.
+
+Migration `20261107100847_publication_export_probe_v1.sql` ergänzt den
+Leseweg für abgeschlossene Exporte. Er bindet Messwerte an Kunde, Eigentümer,
+Dateirevision, Bytezahl und Prüfsumme. Die privaten Schreibrechte liegen beim
+Administrator. Neue und bestehende Magic-Effect-Ergebnisse behalten ihren
+eigenen Prüfweg. Der lokale Messweg besteht unabhängig von einer Transkription.
 
 ## Nächster ausführbarer Schritt und Grenzen
 
-1. Für genau diesen Export den passenden Portalentwurf speichern und die
-   revisionsgebundenen technischen Nachweise sowie den Portaltextvergleich über
-   einen tatsächlich verfügbaren Prüfweg erzeugen. Die bestehende automatische
-   Videoanalyse verwendet die vorhandene OpenAI-Anbindung; sie ist kein neu
-   eingerichteter, kostenloser Prüfdienst. Hier wurde sie nicht aufgerufen.
+1. Den separaten Portaltextvergleich für die gespeicherten Entwurfsrevisionen
+   abschließen. Sein regulärer Maschinenweg verlangt gespeicherte Video-Inhaltsbelege.
+   Der lokale FFmpeg-Befund erfüllt die technische Dateiprüfung.
 2. Erst danach das aktuelle Zielkonto samt erlaubten Optionen lesen und den
    konkreten Auftrag vorbereiten. Alte Kontonachweise aus stornierten Aufträgen
    sind keine frische Zielkontobestätigung.
@@ -94,8 +112,7 @@ Freigabe zur vollständigen Beitragsprüfung; er wird hier nicht erfunden.
    Videoabschluss und übergebenen Bildzeitpunkt nachweisen; daraus keine
    unabhängig bestätigte Coverdatei ableiten. History anschließend lesen.
 
-Die reine Uploadfreigabe wäre für den Kurzexport heute noch nicht ausreichend:
-eigener Portaltext und gespeicherte technische/inhaltliche Belege fehlen ebenfalls.
+Die nächste fachliche Voraussetzung ist der gebundene Portaltextvergleich.
 Die neun bestehenden Aufträge bleiben unverändert. Keine Operatorberechtigung,
 kein Provider- oder Coverversuch. PR #57/#69, n8n-Originalentwürfe und
 Shopify-Testmodus bleiben unangetastet.
