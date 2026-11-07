@@ -153,7 +153,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,restart,statusButton,close);
   dialog.append(title,intro,controls,details,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
-  let recovery=null,interruptedPreparation=null;
+  let recovery=null,preparationToResume=null;
   const unresolvedMessage='Der gespeicherte Freigabestand ist noch unklar. Lade den Status erneut oder öffne unter History den Auftrag.';
   let expiryTimer=null;
   function clearExpiryTimer(){if(expiryTimer!==null)clearTimeout(expiryTimer);expiryTimer=null;}
@@ -298,7 +298,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
        !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
     context=getContext();
     showOrder(previous);
-    if(pendingTarget(previous))interruptedPreparation={id:previous.id,choices:previous.choices,persisted:true};
+    if(pendingTarget(previous))preparationToResume={id:previous.id,choices:previous.choices,persisted:true};
     setWorking(false);
     dialog.showModal();
     onOpen();
@@ -374,7 +374,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         return;
       }
       stored=validatedOrder(result,pending.id);
-      if(order?.state==='prepared'&&stored.state==='preparing')throw Error(orderError('REQUEST_CONFLICT'));
+      if((order?.state==='prepared'||pending.state==='prepared')&&stored.state==='preparing')throw Error(orderError('REQUEST_CONFLICT'));
       if(pending.choices){
         checkPreparation(stored,pending);
         if(pendingTarget(stored)&&(pending.persisted||preparationEnded(stored))){
@@ -421,7 +421,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(generation!==epoch)return;
       if(choices){
         preparationId=result.id;
-        const expected=interruptedPreparation?.id===result.id?interruptedPreparation:{choices,targetId:account?.target?.id};
+        const expected=preparationToResume?.id===result.id?preparationToResume:{choices,targetId:account?.target?.id};
         checkPreparation(result,expected);
         if(result.state==='preparing'){
           if(!pendingTarget(order)||!pendingTarget(result))throw Error();
@@ -437,10 +437,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       const duplicate=e.rejected&&e.code==='DUPLICATE_PUBLICATION';
       preparationId=e.preparationId||preparationId;
       if(choices&&preparationId&&!e.rejected){
-        interruptedPreparation={id:preparationId,choices,targetId:account?.target?.id,persisted:order?.state==='preparing'};
-        recovery=interruptedPreparation;
+        preparationToResume={id:preparationId,choices,targetId:account?.target?.id,persisted:order?.state==='preparing'};
+        recovery=preparationToResume;
       }else if(sentApproval||duplicate){
-        interruptedPreparation=null;
+        preparationToResume=null;
         recovery={id:duplicate?e.existingId:order.id,duplicate,code:e.rejected?e.code:null};
       }
       if(recovery){
@@ -454,14 +454,14 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   }
   function savedPreparation(){
     const status=order.approval_window?.status;
-    return {id:order.id,choices:order.choices,targetId:order.target?.id,persisted:true,
+    return {id:order.id,state:order.state,binding:context.binding,choices:order.choices,targetId:order.target?.id,persisted:true,
       code:status==='recheck'?'TARGET_OPTIONS_CHANGED':status==='expired'?'ORDER_NOT_PREPARED':null};
   }
-  async function startPreparation(resume=false){
+  async function openPreparation(){
     if(working)return;
-    if(resume&&!recovery){
+    if(!recovery){
       if(order?.state==='prepared'||pendingTarget(order))recovery=savedPreparation();
-      else if(!order)recovery=interruptedPreparation;
+      else if(!order)recovery=preparationToResume;
     }
     if(recovery){
       setWorking(false);
@@ -471,33 +471,48 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         if(!dialog.open)dialog.showModal();
         notice.textContent=e.message;return;
       }
-      if(JSON.stringify(context.binding)===JSON.stringify(next.binding)){
+      if(JSON.stringify(recovery.binding||context.binding)===JSON.stringify(next.binding)){
+        context=next;
         if(!dialog.open)dialog.showModal();
         onOpen();
         return run();
       }
       recovery=null;
     }
-    interruptedPreparation=null;clearExpiryTimer();restart.hidden=true;
+    return startPreparation();
+  }
+  async function startPreparation(savedBeforeRestart=null){
+    preparationToResume=savedBeforeRestart;clearExpiryTimer();restart.hidden=true;
     const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;humanControls.hidden=true;humanEnabled.checked=false;for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Zielkonto wird beim Portal geprüft …';if(!dialog.open)dialog.showModal();onOpen();setWorking(true);
     try{
       context=getContext();const platform=context.binding.platform;
+      if(savedBeforeRestart&&JSON.stringify(savedBeforeRestart.binding)!==JSON.stringify(context.binding))preparationToResume=null;
       if(context.productId){
         notice.textContent='SMA prüft den gespeicherten Produktlink …';
         await checkLink(generation);notice.textContent='Zielkonto wird beim Portal geprüft …';
       }
-      const verified=['youtube','tiktok'].includes(platform)?await client.account(platform):null;
+      let verified=null;
+      if(['youtube','tiktok'].includes(platform)){
+        // A failed check or a newly connected account must not reactivate the former target.
+        try{verified=await client.account(platform);}
+        finally{
+          if(savedBeforeRestart?.targetId&&savedBeforeRestart.targetId!==verified?.target.id){
+            savedBeforeRestart.code||='TARGET_OPTIONS_CHANGED';
+          }
+        }
+      }
       if(generation!==epoch)return;account=verified;unchanged();renderChoices(platform,account);controls.hidden=false;
       if(account){details.append(make('p','Verbundenes Zielkonto: '+account.account_check.display_name+' · '+account.target.id));if(platform==='tiktok')details.append(make('p','Dieses TikTok-Konto erlaubt Videos bis '+account.account_check.policy.max_duration_sec+' Sekunden.'));}
       notice.textContent='Wähle die Einstellungen für diesen Beitrag.';
     }catch(e){if(generation===epoch&&!offerLinkRepair(e))notice.textContent=e.message||orderError();}
     finally{if(generation===epoch)setWorking(false);}
   }
-  button.addEventListener('click',()=>startPreparation(true));
+  button.addEventListener('click',openPreparation);
   restart.addEventListener('click',()=>{
     if(working||restart.hidden)return;
-    if(recovery?.canRestart){recovery=null;interruptedPreparation=null;}
-    return startPreparation();
+    const prior=recovery?{...recovery,state:'prepared',binding:context.binding}:savedPreparation();
+    recovery=null;
+    return startPreparation(prior);
   });
   controls.addEventListener('submit',event=>{event.preventDefault();if(working||order||recovery||!controls.reportValidity())return;
     if(commercial?.checked&&!fields.get('brand_content_toggle').checked&&!fields.get('brand_organic_toggle').checked){notice.textContent='Wähle eigene Marke, Werbung für Dritte oder beides.';return;}
@@ -509,7 +524,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(generation!==epoch)throw Error(orderError('ORDER_CHANGED'));
       unchanged();
       if(context.productId)await checkLink(generation);
-      if(interruptedPreparation&&JSON.stringify(choices)!==JSON.stringify(interruptedPreparation.choices))interruptedPreparation=null;
+      // Once this write is sent, a lost response belongs to the new request.
+      if(preparationToResume&&(preparationToResume.persisted||JSON.stringify(choices)!==JSON.stringify(preparationToResume.choices))){
+        preparationToResume=null;
+      }
       return client.prepare(context.binding,choices);
     },{choices});
   });
@@ -530,7 +548,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     return run(()=>client.get(order.id));
   });
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>{if(!dialog.open)clearExpiryTimer();});dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
-  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;working=false;recovery=null;interruptedPreparation=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
