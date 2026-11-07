@@ -92,7 +92,11 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   const dialog=make('dialog');dialog.id='publicationOrderDialog';dialog.setAttribute('aria-labelledby','publicationOrderHeading');
   const title=make('h2','Veröffentlichungsauftrag · '+portalName);title.id='publicationOrderHeading';
   const intro=make('p','Deine Freigabe gilt für die angezeigte Datei, den Beitrag und das gewählte Konto.');
-  const controls=make('form'),options=make('div'),prepare=make('button','Auftrag prüfen');prepare.type='submit';options.className='order-options';controls.append(options,prepare);
+  const controls=make('form'),options=make('div'),prepare=make('button','Auftrag prüfen');
+  const reuse=make('button','Videoangaben übernehmen'),prepareActions=make('div');
+  reuse.id='order-reuse-video';reuse.type='button';reuse.className='secondary';reuse.hidden=true;
+  prepare.type='submit';options.className='order-options';prepareActions.className='actions';
+  prepareActions.append(reuse,prepare);controls.append(options,prepareActions);
   const details=make('div'),notice=make('p');notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
   const reviewControls=make('div'),reviewFields=new Map();
   for(const [key,text] of [['content_checked','Ich habe die vollständige Datei, Ton, Einblendungen und den gespeicherten Beitrag geprüft.'],['media_rights','Ich darf die verwendeten Bilder, Videos und dargestellten Personen für diesen Beitrag verwenden.'],['music_rights','Für enthaltene Musik und sonstige Tonaufnahmen habe ich die nötigen Nutzungsrechte; andernfalls enthält der Beitrag keine solchen Inhalte.'],['tiktok_music_terms','Mit der Veröffentlichung stimme ich der '],['tiktok_branded_terms','Für Werbung für Dritte stimme ich der ']]){
@@ -122,9 +126,40 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   let expiryTimer=null;
   function clearExpiryTimer(){if(expiryTimer!==null)clearTimeout(expiryTimer);expiryTimer=null;}
   const fields=new Map();let commercial=null,commercialNotice=null;
+  const videoFields=['made_for_kids','contains_synthetic_media'];
+  const bindingFields=['platform','asset_id','asset_revision','assignment_revision','preview_id','preview_revision'];
+  let savedVideo=null;
+  function rememberVideoChoices(previous){
+    savedVideo=null;
+    if(previous.state!=='prepared'||previous.approved_at!=null||previous.check_error||
+       previous.binding?.platform!=='youtube'||!previous.target?.id||
+       !bindingFields.every(key=>previous.binding[key]!=null)||
+       !videoFields.every(key=>typeof previous.choices?.[key]==='boolean'))return;
+    savedVideo={binding:previous.binding,targetId:previous.target.id,
+      made_for_kids:previous.choices.made_for_kids,contains_synthetic_media:previous.choices.contains_synthetic_media};
+  }
+  function sameVideo(){
+    return savedVideo&&account?.target.id===savedVideo.targetId&&
+      bindingFields.every(key=>context.binding[key]===savedVideo.binding[key]);
+  }
+  function updateReuse(){
+    reuse.hidden=!sameVideo()||videoFields.some(key=>fields.get(key)?.value!=='');
+  }
+  reuse.addEventListener('click',()=>{
+    if(!dialog.open||working||order||reuse.hidden||!sameVideo())return;
+    try{unchanged();}catch(e){reuse.hidden=true;notice.textContent=e.message;return;}
+    for(const key of videoFields)fields.get(key).value=String(savedVideo[key]);
+    updateReuse();
+    notice.textContent=fields.get('visibility').value?'Videoangaben übernommen.':'Videoangaben übernommen. Bitte wähle die Sichtbarkeit.';
+    if(!fields.get('visibility').value)fields.get('visibility').focus();
+    else prepare.focus();
+  });
   function select(key,label,values) {
     const l=make('label',label),s=make('select');s.id='order-'+key;l.htmlFor=s.id;s.required=true;
-    const empty=make('option','Bitte auswählen');empty.value='';s.append(empty);
+    const prior=videoFields.includes(key)&&sameVideo();
+    const prompt=prior?'Bisher '+(savedVideo[key]?'Ja':'Nein')+' · bitte wählen':'Bitte auswählen';
+    const empty=make('option',prompt);empty.value='';s.append(empty);
+    if(prior)s.addEventListener('change',updateReuse);
     for(const [value,text] of values){const o=make('option',text);o.value=value;s.append(o);}fields.set(key,s);
     const field=make('div');field.className='order-option';field.append(l,s);options.append(field);
   }
@@ -143,11 +178,12 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     if(commercial.checked&&visibility.value==='SELF_ONLY')commercialNotice.textContent+=' Werbung für Dritte ist mit „Nur ich“ nicht möglich.';
   }
   function renderChoices(platform,verified) {
-    options.replaceChildren();fields.clear();commercial=null;commercialNotice=null;
+    options.replaceChildren();fields.clear();commercial=null;commercialNotice=null;reuse.hidden=true;
     if(platform==='youtube') {
       select('visibility','Sichtbarkeit',[['private','Privat'],['unlisted','Nicht gelistet'],['public','Öffentlich']]);
       select('made_for_kids','Speziell für Kinder erstellt?',[['true','Ja'],['false','Nein']]);
       select('contains_synthetic_media','Realistisch veränderte oder synthetische Inhalte?',[['true','Ja'],['false','Nein']]);
+      updateReuse();
     } else if(platform==='tiktok') {
       const allowed=accountChoiceOptions(platform,verified);
       select('visibility','Gewünschte Sichtbarkeit',allowed.visibility);
@@ -181,7 +217,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   }
   function showOrder(r) {
     if(!r.binding||Object.entries(context.binding).some(([k,v])=>r.binding[k]!==v))throw Error(orderError('ORDER_CHANGED'));
-    clearExpiryTimer();order=r;details.replaceChildren();
+    clearExpiryTimer();order=r;rememberVideoChoices(r);details.replaceChildren();
     if(r.state==='prepared'&&r.approval_window?.status==='active'&&!preparationEnded(r)){
       const until=Date.parse(r.approval_window.expires_at);
       details.append(make('p','Vorbereitung gültig bis '+new Intl.DateTimeFormat('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Europe/Vienna'}).format(until)+' Uhr (Wien).'));
@@ -254,7 +290,7 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   approve.addEventListener('click',()=>run(()=>client.approve(order,consent.checked,reviewValues())));
   statusButton.addEventListener('click',()=>run(()=>client.get(order.id)));
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',clearExpiryTimer);dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
-  return {viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;order=null;context=null;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {rememberVideoChoices,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
