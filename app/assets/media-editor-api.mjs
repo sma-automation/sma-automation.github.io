@@ -1,4 +1,4 @@
-import {createMusicLibraryAPI} from './music-library-api.mjs?v=2';
+import {createMusicLibraryAPI} from './music-library-api.mjs?v=3';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=1';
 import {fetchAssetThumbnail} from './asset-thumbnail.mjs?v=1';
 import {transferDeviceFile} from './device-upload.mjs?v=1';
@@ -10,7 +10,8 @@ async function session(owner){const {data,error}=await (await auth()).auth.getSe
 export const editorMusicLibrary=owner=>createMusicLibraryAPI({owner,getSession:()=>session(owner),includeCatalog:true});
 export async function getOwnerId(){try{return (await session()).user.id;}catch{return null;}}
 export async function watchOwner(callback){return (await auth()).auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription;}
-async function rpc(name,body,owner){const s=await session(owner);const response=await fetch(origin+'/rest/v1/rpc/'+name,{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+s.access_token},body:JSON.stringify(body)});if(!response.ok)throw Error(response.status===401?'AUTH_REQUIRED':'UNAVAILABLE');return response.json();}
+async function rpc(name,body,owner,signal){const s=await session(owner);const response=await fetch(origin+'/rest/v1/rpc/'+name,{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(15000)]),headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+s.access_token},body:JSON.stringify(body)});if(!response.ok)throw Error(response.status===401?'AUTH_REQUIRED':'UNAVAILABLE');return response.json();}
+export const galleryMusicRequest=(action,input,owner,signal)=>rpc('sma_gallery_music_v1',{p_action:action,p_input:input},owner,signal);
 export const editorRequest=(action,input,owner)=>rpc('sma_publication_editor_v1',{p_action:action,p_input:input},owner);
 export const editorFiles=owner=>rpc('sma_publication_files_v1',{p_action:'list'},owner);
 export async function editorRefreshFiles(owner,signal){await refreshMediaCatalog({getSession:()=>session(owner),owner,signal});signal?.throwIfAborted();const result=await editorFiles(owner);await session(owner);signal?.throwIfAborted();return result;}

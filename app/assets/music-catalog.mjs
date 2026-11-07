@@ -85,7 +85,7 @@ export function mountCatalog({doc,host,api,goToCheckout}){
      const blob=await api.source(setting,signal);signal.throwIfAborted();url=URL.createObjectURL(blob);audio.src=url;audio.hidden=false;
      status.textContent='Hörprobe bereit · '+t.name;
     }else{
-     await api.unlock(t.sha256,signal);await reload(signal);status.textContent='Freigeschaltet · '+t.name;
+     await api.unlock(t.sha256,signal);signal.throwIfAborted();doc.dispatchEvent(new doc.defaultView.Event('sma-music-unlocked'));await reload(signal);status.textContent='Freigeschaltet · '+t.name;
     }
    }));row.append(info,btn);list.append(row);
   }

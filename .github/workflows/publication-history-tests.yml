@@ -34,6 +34,10 @@ on:
       - supabase/migrations/*_publication_preview_cover_plan_v1.sql
       - supabase/sql/publication-provider-cover.sql
       - supabase/migrations/*_publication_provider_cover_v1.sql
+      - app/assets/gallery-music*
+      - tests/*gallery-music*
+      - supabase/sql/gallery-music.sql
+      - supabase/migrations/*_gallery_automatic_music_v1.sql
       - app/assets/music-catalog.mjs
       - supabase/sql/music-credits.sql
       - supabase/migrations/*_music_catalog_credits_v1.sql
@@ -116,6 +120,7 @@ jobs:
         run: |
           npm ci --prefix tests/sql-runtime --ignore-scripts
           npm ci --prefix tests/dom-runtime --ignore-scripts
+          npm ci --prefix tests/media-runtime --ignore-scripts
       - name: Test histories, editor drafts and regressions
         run: |
           node --test tests/*.test.cjs
@@ -138,6 +143,8 @@ jobs:
           node tests/run-media-export-dom.mjs
           node tests/run-media-music-dom.mjs
           node tests/run-export-music-cancel-dom.mjs
+          node tests/run-gallery-music-sql.mjs
+          node tests/run-gallery-music-wasm.mjs
           node tests/run-music-credits-sql.mjs
           node tests/run-music-library-sql.mjs
           node tests/run-music-library-reservations-sql.mjs

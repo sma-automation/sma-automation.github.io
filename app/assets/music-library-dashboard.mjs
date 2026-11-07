@@ -1,5 +1,5 @@
 import {mountMusicLibrary} from './music-library-view.mjs?v=2';
-import {mountCatalog} from './music-catalog.mjs?v=1';
+import {mountCatalog} from './music-catalog.mjs?v=2';
 export function mountMusicLibraryDashboard({doc,api,stylesheetUrl,watchOwner,expectedOwnerId}){
  const entries=[],views=[];let destroyed=false;const style=doc.createElement('link');style.rel='stylesheet';style.href=stylesheetUrl;doc.head.append(style);
  for(const [key,playlist] of [['tracks',false],['playlist',true]]){const host=doc.getElementById('sma-music-panel-'+key);if(!host)continue;const old=[...host.childNodes];host.replaceChildren();entries.push({host,old});const view=mountMusicLibrary({doc,host,api,playlist,onChange:()=>views.forEach(v=>{if(v!==view)void v.refresh();})});views.push(view);}
