@@ -91,8 +91,8 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   button.setAttribute('aria-haspopup','dialog');host.append(button);
   const dialog=make('dialog');dialog.id='publicationOrderDialog';dialog.setAttribute('aria-labelledby','publicationOrderHeading');
   const title=make('h2','Veröffentlichungsauftrag · '+portalName);title.id='publicationOrderHeading';
-  const intro=make('p','Prüfe Datei, gespeicherten Beitrag und Zielkonto. Deine Freigabe gilt nur für genau diesen Stand. Offene Medien- oder Kontoprüfungen verhindern die Veröffentlichung.');
-  const controls=make('form'),options=make('div'),prepare=make('button','Auftrag prüfen');prepare.type='submit';controls.append(options,prepare);
+  const intro=make('p','Deine Freigabe gilt für die angezeigte Datei, den Beitrag und das gewählte Konto.');
+  const controls=make('form'),options=make('div'),prepare=make('button','Auftrag prüfen');prepare.type='submit';options.className='order-options';controls.append(options,prepare);
   const details=make('div'),notice=make('p');notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
   const reviewControls=make('div'),reviewFields=new Map();
   for(const [key,text] of [['content_checked','Ich habe die vollständige Datei, Ton, Einblendungen und den gespeicherten Beitrag geprüft.'],['media_rights','Ich darf die verwendeten Bilder, Videos und dargestellten Personen für diesen Beitrag verwenden.'],['music_rights','Für enthaltene Musik und sonstige Tonaufnahmen habe ich die nötigen Nutzungsrechte; andernfalls enthält der Beitrag keine solchen Inhalte.'],['tiktok_music_terms','Mit der Veröffentlichung stimme ich der '],['tiktok_branded_terms','Für Werbung für Dritte stimme ich der ']]){
@@ -118,7 +118,6 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,restart,statusButton,close);
   dialog.append(title,intro,controls,details,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
-  const style=make('style');style.textContent='#publicationOrderDialog{width:min(650px,calc(100vw - 24px));max-height:min(720px,calc(100dvh - 24px));top:12px;bottom:auto;margin:0 auto;overflow:auto;border:1px solid #dfe5ef;border-radius:14px;padding:24px;color:#17233b}#publicationOrderDialog::backdrop{background:#17233b66}#publicationOrderDialog label{margin:14px 0 8px}#publicationOrderDialog input[type=checkbox]{margin-right:8px}#publicationOrderDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;background:#f5f7fc;padding:14px;border-radius:10px}#publicationOrderDialog select{margin-bottom:14px}#preparePublicationOrder{margin-top:12px}';doc.head.append(style);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
   let expiryTimer=null;
   function clearExpiryTimer(){if(expiryTimer!==null)clearTimeout(expiryTimer);expiryTimer=null;}
@@ -126,7 +125,8 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
   function select(key,label,values) {
     const l=make('label',label),s=make('select');s.id='order-'+key;l.htmlFor=s.id;s.required=true;
     const empty=make('option','Bitte auswählen');empty.value='';s.append(empty);
-    for(const [value,text] of values){const o=make('option',text);o.value=value;s.append(o);}fields.set(key,s);options.append(l,s);
+    for(const [value,text] of values){const o=make('option',text);o.value=value;s.append(o);}fields.set(key,s);
+    const field=make('div');field.className='order-option';field.append(l,s);options.append(field);
   }
   function checkbox(key,label,{forced=false,invert=false}={}) {
     const l=make('label'),input=make('input');input.type='checkbox';input.id='order-'+key;
@@ -194,7 +194,9 @@ export function installOrderReview(doc,{session,getContext,refresh,host,portalNa
     const decisionLabels={visibility:'Sichtbarkeit',made_for_kids:'Speziell für Kinder',contains_synthetic_media:'Synthetische Inhalte',disable_comment:'Kommentare deaktiviert',disable_duet:'Duette deaktiviert',disable_stitch:'Stitch deaktiviert',brand_content_toggle:'Werbung für Dritte',brand_organic_toggle:'Eigene Marke'};
     const visibilityLabels={private:'Privat',public:'Öffentlich',unlisted:'Nicht gelistet',SELF_ONLY:'Nur ich',PUBLIC_TO_EVERYONE:'Öffentlich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
     const decisions=make('ul');for(const [key,value] of Object.entries(r.choices||{}))if(decisionLabels[key])decisions.append(make('li',decisionLabels[key]+': '+(key==='visibility'?visibilityLabels[value]||value:value?'Ja':'Nein')));details.append(decisions);
-    details.append(make('h3',r.draft?.title||'Gespeicherter Beitrag'),make('pre',r.draft?.caption||r.draft?.body||''));
+    const caption=make('details');caption.className='order-caption';
+    caption.append(make('summary','Beitragstext ansehen'),make('pre',r.draft?.caption||r.draft?.body||''));
+    details.append(make('h3',r.draft?.title||'Gespeicherter Beitrag'),caption);
     const media=r.media_check;
     if(media?.human_review?.method==='customer_attestation')details.append(make('p','Persönliche Inhaltsprüfung für diesen Stand dokumentiert. Die automatische Video-Sicherheitsprüfung wurde dadurch nicht durchgeführt.'));
     if(media?.asset_id===context.binding.asset_id&&media?.asset_revision===context.binding.asset_revision&&Array.isArray(media.checks)){
