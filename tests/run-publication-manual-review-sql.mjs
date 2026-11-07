@@ -31,6 +31,29 @@ try{
  const request=async(action,input,owner=uid)=>{await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);return asRole('authenticated',async()=>(await db.query('select public.sma_publication_order_v1($1,$2) r',[action,input])).rows[0].r);};
  const worker=async(action,d={},lease=null)=>asRole('service_role',async()=>(await db.query('select public.sma_publication_order_worker_v1($1,$2,$3,$4) r',[action,id(10),lease,d])).rows[0].r);
  const provider=async(d={})=>asRole('service_role',async()=>(await db.query("select public.sma_publication_provider_v1('begin',$1,null,$2) r",[id(10),d])).rows[0].r);
+ // Install the actual history projections and test the same deadline in both customer reads.
+ await db.exec((await src('publication-provider-cover')).split('create or replace function')[0]);
+ for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window'])await db.exec(await src(f));
+ const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
+ eq((await view()).approval_window.status,'active');
+ eq(Date.parse((await view()).approval_window.expires_at),Date.parse(evidence.expires_at));
+ eq((await history()).entries[0].approval_window,(await view()).approval_window);
+ for(const [change,status] of [
+  ["created_at=now()-interval '31 minutes'",'expired'],
+  ["account_check=jsonb_set(account_check,'{expires_at}',to_jsonb(now()-interval '1 second'))",'expired'],
+  ["account_check=jsonb_set(account_check,'{expires_at}','\"invalid\"')",'recheck'],
+  ["account_check=null",'recheck'],
+  ["state='cancelled'",null]
+ ]){
+  await db.exec('begin');await db.exec('update sma_private.publication_orders_v1 set '+change);
+  const row=await view();eq(row.approval_window?.status??null,status);eq(row.approval_token,null);eq(row.human_review_option,null);
+  eq((await history()).entries[0].approval_window,row.approval_window);
+  await db.exec('rollback');
+ }
+ await db.exec('begin');await db.exec("update sma_private.publication_orders_v1 set binding=jsonb_set(binding,'{platform}','\"instagram\"'),account_check=null");
+ eq((await view()).approval_window.status,'active');await db.exec('rollback');
+ eq((await request('get',{id:id(10)},other)).code,'ORDER_UNAVAILABLE');
  const v=await view(),base={policy_version:'media-consent-2026-11-03.1',content_checked:true,media_rights:true,music_rights:true,tiktok_music_terms:false,tiktok_branded_terms:false};
  const human={...v.human_review_option,full_playback:true,visual_clear:true,speech_text_checked:true,claims_match:true},review={...base,human_review:human};
  const approval={id:id(10),approval_token:v.approval_token,confirm:true,review};

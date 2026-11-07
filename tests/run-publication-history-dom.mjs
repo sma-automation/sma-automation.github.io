@@ -219,4 +219,9 @@ await test('analysis history distinguishes empty periods, failures and expired u
  const f=fixture({requestAnalyses:()=>analyses([analysisEntry(1,{status:'failed',error_code:'FILE_CHANGED'}),analysisEntry(2,{status:'timed_out',finished_at:null}),analysisEntry(3,{status:'processing',finished_at:null})])});await tick();assert.match(f.$('#historyAnalysisCard').textContent,/Analyse fehlgeschlagen/);assert.match(f.$('#historyAnalysisCard').textContent,/Zeit abgelaufen/);assert.match(f.$('#historyAnalysisCard').textContent,/Analyse läuft/);assert.match(f.$('#historyAnalysisCard').textContent,/kein automatischer Neustart/);f.view.destroy();
  const g=fixture({requestAnalyses:()=>analyses([])});await tick();assert.match(g.$('#historyAnalysisCard').textContent,/Frühere Versuche wurden nicht nachträglich erfasst/);assert.equal(g.$('#historyAnalysisCard nav').hidden,true);g.view.destroy();
 });
+await test('expired preparation shows the next step without exposing approval controls',async()=>{
+ const f=fixture({request:()=>result([entry(1,{status:'prepared',approval_window:{status:'expired',expires_at:'2026-11-07T11:02:26Z'}})])});
+ await tick();assert.equal(f.$('.sma-history-status').textContent,'Vorbereitung abgelaufen');
+ assert.match(f.$('ol').textContent,/Beitragsvorschau/);assert.equal(f.$('ol button'),null);f.view.destroy();
+});
 console.log(`${passed} history DOM scenarios passed.`);

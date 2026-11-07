@@ -8,6 +8,8 @@ on:
       - app/assets/publication-order.mjs
       - tests/*publication-manual-review*
       - tests/sql-runtime/manual-review-live-baseline.json
+      - supabase/sql/publication-approval-window.sql
+      - supabase/migrations/*_publication_approval_window_v1.sql
       - supabase/sql/publication-manual-review.sql
       - supabase/migrations/*_publication_manual_media_review_v1.sql
       - app/assets/publication-analysis-history*

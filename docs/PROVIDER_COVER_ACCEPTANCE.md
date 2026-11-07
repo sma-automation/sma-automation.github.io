@@ -4,6 +4,23 @@ Stand: 07.11.2026 (Wien). **Noch keine Uploadfreigabe und kein uploadbereiter
 Auftrag.** Die erste Sichtung aus PR #118 erfolgte lokal. Der Speicherstand folgt unten.
 Sie ersetzt keine persönlichen Erklärungen und keine gespeicherten Mediennachweise.
 
+## Aktueller Stand der Abnahme
+
+Der private YouTube-Test für den Drei-Sekunden-Export wurde am 07.11.2026
+um 11:57 Uhr (Wien) vorbereitet. Die Türszene wurde laut Kundenangabe mit
+Runway erzeugt. Im Auftrag stehen „synthetische Inhalte“ auf Ja und „speziell
+für Kinder“ auf Nein. Die Kontoprüfung lief um 12:02 Uhr ab. Für einen später
+ausdrücklich freigegebenen Versuch müssen Zielkonto und Einstellungen erneut
+geprüft werden. Die persönliche Prüfung, Rechtebestätigungen und die
+Veröffentlichungsfreigabe stehen aus. Eine Providerbestätigung liegt weiterhin aus.
+
+History und Auftragsdialog zeigen die Gültigkeit der Vorbereitung an. Maßgeblich
+ist die frühere der beiden Fristen für Auftrag und Kontoprüfung. Ein Neustart im
+Dialog lädt die Kontooptionen. Erst „Auftrag prüfen“ bereitet einen neuen Auftrag vor.
+
+Die zwei Werbeentwürfe am Zehn-Sekunden-Original gehören zu anderen Textversionen.
+Für ihre aktuellen Bindungen ist bisher kein abgeschlossener Inhaltsabgleich gespeichert.
+
 ## Zwei unterschiedliche Dateien
 
 Die Assistenzsichtung aus [PR #117](https://github.com/sma-automation/sma-automation.github.io/pull/117)
@@ -115,7 +132,7 @@ Veränderung bzw. synthetischen Herkunft der Türszene ist offen. Der gespeicher
 Testton belegt allein die Entstehung der Tonspur. Für TikTok ist vor einer
 Auftragsvorbereitung die zutreffende Werbekennzeichnung des Beitrags zu klären.
 
-## Nächster ausführbarer Schritt und Grenzen
+## Ablauf der Abnahme und damaliger Prüfstand
 
 1. Automatischer Textvergleich abgeschlossen. Die beiden gespeicherten Entwürfe
    in Revision 1 stimmen in Titel, Text, Hashtags und vollständiger Caption mit
@@ -142,7 +159,7 @@ Auftragsvorbereitung die zutreffende Werbekennzeichnung des Beitrags zu klären.
    unabhängig bestätigte Coverdatei ableiten. History anschließend lesen.
 
 Migration `20261107102147_publication_export_reference_v1.sql` ist installiert.
-Der nächste Schritt für den privaten YouTube-Test ist die offene Medienkennzeichnung.
+Die damalige Frage zur Medienkennzeichnung wurde inzwischen durch die Runway-Angabe geklärt.
 Die neun bestehenden Aufträge bleiben unverändert. Keine Operatorberechtigung,
 kein Provider- oder Coverversuch. PR #57/#69, n8n-Originalentwürfe und
 Shopify-Testmodus bleiben unangetastet.

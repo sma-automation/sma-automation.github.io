@@ -36,7 +36,7 @@ am 06.11.2026 wegen der Vorgabe ohne zusätzliche Kosten zurückgestellt.
 Sightengine bleibt kostenlos; keine ausstehende Buchungsentscheidung und kein
 bezahlter Ersatzdienst. Technischer Anschluss, drei bestehende Sperren,
 späterer Abnahmeablauf und die getrennte semantische Prüfung sind dort festgehalten.
-Alle 9 Aufträge unverändert; 0 Operatorfreigaben, Provider- und Coverversuche.
+Zu den neun früheren stornierten Aufträgen kommt ein separat vorbereiteter privater YouTube-Cover-Test. Sein Kontonachweis ist abgelaufen. Der aktuelle Abnahmestand steht in [PROVIDER_COVER_ACCEPTANCE.md](../../docs/PROVIDER_COVER_ACCEPTANCE.md).
 Bestandsprüfung abgeschlossen. PR #57/#69 separat offen, unveröffentlichte
 n8n-Originalentwürfe und Shopify-Testmodus erhalten; keine kostenpflichtigen
 Änderungen freigegeben.

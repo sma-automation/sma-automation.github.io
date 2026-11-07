@@ -3,7 +3,7 @@ import {mountPublicationEditorHistory} from './publication-editor-history-dashbo
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
 import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
-import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=1';
+import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=2';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 
 export function mountPublicationHistory({doc,request,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
@@ -65,9 +65,12 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  let analyticsDisclosure;
  if(analyticsCard){analyticsDisclosure=create('details',null,'sma-history-analytics');const label=create('summary','Analytics · In Vorbereitung');analyticsCard.before(analyticsDisclosure);analyticsDisclosure.append(label,analyticsCard);}
  const pageSize=5;
+ const expiryTimers=[];
+ function clearExpiryTimers(){for(const timer of expiryTimers)clearTimeout(timer);expiryTimers.length=0;}
  let pageNumber=0,lastResult=null,entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
  const active=()=>!disposed&&!invalidOwner&&page.classList.contains('active')&&ownerWindow.document.visibilityState!=='hidden';
  function clear(text=''){
+  clearExpiryTimers();
   textHistory?.clear();assignmentHistory?.clear();editorHistory?.clear();analysisHistory?.clear();
   generation++;busy=false;entries=[];cursor=null;summary=null;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
@@ -77,7 +80,7 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
  const current=g=>g===generation&&active();
  const format=value=>new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(value));
  function render(result=lastResult){
-  lastResult=result;
+  clearExpiryTimers();lastResult=result;
   const label=formatHistoryMonth(selection);
   const values=[summary.orders,summary.public_confirmed,summary.platforms.length];
   cards.forEach((card,i)=>{const v=card.querySelector('.big-value');if(v)v.textContent=String(values[i]);const detail=i===2?(summary.platforms.map(p=>historyPlatforms[p]).join(' · ')||'Noch keine Portale'):i===1?'Bestätigter Stand dieser Aufträge':label;translated(card.querySelector('.muted'),detail,detail);});
@@ -95,6 +98,14 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    cover.dataset.coverStatus=entry.cover.status;meta.append(cover);
    const details=create('details'),toggle=create('summary');toggle.append(heading,meta);
    const detail=create('p',historyStatuses[entry.status][1]);
+   const window=entry.approval_window;
+   if(window){
+    const expire=()=>{status.textContent='Vorbereitung abgelaufen';detail.textContent='Öffne die Beitragsvorschau und starte die Vorbereitung erneut.';};
+    const remaining=Date.parse(window.expires_at)-Date.now();
+    if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';}
+    else if(window.status==='expired'||remaining<=0)expire();
+    else{detail.textContent='Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';expiryTimers.push(setTimeout(expire,remaining+1));}
+   }
    const dates=create('small','Erstellt: '+format(entry.created_at)+' · Stand: '+format(entry.updated_at));
    const coverDetail=create('p',historyCoverStatuses[entry.cover.status][1],'sma-history-cover-detail');
    details.append(toggle,create('p',entry.target_name||'Zielkonto nicht gespeichert'),detail,dates,coverDetail);

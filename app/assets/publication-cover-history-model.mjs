@@ -26,7 +26,9 @@ export function readPublicationCoverHistory(value){
    ||(['complete','sending','permission_required','failed'].includes(c.status)&&entry.platform!=='youtube')
    ||(c.status==='timestamp_sent'&&entry.platform!=='tiktok')
    ||(['complete','timestamp_sent','sending','permission_required','failed'].includes(c.status)&&!['public_confirmed','private_complete','unlisted_complete','limited_complete'].includes(entry.status)))throw Error('INVALID_HISTORY');
-  return {...entry,cover:{status:c.status,updated_at:c.updated_at}};
+  const w=value.entries[i].approval_window;
+  if(w!=null&&(typeof w!=='object'||!['active','expired','recheck'].includes(w.status)||!timestamp(w.expires_at)))throw Error('INVALID_HISTORY');
+  return {...entry,...(w&&entry.status==='prepared'?{approval_window:{status:w.status,expires_at:w.expires_at}}:{}),cover:{status:c.status,updated_at:c.updated_at}};
  });
  return result;
 }
