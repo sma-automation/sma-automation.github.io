@@ -4,6 +4,44 @@ Stand: 06.11.2026. Eigene MP3-/WAV-Dateien werden im privaten Kundenbereich
 dauerhaft gespeichert. Im Dashboard bleiben die Kapitel **Tracks** und
 **Meine Playlist** mit der freigegebenen feinen Unterstreichung erhalten.
 
+## SMA-Musikkatalog und Credits – Stand 07.11.2026
+
+Die vorhandene Bibliothek speichert private Uploads je Kundenkonto. Unter
+**Meine Playlist** werden die eigenen Favoriten angezeigt. Im geprüften
+Datenbestand ist ein fertiger Track vorhanden, der dokumentierte Technik-Testton.
+
+Für die kommenden, von SMA produzierten Musikstücke ist das Paketmodell festgelegt.
+
+| Zugang zum SMA-Musikkatalog | Vereinbarte Nutzung |
+| --- | --- |
+| Delta | Im Paket enthalten. |
+| Alpha und Beta | Kauf ausschließlich im Zehnerpaket für 10 Euro. Ein Credit entspricht der Freischaltung eines Tracks. |
+
+Die Freischaltung bezieht sich auf einen Musiktitel. Der automatische Zuschnitt
+für ein weiteres Video löst keinen weiteren Trackkauf aus. Ein neuer Galerieclip
+ohne Audiospur soll bei Bedarf Musik aus den für das Kundenkonto freigeschalteten
+SMA-Titeln erhalten. Bereits vertonte Videos behalten ihren Ton. Diese Paketregel
+betrifft den SMA-Katalog. Die bestehenden persönlichen Uploads sind separat.
+
+**Geprüfter Ausbaustand.** Im angemeldeten Dashboard steht unter
+**Einstellungen → Paket & Credits** beim Guthaben „–“. **Credits aufladen** ist
+deaktiviert. Die n8n-Kundenassistentensicherung enthält bereits die Paketangaben
+zur Musik. Die vorhandene Mollie-Strecke betrifft SMA-Paketzahlungen. Im aktuellen
+Repository und im produktiven Supabase-Schema ist keine Gutschrift für einen
+10-Euro-Musikkauf, kein Credit-Buchungsjournal und keine gekaufte Trackfreischaltung
+nachweisbar. Die automatische Vertonung beim Galerieeingang ist ebenfalls offen.
+
+Der Zuschnitt ist lokal separat geprüft. Beim stummen Türgriff-Original blieb
+der Videostream bytegleich. Ein zwölf Sekunden langer synthetischer Ton wurde
+auf 10,041 Sekunden zugeschnitten (Video 10,041667 Sekunden). Der bereits
+vertonte Drei-Sekunden-Export wurde übersprungen. Diese lokale Prüfung nutzte
+weder einen Kundenkauf noch einen Titel aus dem künftigen SMA-Katalog.
+
+Der nächste technische Schritt ist die Zuordnung bestätigter Zehnerkäufe und
+einmaliger Trackfreischaltungen zum Kundenkonto. Damit kann die automatische
+Musikauswahl bei Alpha und Beta auf die erworbenen Titel zugreifen. Wiederholte
+Zahlungsrückmeldungen dürfen denselben Kauf nur einmal gutschreiben.
+
 ## Bedienung
 
 - Tracks: Musik hinzufügen, suchen, anhören und zur Playlist hinzufügen.
