@@ -5,7 +5,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube',approvalResponse,storedResponse}={}){
+function fixture({option=true,platform='youtube',approvalResponse,storedResponse,prepareResponse,refresh=async()=>{}}={}){
  const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
@@ -15,19 +15,20 @@ function fixture({option=true,platform='youtube',approvalResponse,storedResponse
   return e;
  };
  const binding={asset_id:'synthetic-asset',asset_revision:'sha256:'+'a'.repeat(64)+':2',platform,preview_id:'synthetic-preview',preview_revision:1,assignment_revision:1};let currentBinding={...binding},reloadPatch={};
- let clock=Date.now(),timer;class TestDate extends Date{static now(){return clock;}}
- const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-000000000010'},fetch:async(_url,opts)=>{
+ let sequence=8,clock=Date.now(),timer;class TestDate extends Date{static now(){return clock;}}
+ const scope={Date:TestDate,setTimeout:f=>{timer=f;return 1;},clearTimeout:()=>{timer=null;},AbortSignal,crypto:{randomUUID:()=> 'ab660000-0000-4000-9000-'+String(++sequence).padStart(12,'0')},fetch:async(_url,opts)=>{
   const req=JSON.parse(opts.body);requests.push(req);const common={ok:true,id:req.input.id,can_publish:false,can_upload:false,target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel',display_name:'Synthetic',policy:{privacy_levels:['SELF_ONLY'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}}};
   if(req.action==='approve'&&approvalResponse)return approvalResponse(req);
   if(req.action==='account')return {ok:true,json:async()=>({...common,stage:'account'})};
-  return {ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
+  const response={ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
+  return req.action==='prepare'&&prepareResponse?prepareResponse(req,response):response;
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
  const view=scope.install(doc,{host:doc.body,portalName:platform,readStoredOrder:async id=>{
   reads.push(id);
   return storedResponse(id,{ok:true,id,binding,can_publish:false,can_upload:false,state:'approved',
    approved_at:new Date(clock).toISOString(),target:{id:'synthetic-channel',platform},choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},approval_policy:'media-consent-2026-11-03.1'});
- },session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh:async()=>{}});
+ },session:async()=>({access_token:'synthetic'}),getContext:()=>({binding:currentBinding,name:'Synthetic.mp4'}),refresh});
  const $=id=>doc.getElementById(id),dialog=$('publicationOrderDialog'),buttons=[...dialog.querySelectorAll('button')],approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
@@ -168,5 +169,57 @@ for(const platform of ['youtube','tiktok']){
  const pending=authorize(t);await reading;
  await t.status.handlers.click();eq(t.reads.length,1);t.view.clear();release();await pending;
  eq(notice(t),'');eq(t.$('publicationOrderDialog').open,false);eq(t.requests.length,3);
+}
+// Lost preparation responses only replay a write after an explicit form submission.
+const submit=t=>t.doc.querySelector('form').handlers.submit({preventDefault(){}});
+const reopen=async t=>{t.$('publicationOrderDialog').close();await t.$('preparePublicationOrder').handlers.click();};
+function interruptedFixture(platform='youtube',options={}){
+ let snapshot,read;
+ const t=fixture({platform,prepareResponse:async(req,response)=>{
+  snapshot={...await response.json(),approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}};
+  if(t.requests.filter(r=>r.action==='prepare').length===1)timeout();
+  return response;
+ },storedResponse:(id)=>read?read(snapshot):snapshot,...options});
+ return Object.assign(t,{readAs:fn=>read=fn});
+}
+for(const platform of ['youtube','tiktok']){
+ const t=interruptedFixture(platform);
+ await t.open();eq(t.reads,[savedId]);eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+ await reopen(t);eq(t.reads,[savedId,savedId]);eq(t.requests.map(r=>r.action),['account','prepare']);
+ eq(t.$('order-final-consent').checked,false);eq(t.$('order-review-music_rights').checked,false);
+}
+for(const missing of [false,true]){
+ const t=interruptedFixture();const initial=s=>missing?{ok:false,code:'ORDER_UNAVAILABLE'}:{...s,state:'preparing',target:null,approval_token:null,approval_window:null};
+ t.readAs(initial);await t.open();
+ eq(t.doc.querySelector('form').hidden,false);eq(t.approve.hidden,true);eq(t.requests.length,2);
+ t.readAs(()=>{throw Error('offline');});await reopen(t);
+ eq(t.doc.querySelector('form').hidden,true);eq(t.status.hidden,false);eq(t.approve.disabled,true);
+ await submit(t);eq(t.requests.length,2);assert.match(notice(t),/Stand der Vorbereitung ist noch unklar/);
+ t.readAs(initial);await t.status.handlers.click();eq(t.doc.querySelector('form').hidden,false);eq(t.requests.length,2);
+ await submit(t);eq(t.requests.map(r=>r.action),['account','prepare','prepare']);
+ eq(t.requests[2].input,t.requests[1].input);eq(t.approve.hidden,false);eq(t.approve.disabled,true);
+}
+{
+ const t=interruptedFixture('tiktok');
+ for(const patch of [{id:'different'},{target:{id:'different'}},{can_publish:true},{choices:{visibility:'SELF_ONLY'}},
+    {binding:{...t.binding,preview_revision:2}}]){
+  t.readAs(s=>({...s,...patch}));
+  if(!t.requests.length)await t.open();else await t.status.handlers.click();
+  eq(t.approve.disabled,true);eq(t.approve.hidden,true);eq(t.doc.querySelector('form').hidden,true);
+  await submit(t);eq(t.requests.length,2);
+ }
+ t.readAs(s=>({...s,state:'cancelled',approval_window:null,approval_token:null}));
+ await t.status.handlers.click();assert.match(notice(t),/storniert/);eq(t.approve.hidden,true);eq(t.requests.length,2);
+}
+{
+ const t=interruptedFixture();t.readAs(()=>({ok:false,code:'ORDER_UNAVAILABLE'}));
+ await t.open();t.$('order-visibility').value='unlisted';await submit(t);
+ eq(t.requests.length,3);assert.notEqual(t.requests[1].input.id,t.requests[2].input.id);
+ eq(t.requests[2].input.choices.visibility,'unlisted');
+}
+{
+ let release;const t=interruptedFixture('youtube',{refresh:()=>new Promise(resolve=>{release=resolve;})});
+ const pending=t.open();await new Promise(resolve=>setImmediate(resolve));
+ t.view.clear();release();await pending;eq(t.requests.map(r=>r.action),['account']);eq(t.reads.length,0);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');

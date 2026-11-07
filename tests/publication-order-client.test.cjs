@@ -12,7 +12,7 @@ async function setup(handler){
 const ok=(id,patch={})=>({ok:true,json:async()=>({ok:true,id,can_upload:false,can_publish:false,state:'prepared',target:{id:'target'},approval_token:'token',...patch})});
 test('lost responses reuse the order ID and preserve the complete selection',async()=>{
  const {client,requests}=await setup((body,n)=>{if(n===1)throw Error('lost response');return ok(body.input.id);});
- await assert.rejects(client.prepare(binding,choices));await client.prepare(binding,choices);
+ await assert.rejects(client.prepare(binding,choices),error=>error.preparationId===id);await client.prepare(binding,choices);
  assert.deepEqual(requests[0].body,requests[1].body);assert.deepEqual(requests[1].body.input,{id,...binding,choices});
  assert.equal(requests[0].options.credentials,'omit');assert.equal(requests[0].options.cache,'no-store');
  await client.prepare({...binding,asset_revision:'version:2'},choices);assert.notEqual(requests[2].body.input.id,id);

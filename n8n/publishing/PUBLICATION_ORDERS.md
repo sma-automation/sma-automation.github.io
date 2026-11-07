@@ -41,6 +41,22 @@ Bestandsprüfung abgeschlossen. PR #57/#69 separat offen, unveröffentlichte
 n8n-Originalentwürfe und Shopify-Testmodus erhalten; keine kostenpflichtigen
 Änderungen freigegeben.
 
+## Unterbrochene Vorbereitung – 7. November 2026
+
+Fehlt nach **Auftrag prüfen** die Antwort, liest SMA den gespeicherten Stand
+der gesendeten Auftrags-ID. Bei einer fertigen Vorbereitung zeigt der Dialog
+den Auftrag mit leeren Bestätigungsfeldern. Datei, Beitrag, Portaloptionen
+und das zuvor angezeigte Zielkonto müssen zusammenpassen.
+
+Ist die Anfrage noch nicht gespeichert oder ihre Vorbereitung noch offen,
+behält das Formular die gewählten Optionen. Ein erneuter Klick auf
+**Auftrag prüfen** mit denselben Einstellungen verwendet dieselbe ID.
+Kann SMA den Stand gerade nicht lesen, bietet **Status erneut laden** einen
+weiteren Leseversuch. Das Schließen und Öffnen des Dialogs im selben Tab
+bewahrt die unterbrochene Anfrage für dieselbe Auswahl. Bewusst geänderte
+Optionen starten eine eigene Vorbereitung. Nach einem Neuladen der Seite
+sind bereits gespeicherte Aufträge über **History → Aufträge** erreichbar.
+
 ## Verbindungsabbruch bei der Freigabe – 7. November 2026
 
 Wenn nach einem Klick auf **Veröffentlichung freigeben** eine eindeutige Antwort
