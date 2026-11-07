@@ -147,6 +147,19 @@ Auch nach Schließen und erneutem Öffnen des Dialogs für dieselbe Auswahl läu
 die ausstehende Klärung über den Leseweg. Nach einem Neuladen der Seite ist
 der gespeicherte Auftrag in **History → Aufträge** zu finden.
 
+### Freigegebenen Auftrag in der History öffnen
+
+Nach gespeicherter Freigabe führt **Freigegebenen Auftrag in der History öffnen**
+zum aufgeklappten Eintrag. Der Dialog zeigt den Freigabezeitpunkt in Wiener Zeit.
+
+Meldet SMA für dieselbe Dateiversion, dass am selben Portal und Zielkonto bereits
+ein Auftrag freigegeben wurde, liest der Dialog die vom Doppelposting-Schutz
+zurückgegebene Auftrags-ID im angemeldeten Kundenkonto. Der Link öffnet den
+ursprünglichen Auftrag, auch wenn der zweite Entwurf andere Texte, Hashtags
+oder Portaloptionen hat. In diesem Fall verwendet auch **Status erneut laden**
+ausschließlich den gespeicherten Auftragsstand. Bei unklarer Zuordnung erscheint
+der Verweis auf den allgemeinen Verlauf.
+
 ## Historischer Ausgangsstand – 3. November 2026
 
 Fortsetzung: [Zielkonto und Portalberechtigungen](ACCOUNT_VERIFICATION.md) – Kontoprüfungen und Anschlusskorrektur sind live abgeschlossen. Die getrennten Medienbestätigungen aus #53 sind veröffentlicht und im echten TikTok-Vorbereitungsdialog geprüft.

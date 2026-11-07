@@ -18,9 +18,9 @@ try{
  await db.exec("create table sma_private.manual_fixture(m jsonb);grant select on sma_private.manual_fixture to service_role;create or replace function sma_private.publication_order_current_v1(j sma_private.publication_orders_v1) returns jsonb language sql stable as $$select jsonb_build_object('ok',true,'media_check',m) from sma_private.manual_fixture$$;create function sma_private.publication_comparison_media_v1(b jsonb,d jsonb,m jsonb) returns jsonb language sql stable as $$select m$$;");
  await db.query("insert into public.sma_kunden values(91,$1,'fixture91','owner@example.test',true,true,false,null,false),(92,$2,'fixture92','other@example.test',true,true,false,null,false)",[uid,other]);
  await db.query("insert into sma_private.publication_files_v1(id,user_id,customer_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,width_px,height_px,duration_ms) values($1,$2,91,'fixture_drive','Synthetic.mp4','video','video/mp4',$3,now(),2000,720,1280,4000)",[id(1),uid,rev]);
- const binding={platform:'youtube',media_kind:'video',asset_id:id(1),asset_revision:rev,drive_file_id:'fixture_drive'},target={platform:'youtube',id:'UC'+'a'.repeat(22),name:'Synthetic',source_revision:'b'.repeat(64)},choices={visibility:'private',made_for_kids:false,contains_synthetic_media:false};
+ const binding={platform:'youtube',media_kind:'video',asset_id:id(1),asset_revision:rev,drive_file_id:'fixture_drive',preview_id:id(2),preview_revision:1,assignment_revision:1},target={platform:'youtube',id:'UC'+'a'.repeat(22),name:'Synthetic',source_revision:'b'.repeat(64)},choices={visibility:'private',made_for_kids:false,contains_synthetic_media:false};
  const evidence={version:1,platform:'youtube',target_id:target.id,target_revision:target.source_revision,display_name:'Synthetic',permissions:['youtube.upload'],policy:{},checked_at:new Date().toISOString(),expires_at:new Date(Date.now()+240000).toISOString()};
- await db.query("insert into sma_private.publication_orders_v1(id,user_id,customer_id,binding,draft,choices,target,state,account_check) values($1,$2,91,$3,'{\"title\":\"Synthetic\",\"caption\":\"Synthetic text\"}',$4,$5,'prepared',$6)",[id(10),uid,binding,choices,target,evidence]);
+ await db.query("insert into sma_private.publication_orders_v1(id,user_id,customer_id,binding,draft,choices,target,state,account_check) values($1,$2,91,$3,'{\"platform\":\"youtube\",\"title\":\"Synthetic\",\"caption\":\"Synthetic text\"}',$4,$5,'prepared',$6)",[id(10),uid,binding,choices,target,evidence]);
  const check=(code,status='pass')=>({code,status,message:code});
  const media={asset_id:id(1),asset_revision:rev,can_publish:false,status:'needs_review',facts:{mime_type:'video/mp4',size_bytes:2000,duration_ms:4000},content_review:{asset_id:id(1),asset_revision:rev,policy_version:'visual-2026-11-01.1',status:'failed',error_code:'VIDEO_PLAN_REQUIRED'},checks:[check('BINARY_INSPECTION'),check('FILE_SIZE'),check('PORTAL_TEXT_COMPARISON'),check('CONTENT_REVIEW_PENDING','pending'),check('SEMANTIC_REVIEW_PENDING','pending'),check('PUBLICATION_APPROVAL_PENDING','pending')]};
  await db.query('insert into sma_private.manual_fixture values($1)',[media]);
@@ -33,7 +33,7 @@ try{
  const provider=async(d={})=>asRole('service_role',async()=>(await db.query("select public.sma_publication_provider_v1('begin',$1,null,$2) r",[id(10),d])).rows[0].r);
  // Install the actual history projections and test the same deadline in both customer reads.
  await db.exec((await src('publication-provider-cover')).split('create or replace function')[0]);
- for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window','publication-pending-preparation','publication-history-order-caption'])await db.exec(await src(f));
+ for(const f of ['publication-history','publication-history-months','publication-cover-history','publication-approval-window','publication-pending-preparation','publication-history-order-caption','publication-history-order-page'])await db.exec(await src(f));
  const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
  for(const [age,expected] of [['1 minute','active'],['30 minutes','expired'],['1 day','expired']]){
@@ -104,6 +104,23 @@ try{
  eq((await request('approve',approval)).approved_at,approved.approved_at);eq((await request('approve',{...approval,review:base})).code,'FINAL_APPROVAL_REQUIRED');
  const count=async t=>(await db.query('select count(*)::int n from sma_private.'+t)).rows[0].n;
  eq(await count('publication_journal_v1'),1);eq(await count('publication_provider_permissions_v1'),0);eq(await count('publication_provider_attempts_v1'),0);
+ // A later text revision for the same asset version and target collides with the first approval.
+ await db.exec('begin');
+ const secondId=id(11);
+ await db.query(`insert into sma_private.publication_orders_v1(id,user_id,customer_id,binding,draft,choices,target,state,account_check)
+  select $2,user_id,customer_id,binding||$3::jsonb,draft||$4::jsonb,choices||$5::jsonb,target,'prepared',account_check
+  from sma_private.publication_orders_v1 where id=$1`,[id(10),secondId,{preview_id:id(3),preview_revision:2,assignment_revision:2},
+  {title:'Later draft',caption:'Later caption'},{visibility:'unlisted'}]);
+ const second=await request('get',{id:secondId});
+ const duplicate=await request('approve',{id:secondId,approval_token:second.approval_token,confirm:true,review:base});
+ eq(duplicate.code,'DUPLICATE_PUBLICATION');eq(duplicate.existing_order_id,approved.id);
+ const original=await request('get',{id:duplicate.existing_order_id});eq(original.approved_at,approved.approved_at);
+ eq(original.binding.preview_revision,1);eq(second.binding.preview_revision,2);
+ const locate=()=>asRole('authenticated',async()=>(await db.query('select public.sma_publication_history_order_page_v1($1) r',[duplicate.existing_order_id])).rows[0].r);
+ const located=await locate();eq(located.order_page,1);eq(located.entries.find(e=>e.id===original.id).order_caption,'Synthetic text');
+ eq((await request('get',{id:secondId})).approved_at,null);eq(await count('publication_journal_v1'),1);
+ eq((await request('get',{id:original.id},other)).code,'ORDER_UNAVAILABLE');eq((await locate()).code,'ORDER_UNAVAILABLE');
+ eq(await count('publication_provider_attempts_v1'),0);await db.exec('rollback');
  for(const change of ["draft=draft||'{\"caption\":\"Changed\"}'","choices=choices||'{\"visibility\":\"public\"}'","target=target||'{\"id\":\"other\"}'","binding=binding||'{\"preview_revision\":2}'","user_id='"+other+"'","customer_id=92","state='cancelled'","approved_at=null"]){await db.exec('begin');await db.exec('update sma_private.publication_orders_v1 set '+change);eq((await view()).media_check?.human_review,undefined);await db.exec('rollback');}
  const data={target,drive_verified:true,text_verified:true,account_check:evidence,blockers:[]};
  const claim=await worker('claim');eq(claim.ok,true);const checked=await worker('finish_check',data,claim.lease_id);eq(checked.state,'checked');eq(checked.blockers,[]);
