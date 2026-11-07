@@ -62,7 +62,7 @@ Geprüfte Primärquellen: [YouTube videos.insert](https://developers.google.com/
 
 Bei der Zuordnung eines neuen Portaltexts zu einem Video prüft SMA den Produktkontext der Dateiversion. Ein eindeutiger aktiver Artikel im öffentlichen Shop desselben Kunden erhält den Direktlink mit `&produkt=<sma_produkt_id>`. Ein bestätigtes privates Produktprofil braucht dafür genau einen aktiven Artikel mit demselben vollständigen Namen. Bei fehlender oder mehrdeutiger Zuordnung verwendet der Entwurf die Shop-Startseite.
 
-Die Dateizuordnung speichert Artikelkennung und fertigen Beitragstext. Bearbeiten und erneutes Öffnen verwenden diese gespeicherte Auswahl. Die interne Übergabe prüft die aktuelle Erreichbarkeit des Katalogeintrags und den exakten Link im gespeicherten Text. Ein zurückgezogener Artikel erfordert einen neuen Entwurf. Die bisherige Shop-Adresse in der Auftragsbindung bleibt mit vorhandenen Aufträgen kompatibel.
+Die Dateizuordnung speichert Artikelkennung und fertigen Beitragstext. Bearbeiten und erneutes Öffnen verwenden diese gespeicherte Auswahl. Die interne Übergabe prüft die aktuelle Erreichbarkeit des Katalogeintrags und den exakten Link im gespeicherten Text. Bei einem zurückgezogenen Artikel kann der Kunde das Linkziel im vorhandenen Entwurf korrigieren. Die bisherige Shop-Adresse in der Auftragsbindung bleibt mit vorhandenen Aufträgen kompatibel.
 
 Der isolierte Durchlauf mit `node tests/run-publication-draft-product-links-sql.mjs` prüft die vier Portaltexte auf Deutsch und Englisch bis zu den vorbereiteten Textfeldern.
 
@@ -77,3 +77,9 @@ Magic Effect und die manuelle Texterstellung verwenden die Angaben des gewählte
 Unter **Inhalt und Ziel → Artikel aus meinem Shop zuordnen** kann der Kunde bei einem Video ohne Produkttreffer seinen öffentlichen Shop durchsuchen. Produktname, SKU oder SMA-Artikelnummer sind suchbar. Eine leere Suche zeigt das Sortiment in Gruppen von zehn. Erst die Wahl im Artikelfeld übernimmt die Angaben für den neuen Entwurf.
 
 Die Katalogsuche verwendet den vorhandenen authentifizierten Datei-RPC. Vor der Textvorbereitung und bei der Dateizuordnung prüft SMA Kundenkonto, Dateistand und Artikel erneut. Liegt inzwischen eine automatische Produktzuordnung vor, greift die normale Produkterkennung und der Kunde muss die geänderte Auswahl prüfen. Bleibt das Artikelfeld leer, ist der allgemeine Shop-Link weiterhin möglich. Die Kundenwahl ist eine Angabe für den Textentwurf. Medienprüfung und Auftragsfreigabe laufen über ihre bisherigen Schritte.
+
+### Linkziel im gespeicherten Videoentwurf korrigieren
+
+Unter **Linkziel bearbeiten** kann der Kunde die Shop-Startseite verwenden oder einen Shopartikel übernehmen. Dafür gelten die vorhandenen Regeln für erkannte Artikel, mehrere passende Treffer und die Katalogsuche. Die Vorschau zeigt die Änderung sofort. Mit **Linkänderung verwerfen** kehrt der Kunde zum gespeicherten Ziel zurück. **Entwurf speichern** speichert das Ziel zusammen mit eventuellen Änderungen an Titel, Text und Hashtags.
+
+Eine reine Linkkorrektur aktualisiert ausschließlich die Dateizuordnung des jeweiligen Portals. Die Revision einer gemeinsam verwendeten Textvorlage bleibt erhalten. Der bisherige Auftrag behält seine gespeicherte Bindung. Eine geänderte Zuordnung muss der Kunde für einen neuen Auftrag erneut prüfen. Die ursprünglichen Quellenangaben bleiben beim Entwurf. Beim Wiederöffnen zeigt die Artikelauswahl den gespeicherten Artikel, sofern er weiterhin verfügbar ist.

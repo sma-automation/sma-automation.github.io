@@ -64,6 +64,7 @@ export function mountCatalogLookup(doc,lookup){
         context=file?{asset_id:file.id,asset_revision:file.revision,platform}:null;
       }
       panel.hidden=!context;
+      if(saved===null&&context){reset();query.value='';panel.open=false;}
       if(saved&&context){
         reset();choices=[saved];fillProductChoices(doc,select,choices,saved.product_id);
         el('catalogResults').hidden=false;panel.open=true;
