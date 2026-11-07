@@ -666,3 +666,14 @@ test('clearing a selection discards its pending export cover',async()=>{
  finish({cover:{position_ms:500},blob:new Blob(['cover'])});await new Promise(resolve=>setImmediate(resolve));
  assert.equal(p.createdUrls.length,0);assert.equal(p.mediaCalls.length,0);
 });
+
+test('the optimizer labels a receipted renamed music version; a lookalike filename stays a video',async()=>{
+ const music={...supportedVideo,name:'Fertige-Fassung.mp4',display:{product:'Testlampe',variant:'soundtrack'}};
+ const ordinary={...supportedVideo,id:'other-file',name:'Bühne – mit SMA-Musik.mp4'};
+ const p=await boot({portal:'youtube',wide:true,files:[music,ordinary]});
+ const [first,second]=p.get('filePickerList').children;
+ assert.equal(first.querySelector('strong').textContent,'Testlampe');
+ assert.match(first.querySelector('small').textContent,/^Video mit SMA-Musik/);
+ assert.equal(second.querySelector('strong').textContent,'Bühne – mit SMA-Musik');
+ assert.doesNotMatch(second.querySelector('small').textContent,/SMA-Musik/);
+});

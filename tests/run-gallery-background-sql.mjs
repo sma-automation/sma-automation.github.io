@@ -1,3 +1,4 @@
+import {checkSoundtrackProduct} from './sql-runtime/gallery-product-context-checks.mjs';
 import {backgroundFlow} from './sql-runtime/gallery-background-flow.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -9,9 +10,9 @@ const value=async(query,args=[])=>(await db.query(query,args)).rows[0]?.v;
 const uid=randomUUID(),sha='a'.repeat(64),render='render/'+sha+'/'+'b'.repeat(64)+'.aac';
 const rpc=(action,input)=>value('select public.sma_gallery_background_v1($1,$2) v',[action,input]);
 const pick=()=>value('select sma_private.gallery_background_pick_v1() v');
-async function file(n){
+async function file(n,name='clip.mp4'){
  return value(`insert into sma_private.publication_files_v1(customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes)
- values(1,$1,$2,'clip.mp4','video','video/mp4',$3,now(),2048) returning id v`,[uid,'file_fixture_'+n,'sha256:'+sha+':1']);
+ values(1,$1,$2,$4,'video','video/mp4',$3,now(),2048) returning id v`,[uid,'file_fixture_'+n,'sha256:'+sha+':1',name]);
 }
 try{
  await db.exec(await readFile('tests/sql-runtime/music-library-fixture.sql','utf8'));
@@ -77,6 +78,7 @@ try{
  assert.equal(await pick(),null);const browser=await value("select public.sma_gallery_music_v1('claim','{}') v");
  assert.equal(browser.id,second.id);assert.equal(await value('select background_audio v from sma_private.gallery_music_v1 where id=$1',[second.id]),null);
  assert.equal((await value("select public.sma_music_credits_v1('overview','{}') v")).credits,0);
- await backgroundFlow({db,value,pick,uid,sha,file,browserJob:browser});
+ const jobId=await backgroundFlow({db,value,pick,uid,sha,file,browserJob:browser});
+ await checkSoundtrackProduct({db,value,sql,uid,jobId});
  console.log('Background dispatch, package rights, ticket replay, cross-renderer retries, quota and fallback passed.');
 }finally{await db.close();}

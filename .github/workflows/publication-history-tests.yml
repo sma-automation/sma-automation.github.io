@@ -43,6 +43,8 @@ on:
       - n8n/publishing/fixtures/gallery-music-probe.json
       - tests/*gallery-background*
       - tests/sql-runtime/gallery-background-flow.mjs
+      - tests/sql-runtime/gallery-product-context-checks.mjs
+      - supabase/migrations/*_gallery_music_product_context_v1.sql
       - supabase/migrations/*_gallery_music_scheduled_probe_v1.sql
       - supabase/migrations/*_gallery_music_background_v1.sql
       - app/assets/gallery-music*
