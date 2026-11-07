@@ -82,9 +82,11 @@ sind bestanden.
 ### Automatische Musik für neue Galerieclips
 
 Beim ersten Eingang einer unterstützten MP4 im Dateikatalog merkt SMA das Video
-für das zugehörige Kundenkonto vor. Ein geöffnetes Kundendashboard oder eine
-eigenständig geöffnete Portaloptimierung übernimmt die Verarbeitung. Ohne
-offenen Browser wartet der Auftrag. Ältere Galeriedateien werden beim nächsten
+für das zugehörige Kundenkonto vor. Der separate n8n-Workflow verarbeitet
+geeignete Clips selbstständig, sobald ein freigegebener Katalogtitel mit
+vorbereiteter AAC-Datei verfügbar ist. Die Browser-Verarbeitung übernimmt
+weitere unterstützte MP4-Dateien beim Öffnen des Dashboards oder der
+Portaloptimierung. Ältere Galeriedateien werden beim nächsten
 Ordnerabgleich nicht nachträglich eingeplant.
 
 SMA wählt einen für das Konto verfügbaren Track aus dem zentralen SMA-Katalog.
@@ -118,7 +120,7 @@ Transaktionsende ab, weil Drive Original und Ausgabe in beliebiger Reihenfolge
 liefern kann. Kundenkonto, Quellversion, reservierte Drive-ID, Dateiname, Größe
 und SHA-256 müssen passen. Auch ein später eindeutig geklärter Upload kann den
 Status „Kundenordner prüfen“ verlassen. Ein offener Tab ist für diesen Abschluss
-entbehrlich. Das Erzeugen der Audiospur erfolgt weiterhin im geöffneten Browser.
+entbehrlich.
 
 Der isolierte Durchlauf in `tests/run-gallery-music-receipt.mjs` verbindet den
 echten FFmpeg-Zuschnitt, den Katalogzugriff eines Alpha-Kontos, die
@@ -128,6 +130,58 @@ dem letzten übertragenen Byte. Ein nachfolgender Abgleich findet genau eine
 Musikfassung. Wiederholte Bestätigungen liefern dieselbe Datei. Ein falscher
 Hash, eine abweichende Größe, ein fremder Dateiname oder eine geänderte Quelle
 verhindern die Zuordnung. Das Testkonto behält seine neun übrigen Credits.
+
+### Hintergrundverarbeitung in n8n Cloud
+
+Ein minütlicher Datenbank-Zeitplan löst den separaten Workflow
+**SMA – Galerie – Automatische Vertonung V1** aus, wenn im Dateikatalog ein
+verarbeitbarer Auftrag vorliegt. Eine leere Warteschlange erzeugt keinen
+n8n-Aufruf. Ein Einmalticket bindet den Aufruf an den reservierten Auftrag.
+Konto, Quellversion, Zugangsrechte zum Track und Kundenordner werden vor
+dem Speichern geprüft. Die Musikfassung landet unter **02 Verarbeitung**.
+
+Beim Einpflegen eines eigenen SMA-Masters wird die AAC-Datei einmal vorbereitet.
+Der folgende Befehl benötigt Python, FFmpeg und ffprobe. Er verarbeitet die
+Musik lokal, begrenzt die Lautstärke auf 25 Prozent und wiederholt einen kurzen
+Master bis zur maximalen Cliplänge. Den ausgegebenen Pfad relativ zum
+Ausgabeordner unter demselben Namen und mit MIME `audio/aac` im privaten
+Bucket `sma-katalog` speichern:
+
+```sh
+python3 n8n/publishing/prepare-gallery-audio.py mein-master.wav ausgabe
+```
+
+Der Pfad lautet `render/<SHA-256 des Masters>/<SHA-256 der AAC-Datei>.aac`.
+Die Zugriffsregel für Kunden gibt nur die freigeschalteten Original-Master
+aus. n8n kontrolliert den Hash der vorbereiteten Datei. Für den Hintergrundweg
+werden klassische, eigenständige MP4 mit einer H.264- oder HEVC-Bildspur
+unterstützt. Vorhandene Audiospuren werden übersprungen. Bei stummen Videos
+werden nur die benötigten AAC-Pakete eingesetzt. Die codierten Videodaten
+sowie Orientierung und Zeitinformationen bleiben erhalten. Andere Container-
+oder Spurvarianten werden der Browserprüfung überlassen. Nach einer
+Ausgabereservierung bleibt die Verarbeitung an denselben Renderer und
+dieselbe Upload-ID gebunden. Eine unterbrochene Übertragung wird am von
+Drive bestätigten Byteoffset fortgesetzt. Nach fünf erfolglosen Versuchen
+wartet eine bereits reservierte, ungeklärte Fassung auf Prüfung.
+
+**Liveprüfung am 07.11.2026.** Um 18:27:00 Wiener Zeit startete der installierte
+Zeitplan den veröffentlichten Workflow mit einem privaten Einmalticket für eine
+synthetische MP4 und einen Testton. Um 18:27:02,938 lag der Beleg für die
+erwartete Prüfsumme in der Datenbank vor. Die 49 Nodes, Verbindungen,
+Credential-Referenzen und Einstellungen wurden mit dem Export der aktiven
+n8n-Version `6c40bfd9-0446-486c-b660-d0982fe749de` abgeglichen.
+Workflow-ID: `By3G8ESyl7yqViqa`. Produktive Ausführungsdaten werden im
+Workflow weder bei Erfolg noch bei Fehler gespeichert. Für manuelle Testläufe
+gilt der bestehende Instanzstandard.
+
+Der reguläre Kundenpfad wurde mit den exportierten Nodes und den echten
+SQL-Funktionen isoliert geprüft. Drive, die n8n-Kundentabelle und der
+Storage-Transport wurden für diesen Test nachgebildet. Ein ab Byte 100
+fortgesetzter Upload ergab genau eine verifizierte Galeriedatei. Am lokalen
+Türgriff-Original war die codierte Bildspur bytegleich (241 Bilder, 10,041667 s);
+die AAC-Tonspur dauert 10,042 s. Für die erste Live-Speicherung einer
+Kundenfassung fehlt der erste produzierte SMA-Katalogmaster. Der private
+Technikton ist dafür nicht freigeschaltet.
 
 ## Bedienung
 
