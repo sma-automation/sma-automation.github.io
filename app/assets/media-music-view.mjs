@@ -1,4 +1,4 @@
-import {mountMusicLibrary,musicLibraryMessages} from './music-library-view.mjs?v=1';
+import {mountMusicLibrary,musicLibraryMessages} from './music-library-view.mjs?v=2';
 import {inspectMusic,readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
 export function mountMediaMusic({doc,onChange,setBusy,createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL,library=null}){
  const $=id=>doc.getElementById(id);let setting=null,blob=null,url=null,key='',video=false,epoch=0,disposed=false,restoreController=null,restoring=null,libraryView=null,savingLibrary=false;

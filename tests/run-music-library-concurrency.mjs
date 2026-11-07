@@ -1,5 +1,6 @@
 // Isolated local PostgreSQL database only; never use an application database.
 import assert from 'node:assert/strict';
+import {checkCreditRaces} from './postgres-runtime/music-credit-races.mjs';
 import {readFile} from 'node:fs/promises';
 import pg from './postgres-runtime/node_modules/pg/lib/index.js';
 const url=new URL(process.env.SMA_TEST_DATABASE_URL??'postgresql://postgres@127.0.0.1:55439/sma_music_reservation_test');
@@ -35,6 +36,7 @@ try{
  // A fresh retry reserves the same immutable path and succeeds after the rejected late write.
  await owner(a);const fresh=(await rpc(a,3)).rows[0].r.track;assert.notEqual(fresh.id,second.id);assert.equal(fresh.object_name,second.object_name);
  await a.query("insert into storage.objects values('sma-musik',$1,$2)",[fresh.object_name,JSON.stringify({size:1000,mimetype:'audio/wav'})]);await a.query('commit');
+ await checkCreditRaces({admin,a,b,owner,waiting,pid,uid});
  console.log('3 native PostgreSQL music reservation scenarios passed: upload first, cleanup first, safe retry.');
 }finally{
  if(started)await Promise.allSettled(clients.map(c=>c.query('rollback')));

@@ -1,5 +1,5 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=8';
-import {getOwnerId,watchOwner,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=4';
+import {mountMediaEditor} from './media-editor-view.mjs?v=9';
+import {getOwnerId,watchOwner,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=5';
 const owner=await getOwnerId();let view,subscription;
 if(!owner){document.getElementById('status').textContent='Bitte melde dich bei SMA an.';document.getElementById('login').hidden=false;}
 else{
