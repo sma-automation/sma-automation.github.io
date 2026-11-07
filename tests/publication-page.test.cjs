@@ -757,3 +757,43 @@ test('a withdrawn manually selected product stops generation, while leaving the 
  assert.match(p.get('status').textContent,/Artikel hat sich geändert/);assert.ok(!p.calls.some(c=>isCaption(c.url)));
  await p.run();assert.equal(JSON.parse(p.calls.find(c=>isCaption(c.url)).options.body).source_text,p.get('source_text').value);
 });
+
+test('a staged switch to the shop home page is visible, reversible and saved without generating new text',async()=>{
+ const d={...instagramResult.preview.drafts[0],product_id:'art-1'};
+ d.caption=d.caption.replace('Zum Shop: ','Zum Produkt: ')+'&produkt=art-1';
+ const existing={...instagramResult,assignment_revision:3,preview:{...instagramResult.preview,drafts:[d]}};
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,wide:true,filesRpc:a=>a.p_action==='get'?existing:
+  a.p_action==='save'?{...instagramResult,assignment_revision:4}:videoFiles(a)});
+ const shop=existing.preview.shop_url;
+ assert.equal(p.get('draftLinkEditor').hidden,false);
+ await p.get('draftLinkShop').click();
+ assert.equal(p.get('shopLink').href,shop);assert.equal(p.get('draftLinkUndo').hidden,false);
+ const caption=p.get('drafts').children[0].querySelectorAll('div').find(el=>el.className==='caption');
+ assert.ok(caption.textContent.endsWith('🛒 Zum Shop: '+shop));
+ assert.throws(()=>p.orderOptions.getContext(),/speichere/);
+ await p.get('draftLinkUndo').click();assert.equal(p.get('draftLinkValue').href,shop+'&produkt=art-1');
+ assert.equal(p.orderOptions.getContext().binding.assignment_revision,3);
+ await p.get('draftLinkShop').click();await p.save();
+ const call=p.calls.find(c=>c.p_action==='save');assert.equal(call.p_input.link_target,null);
+ assert.equal(call.p_input.body,d.body);assert.equal(p.get('shopLink').href,shop);
+ assert.equal(p.calls.filter(c=>isCaption(c.url)).length,0);
+});
+test('editing a saved link uses the current catalogue choice and retains unsaved text on rejection',async()=>{
+ const item={product_id:'new-id',name:'Neue Lampe',sku:'AL-3',purpose:'Licht am Arbeitsplatz.'};
+ const original={...instagramResult,assignment_revision:2,link_product:null};
+ const p=await boot({portal:'instagram',asset:supportedVideo.id,wide:true,
+  filesRpc:a=>a.p_action==='catalog_search'?{ok:true,choices:[item],more:false}:a.p_action==='save'?
+    {ok:false,code:'PRODUCT_SELECTION_CHANGED'}:productFiles(null,original)(a)});
+ await p.get('draftLinkProduct').click();assert.equal(p.get('catalogLookup').open,true);
+ await p.get('catalogSearch').click();
+ p.get('catalogProduct').value=item.product_id;await p.get('catalogProduct').events.change();
+ assert.equal(p.get('shopLink').href,result.preview.shop_url+'&produkt=new-id');
+ const body=p.get('drafts').children[0].querySelector('textarea');body.value='Meine überarbeitete Beschreibung der Lampe.';
+ p.get('drafts').children[0].events.input();await p.save();
+ const target=p.calls.find(c=>c.p_action==='save').p_input.link_target;
+ assert.deepEqual(JSON.parse(JSON.stringify(target)),{product_id:'new-id',name:item.name,purpose:item.purpose,source:'catalog'});
+ assert.equal(body.value,'Meine überarbeitete Beschreibung der Lampe.');assert.equal(p.get('draftLinkUndo').hidden,false);
+ await p.get('draftLinkUndo').click();assert.equal(p.get('shopLink').href,result.preview.shop_url);
+ assert.throws(()=>p.orderOptions.getContext(),/speichere/);
+ assert.equal(p.calls.some(c=>isCaption(c.url)),false);
+});

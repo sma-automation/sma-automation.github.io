@@ -23,6 +23,9 @@ on:
       - tests/publication-hashtags.test.cjs
       - supabase/sql/publication-text-edits.sql
       - app/assets/publication-catalog-lookup.mjs
+      - supabase/sql/publication-edit-draft-link.sql
+      - supabase/migrations/*_publication_edit_draft_link_v1.sql
+      - tests/sql-runtime/publication-edit-draft-link-checks.mjs
       - supabase/sql/publication-catalog-lookup.sql
       - supabase/migrations/*_publication_catalog_lookup_v1.sql
       - tests/sql-runtime/publication-catalog-lookup-checks.mjs

@@ -1,4 +1,4 @@
-import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=1';
+import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
@@ -15,6 +15,7 @@ const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 const messages={CAPTION_TOO_LONG:'Der gesamte Beitrag mit Link ist zu lang. Bitte kürze den Text oder die Hashtags.',CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0,dirty=false;
+let pendingLink,refreshDraftLink,choosingLinkFor;
 let reviewStatus=null;
 let retryHistoryPreview=false;
 let orderReview=null;
@@ -43,11 +44,11 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  getPreview:()=>{
   const draft=current?.preview?.drafts.find(d=>d.platform===selectedPortal);
   let hashtags=[];try{hashtags=parseHashtags($(selectedPortal+'-hashtags')?.value||'');}catch{}
-  return {draft:draft?{...draft,hashtags,title:$(selectedPortal+'-title').value,body:$(selectedPortal+'-body').value,shop_url:current.preview.shop_url}:null,
+  return {draft:draft?{...draftWithLink(draft),hashtags,title:$(selectedPortal+'-title').value,body:$(selectedPortal+'-body').value,shop_url:current.preview.shop_url}:null,
    facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
-   draftStatus:draft?(dirty?'Aktuelle, noch nicht gespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet'):''};
+   draftStatus:draft?(hasDraftEdits()?'Aktuelle, noch nicht gespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet'):''};
  },
- onView:view=>{if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
+ onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
 }):null;
 if(workspace){
  window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files'].includes(event.data.view))workspace.show(event.data.view);});
@@ -58,7 +59,7 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -146,6 +147,17 @@ function attachProduct(input,product){
 }
 function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
 function syncMedia(){if(selectedAsset){$('media_kind').value=selectedAsset.media_kind;$('media_kind').disabled=true;}else{$('media_kind').disabled=false;}if(selectedPortal){for(const c of document.querySelectorAll('[name=platforms]'))c.checked=c.value===selectedPortal;if(selectedPortal==='youtube'){$('media_kind').value='video';$('media_kind').disabled=true;}}const yt=document.querySelector('[name=platforms][value=youtube]');yt.disabled=$('media_kind').value==='image';if(yt.disabled)yt.checked=false;}
+function hasDraftEdits(){return dirty||pendingLink!==undefined;}
+function draftWithLink(draft){
+ if(pendingLink===undefined)return draft;
+ const copy={...draft};
+ if(pendingLink===null)delete copy.product_id;else copy.product_id=pendingLink.product_id;
+ return copy;
+}
+function savedProductSelection(data){
+ if(!Object.hasOwn(data,'link_product'))return sourceProduct(data.input?.source_text);
+ return {choice:data.preview?.drafts?.find(d=>d.platform===selectedPortal)?.product_id||'',catalog:data.link_product};
+}
 function caption(d,body,tags=d.hashtags){
  const target=draftDestination(current.preview.shop_url,d,current.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
@@ -158,14 +170,28 @@ function render(data){
  if(!visibleDrafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
  const target=draftDestination(data.preview.shop_url,visibleDrafts.length===1?visibleDrafts[0]:null,data.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
- current=data;$('drafts').replaceChildren();
+ current=data;pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('drafts').replaceChildren();
+ $('draftLinkEditor').hidden=!(selectedPortal&&selectedAsset?.media_kind==='video'&&data.assignment_revision>0);
+ $('draftLinkEditor').open=false;$('draftLinkUndo').hidden=true;
  $('shopLink').textContent=target.url;$('shopLink').href=target.url;
  for(const d of visibleDrafts){const card=document.createElement('article');card.className='card draft';card.dataset.platform=d.platform;const h=document.createElement('h3');h.textContent=names[d.platform];card.append(h);
   for(const [key,label,max] of [['title','Titel / Einstieg',80],['body','Beitragstext',1200]]){const box=document.createElement('div');box.className='field';const l=document.createElement('label');l.htmlFor=d.platform+'-'+key;l.textContent=label;const control=document.createElement(key==='body'?'textarea':'input');control.id=l.htmlFor;control.dataset.field=key;control.maxLength=max;control.value=d[key];control.required=true;box.append(l,control);card.append(box);}
   const tags=addHashtagField(document,card,d.platform,d.hashtags);
   const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=d.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
   if(d.review_notes.length){const notes=document.createElement('ul');notes.className='note';for(const text of d.review_notes){const li=document.createElement('li');li.textContent=text;notes.append(li);}card.append(notes);}
-  card.addEventListener('input',()=>{dirty=true;$('saveStatus').textContent='Ungespeicherte Änderungen';try{full.textContent=caption(d,card.querySelector('textarea').value,parseHashtags(tags.value));tags.setCustomValidity('');}catch(e){tags.setCustomValidity(e.message);full.textContent=e.message;}});$('drafts').append(card);
+  const updateCaption=()=>{try{full.textContent=caption(draftWithLink(d),card.querySelector('textarea').value,parseHashtags(tags.value));tags.setCustomValidity('');}catch(e){tags.setCustomValidity(e.message);full.textContent=e.message;}};
+  if(!$('draftLinkEditor').hidden){
+   $('draftLinkValue').textContent=target.url;$('draftLinkValue').href=target.url;
+   refreshDraftLink=()=>{
+    const next=draftWithLink(d),destination=draftDestination(data.preview.shop_url,next,data.preview.language);
+    for(const id of ['shopLink','draftLinkValue']){$(id).textContent=destination.url;$(id).href=destination.url;}
+    summary.textContent=next.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';
+    $('draftLinkUndo').hidden=pendingLink===undefined;
+    $('saveStatus').textContent=hasDraftEdits()?'Ungespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet';
+    updateCaption();workspace?.refreshPreview();
+   };
+  }
+  card.addEventListener('input',()=>{dirty=true;$('saveStatus').textContent='Ungespeicherte Änderungen';updateCaption();});$('drafts').append(card);
  }
  if(workspace&&selectedAsset&&selectedAsset.display?.draft_title!==visibleDrafts[0].title){
   selectedAsset.display={...selectedAsset.display,draft_title:visibleDrafts[0].title};
@@ -218,7 +244,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){resetMagic();current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
+function clearDraft(){resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -353,7 +379,7 @@ async function requestFileSelection(id,discard=false){
  if(busy)return;const file=id?assets.find(f=>f.id===id):null;
  if(id&&(!file||!fileFitsPortal(file)))return;
  if((selectedAsset?.id||'')===id){if(!workspace)$('filePicker').close();return;}
- if((dirty||sourceDirty)&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
+ if((hasDraftEdits()||sourceDirty)&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
  pendingAssetId=null;$('fileSwitchNotice').hidden=true;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();await loadLatest();
 }
@@ -390,7 +416,7 @@ async function runDeviceUpload(){
  }catch(e){
   if(!signedOut){$('uploadStatus').textContent=controller.signal.aborted?'Upload angehalten. Mit „Upload fortsetzen“ kannst du weitermachen.':errorText({code:e.message});$('retryUpload').hidden=false;}
  }finally{uploadController=null;$('cancelUpload').hidden=true;lock(false);}
- if(completed&&!signedOut){if(dirty||sourceDirty)openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
+ if(completed&&!signedOut){if(hasDraftEdits()||sourceDirty)openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
 }
 $('deviceFile').addEventListener('change',async()=>{
  if(busy||signedOut)return;const file=$('deviceFile').files?.[0];if(!file)return;
@@ -528,7 +554,7 @@ async function openHistoryOrderPreview(id,owner){
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  // Select only after the order, file and saved portal text have all been verified.
  assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
- renderSelectedFile();showProductContext(saved.product_context,file,sourceProduct(saved.input?.source_text));fillInput(saved.input);render(saved);
+ renderSelectedFile();showProductContext(saved.product_context,file,savedProductSelection(saved));fillInput(saved.input);render(saved);
  orderReview.rememberVideoChoices(order);
  workspace.show('preview');status('Beitragsvorschau des Auftrags geladen.');
  await loadMediaCheck();await loadMagicEffect(false);
@@ -559,7 +585,7 @@ async function loadLatest(){const file=selectedAsset;lock(true);try{
  await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
  if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
- showProductContext(data.product_context,file,sourceProduct(data.input?.source_text));
+ showProductContext(data.product_context,file,savedProductSelection(data));
  if(data.status==='empty'){clearDraft();if(!$('productChoiceField').hidden)$('sourcePanel').open=true;status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
@@ -666,7 +692,7 @@ function syncMagicActions(){
 async function runMagicAction(mode,replace=false){
  if(busy||signedOut||!['source','text'].includes(mode))return;
  const hint=magicActionHint();if(hint){status(hint,true);return;}
- if((dirty||(sourceDirty&&automaticInputSignature!==JSON.stringify(sourceInput())))&&!replace){
+ if((hasDraftEdits()||(sourceDirty&&automaticInputSignature!==JSON.stringify(sourceInput())))&&!replace){
   pendingAutomatic=mode;$('magicReplaceNotice').hidden=false;
   $('magicReplaceNotice').scrollIntoView({block:'nearest'});$('cancelMagicReplace').focus();return;
  }
@@ -698,7 +724,7 @@ $('confirmMagicReplace').addEventListener('click',()=>pendingAutomatic?runMagicA
 $('cancelMagicReplace').addEventListener('click',()=>{pendingAutomatic=null;$('magicReplaceNotice').hidden=true;});
 
 async function refreshFiles(){
- if(busy)return;if(dirty||sourceDirty){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
+ if(busy)return;if(hasDraftEdits()||sourceDirty){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
  lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
 }
 async function refreshVideoMetadata(){
@@ -750,6 +776,40 @@ async function generatePreview({withinAutomatic=false}={}){
 }
 $('previewForm').addEventListener('submit',event=>{event.preventDefault();return generatePreview();});
 
+function setDraftLink(target){
+ if(!current||!refreshDraftLink||signedOut)return;
+ const original=current.preview.drafts.find(d=>d.platform===selectedPortal);
+ pendingLink=(original.product_id??null)===(target?.product_id??null)?undefined:target;
+ choosingLinkFor=null;refreshDraftLink();$('draftLinkEditor').open=true;$('draftLinkEditor').scrollIntoView({block:'nearest'});
+ status(pendingLink===undefined?'Gespeichertes Linkziel übernommen.':'Linkziel in der Vorschau geändert. Prüfe den Beitragstext und speichere den Entwurf.');
+}
+async function chooseDraftLink(){
+ if(signedOut||busy||!refreshDraftLink)return;
+ const context=fileContext(),original=current;lock(true);
+ try{
+  const product=await getDraftProduct(context);assertFileContext(context);
+  if(current!==original)return;
+  if(product?.product_id){
+   setDraftLink({product_id:product.product_id,name:product.name,purpose:product.purpose,
+    source:product.fromCatalog?'catalog':product.chosen?'choice':'matched'});
+   return;
+  }
+  if(product?.state==='matched'||(product?.state==='ambiguous'&&$('productChoiceField').hidden)){
+   status('Für diese Datei ist kein passender öffentlicher Shopartikel verfügbar.',true);return;
+  }
+  choosingLinkFor=current;workspace?.show('source');
+  if(product?.state==='ambiguous'){$('sourcePanel').open=true;pendingProductFocus='productChoice';}
+  else{if(!workspace)$('sourcePanel').open=true;$('catalogLookup').open=true;pendingProductFocus='catalogQuery';}
+  status('Wähle den Shopartikel für den gespeicherten Entwurf.');
+ }catch(e){if(!signedOut)status(e.message,true);}finally{lock(false);}
+}
+$('draftLinkProduct').addEventListener('click',chooseDraftLink);
+$('draftLinkShop').addEventListener('click',()=>{if(!busy)setDraftLink(null);});
+$('draftLinkUndo').addEventListener('click',()=>{if(!busy&&refreshDraftLink){pendingLink=undefined;choosingLinkFor=null;refreshDraftLink();status('Gespeichertes Linkziel wiederhergestellt.');}});
+for(const id of ['productChoice','catalogProduct'])$(id).addEventListener('change',()=>{
+ if(choosingLinkFor&&choosingLinkFor===current&&$(id).value)return chooseDraftLink();
+});
+
 $('save').addEventListener('click',async()=>{
  if(busy||signedOut||!current)return;
  let edits;try{edits=[...$('drafts').children].map(card=>({platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),body:card.querySelector('[data-field=body]').value.trim(),hashtags:parseHashtags(card.querySelector('[data-field=hashtags]').value)}));}catch(e){status(e.message,true);return;}
@@ -759,13 +819,22 @@ $('save').addEventListener('click',async()=>{
  lock(true);$('saveStatus').textContent='Wird gespeichert …';
  try{
   await ensureFreshFile(context);
-  const result=context?await withFreshFile(context,()=>fileRpc('save',{...context,title:edits[0].title,body:edits[0].body,hashtags:edits[0].hashtags})):await rpc('save',{revision:current.revision,drafts},current.id);
-  render(result);if(context)fileChanged();status('Änderungen gespeichert. Der Shop-Link ist weiterhin enthalten.');
+  const result=context?await withFreshFile(context,()=>fileRpc('save',{...context,title:edits[0].title,body:edits[0].body,hashtags:edits[0].hashtags,...(pendingLink===undefined?{}:{link_target:pendingLink})})):await rpc('save',{revision:current.revision,drafts},current.id);
+  const applied=pendingLink;
+  render(result);
+  if(context){
+   if(applied!==undefined){
+    if(!$('catalogLookup').hidden)catalogLookup.setContext(selectedAsset,selectedPortal,applied);
+    if(!$('productChoiceField').hidden)$('productChoice').value=applied?.product_id||'';
+   }
+   fileChanged();
+  }
+  status('Änderungen gespeichert.');
  }catch(e){if(!signedOut){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}}finally{lock(false);syncMedia();}
 });
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
- getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(dirty||sourceDirty)throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
+ getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(hasDraftEdits()||sourceDirty)throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},
 });
@@ -775,7 +844,7 @@ lock(true);status('Deine Dateien werden geladen …');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){galleryMusic?.destroy();coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;current=null;assets=[];selectedAsset=null;sourceDirty=false;pendingAssetId=null;resetMagic();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){galleryMusic?.destroy();coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
  if(selectedPortal&&!params.has('order')&&window.top===window){
   galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:text=>{if(!signedOut)$('galleryMusicStatus').textContent=text;},
