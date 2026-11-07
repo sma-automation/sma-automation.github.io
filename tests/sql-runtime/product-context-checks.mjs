@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {checkProductComparison} from './product-comparison-checks.mjs';
 
 export async function checkProductContext({db,load,first}) {
   const files=await load('publication-files.sql');
@@ -52,6 +53,7 @@ export async function checkProductContext({db,load,first}) {
   assert.equal((await catalog('youtube')).files.find(f=>f.id===cover).display.variant,undefined);
   await db.exec('rollback');
   assert.equal(await first("select has_function_privilege('authenticated','sma_private.publication_optimizer_file_label_v1(sma_private.publication_files_v1,text)','execute') value"),false);
+  await checkProductComparison({db,first,load,output,profile});
   const matched=(await read()).product_context;
   assert.equal(matched.name,'Hotelgriff');
   assert.equal(matched.topic,'Reisehygiene');

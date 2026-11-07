@@ -18,8 +18,22 @@ History und Auftragsdialog zeigen die Gültigkeit der Vorbereitung an. Maßgebli
 ist die frühere der beiden Fristen für Auftrag und Kontoprüfung. Ein Neustart im
 Dialog lädt die Kontooptionen. Erst „Auftrag prüfen“ bereitet einen neuen Auftrag vor.
 
-Die zwei Werbeentwürfe am Zehn-Sekunden-Original gehören zu anderen Textversionen.
-Für ihre aktuellen Bindungen ist bisher kein abgeschlossener Inhaltsabgleich gespeichert.
+Die beiden Werbeentwürfe am Zehn-Sekunden-Original wurden anhand der vorhandenen
+241 Einzelbilder und des vom Kunden beschriebenen Produktzwecks geprüft.
+Am Anfang berührt ein Finger die Metallklinke. Das Öffnen ausschließlich mit
+dem roten Griff ist im geschnittenen Clip nicht eindeutig belegt. Die damaligen
+Textstände erhielten je einen konkreten Hinweis. Die korrigierten Texte
+beschreiben Ansetzen, Abnehmen und Verstauen. Sie nennen das Hotel als
+vorgesehenen Einsatzort.
+
+YouTube und TikTok stehen jeweils auf Textrevision 4 (Dateizuordnung 6 und 4).
+Beide regulären Medienprüfungen melden `PORTAL_TEXT_COMPARISON=pass`.
+Der Prüfstand `assisted_video_and_product_facts` kennzeichnet die Assistenzsichtung.
+Die interne Vergleichsfunktion bindet den Text, die gespeicherten Video-Beobachtungen
+und ein für das Kundenkonto anhand der SHA-256-Prüfsumme eindeutig bestätigtes
+Produktprofil. Änderungen an diesen Eingaben erfordern einen neuen Vergleich.
+Für diese Abnahme wurde kein externer Analyseaufruf gestartet. Zehn bestehende
+Aufträge, null Freigaben, Operatorberechtigungen, Provider- und Coverversuche.
 
 ## Zwei unterschiedliche Dateien
 

@@ -54,6 +54,9 @@ on:
       - supabase/migrations/*_publication_export_probe_v1.sql
       - supabase/sql/publication-optimizer-file-labels.sql
       - supabase/migrations/*_publication_optimizer_file_labels_v1.sql
+      - supabase/sql/publication-product-comparison.sql
+      - supabase/migrations/*_publication_product_comparison_v1.sql
+      - tests/sql-runtime/product-comparison-checks.mjs
       - supabase/sql/publication-product-context.sql
       - supabase/migrations/*_publication_product_context_v1.sql
       - tests/sql-runtime/product-context-checks.mjs
