@@ -98,11 +98,15 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    cover.dataset.coverStatus=entry.cover.status;meta.append(cover);
    const details=create('details'),toggle=create('summary');toggle.append(heading,meta);
    const detail=create('p',historyStatuses[entry.status][1]);
+   let previewLink;
    const window=entry.approval_window;
    if(window){
-    const expire=()=>{status.textContent='Vorbereitung abgelaufen';detail.textContent='Öffne die Beitragsvorschau und starte die Vorbereitung erneut.';};
+    previewLink=create('a','Beitragsvorschau öffnen','sma-history-preview-link');
+    previewLink.href='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
+    previewLink.target='_top';previewLink.hidden=true;
+    const expire=()=>{status.textContent='Vorbereitung abgelaufen';detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';previewLink.hidden=false;};
     const remaining=Date.parse(window.expires_at)-Date.now();
-    if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';}
+    if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';previewLink.hidden=false;}
     else if(window.status==='expired'||remaining<=0)expire();
     else{detail.textContent='Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';expiryTimers.push(setTimeout(expire,remaining+1));}
    }
@@ -110,6 +114,7 @@ export function mountPublicationHistory({doc,request,requestTexts,requestAssignm
    const coverDetail=create('p',historyCoverStatuses[entry.cover.status][1],'sma-history-cover-detail');
    details.append(toggle,create('p',entry.target_name||'Zielkonto nicht gespeichert'),detail,dates,coverDetail);
    if(entry.cover.updated_at)details.append(create('small','Cover-Stand: '+format(entry.cover.updated_at)));
+   if(previewLink)details.append(previewLink);
    row.append(details);list.append(row);
   }
   message.textContent=entries.length?(pageNumber*pageSize+1)+'–'+Math.min((pageNumber+1)*pageSize,entries.length)+' von '+summary.orders+' Aufträgen · Seite '+(pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';

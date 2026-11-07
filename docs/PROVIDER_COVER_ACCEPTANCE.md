@@ -17,6 +17,10 @@ Veröffentlichungsfreigabe stehen aus. Eine Providerbestätigung liegt weiterhin
 History und Auftragsdialog zeigen die Gültigkeit der Vorbereitung an. Maßgeblich
 ist die frühere der beiden Fristen für Auftrag und Kontoprüfung. Ein Neustart im
 Dialog lädt die Kontooptionen. Erst „Auftrag prüfen“ bereitet einen neuen Auftrag vor.
+Bei einer abgelaufenen Vorbereitung führt **History → Aufträge → Beitragsvorschau öffnen**
+im selben Tab direkt zur gebundenen Datei und zum gespeicherten Portaltext. Bei
+einem geänderten Datei- oder Textstand zeigt SMA einen Hinweis. Eine veraltete
+Dateiliste wird bei Bedarf mit dem Kundenordner abgeglichen.
 
 Die beiden Werbeentwürfe am Zehn-Sekunden-Original wurden anhand der vorhandenen
 241 Einzelbilder und des vom Kunden beschriebenen Produktzwecks geprüft.

@@ -68,3 +68,6 @@
 .sma-history-cover-status[data-cover-status=complete]{color:#206341}
 .sma-history-cover-status:is([data-cover-status=failed],[data-cover-status=uncertain],[data-cover-status=needs_review],[data-cover-status=permission_required],[data-cover-status=blocked]){color:#84500d}
 @media(max-width:650px){.sma-history-cover-status{display:block;margin-left:0}}
+
+.sma-history-preview-link{display:inline-block;margin:6px 0;padding:8px 12px;border:1px solid #c7d3f8;border-radius:8px;background:#edf2ff;color:#3157cd;font:inherit;text-decoration:none}
+.sma-history-preview-link:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
