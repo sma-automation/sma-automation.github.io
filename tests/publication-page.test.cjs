@@ -586,6 +586,18 @@ test('approval recovery reads only the exact order and discards a result after l
  assert.deepEqual(JSON.parse(JSON.stringify(p.calls.slice(before))),[{name:'sma_publication_order_v1',p_action:'get',p_input:{id:historyOrderId}}]);
  await assert.rejects(p.orderOptions.readStoredOrder(historyOrderId));assert.equal(p.calls.length,before+1);
 });
+test('explicit cancellation uses the owner-scoped order RPC and rejects stale sessions',async()=>{
+ let release;
+ const p=await boot({portal:'youtube',orderResponse:()=>new Promise(resolve=>{release=resolve;})});
+ const before=p.calls.length;
+ await assert.rejects(p.orderOptions.cancelStoredOrder('invalid'));
+ assert.equal(p.calls.length,before);
+ const pending=p.orderOptions.cancelStoredOrder(historyOrderId);
+ await new Promise(r=>setImmediate(r));
+ assert.deepEqual(JSON.parse(JSON.stringify(p.calls.slice(before))),[{name:'sma_publication_order_v1',p_action:'cancel',p_input:{id:historyOrderId}}]);
+ p.signOut();release(historyOrder);await assert.rejects(pending,/melde/);
+ await assert.rejects(p.orderOptions.cancelStoredOrder(historyOrderId));assert.equal(p.calls.length,before+1);
+});
 test('history deep link fails safely on stale media, stale text, wrong account and invalid links',async()=>{
  for(const options of [{orderId:'invalid'}, {order:{ok:false,code:'ORDER_UNAVAILABLE'}},{order:{...historyOrder,state:'cancelled'}},
    {order:{...historyOrder,binding:{...historyOrder.binding,platform:'tiktok'}}},{file:null},

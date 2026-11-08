@@ -147,7 +147,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,host,portalName,verifyProductLink,onUnavailableLink,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,host,portalName,verifyProductLink,onUnavailableLink,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -182,8 +182,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   const checkTarget=make('button','Zielkonto prüfen');checkTarget.type='button';checkTarget.hidden=true;
   const statusButton=make('button','Status erneut laden');statusButton.type='button';statusButton.className='secondary';statusButton.hidden=true;
   const restart=make('button','Vorbereitung neu starten');restart.type='button';restart.className='secondary';restart.hidden=true;
+  const cancel=make('button','Vorbereitung abbrechen');cancel.type='button';cancel.className='secondary';cancel.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
-  const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,restart,statusButton,close);
+  const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,restart,statusButton,cancel,close);
   dialog.append(title,intro,controls,details,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
   let recovery=null,preparationToResume=null;
@@ -269,6 +270,8 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     syncCommercial();close.disabled=value;consent.disabled=value||locked;
     restart.hidden=recovery?!recovery.canRestart:order?.state!=='prepared'&&!pendingTarget(order);
     restart.disabled=value;
+    cancel.hidden=!cancelStoredOrder||!!recovery||order?.approved_at!==null||!['preparing','prepared'].includes(order.state);
+    cancel.disabled=value||cancel.hidden;
     for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared'||locked;
     humanEnabled.disabled=value||!humanReviewAvailable(order);humanChecklist.hidden=!humanEnabled.checked;
     for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);
@@ -287,11 +290,12 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function checkBinding(r){
     if(!r.binding||Object.entries(context.binding).some(([k,v])=>r.binding[k]!==v))throw Error(orderError('ORDER_CHANGED'));
   }
+  function historyLink(id,label){
+    const link=make('a',label);link.href='dashboard.html#auftrag/'+id;link.target='_top';return link;
+  }
   function appendApprovalReceipt(row){
     const when=new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(row.approved_at));
-    const link=make('a','Freigegebenen Auftrag in der History öffnen');
-    link.href='dashboard.html#auftrag/'+row.id;link.target='_top';
-    details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),link);
+    details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),historyLink(row.id,'Freigegebenen Auftrag in der History öffnen'));
   }
   function showDuplicate(row,targetId){
     // The journal identifies duplicate approvals by file version, platform and target.
@@ -339,6 +343,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     else notice.textContent='Die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
     if(recordedApproval(r))appendApprovalReceipt(r);
+    if(r.state==='cancelled'&&r.approved_at===null&&orderIdPattern.test(r.id)){
+      details.append(historyLink(r.id,'Abgebrochenen Auftrag in der History öffnen'));
+    }
     approve.hidden=r.state!=='prepared';
   }
   function resumePrepared(previous){
@@ -433,7 +440,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(pending.choices){
         checkPreparation(stored,pending);
         if(pendingTarget(stored)&&(pending.persisted||preparationEnded(stored))){
-          showOrder(stored);recovery=null;return;
+          showOrder(stored);recovery=null;
+          if(pending.cancellation)notice.textContent='Die Vorbereitung ist noch offen. Du kannst den Abbruch erneut wählen.';
+          return;
         }
         if(!pending.persisted&&stored.state==='preparing'&&stored.approved_at===null&&stored.approval_token===null&&stored.approval_window==null){
           offerPreparationRetry('Die Vorbereitung ist noch nicht abgeschlossen.');
@@ -442,6 +451,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       }
       if(order?.target?.id&&stored.target?.id!==order.target.id)throw Error();
       checkStoredState(stored);
+      if(pending.cancellation&&stored.state==='cancelled'&&(stored.approved_at!==null||stored.approval_token!=null))throw Error();
       if(stored.state==='prepared'&&['ORDER_NOT_PREPARED','TARGET_OPTIONS_CHANGED'].includes(pending.code)){
         const status=pending.code==='ORDER_NOT_PREPARED'?'expired':'recheck';
         showOrder({...stored,approval_window:{...stored.approval_window,status}});
@@ -449,7 +459,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
         showOrder(stored);
         if(stored.state==='prepared'&&pending.code)notice.textContent=orderError(pending.code);
       }
-      recovery=null;
+      if(pending.cancellation&&stored.state==='prepared')notice.textContent='Der Auftrag ist noch vorbereitet. Du kannst den Abbruch erneut wählen.';
+      // A concurrent approval is a read-only receipt, including subsequent status refreshes.
+      if(!pending.cancellation||!recordedApproval(stored))recovery=null;
     }catch(error){
       if(generation!==epoch||pending!==recovery)return;
       pending.canRestart=error.selectionConflict===true&&stored?.state==='prepared'&&stored.approved_at===null;
@@ -606,6 +618,22 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(context.productId)await checkLink(generation);
       return prepareSelection(choices,generation);
     },{choices});
+  });
+  cancel.addEventListener('click',async()=>{
+    if(working||cancel.hidden||!dialog.open)return;
+    try{unchanged();}catch(error){notice.textContent=error.message;return;}
+    const generation=epoch,pending={...savedPreparation(),cancellation:true};
+    recovery=pending;preparationToResume=null;setWorking(true);
+    notice.textContent='Die Vorbereitung wird abgebrochen …';
+    try{
+      const stored=validatedOrder(await cancelStoredOrder(pending.id),pending.id);
+      if(generation!==epoch)return;
+      unchanged();checkPreparation(stored,pending);
+      if(stored.state!=='cancelled'||stored.approved_at!==null||stored.approval_token!=null)throw Error();
+      showOrder(stored);recovery=null;
+    }catch{
+      if(generation===epoch)await readRecovery(generation);
+    }finally{if(generation===epoch)setWorking(false);}
   });
   consent.addEventListener('change',()=>setWorking(working));
   for(const input of reviewFields.values())input.addEventListener('change',()=>setWorking(working));

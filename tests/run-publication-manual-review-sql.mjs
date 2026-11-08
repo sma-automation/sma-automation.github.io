@@ -38,6 +38,10 @@ try{
  eq(existingApproval,await readFile(new URL('../supabase/migrations/20261107231249_publication_existing_approval_v1.sql',import.meta.url),'utf8'));
  await db.exec(existingApproval);
  await assert.rejects(()=>db.exec(existingApproval),/PUBLICATION_EXISTING_APPROVAL_BASELINE_CHANGED/);n++;
+ const cancelPreparation=await src('publication-cancel-preparation');
+ eq(cancelPreparation,await readFile(new URL('../supabase/migrations/20261108085618_publication_cancel_preparation_v1.sql',import.meta.url),'utf8'));
+ await db.exec(cancelPreparation);
+ await assert.rejects(()=>db.exec(cancelPreparation),/PUBLICATION_CANCEL_PREPARATION_BASELINE_CHANGED/);n++;
  const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
  for(const [age,expected] of [['1 minute','active'],['30 minutes','expired'],['1 day','expired']]){
@@ -51,6 +55,31 @@ try{
   eq((await request('get',{id:id(10)},other)).code,'ORDER_UNAVAILABLE');
   await db.exec('rollback');
  }
+ // Cancellation uses the same owner and customer locks as approval. Exercise both
+ // serialized outcomes, including a worker returning from its target check.
+ const cancelInput={id:id(10)},cancel=()=>request('cancel',cancelInput);
+ for(const state of ['preparing','prepared']){
+  await db.exec('begin');
+  if(state==='preparing')await db.exec("update sma_private.publication_orders_v1 set state='preparing',target=null,account_check=null");
+  const before=await view(),cancelled=await cancel();
+  eq(cancelled.state,'cancelled');eq(cancelled.id,cancelInput.id);
+  eq(cancelled.approval_token,null);eq(cancelled.approval_window,null);eq(cancelled.preparation_window,null);
+  eq(cancelled.approved_at,null);eq(cancelled.can_upload,false);eq(cancelled.can_publish,false);
+  eq(cancelled.binding,before.binding);eq(cancelled.choices,before.choices);eq(cancelled.draft,before.draft);
+  eq((await history()).entries[0].status,'cancelled');
+  eq((await worker('bind_target',{target,account_check:evidence})).code,'ORDER_CHANGED');
+  eq((await worker('claim')).code,'FINAL_APPROVAL_REQUIRED');
+  await db.exec("update sma_private.publication_orders_v1 set updated_at='2026-11-01'");
+  eq((await cancel()).state,'cancelled');
+  eq((await db.query("select updated_at='2026-11-01'::timestamptz as unchanged from sma_private.publication_orders_v1")).rows[0].unchanged,true);
+  await db.exec('rollback');
+ }
+ eq((await request('cancel',cancelInput,other)).code,'ORDER_UNAVAILABLE');
+ eq((await request('cancel',cancelInput,'')).code,'AUTH_REQUIRED');
+ eq((await request('cancel',{id:id(77)})).code,'ORDER_UNAVAILABLE');
+ eq((await request('cancel',{...cancelInput,confirm:true})).code,'INVALID_INPUT');
+ await db.exec('begin');await db.exec('update public.sma_kunden set aktiv=false where id=91');
+ eq((await cancel()).code,'ACCESS_INACTIVE');await db.exec('rollback');
  await db.exec('begin');
  const selected={platform:'youtube',asset_id:id(1),asset_revision:rev,assignment_revision:1,preview_id:id(2),preview_revision:1};
  await db.query("update sma_private.publication_orders_v1 set state='preparing',target=null,account_check=null,binding=binding||$1::jsonb",[selected]);
@@ -103,7 +132,17 @@ try{
  eq((await request('approve',{...approval,confirm:false})).code,'FINAL_APPROVAL_REQUIRED');eq((await request('approve',{...approval,approval_token:id(99)})).code,'FINAL_APPROVAL_REQUIRED');
  eq((await request('approve',{...approval,review:{...review,human_review:{...human,source_fingerprint:'f'.repeat(64)}}})).code,'HUMAN_REVIEW_UNAVAILABLE');
  await setMedia({...media,checks:[...media.checks,check('VISUAL_REVIEW','pending')]});eq((await request('approve',approval)).code,'HUMAN_REVIEW_UNAVAILABLE');await setMedia(media);
+ await db.exec('begin');eq((await cancel()).state,'cancelled');
+ eq((await request('approve',approval)).code,'ORDER_NOT_PREPARED');
+ eq((await db.query('select count(*)::int as n from sma_private.publication_journal_v1')).rows[0].n,0);
+ await db.exec('rollback');
  const approved=await request('approve',approval);eq(approved.state,'approved');eq(approved.media_check.human_review.method,'customer_attestation');eq(approved.media_check.content_review,media.content_review);eq(approved.can_publish,false);eq(approved.can_upload,false);
+ eq((await cancel()).code,'ORDER_NOT_CANCELLABLE');
+ eq((await request('get',cancelInput)).approved_at,approved.approved_at);
+ // Even an inconsistent preparing row cannot revoke a journaled approval.
+ await db.exec('begin');
+ await db.exec("update sma_private.publication_orders_v1 set state='preparing',approved_at=null,approval_review=null");
+ eq((await cancel()).code,'ORDER_NOT_CANCELLABLE');await db.exec('rollback');
  eq(approved.media_check.checks.map(x=>x.code),['BINARY_INSPECTION','FILE_SIZE','PORTAL_TEXT_COMPARISON','HUMAN_VISUAL_REVIEW','HUMAN_SEMANTIC_REVIEW','PUBLICATION_APPROVAL_PENDING']);
  eq((await request('approve',approval)).approved_at,approved.approved_at);eq((await request('approve',{...approval,review:base})).code,'FINAL_APPROVAL_REQUIRED');
  const count=async t=>(await db.query('select count(*)::int n from sma_private.'+t)).rows[0].n;
