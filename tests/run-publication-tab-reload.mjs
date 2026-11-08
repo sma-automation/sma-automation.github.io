@@ -42,16 +42,16 @@ try{
   });
   document.getElementById('save').click();await unresolved;sessionStorage.fixtureReload='1';location.reload();
  }else{
-  parent.postMessage({restored:body?.value===pending,writes:Number(sessionStorage.fixtureWrites),
+  parent.postMessage({type:'reload-result',restored:body?.value===pending,writes:Number(sessionStorage.fixtureWrites),
    notice:document.getElementById('saveStatus').textContent,ready:!busy&&!document.getElementById('save').disabled},location.origin);
  }
-}catch(error){parent.postMessage({error:String(error)},location.origin);}`;
+}catch(error){parent.postMessage({type:'reload-result',error:String(error)},location.origin);}`;
 const server=createServer(async(req,res)=>{
  try{
   const path=new URL(req.url,'http://127.0.0.1').pathname;
   const send=(type,body)=>{res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store',
    'Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'self' data: blob:"});res.end(body);};
-  if(path==='/')return send('text/html','<script>onmessage=e=>{if(e.origin===location.origin){const o=document.createElement("output");o.textContent=JSON.stringify(e.data);document.body.append(o);}}</script><iframe src="/app/publication-preview.html?portal=youtube&wide=1&asset='+fileId+'"></iframe>');
+  if(path==='/')return send('text/html','<script>onmessage=e=>{if(e.origin===location.origin&&e.data?.type==="reload-result"){const o=document.createElement("output");o.textContent=JSON.stringify(e.data);document.body.append(o);}}</script><iframe src="/app/publication-preview.html?portal=youtube&wide=1&asset='+fileId+'"></iframe>');
   if(path==='/client.mjs')return send('text/javascript',client);
   if(path!=='/app/publication-preview.html'&&!/^\/app\/assets\/[\w.-]+\.(css|m?js)$/.test(path)){res.writeHead(404).end();return;}
   let source=await readFile(new URL('..'+path,import.meta.url),'utf8');
