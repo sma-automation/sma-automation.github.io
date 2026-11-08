@@ -10,7 +10,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=14';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=15';
 import {installOrderReview} from './publication-order.mjs?v=21';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
@@ -57,7 +57,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
 }):null;
 if(workspace){
- window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files'].includes(event.data.view))workspace.show(event.data.view);});
+ window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(event.data.view))workspace.show(event.data.view);});
  let heightQueued=false;
  const sendHeight=()=>{if(heightQueued)return;heightQueued=true;requestAnimationFrame(()=>{heightQueued=false;window.top.postMessage({type:'sma-publication-preview-height',height:Math.max(300,Math.ceil(document.querySelector('main').getBoundingClientRect().height)+20)},location.origin);});};
  new ResizeObserver(sendHeight).observe(document.querySelector('main'));sendHeight();
@@ -66,6 +66,7 @@ if(workspace){
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value||!!comparisonBase;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+ if(workspace){$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}

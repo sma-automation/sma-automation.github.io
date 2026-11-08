@@ -36,3 +36,14 @@ test('hidden portal frames cannot navigate the active workspace',()=>{
  const p=setup();p.openOptimizer('instagram',p.trigger);const old=p.view().optimizerFrames.children[0];p.closeOptimizer();p.openOptimizer('youtube',p.trigger);
  p.optimizerWorkspaceView(old,'preview');assert.equal(p.history.state.portal,'youtube');assert.notEqual(p.history.state.view,'preview');assert.equal(p.view().optimizerHeader.hidden,false);
 });
+test('editing a post from the embedded preview keeps the requested editor and its focus',()=>{
+ const p=setup();p.select('video');p.openOptimizer('youtube',p.trigger);
+ const frame=p.view().optimizerFrames.children[0],sent=[];frame.contentWindow={postMessage:m=>sent.push(m.view)};
+ p.optimizerWorkspaceView(frame,'preview');p.optimizerWorkspaceView(frame,'source');
+ assert.equal(p.history.state.view,'source');assert.equal(p.view().optimizerHeader.hidden,false);
+ assert.deepEqual(sent,[],'the iframe is already showing the focused editor');
+ p.optimizerWorkspaceView(frame,'preview');p.history.back();
+ assert.deepEqual(sent,['source']);p.history.forward();assert.equal(sent.at(-1),'preview');
+ p.optimizerWorkspaceView(frame,'files');assert.equal(p.history.state.view,'files');
+ p.closeOptimizer();assert.equal(p.view().optimizerPage.hidden,true);
+});

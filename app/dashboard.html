@@ -23,39 +23,60 @@ const frame=document.getElementById('dashboard');
 const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
-let optimizerTrigger=null,selectedFileId=null;
+let optimizerTrigger=null,selectedFileId=null,returningFromPreview=null;
 let fileView=null,musicLibraryDashboard=null;
 let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardOwnerId=null;
 function showPublishing(){
+ returningFromPreview=null;
  if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
  for(const child of publishingPage.children)child.classList.remove('sma-publishing-hidden');
  optimizerTrigger?.focus();
 }
 function closeOptimizer(){if(history.state?.smaOptimization)history.back();else showPublishing();}
 function openOptimizer(portal,trigger,restoring=false){
+ returningFromPreview=null;
  if(!optimizerPage)return;optimizerTrigger=trigger;optimizerHeading.textContent=portalNames[portal]+' optimieren';
  const frameKey=portal+':'+(selectedFileId||'template');
  let preview=[...(optimizerFrames?.children||[])].find(el=>el.dataset.key===frameKey);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','34');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','35');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
  publishingPage.classList.add('sma-optimizing');optimizerPage.hidden=false;optimizerPage.scrollIntoView({block:'start'});optimizerHeading.focus();
  optimizerHeader.hidden=preview.dataset.view==='preview';
- if(restoring){const view=history.state?.view==='preview'?'preview':'files';preview.dataset.view=view;optimizerHeader.hidden=view==='preview';preview.contentWindow?.postMessage({type:'sma-publication-show-view',view},window.location.origin);}
- if(!restoring){const route={smaOptimization:true,portal,assetId:selectedFileId};if(!history.state?.smaOptimization)history.pushState(route,'', '#optimieren/'+portal);else history.replaceState(route,'', '#optimieren/'+portal);}
+ if(restoring){const view=['preview','source'].includes(history.state?.view)?history.state.view:'files';preview.dataset.view=view;optimizerHeader.hidden=view==='preview';preview.contentWindow?.postMessage({type:'sma-publication-show-view',view},window.location.origin);}
+ if(!restoring){
+  const route={smaOptimization:true,portal,assetId:selectedFileId,view:preview.dataset.view==='source'?'source':'files'};
+  if(!history.state?.smaOptimization)history.pushState(route,'','#optimieren/'+portal);
+  else history.replaceState(route,'','#optimieren/'+portal);
+  if(preview.dataset.view==='preview')history.pushState({...route,view:'preview'},'','#optimieren/'+portal+'/vorschau');
+ }
 }
 function clearOptimizer(){optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(history.state?.smaOptimization)history.replaceState(null,'',location.pathname+location.search);}
 function optimizerWorkspaceView(preview,view){
  if(preview.hidden||optimizerPage.hidden||!['files','source','preview'].includes(view))return;
  const before=preview.dataset.view;preview.dataset.view=view;optimizerHeader.hidden=view==='preview';
  if(view==='preview'&&history.state?.smaOptimization&&history.state.view!=='preview')history.pushState({...history.state,view:'preview'},'', '#optimieren/'+preview.dataset.portal+'/vorschau');
- else if(view!=='preview'&&history.state?.view==='preview')history.back();
- if((view==='preview'||before==='preview')&&before!==view)optimizerPage.scrollIntoView({block:'start'});
+ else if(view!=='preview'&&history.state?.smaOptimization){
+  if(history.state.view==='preview'){
+   if(!returningFromPreview){returningFromPreview=preview;history.back();}
+  }else if(history.state.view!==view)history.replaceState({...history.state,view},'');
+ }
+ if(view!==before&&(view==='preview'||(before==='preview'&&view==='files')))optimizerPage.scrollIntoView({block:'start'});
 }
-window.addEventListener('popstate',event=>{const route=event.state;if(route?.smaOptimization&&Object.hasOwn(portalNames,route.portal)){selectedFileId=route.assetId||null;openOptimizer(route.portal,optimizerTrigger,true);}else showPublishing();});
+window.addEventListener('popstate',event=>{
+ const route=event.state,returning=returningFromPreview;returningFromPreview=null;
+ if(!route?.smaOptimization||!Object.hasOwn(portalNames,route.portal)){showPublishing();return;}
+ selectedFileId=route.assetId||null;
+ // The child already opened the requested editor or gallery. Preserve its keyboard focus.
+ if(returning&&!optimizerPage.hidden&&!returning.hidden&&returning.dataset.key===route.portal+':'+(selectedFileId||'template')&&
+    route.view!=='preview'&&['files','source'].includes(returning.dataset.view)){
+  history.replaceState({...route,view:returning.dataset.view},'');return;
+ }
+ openOptimizer(route.portal,optimizerTrigger,true);
+});
 function attachOptimizerPage(doc,page){
  publishingPage=page;optimizerPage=doc.createElement('section');optimizerPage.id='smaOptimizationPage';optimizerPage.hidden=true;
  const header=doc.createElement('header');optimizerHeader=header;header.className='sma-optimization-header';const back=doc.createElement('button');back.type='button';back.className='sma-optimization-back';back.setAttribute('aria-label','Zurück zur Veröffentlichung');back.title='Zurück zur Veröffentlichung';const arrow=doc.createElement('span');arrow.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';arrow.setAttribute('aria-hidden','true');const backLabel=doc.createElement('span');backLabel.textContent='Veröffentlichung';back.append(arrow,backLabel);back.addEventListener('click',closeOptimizer);

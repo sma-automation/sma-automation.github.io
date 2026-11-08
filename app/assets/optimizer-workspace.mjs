@@ -99,7 +99,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const postTags = make('p', 'workspacePostTags');
   const postShop = make('a', 'workspacePostShop');
   postShop.target = '_blank'; postShop.rel = 'noopener noreferrer';
-  postBody.append(postTitle, postCaption, postTags, postShop);
+  const editPost = button('workspaceEditPost', 'Beitragstext bearbeiten', () => {
+    const field = $(portalName.toLowerCase() + '-body');
+    if (!selectedFile || !field || field.disabled) return;
+    show('text'); field.focus();
+  });
+  editPost.className = 'secondary'; editPost.hidden = true;
+  postBody.append(postTitle, postCaption, postTags, postShop, editPost);
   post.append(profile, $('assetPreview'), postBody);
   const linkIssue=make('div','workspaceLinkIssue');
   const linkMessage=make('p','workspaceLinkMessage');linkMessage.className='notice';linkMessage.setAttribute('role','status');
@@ -130,6 +136,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     else post.style.removeProperty('--media-aspect');
     const description = selectedFile ? describe(file) : null;
     previewName.textContent = description ? [description.title, description.version].join(' · ') : '';
+    editPost.hidden = !data.draft;
     postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
     postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
     postTags.textContent = (draft.hashtags || []).map(tag => '#' + tag).join(' ');
@@ -205,6 +212,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   resultDetails.append($('portalNote'), ...resultNotes);
   $('result').append(resultDetails);
   $('save').textContent = 'Entwurf speichern';
+  const previewEdits = button('workspacePreviewEdits', 'Beitragsvorschau öffnen', () => show('preview'));
+  previewEdits.className = 'secondary'; previewEdits.hidden = true;
+  $('save').parentElement.append(previewEdits);
   text.append(textHeader, empty, $('result'));
   editor.append($('magicActionsText'), $('catalogLookup'), $('sourcePanel'), text);
   $('assetPanel').hidden = true;
@@ -247,7 +257,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       const description = file ? describe(file) : null;
       selectedName.textContent = description?.title || 'Noch keine Datei ausgewählt';
       selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
-      viewFile.disabled = !file;
+      viewFile.disabled = !file; previewEdits.hidden = !file;
       if (active === 'preview') {
         if (file) refreshPreview();
         else show('files');
@@ -257,6 +267,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
 
   function clearPreview() {
     for (const node of [postTitle, postCaption, postTags, postShop, sourceDescription, previewName]) node.textContent = '';
+    editPost.hidden = true;
     postShop.removeAttribute('href');linkIssue.hidden=true;linkMessage.textContent=''; facts.replaceChildren(); reviewNotes.replaceChildren();
   }
 }
