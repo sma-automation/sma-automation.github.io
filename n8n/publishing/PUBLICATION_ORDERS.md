@@ -65,6 +65,22 @@ Konflikt lässt sich erneut vergleichen. **Zurück** behält die eigenen Eingabe
 Bei einer ersetzten Datei oder einem neu erzeugten Entwurf wird die Übernahme
 gesperrt.
 
+### Unterbrochene Speicherantwort
+
+Fehlt beim Speichern eines dateigebundenen YouTube- oder TikTok-Texts die
+Bestätigung, liest der Editor den Entwurf und seine aktuelle Dateizuordnung.
+Er vergleicht Dateiversion, Portal, Entwurfskennung, Revisionsstand, Shop,
+Titel, Text, Hashtags und Linkziel. Stimmt die Fassung mit den gesendeten
+Angaben überein, zeigt er den bestätigten Stand. Eine andere gespeicherte
+Fassung kann der Kunde mit seinen Eingaben vergleichen.
+
+Bei einem unterbrochenen Leseversuch bleibt **Speicherstand prüfen** im
+geöffneten Editor verfügbar. Ein Klick liest erneut. Enthält die bisherige
+Revision die gesendeten Änderungen noch nicht, kann der Kunde ausdrücklich
+erneut speichern. Auch dieser Schreibversuch prüft die Revision. Zwischenzeitlich
+eingegebene Texte bleiben im Formular. Ein Konto- oder Entwurfswechsel verwirft
+die ausstehende Prüfung.
+
 ## Abgleich vor der Freigabe
 
 Nach **Auftrag prüfen** vergleicht die Beitragsvorschau die gespeicherten Portaloptionen
