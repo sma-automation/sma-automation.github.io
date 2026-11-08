@@ -77,3 +77,10 @@
 .sma-history-edit-picker{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 16px;font:inherit}
 .sma-history-edit-picker select{max-width:100%;min-height:40px;padding:6px 10px;border:1px solid #c7d3f8;border-radius:9px;background:#fff;color:inherit;font:inherit}
 .sma-history-edit-picker select:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
+
+/* Keep all three History chapter tabs on one line on narrow 320px phones.
+   Local Chromium layout check; do not alter the global approved typography. */
+@media(max-width:359px){
+ #page-history .sma-chapters{gap:0 6px!important}
+ #page-history .sma-chapters>button{padding-left:9px!important;padding-right:9px!important}
+}
