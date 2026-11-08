@@ -17,7 +17,7 @@ const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 const messages={CAPTION_TOO_LONG:'Der gesamte Beitrag mit Link ist zu lang. Bitte kürze den Text oder die Hashtags.',CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 messages.PRODUCT_LINK_UNAVAILABLE='Der verlinkte Artikel ist in deinem öffentlichen Shop nicht mehr eindeutig verfügbar. Wähle einen anderen Artikel oder die Shop-Startseite und speichere den Entwurf.';
-let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0,dirty=false;
+let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0;
 let pendingLink,refreshDraftLink,choosingLinkFor,uncertainSave=null;
 const tabDrafts=tabDraftStore(window);
 let startupDraft=null,tabRecord=null,comparisonBase=null;
@@ -27,7 +27,7 @@ let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
 let pendingProductFocus=null;
-let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceDirty=false,signedOut=false;
+let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
 const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-video-magic-effect-v1';
 const magicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-magic-effect-v1';
 const reviewEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-content-review-v1';
@@ -67,7 +67,7 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value||!!comparisonBase;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
  if(workspace){$('workspaceDraftAction').disabled=value;$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
@@ -155,7 +155,18 @@ function attachProduct(input,product){
  if(source.length>8000)throw Error('Die Produktangaben und die Dateibeschreibung sind zusammen zu lang. Bitte kürze die Dateibeschreibung.');
  return {...input,source_text:source};
 }
-function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
+function sourceFormKey(){
+ const {language,media_kind,platforms}=sourceInput();
+ return JSON.stringify([$('source_text').value,language,media_kind,platforms]);
+}
+function hasSourceEdits(){return sourceBaseline!==null&&sourceFormKey()!==sourceBaseline;}
+function fillInput(input){
+ if(input){
+  for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';
+  for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;
+ }
+ syncMedia();sourceBaseline=sourceFormKey();
+}
 function syncMedia(){if(selectedAsset){$('media_kind').value=selectedAsset.media_kind;$('media_kind').disabled=true;}else{$('media_kind').disabled=false;}if(selectedPortal){for(const c of document.querySelectorAll('[name=platforms]'))c.checked=c.value===selectedPortal;if(selectedPortal==='youtube'){$('media_kind').value='video';$('media_kind').disabled=true;}}const yt=document.querySelector('[name=platforms][value=youtube]');yt.disabled=$('media_kind').value==='image';if(yt.disabled)yt.checked=false;}
 function editedPortalText(card){
  return {platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),
@@ -164,14 +175,26 @@ function editedPortalText(card){
 function setUncertainSave(snapshot){
  uncertainSave=snapshot;$('checkDraftSave').hidden=!snapshot;$('save').hidden=!!snapshot;
 }
-function hasDraftEdits(){return dirty||pendingLink!==undefined||!!uncertainSave||!!comparisonBase;}
+function hasFormChanges(){
+ return pendingLink!==undefined||[...$('drafts').querySelectorAll('input,textarea')].some(field=>field.value!==field.defaultValue);
+}
+function hasDraftEdits(){return !!current&&(!!uncertainSave||!!comparisonBase||!$('compareDraft').hidden||hasFormChanges());}
+function syncSaveButton(){
+ $('save').disabled=busy||signedOut||!current||!!comparisonBase||!!uncertainSave||!hasFormChanges();
+}
+function updateDraftStatus(){
+ syncSaveButton();
+ const step=previewDraftStep();
+ $('saveStatus').textContent=step?.target==='checkDraftSave'||step?.target==='compareDraft'?step.note:
+  hasDraftEdits()?'Ungespeicherte Änderungen':selectedAsset?'Dieser Datei und diesem Portal zugeordnet':'Textvorlage gespeichert';
+}
 function previewDraftStep(){
  if(!selectedAsset||signedOut)return null;
  if(!current)return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
  if(uncertainSave)return {target:'checkDraftSave',label:'Speicherstand prüfen',note:'Die Speicherbestätigung für diesen Beitrag steht aus.'};
  if(!$('compareDraft').hidden)return {target:'compareDraft',label:'Änderungen vergleichen',note:'Eine andere Fassung ist gespeichert. Vergleiche sie mit deinen Eingaben.'};
  if(hasDraftEdits())return {target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
- if(sourceDirty)return {target:'source_text',label:'Inhaltsangaben öffnen',note:'Der Beitrag ist gespeichert. Die geänderten Inhaltsangaben sind noch nicht in diesen Text übernommen.'};
+ if(hasSourceEdits())return {target:'source_text',label:'Inhaltsangaben öffnen',note:'Der Beitrag ist gespeichert. Die geänderten Inhaltsangaben sind noch nicht in diesen Text übernommen.'};
  return null;
 }
 async function runPreviewDraftAction(target){
@@ -238,8 +261,8 @@ function render(data){
  $('draftLinkEditor').open=unavailable;$('draftLinkUndo').hidden=true;
  showDraftDestination(target,unavailable);
  for(const d of visibleDrafts){const card=document.createElement('article');card.className='card draft';card.dataset.platform=d.platform;const h=document.createElement('h3');h.textContent=names[d.platform];card.append(h);
-  for(const [key,label,max] of [['title','Titel / Einstieg',80],['body','Beitragstext',1200]]){const box=document.createElement('div');box.className='field';const l=document.createElement('label');l.htmlFor=d.platform+'-'+key;l.textContent=label;const control=document.createElement(key==='body'?'textarea':'input');control.id=l.htmlFor;control.dataset.field=key;control.maxLength=max;control.value=d[key];control.required=true;box.append(l,control);card.append(box);}
-  const tags=addHashtagField(document,card,d.platform,d.hashtags);
+  for(const [key,label,max] of [['title','Titel / Einstieg',80],['body','Beitragstext',1200]]){const box=document.createElement('div');box.className='field';const l=document.createElement('label');l.htmlFor=d.platform+'-'+key;l.textContent=label;const control=document.createElement(key==='body'?'textarea':'input');control.id=l.htmlFor;control.dataset.field=key;control.maxLength=max;control.value=d[key];control.defaultValue=control.value;control.required=true;box.append(l,control);card.append(box);}
+  const tags=addHashtagField(document,card,d.platform,d.hashtags);tags.defaultValue=tags.value;
   const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=d.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
   if(d.review_notes.length){const notes=document.createElement('ul');notes.className='note';for(const text of d.review_notes){const li=document.createElement('li');li.textContent=text;notes.append(li);}card.append(notes);}
   const updateCaption=()=>{try{full.textContent=caption(draftWithLink(d),card.querySelector('textarea').value,parseHashtags(tags.value));tags.setCustomValidity('');}catch(e){tags.setCustomValidity(e.message);full.textContent=e.message;}};
@@ -249,17 +272,17 @@ function render(data){
     showDraftDestination(destination,unavailableDraftLink(d));
     summary.textContent=next.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';
     $('draftLinkUndo').hidden=pendingLink===undefined;
-    $('saveStatus').textContent=hasDraftEdits()?'Ungespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet';
+    updateDraftStatus();
     updateCaption();workspace?.refreshPreview();
    };
   }
-  card.addEventListener('input',()=>{dirty=true;$('saveStatus').textContent='Ungespeicherte Änderungen';updateCaption();updateTabForm();});$('drafts').append(card);
+  card.addEventListener('input',()=>{updateDraftStatus();updateCaption();updateTabForm();});$('drafts').append(card);
  }
  if(workspace&&selectedAsset&&selectedAsset.display?.draft_title!==visibleDrafts[0].title){
   selectedAsset.display={...selectedAsset.display,draft_title:visibleDrafts[0].title};
   workspace.selection(selectedAsset);renderFilePicker();
  }
- dirty=false;if(selectedAsset){assignmentRevision=data.assignment_revision??assignmentRevision;selectedAsset.assignments=(selectedAsset.assignments||[]).filter(a=>a.platform!==selectedPortal).concat([{platform:selectedPortal,revision:assignmentRevision,status:'assigned'}]);}$('result').hidden=false;workspace?.textAvailable(true);$('saveStatus').textContent=selectedAsset?'Dieser Datei und diesem Portal zugeordnet':'Textvorlage gespeichert';if(selectedPortal&&!workspace)$('sourcePanel').open=false;
+ if(selectedAsset){assignmentRevision=data.assignment_revision??assignmentRevision;selectedAsset.assignments=(selectedAsset.assignments||[]).filter(a=>a.platform!==selectedPortal).concat([{platform:selectedPortal,revision:assignmentRevision,status:'assigned'}]);}$('result').hidden=false;workspace?.textAvailable(true);$('saveStatus').textContent=selectedAsset?'Dieser Datei und diesem Portal zugeordnet':'Textvorlage gespeichert';if(selectedPortal&&!workspace)$('sourcePanel').open=false;
 }
 async function waitForResult(id){for(let i=0;i<50;i++){const r=await rpc('get',{},id);if(r.status==='completed')return r;if(r.status==='failed')throw Error(errorText(r));if(r.status==='empty')throw Error('Die Anfrage ist noch nicht angekommen. Du kannst sie erneut versuchen.');await new Promise(resolve=>setTimeout(resolve,3000));}throw Error('Die Erstellung läuft noch. Bitte lade gleich die letzte Vorschau.');}
 function fileError(code){return Object.assign(Error(errorText({code})),{code});}
@@ -313,7 +336,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
+function clearDraft(){closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';fillInput(null);}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -448,7 +471,7 @@ async function requestFileSelection(id,discard=false){
  if(busy)return;const file=id?assets.find(f=>f.id===id):null;
  if(id&&(!file||!fileFitsPortal(file)))return;
  if((selectedAsset?.id||'')===id){if(!workspace)$('filePicker').close();return;}
- if((hasDraftEdits()||sourceDirty)&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
+ if((hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
  pendingAssetId=null;$('fileSwitchNotice').hidden=true;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();await loadLatest();
 }
@@ -485,7 +508,7 @@ async function runDeviceUpload(){
  }catch(e){
   if(!signedOut){$('uploadStatus').textContent=controller.signal.aborted?'Upload angehalten. Mit „Upload fortsetzen“ kannst du weitermachen.':errorText({code:e.message});$('retryUpload').hidden=false;}
  }finally{uploadController=null;$('cancelUpload').hidden=true;lock(false);}
- if(completed&&!signedOut){if(hasDraftEdits()||sourceDirty)openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
+ if(completed&&!signedOut){if(hasDraftEdits()||hasSourceEdits())openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
 }
 $('deviceFile').addEventListener('change',async()=>{
  if(busy||signedOut)return;const file=$('deviceFile').files?.[0];if(!file)return;
@@ -794,7 +817,7 @@ function showMagic(r,file){
   if(file.media_kind==='video')$('magicSummary').textContent+='\n'+({no_audio_stream:'Dieses Video hat keine Tonspur.',no_speech_recognized:'In der Tonspur wurde keine Sprache erkannt.',transcribed:'Gesprochene Inhalte wurden transkribiert und berücksichtigt.'})[v.audio_status];
   const unclear=v.subject_type==='unclear';$('applyMagic').hidden=unclear;
   $('magicStatus').textContent=unclear?'Das Motiv ist nicht sicher erkennbar. Bitte beschreibe es selbst oder verwende ein deutlicheres Foto.':magicLabel(file)+' erkannt. Prüfe die Beschreibung und die lesbaren Aufschriften.';
-  if(!unclear&&!sourceDirty&&!$('source_text').value.trim()){$('source_text').value=v.source_text;if(!workspace)$('sourcePanel').open=true;$('magicStatus').textContent=magicLabel(file)+' erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
+  if(!unclear&&!hasSourceEdits()&&!$('source_text').value.trim()){$('source_text').value=v.source_text;sourceBaseline=sourceFormKey();if(!workspace)$('sourcePanel').open=true;$('magicStatus').textContent=magicLabel(file)+' erkannt. Die Beschreibung wurde unter „Inhalt und Ziel“ eingefügt.';}
  }
  syncMagicButton();return true;
 }
@@ -804,7 +827,7 @@ async function loadMagicEffect(autoStart=false){
  const hint=magicHint(file);if(hint){$('magicStatus').textContent=hint;return;}
  try{
   const r=await magicRpc(file);if(!showMagic(r,file))return;
-  if(autoStart&&(r.status==='processing'||(file.media_kind==='image'&&r.status==='unrecognized'&&!sourceDirty&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
+  if(autoStart&&(r.status==='processing'||(file.media_kind==='image'&&r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
  }catch(e){if(photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto({withinAutomatic=false}={}){
@@ -832,7 +855,7 @@ async function recognizePhoto({withinAutomatic=false}={}){
 $('recognizePhoto').addEventListener('click',()=>recognizePhoto());
 $('applyMagic').addEventListener('click',()=>{
  if(busy||magicState?.status!=='completed'||magicState.asset_id!==selectedAsset?.id||magicState.asset_revision!==selectedAsset?.revision||magicState.result?.subject_type==='unclear')return;
- $('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;sourceDirty=true;attempt=null;
+ $('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;attempt=null;
  const message='Erkannter Inhalt übernommen. Prüfe die Beschreibung und klicke anschließend auf „'+$('generate').textContent+'“.';
  $('magicStatus').textContent=message;$('magicApplied').textContent=message;$('magicApplied').hidden=false;
  workspace?.show('source');
@@ -856,7 +879,7 @@ function syncMagicActions(){
 async function runMagicAction(mode,replace=false){
  if(busy||signedOut||!['source','text'].includes(mode))return;
  const hint=magicActionHint();if(hint){status(hint,true);return;}
- if((hasDraftEdits()||(sourceDirty&&automaticInputSignature!==JSON.stringify(sourceInput())))&&!replace){
+ if((hasDraftEdits()||(hasSourceEdits()&&automaticInputSignature!==JSON.stringify(sourceInput())))&&!replace){
   pendingAutomatic=mode;$('magicReplaceNotice').hidden=false;
   $('magicReplaceNotice').scrollIntoView({block:'nearest'});$('cancelMagicReplace').focus();return;
  }
@@ -876,7 +899,7 @@ async function runMagicAction(mode,replace=false){
    if(magicState.result.subject_type==='unclear')throw Error('Das Motiv ist nicht sicher erkennbar. Bitte ergänze den Inhalt selbst oder wähle ein deutlicheres Foto.');
    $('source_text').value=magicState.result.source_text;
   }
-  sourceDirty=true;automaticInputSignature=JSON.stringify(sourceInput());if(!workspace)$('sourcePanel').open=true;
+  automaticInputSignature=JSON.stringify(sourceInput());if(!workspace)$('sourcePanel').open=true;
   if(mode==='text')await generatePreview({withinAutomatic:true});
   else{workspace?.show('source');status('Der erkannte Inhalt ist übernommen. Du kannst die Angaben bearbeiten oder unter „Text für '+(names[selectedPortal]||'das Portal')+'“ automatisch den Beitragstext erstellen.');}
  }catch(e){if(!signedOut)status(e.message,true);}
@@ -888,7 +911,7 @@ $('confirmMagicReplace').addEventListener('click',()=>pendingAutomatic?runMagicA
 $('cancelMagicReplace').addEventListener('click',()=>{pendingAutomatic=null;$('magicReplaceNotice').hidden=true;});
 
 async function refreshFiles(){
- if(busy)return;if(hasDraftEdits()||sourceDirty){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
+ if(busy)return;if(hasDraftEdits()||hasSourceEdits()){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
  lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
 }
 async function refreshVideoMetadata(){
@@ -903,9 +926,9 @@ async function refreshVideoMetadata(){
 $('refreshVideoMetadata').addEventListener('click',refreshVideoMetadata);
 $('refreshFiles').addEventListener('click',()=>retryHistoryPreview&&!signedOut?loadHistoryPreview():refreshFiles());
 $('pickerRefresh').addEventListener('click',refreshFiles);
-$('previewForm').addEventListener('input',event=>{if(event?.target!==$('productChoice'))sourceDirty=true;attempt=null;});
+$('previewForm').addEventListener('input',()=>{attempt=null;});
 $('media_kind').addEventListener('change',syncMedia);
-$('language').addEventListener('change',()=>{sourceDirty=true;attempt=null;});
+$('language').addEventListener('change',()=>{attempt=null;});
 function closeReloadChoice(accepted){
  const settle=reloadChoice;reloadChoice=null;
  $('draftReloadPreview').replaceChildren();
@@ -919,7 +942,7 @@ function reviewStoredDraft(saved){
   add('h3',selectedPortal?draft.title:names[draft.platform]+' · '+draft.title);add('p',draft.caption);
   if(saved.product_link_available===false&&draft.product_id)add('p',messages.PRODUCT_LINK_UNAVAILABLE);
  }
- if(sourceDirty&&typeof saved.input?.source_text==='string'){
+ if(hasSourceEdits()&&typeof saved.input?.source_text==='string'){
   add('h3','Gespeicherte Beschreibung');add('p',originalSource(saved.input.source_text));
  }
  $('draftReloadDialog').showModal();
@@ -962,16 +985,19 @@ $('loadLatest').addEventListener('click',async()=>{
   if(uncertainSave){await checkDraftSave();return;}
   let saved=await readDraftForReload(context);
   await checkEditorContext(context,original);
-  if(hasDraftEdits()||sourceDirty){
+  if(hasDraftEdits()||hasSourceEdits()){
    if(!await reviewStoredDraft(saved)||signedOut)return;
    const fresh=await readDraftForReload(context);
    await checkEditorContext(context,original);
    if(reloadVersion(saved)!==reloadVersion(fresh))throw Error('Der Entwurf wurde während der Auswahl geändert. Deine Eingaben sind erhalten. Lade die gespeicherte Fassung erneut.');
    saved=fresh;
   }
-  const keepSource=sourceDirty&&!saved.input;
-  if(!keepSource)showProductContext(saved.product_context,selectedAsset,savedProductSelection(saved));
-  fillInput(saved.input);render(saved);sourceDirty=keepSource;workspace?.show('text');
+  const keepSource=hasSourceEdits()&&!saved.input;
+  if(!keepSource){
+   showProductContext(saved.product_context,selectedAsset,savedProductSelection(saved));
+   fillInput(saved.input);
+  }
+  render(saved);workspace?.show('text');
   status(selectedAsset?'Gespeicherter Portalbeitrag geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(error){if(!signedOut)status(error.message,true);}
  finally{lock(false);syncMedia();}
@@ -984,7 +1010,7 @@ async function generatePreview({withinAutomatic=false}={}){
  try{
   await ensureFreshFile(context);
   const product=await getDraftProduct(context);
-  if(product?.state==='ambiguous'&&(withinAutomatic||!sourceDirty))throw Error(askForProduct());
+  if(product?.state==='ambiguous'&&(withinAutomatic||!hasSourceEdits()))throw Error(askForProduct());
   const draftInput=attachProduct(input,product);
   const signature=JSON.stringify({input:draftInput,asset_id:context?.asset_id,asset_revision:context?.asset_revision});
   if(!attempt||attempt.signature!==signature||attempt.finished)attempt={signature,id:crypto.randomUUID(),finished:false};
@@ -1003,7 +1029,7 @@ async function generatePreview({withinAutomatic=false}={}){
    request.preview=data;
   }
   if(context){data=await withFreshFile(context,()=>fileRpc('assign',{...context,preview_id:request.preview.id,preview_revision:request.preview.revision}));fileChanged();}
-  render(data);request.finished=true;sourceDirty=false;workspace?.show('text');status('Die Textvorschau ist gespeichert. Prüfe jetzt die Inhalte und passe sie bei Bedarf an.');
+  render(data);sourceBaseline=sourceFormKey();request.finished=true;workspace?.show('text');status('Die Textvorschau ist gespeichert. Prüfe jetzt die Inhalte und passe sie bei Bedarf an.');
   return true;
  }catch(e){if(!signedOut)status(e.message,true);return false;}finally{lock(false);syncMedia();}
 }
@@ -1087,14 +1113,13 @@ $('compareDraft').addEventListener('click',async()=>{
   const values=await draftConflict.choose({...base,product_id:base.product_id??null},local,{...remote,product_id:remote.product_id??null});
   if(!values)return;
   await checkEditorContext(context,original);
-  const keepSourceEdits=sourceDirty,retained=tabDrafts.matches(tabRecord)?tabRecord:null;
-  if(!keepSourceEdits)showProductContext(latest.product_context,selectedAsset,savedProductSelection(latest));
-  render(latest);sourceDirty=keepSourceEdits;
+  const retained=tabDrafts.matches(tabRecord)?tabRecord:null;
+  if(!hasSourceEdits())showProductContext(latest.product_context,selectedAsset,savedProductSelection(latest));
+  render(latest);
   const card=$('drafts').children[0];
   card.querySelector('[data-field=title]').value=values.title;card.querySelector('[data-field=body]').value=values.body;
   card.querySelector('[data-field=hashtags]').value=values.hashtags.map(tag=>'#'+tag).join(' ');
   pendingLink=values.product_id===(remote.product_id??null)?undefined:stagedLink;
-  dirty=values.title!==remote.title||values.body!==remote.body||JSON.stringify(values.hashtags)!==JSON.stringify(remote.hashtags);
   refreshDraftLink?.();workspace?.refreshPreview();
   if(retained&&hasDraftEdits())keepRecoveredForm(retained,latest);
   status(hasDraftEdits()?'Auswahl übernommen. Prüfe den Entwurf und speichere deine Änderungen.':'Der Entwurf entspricht dem gespeicherten Stand.');
@@ -1150,13 +1175,11 @@ function restoreTabAttempt(saved,file){
  const card=$('drafts').children[0];
  card.querySelector('[data-field=title]').value=form.title;card.querySelector('[data-field=body]').value=form.body;
  card.querySelector('[data-field=hashtags]').value=form.tags;
- let differs=true;
- try{differs=!sameEditableDraft({...editedPortalText(card),product_id:draftWithLink(draft).product_id??null},draft);}catch{}
- if(!differs){
+ if(!hasDraftEdits()){
   tabDrafts.forget(record);
   return {edited:false,message:confirmed?'Die Fassung aus diesem Tab ist als Entwurf gespeichert.':'Die aktuelle Fassung ist geladen. Die Eingabefelder stimmen mit ihr überein.'};
  }
- tabRecord={...record,token:crypto.randomUUID()};tabDrafts.write(tabRecord);dirty=true;
+ tabRecord={...record,token:crypto.randomUUID()};tabDrafts.write(tabRecord);
  if(!confirmed&&!sameEditableDraft(record.base,draft)){comparisonBase=record.base;$('compareDraft').hidden=false;}
  refreshDraftLink?.();workspace?.refreshPreview();
  const message=comparisonBase?'Eingaben aus diesem Tab wiederhergestellt. Vergleiche sie mit der inzwischen gespeicherten Fassung.':
@@ -1166,10 +1189,9 @@ function restoreTabAttempt(saved,file){
 }
 
 function finishDraftSave(result,context){
- const applied=pendingLink,sourceWasDirty=sourceDirty;
+ const applied=pendingLink;
  render(result);
  if(!context)return;
- sourceDirty=sourceWasDirty;
  if(applied!==undefined){
   if(!$('catalogLookup').hidden)catalogLookup.setContext(selectedAsset,selectedPortal,applied);
   if(!$('productChoiceField').hidden)$('productChoice').value=applied?.product_id||'';
@@ -1228,7 +1250,7 @@ async function checkDraftSave(){
    if(edited){
     const restored=$('drafts').children[0];
     fields.forEach((key,i)=>{restored.querySelector('[data-field='+key+']').value=raw[i];});
-    dirty=true;refreshDraftLink?.();workspace?.refreshPreview();
+    refreshDraftLink?.();workspace?.refreshPreview();
     if(recoveredRecord)keepRecoveredForm(recoveredRecord,saved);
    }
    const message=edited?'Die gesendete Fassung ist gespeichert. Deine späteren Texteingaben sind noch offen.':'Die Fassung im Formular ist als Entwurf gespeichert.';
@@ -1238,7 +1260,8 @@ async function checkDraftSave(){
   $('compareDraft').hidden=!advanced;
   const message=advanced
    ? (confirmed?'Die gesendete Fassung ist gespeichert. Deine späteren Eingaben kannst du vergleichen.':'Eine andere Fassung ist gespeichert. Du kannst deine Eingaben mit ihr vergleichen.')
-   : 'Deine Eingaben sind im gespeicherten Stand noch nicht enthalten. Du kannst den Entwurf erneut speichern.';
+   : hasFormChanges()?'Deine Eingaben sind im gespeicherten Stand noch nicht enthalten. Du kannst den Entwurf erneut speichern.'
+    :'Deine Eingaben entsprechen der zuletzt gelesenen Fassung.';
   $('saveStatus').textContent=message;status(message);
  }catch(error){
   if(signedOut||uncertainSave!==snapshot)return;
@@ -1254,7 +1277,7 @@ $('checkDraftSave').addEventListener('click',async()=>{
 });
 
 async function saveDraft(){
- if(busy||signedOut||!current||uncertainSave||comparisonBase)return;
+ if(busy||signedOut||!current||uncertainSave||comparisonBase||!hasFormChanges())return;
  let edits;try{edits=[...$('drafts').children].map(editedPortalText);}catch(e){status(e.message,true);return;}
  const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});
  if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}
@@ -1291,7 +1314,7 @@ if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrd
 });
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&($('draftConflictDialog').open||$('draftReloadDialog').open))return;if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 // Build the shared portal workspace before waiting for the external account client.
-lock(true);status('Deine Dateien werden geladen …');
+syncMedia();sourceBaseline=sourceFormKey();lock(true);status('Deine Dateien werden geladen …');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');

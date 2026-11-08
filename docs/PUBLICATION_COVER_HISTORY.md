@@ -63,6 +63,13 @@ geänderten Angaben zur Texterstellung führt die Vorschau zurück zu **Inhalt
 und Ziel**. Der in der History aufgezeichnete Auftrag behält seinen damaligen
 Beitragstext.
 
+Setzt der Kunde Titel, Text, Hashtags und Linkziel im Editor wieder auf die
+geladene Fassung zurück, erkennt SMA den gespeicherten Entwurf. Eine neue
+Speicherung entfällt. Beschreibung und Sprache werden separat verglichen.
+Bei fehlender Speicherantwort bleibt **Speicherstand prüfen** verfügbar. Hat ein
+anderer Tab eine neuere Fassung gespeichert und SMA dies erkannt, bleibt
+**Änderungen vergleichen** erforderlich.
+
 ### Gespeicherter Beitragstext
 
 Unter **History → Aufträge** zeigt ein aufgeklappter Auftrag seinen damaligen
