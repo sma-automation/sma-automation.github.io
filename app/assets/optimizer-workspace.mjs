@@ -87,7 +87,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const headingText = make('div');
   headingText.append(previewHeading, previewName);
   headingRow.append(headingText);
-  preview.append(previewNav, headingRow, previewTabs, postView, detailView);
+  const draftState = make('div', 'workspaceDraftState');
+  const draftNotice = make('p', 'workspaceDraftNotice');
+  draftNotice.setAttribute('role', 'status');
+  const draftAction = button('workspaceDraftAction', '', () => options.onDraftAction?.(draftAction.dataset.target));
+  draftAction.className = 'secondary'; draftAction.hidden = true;
+  draftState.append(draftNotice, draftAction);
+  preview.append(previewNav, headingRow, draftState, previewTabs, postView, detailView);
   const post = make('article', 'workspacePost');
   post.setAttribute('aria-label', 'Darstellung des Beitrags');
   post.dataset.portal = portalName.toLowerCase();
@@ -123,7 +129,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     postTab.setAttribute('aria-pressed', String(key === 'post')); detailTab.setAttribute('aria-pressed', String(key === 'details'));
     if (key !== 'post') for (const video of preview.querySelectorAll('video')) video.pause();
   }
-  function refreshPreview() {
+  function refreshPreview(feedback = '') {
     const data = options.getPreview?.() || {};
     const draft = data.draft || {};
     const file = selectedFile || {};
@@ -136,10 +142,16 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     else post.style.removeProperty('--media-aspect');
     const description = selectedFile ? describe(file) : null;
     previewName.textContent = description ? [description.title, description.version].join(' · ') : '';
+    const step = data.draftStep, prepare = $('preparePublicationOrder');
+    if (prepare) prepare.hidden = !!step;
+    draftNotice.textContent = feedback || step?.note || data.draftStatus || '';
+    draftAction.dataset.target = step?.target || '';
+    draftAction.textContent = step?.label || '';
+    draftAction.hidden = !step;
     editPost.hidden = !data.draft;
     postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
     postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
-    postTags.textContent = (draft.hashtags || []).map(tag => '#' + tag).join(' ');
+    postTags.textContent = data.invalidHashtags || (draft.hashtags || []).map(tag => '#' + tag).join(' ');
     postTags.hidden = !postTags.textContent;
     const target = draftDestination(draft.shop_url, draft, data.language);
     const shop = target?.url;
@@ -250,7 +262,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   return {
     show,
     galleryVisible: () => active === 'files',
-    refreshPreview() { if (active === 'preview') refreshPreview(); },
+    refreshPreview(feedback) { if (active === 'preview') refreshPreview(feedback); },
     textAvailable(value) { empty.hidden = value; if (!value) clearPreview(); else if (active === 'preview') refreshPreview(); },
     selection(file) {
       selectedFile = file; clearPreview();
@@ -267,6 +279,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
 
   function clearPreview() {
     for (const node of [postTitle, postCaption, postTags, postShop, sourceDescription, previewName]) node.textContent = '';
+    draftNotice.textContent = ''; draftAction.hidden = true;
+    const prepare = $('preparePublicationOrder'); if (prepare) prepare.hidden = true;
     editPost.hidden = true;
     postShop.removeAttribute('href');linkIssue.hidden=true;linkMessage.textContent=''; facts.replaceChildren(); reviewNotes.replaceChildren();
   }

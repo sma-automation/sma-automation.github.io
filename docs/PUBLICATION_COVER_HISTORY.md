@@ -55,9 +55,13 @@ Auftrags-ID im URL-Fragment.
 
 **Beitragstext bearbeiten** öffnet das Textfeld des angezeigten Portalentwurfs.
 Mit **Beitragsvorschau öffnen** sieht der Kunde seine aktuellen Eingaben an der
-ausgewählten Datei. Er kann zur Korrektur zurückkehren. Erst **Entwurf speichern**
-speichert die Änderung. Der in der History aufgezeichnete Auftrag behält seinen
-damaligen Beitragstext.
+ausgewählten Datei. **Entwurf speichern** in der Vorschau speichert Text, Hashtags
+und Linkziel gemeinsam. Nach der Speicherbestätigung zeigt die Vorschau
+**Freigabe vorbereiten**. Eine ausstehende Antwort führt zu **Speicherstand
+prüfen**, eine konkurrierende Fassung zu **Änderungen vergleichen**. Bei
+geänderten Angaben zur Texterstellung führt die Vorschau zurück zu **Inhalt
+und Ziel**. Der in der History aufgezeichnete Auftrag behält seinen damaligen
+Beitragstext.
 
 ### Gespeicherter Beitragstext
 
