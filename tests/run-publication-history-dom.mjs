@@ -324,7 +324,7 @@ await test('expired preparation shows the next step without exposing approval co
  const f=fixture({request:()=>result([entry(1,{status:'prepared',approval_window:{status:'expired',expires_at:'2026-11-07T11:02:26Z'}})])});
  await tick();assert.equal(f.$('.sma-history-status').textContent,'Vorbereitung abgelaufen');
  const link=f.$('ol a');
- assert.equal(link.textContent,'Beitragsvorschau öffnen');assert.equal(link.hidden,false);
+ assert.equal(link.textContent,'Aktuellen Beitrag öffnen');assert.equal(link.hidden,false);
  assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+entry(1).id);
  assert.equal(link.getAttribute('target'),'_top');assert.equal(f.$('ol button'),null);f.view.destroy();
 });
@@ -339,8 +339,19 @@ await test('active preparation links to the same order and falls back to preview
   assert.equal(link.hidden,false);assert.equal(link.textContent,'Vorbereitung fortsetzen');
   assert.equal(link.getAttribute('href'),preview+'&resume=1');
   mock.timers.tick(60001);
-  assert.equal(link.textContent,'Beitragsvorschau öffnen');assert.equal(link.getAttribute('href'),preview);
+  assert.equal(link.textContent,'Aktuellen Beitrag öffnen');assert.equal(link.getAttribute('href'),preview);
   assert.deepEqual(f.calls,[{}]);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+await test('a TikTok account recheck switches to the current post link when its deadline passes',async()=>{
+ const now=Date.now();mock.timers.enable({apis:['Date','setTimeout'],now});
+ const row=entry(1,{platform:'tiktok',status:'prepared',approval_window:{status:'recheck',expires_at:new Date(now+1000).toISOString()}});
+ const f=fixture({request:()=>result([row],null,{summary:{orders:1,public_confirmed:0,platforms:['tiktok']}})});
+ try{
+  await tick();const link=f.$('ol a');
+  assert.match(f.$('.sma-history-status').textContent,/Kontoprüfung/);
+  mock.timers.tick(1001);assert.equal(link.textContent,'Aktuellen Beitrag öffnen');assert.match(f.$('.sma-history-status').textContent,/abgelaufen/);
+  assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=tiktok&order='+entry(1).id);assert.deepEqual(f.calls,[{}]);
  }finally{f.view.destroy();mock.timers.reset();}
 });
 await test('unfinished order links to its saved preparation until the server deadline',async()=>{

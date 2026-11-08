@@ -540,6 +540,71 @@ test('history opens the specific prepared order directly as a saved post preview
  assert.equal(p.orderOptions.getContext().binding.preview_id,historySaved.id);assert.equal(p.orderOptions.previousOrder.id,historyOrderId);
 });
 const cancelledOrder={...historyOrder,state:'cancelled',approval_token:null,approval_review:null,check_error:'ORDER_CHANGED'};
+const expiredWindow={status:'expired',expires_at:'2026-11-07T10:00:00Z'};
+test('expired preparations open the latest assigned text of the same file without resuming the old ID',async()=>{
+ for(const portal of ['youtube','tiktok'])for(const state of ['prepared','preparing']){
+  const pending=state==='preparing';
+  const order={...historyOrder,state,approval_token:null,target:pending?null:{platform:portal,id:'test-target'},
+   binding:{...historyOrder.binding,platform:portal},draft:{...historyOrder.draft,platform:portal},
+   [pending?'preparation_window':'approval_window']:expiredWindow,check_error:'ORDER_CHANGED'};
+  const file={...historyFile,assignments:[{platform:portal,revision:8,status:'assigned'}]};
+  const draft={...order.draft,body:'Heute gespeicherter Beitrag für diese Datei.'};
+  const saved={...historySaved,assignment_revision:8,id:'a77a0000-0000-4000-8000-000000000023',revision:3,preview:{...historySaved.preview,drafts:[draft]}};
+  const p=await historyView({portal,order,file,saved});
+  assert.deepEqual(p.views,['preview']);assert.equal(p.get('drafts').querySelector('textarea').value,draft.body);
+  assert.equal(p.orderOptions.getContext().binding.preview_id,saved.id);assert.equal(p.orderOptions.getContext().binding.assignment_revision,8);
+  assert.equal(p.orderOptions.previousOrder,undefined);assert.equal(p.orderOptions.resumeOrder,undefined);
+  assert.match(p.get('status').textContent,/Vorbereitung ist abgelaufen/);
+  assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+ }
+});
+test('an unchanged expired YouTube draft retains optional video suggestions and starts with a closed order dialog',async()=>{
+ const order={...historyOrder,approval_token:null,approval_window:expiredWindow};
+ const p=await historyView({order,resume:true});assert.deepEqual(p.views,['preview']);
+ assert.equal(p.orderOptions.previousOrder.id,order.id);assert.equal(p.orderOptions.resumeOrder,undefined);
+ assert.equal(p.get('back').href,'dashboard.html#auftrag/'+order.id);
+});
+test('expiry during a resume lookup opens the current revision without a stale approval dialog',async()=>{
+ let reads=0;
+ const p=await historyView({resume:true,orderResponse:async()=>++reads===1?historyOrder:{...historyOrder,approval_token:null,approval_window:expiredWindow}});
+ assert.deepEqual(p.views,['preview']);assert.equal(p.orderOptions.resumeOrder,undefined);assert.match(p.get('status').textContent,/abgelaufen/);
+ assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+});
+test('expired history never applies the old video answers to a different caption or opens an invalid order',async()=>{
+ const order={...historyOrder,approval_token:null,approval_window:expiredWindow};
+ const updated={...historyOrder.draft,body:'Ein geänderter Text mit denselben Revisionsangaben.'};
+ const p=await historyView({order,saved:{...historySaved,preview:{...historySaved.preview,drafts:[updated]}}});
+ assert.deepEqual(p.views,['preview']);assert.equal(p.orderOptions.previousOrder,undefined);
+ for(const patch of [
+  {approval_token:'old-token'},{approval_review:{}},{approved_at:'2026-11-07T09:00:00Z'},
+  {approval_window:{...expiredWindow,expires_at:'invalid'}},{preparation_window:expiredWindow},
+  {state:'approved'},{can_publish:true},{can_upload:true},{check_error:'FILE_UNAVAILABLE'},{check_error:'UNKNOWN_ERROR'}
+ ]){
+  const bad=await historyView({order:{...order,...patch},resume:true});
+  assert.deepEqual(bad.views,[]);assert.equal(bad.orderOptions.previousOrder,undefined);assert.equal(bad.orderOptions.resumeOrder,undefined);
+ }
+ const replaced=await historyView({order,file:{...historyFile,revision:'other-version'}});
+ assert.deepEqual(replaced.views,[]);assert.equal(replaced.get('result').hidden,true);
+});
+test('an old date on the device cannot unlock a newer text while the server still reports active or recheck',async()=>{
+ for(const status of ['active','recheck']){
+  const p=await historyView({order:{...historyOrder,approval_window:{...expiredWindow,status},check_error:'ORDER_CHANGED'},
+   file:{...historyFile,assignments:[{platform:'youtube',status:'assigned',revision:6}]},saved:{...historySaved,assignment_revision:6}});
+  assert.deepEqual(p.views,[]);assert.equal(p.get('result').hidden,true);
+  assert.equal(p.orderOptions.previousOrder,undefined);assert.equal(p.orderOptions.resumeOrder,undefined);
+  assert.ok(p.calls.every(c=>c.name==='sma_publication_order_v1'&&c.p_action==='get'));
+ }
+});
+test('expiry after the folder refresh can open the newer text of the original file',async()=>{
+ let refreshed=false;
+ const order={...historyOrder,approval_token:null,approval_window:expiredWindow};
+ const p=await historyView({orderResponse:()=>({...order,check_error:refreshed?'ORDER_CHANGED':'FILE_CHANGED'}),
+  fetchResponse:async()=>{refreshed=true;return {ok:true};},file:{...historyFile,assignments:[{platform:'youtube',revision:6,status:'assigned'}]},
+  saved:{...historySaved,assignment_revision:6},resume:true});
+ assert.deepEqual(p.views,['preview']);assert.equal(p.orderOptions.getContext().binding.assignment_revision,6);
+ assert.equal(p.orderOptions.previousOrder,undefined);assert.equal(p.orderOptions.resumeOrder,undefined);
+ assert.deepEqual(p.calls.filter(c=>c.url).map(c=>new URL(c.url).pathname),['/webhook/sma-publication-files-v1']);
+});
 test('a cancelled order opens the current saved draft of the same file and portal without restoring any preparation',async()=>{
  for(const portal of ['youtube','tiktok']){
   const order={...cancelledOrder,binding:{...historyOrder.binding,platform:portal},draft:{...historyOrder.draft,platform:portal}};
