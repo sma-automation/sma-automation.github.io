@@ -49,6 +49,22 @@ Beim Öffnen der Freigabevorbereitung prüft SMA den Artikel vor der Zielkontoab
 
 Ein History-Link kann bei einem zurückgezogenen Artikel den gespeicherten Entwurf zur Korrektur öffnen. Dazu müssen Auftrags-ID, Datei, Portal, Revisionen, Shop und Beitrag weiterhin übereinstimmen. Die unterbrochene Vorbereitung wird in diesem Fall nicht fortgesetzt. Eine Ersatzwahl muss der Kunde speichern.
 
+## Gleichzeitiges Bearbeiten eines Portalbeitrags
+
+Speichern zwei Tabs denselben YouTube- oder TikTok-Entwurf, prüft SMA die Revision
+der Dateizuordnung. Nach einem Konflikt bleiben die Eingaben im Textformular.
+**Änderungen vergleichen** lädt die gespeicherte Fassung für dieselbe
+Dateiversion, dasselbe Portal und denselben Entwurf. Titel, Beitragstext,
+Hashtags und Linkziel werden mit dem ursprünglichen Stand verglichen.
+
+Eine Änderung aus nur einem Tab erscheint im Vorschlag. Haben beide Tabs
+dasselbe Feld unterschiedlich geändert, wählt der Kunde für dieses Feld eine
+Fassung. **In Entwurf übernehmen** setzt die Auswahl ins Formular.
+**Entwurf speichern** prüft beim Schreiben die neue Revision. Ein weiterer
+Konflikt lässt sich erneut vergleichen. **Zurück** behält die eigenen Eingaben.
+Bei einer ersetzten Datei oder einem neu erzeugten Entwurf wird die Übernahme
+gesperrt.
+
 ## Abgleich vor der Freigabe
 
 Nach **Auftrag prüfen** vergleicht die Beitragsvorschau die gespeicherten Portaloptionen

@@ -17,6 +17,7 @@ on:
       - supabase/sql/publication-analysis-history.sql
       - supabase/migrations/*_publication_analysis_history_v1.sql
       - app/assets/publication-hashtags.mjs
+      - app/assets/publication-draft-conflict.mjs
       - app/assets/publication-preview.js
       - app/publication-preview.html
       - tests/*publication-text-edits*
