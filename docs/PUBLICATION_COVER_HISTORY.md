@@ -70,6 +70,13 @@ Bei fehlender Speicherantwort bleibt **Speicherstand prüfen** verfügbar. Hat e
 anderer Tab eine neuere Fassung gespeichert und SMA dies erkannt, bleibt
 **Änderungen vergleichen** erforderlich.
 
+Enthält eine Eingabe zum Beispiel einen leeren Titel, einen zu kurzen
+Beitragstext oder doppelte Hashtags, nennt die Beitragsvorschau den Grund.
+**Titel korrigieren**, **Beitragstext korrigieren** oder **Hashtags korrigieren**
+setzt den Cursor in das betreffende Feld. Nach der Korrektur kann der Kunde
+den Entwurf ausdrücklich speichern. Bei einem bekannten Versionskonflikt
+führt der nächste Schritt zum Vergleich.
+
 ### Gespeicherter Beitragstext
 
 Unter **History → Aufträge** zeigt ein aufgeklappter Auftrag seinen damaligen

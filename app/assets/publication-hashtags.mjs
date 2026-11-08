@@ -1,9 +1,14 @@
-export const hashtagMessage='Bitte höchstens drei unterschiedliche Hashtags mit je 1–50 Buchstaben, Ziffern oder Unterstrichen eingeben. Mit Leerzeichen trennen; leer lassen entfernt alle Hashtags.';
+export const hashtagMessage='Bitte höchstens drei unterschiedliche Hashtags mit je 1–50 Buchstaben, Ziffern oder Unterstrichen eingeben und mit Leerzeichen trennen. Ein leeres Feld entfernt alle Hashtags.';
 
 export function parseHashtags(value) {
  if(typeof value!=='string'||value.length>1000)throw Error(hashtagMessage);
  const tags=value.trim()?value.trim().split(/\s+/u).map(tag=>tag.replace(/^#/u,'').normalize('NFC')):[];
- if(tags.length>3||tags.some(tag=>[...tag].length<1||[...tag].length>50||!/^[_\p{L}\p{N}]+$/u.test(tag))||new Set(tags.map(tag=>tag.toLocaleLowerCase('de'))).size!==tags.length)throw Error(hashtagMessage);
+ if(tags.length>3)throw Error('Verwende höchstens drei Hashtags.');
+ if(tags.some(tag=>!tag||[...tag].length>50))throw Error('Jeder Hashtag braucht 1–50 Zeichen nach dem #.');
+ if(tags.some(tag=>!/^[_\p{L}\p{N}]+$/u.test(tag)))throw Error('Verwende im Hashtag nur Buchstaben, Ziffern oder Unterstriche. Trenne mehrere Hashtags durch Leerzeichen.');
+ const folded=tags.map(tag=>tag.toLocaleLowerCase('de'));
+ const duplicate=folded.findIndex((tag,index)=>folded.indexOf(tag)!==index);
+ if(duplicate!==-1)throw Error('Der Hashtag #'+tags[duplicate]+' ist doppelt. Verwende ihn nur einmal.');
  return tags;
 }
 

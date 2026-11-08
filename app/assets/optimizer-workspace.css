@@ -296,6 +296,7 @@ body.wide #workspacePreviewHeader > div { min-width: 0; }
 body.wide #workspacePreviewHeader #preparePublicationOrder { margin: 0; padding: 8px 14px; min-height: 40px; }
 body.wide #workspacePreviewHeader #workspacePreviewName { margin: 2px 0 0; }
 body.wide #workspaceDraftState{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px}
+:is(#workspaceDraftNotice,#portalStatus,#status,#saveStatus){overflow-wrap:anywhere}
 body.wide #workspaceDraftNotice{font-size:13px;color:#52617a;margin:4px 0}
 body.wide #workspaceDraftAction{margin:4px 0}
 body.wide #workspaceEditPost:not([hidden]) { display: block; margin-top: 12px; }
