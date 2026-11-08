@@ -526,14 +526,18 @@ async function storedOrderRequest(action,id){
  if(signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
  return data;
 }
-async function readHistoryOrder(id){
+async function readHistoryOrder(id,currentPost=false){
  const unavailable='Die Beitragsvorschau für diesen Auftrag ist in deinem Konto nicht verfügbar.';
  if(!workspace||!orderUuid.test(id))throw Error(unavailable);
  const order=await readStoredOrder(id),binding=order?.binding;
  if(order?.state==='preparing'&&(order.approved_at!==null||order.target!==null||order.approval_token!==null||
     order.account_check!=null||order.approval_window!=null||!['active','expired'].includes(order.preparation_window?.status)||
     !Number.isFinite(Date.parse(order.preparation_window.expires_at))))throw Error(unavailable);
- if(!order?.ok||order.id!==id||!['preparing','prepared'].includes(order.state)||order.approved_at!=null||
+ const allowedState=currentPost
+  ? order?.state==='cancelled'&&order.approved_at===null&&order.approval_token===null&&order.approval_review==null
+    &&order.approval_window==null&&order.preparation_window==null&&['youtube','tiktok'].includes(selectedPortal)
+  : ['preparing','prepared'].includes(order?.state);
+ if(order?.ok!==true||order.id!==id||!allowedState||order.approved_at!=null||
     order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!orderUuid.test(binding.asset_id)||
     !orderUuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Error(unavailable);
@@ -574,19 +578,45 @@ async function openHistoryOrderPreview(id,owner){
     ['platform','title','body','caption','hashtags','review_notes','product_id'].some(key=>JSON.stringify(draft[key])!==JSON.stringify(order.draft[key])))throw Error(changed);
  const repairLink=!!draft.product_id&&saved.product_link_available===false;
  if(order.check_error&&!repairLink)throw Error(changed);
+ await showHistoryPost(owner,catalog,file,saved,repairLink,order);
+}
+
+async function openCurrentHistoryPost(id,owner){
+ if(params.get('resume')==='1')throw Error('Ein abgebrochener Auftrag kann nicht fortgesetzt werden.');
+ const {binding}=await readHistoryOrder(id,true);
+ // Read by the owned file and portal, then check that this assignment still belongs to the same file version.
+ const saved=await fileRpc('get',{asset_id:binding.asset_id,platform:selectedPortal});
+ if(saved.status!=='completed'||!orderUuid.test(saved.id)||!Number.isSafeInteger(saved.revision)||saved.revision<1||
+    !Number.isSafeInteger(saved.assignment_revision)||saved.assignment_revision<1||saved.preview?.can_publish!==false||
+    !Array.isArray(saved.preview.drafts)||saved.preview.drafts.length!==1||saved.preview.drafts[0]?.platform!==selectedPortal){
+  throw Error('Für diese Datei ist aktuell kein gespeicherter Beitrag für '+names[selectedPortal]+' verfügbar.');
+ }
+ const catalog=await optimizerCatalog();
+ const file=catalog.files?.find(f=>f.id===binding.asset_id);
+ if(!file||!fileFitsPortal(file))throw Error(messages.FILE_UNAVAILABLE);
+ if(file.revision!==binding.asset_revision)throw Error('Die Datei wurde seit dem Abbruch ersetzt. Wähle die aktuelle Datei unter Veröffentlichung.');
+ const assignment=file.assignments?.find(a=>a.platform===selectedPortal);
+ if(assignment?.status!=='assigned')throw fileError('ASSIGNMENT_CHANGED');
+ if(assignment.revision!==saved.assignment_revision)throw fileError('ASSIGNMENT_CONFLICT');
+ const repairLink=!!saved.preview.drafts[0].product_id&&saved.product_link_available===false;
+ await showHistoryPost(owner,catalog,file,saved,repairLink);
+}
+
+async function showHistoryPost(owner,catalog,file,saved,repairLink,order=null){
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  // Select only after the order, file and saved portal text have all been verified.
  assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
  renderSelectedFile();showProductContext(saved.product_context,file,savedProductSelection(saved));fillInput(saved.input);render(saved);
  if(!repairLink){
-  orderReview.rememberVideoChoices(order);
-  workspace.show('preview');status('Beitragsvorschau des Auftrags geladen.');
+  if(order)orderReview.rememberVideoChoices(order);
+  workspace.show('preview');
+  status(order?'Beitragsvorschau des Auftrags geladen.':'Aktueller Beitrag geladen. Der frühere Auftrag ist abgebrochen.');
  }
  await loadMediaCheck();await loadMagicEffect(false);
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  lock(false);syncMedia();
  if(repairLink){openDraftLinkEditor();status(messages.PRODUCT_LINK_UNAVAILABLE,true);return;}
- if(resume&&!orderReview.resumePrepared(order)){
+ if(order&&params.get('resume')==='1'&&!orderReview.resumePrepared(order)){
   status('Die gespeicherte Vorbereitung kann nicht fortgesetzt werden. Du kannst sie für diesen Beitrag neu starten.');
  }
 }
@@ -596,10 +626,13 @@ async function loadHistoryPreview(){
  lock(true);
  $('refreshFiles').textContent='Dateien aktualisieren';
  status('Beitragsvorschau wird geladen …');
- try{await openHistoryOrderPreview(params.get('order'),previewOwnerId);}
+ try{
+  const open=params.get('view')==='current'?openCurrentHistoryPost:openHistoryOrderPreview;
+  await open(params.get('order'),previewOwnerId);
+ }
  catch(error){
   if(signedOut)return;
-  if(['FILE_REFRESH_REQUIRED','FILE_SYNC_RUNNING','FILE_SYNC_RATE_LIMITED','FILE_SYNC_UNAVAILABLE','FOLDER_UNAVAILABLE'].includes(error.code)){
+  if(['FILE_REFRESH_REQUIRED','FILE_SYNC_RUNNING','FILE_SYNC_RATE_LIMITED','FILE_SYNC_UNAVAILABLE','FOLDER_UNAVAILABLE','ASSIGNMENT_CONFLICT'].includes(error.code)){
    retryHistoryPreview=true;
    $('refreshFiles').textContent='Vorschau erneut laden';
    $('refreshFiles').disabled=false;

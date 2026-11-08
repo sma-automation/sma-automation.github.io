@@ -66,6 +66,19 @@ stimmten alle zehn im Testkonto gelesenen Texte exakt mit den gespeicherten
 Aufträgen überein. Die Auftragsdaten und die bisherigen History-Felder hatten
 vor und nach der Änderung dieselben Prüfsummen.
 
+### Nach einem Abbruch am Beitrag weiterarbeiten
+
+Bei einem abgebrochenen YouTube- oder TikTok-Auftrag führt **Aktuellen Beitrag
+öffnen** zum derzeit gespeicherten Entwurf für dieselbe Dateiversion und dasselbe
+Portal. Der Text im aufgeklappten History-Eintrag zeigt weiterhin den damaligen
+Stand. Beim Bearbeiten und Speichern verwendet die Vorschau die aktuelle
+Dateizuordnung. Bei einem entfernten Produkt öffnet sie die Linkkorrektur.
+
+Wechselt die Textrevision beim Laden, bietet **Vorschau erneut laden** einen
+neuen Abgleich. Eine ersetzte Datei lässt sich unter **Veröffentlichung** auswählen. Die Freigabevorbereitung für den
+aktuellen Beitrag startet erst auf Klick. Der Abbruch und die früheren
+Portaleinstellungen gehören weiterhin zum ursprünglichen Auftrag.
+
 ## Technik
 
 - Additiver Lese-RPC `sma_publication_history_v3`, öffentlich SECURITY INVOKER,

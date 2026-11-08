@@ -31,10 +31,23 @@ await test('expanded orders show their own saved caption as plain multiline text
  assert.equal(first.hasAttribute('open'),false);first.setAttribute('open','');
  assert.equal(first.querySelector('.sma-history-saved-text').textContent,caption);
  assert.equal(first.querySelector('summary').textContent.includes(caption),false);
- assert.equal(first.querySelector('a, img, button'),null);
+ assert.equal(first.querySelector('.sma-history-saved-text a, img, button'),null);
  assert.equal(second.querySelector('.sma-history-saved-text').textContent,'Text des zweiten Auftrags.');
  assert.match(legacy.textContent,/kein vollständiger Beitragstext/);
  assert.deepEqual(f.calls,[{}]);f.owner('other');assert.equal(f.$('.sma-history-saved-text'),null);f.view.destroy();
+});
+await test('a cancelled YouTube or TikTok order links only to the current post for that order',async()=>{
+ const entries=['youtube','tiktok','instagram','facebook','unknown'].map((platform,i)=>entry(i+1,{platform,status:'cancelled'}));
+ const f=fixture({request:()=>({...result(entries),summary:{orders:5,public_confirmed:0,platforms:['youtube','tiktok','instagram','facebook']}})});await tick();
+ const rows=[...f.doc.querySelectorAll('ol li')];assert.equal(rows.length,5);
+ for(const [i,row] of rows.entries()){
+  const a=row.querySelector('a');
+  if(i>1){assert.equal(a,null);continue;}
+  assert.equal(a.textContent,'Aktuellen Beitrag öffnen');assert.equal(a.target,'_top');
+  assert.equal(a.getAttribute('href'),'/app/publication-preview.html?wide=1&portal='+entries[i].platform+'&order='+entries[i].id+'&view=current');
+  assert.match(row.querySelector('summary').textContent,/Abgebrochen/);
+ }
+ assert.deepEqual(f.calls,[{}]);f.view.destroy();
 });
 await test('hidden History is silent and opening it loads; leaving clears results',async()=>{
  const f=fixture({active:false});await tick();assert.equal(f.calls.length,0);f.page.classList.add('active');await tick();assert.equal(f.calls.length,1);assert.equal(f.page.querySelectorAll('li').length,1);
