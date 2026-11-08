@@ -12,7 +12,7 @@ Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf alle zwöl
 | Social Media | YouTube · TikTok · Instagram · Facebook |
 | Content | Meine Dateien · Content Optimizer · Magic Effect |
 | Musikbibliothek | Tracks · Meine Playlist |
-| History | Aufträge · Portaltexte · Dateiverlauf · Bearbeitungen |
+| History | Aufträge · Bearbeiten · Analyse |
 | Einstellungen | Kundenkonto · Firmendaten · Paket & Credits · Schnittstellen |
 | Tutorials | Schnellstart · Anleitungen · Hilfe |
 | 24/7 Verkäufer | Beratung · Produkte & Content |
@@ -49,3 +49,18 @@ Magic Effect und Veröffentlichung bleiben erhalten. Der Entwurf verwendet die
 freigegebenen feinen Kapitelreiter für Format & Ausschnitt, Schnitt & Cover, Text
 und Ton. Vorschau und gespeicherte Einstellungen sind verfügbar; Medienexport
 und zusätzliche Musik sind noch offen. Details: `MEDIA_EDITOR_DRAFTS.md`.
+
+## Drei History-Kapitel (08.11.2026)
+
+PR #173 wurde auf `website-v1` zusammengeführt. Unter **Bearbeiten** erscheint zunächst
+**Bild und Video**. Über **Verlauf anzeigen** bleiben **Beitragstexte** und
+**Dateizuordnungen** erreichbar. Auftragskennzahlen bleiben ausschließlich bei
+**Aufträge**; Monatsfilter, Seitenwechsel, Kundenisolation und gespeicherte
+Verläufe bleiben erhalten. Die Hauptreiter behalten die freigegebene Schrift,
+die feine graue Grundlinie und die blaue aktive Unterstreichung.
+
+Ein zusätzlicher enger Mobilansichts-Fix verkleinert ausschließlich den Abstand
+und die seitliche Innenfläche dieser drei History-Reiter bei Bildschirmbreiten
+bis 359 px. In einer lokalen Chromium-Layoutprüfung passten die drei Reiter
+bei 320 px nebeneinander; die Darstellung bei 360 px und auf Desktop blieb
+unverändert. Das ist **kein** angemeldeter Live-Browsernachweis.
