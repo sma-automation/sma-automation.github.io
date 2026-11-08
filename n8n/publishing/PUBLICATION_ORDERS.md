@@ -81,6 +81,27 @@ erneut speichern. Auch dieser Schreibversuch prüft die Revision. Zwischenzeitli
 eingegebene Texte bleiben im Formular. Ein Konto- oder Entwurfswechsel verwirft
 die ausstehende Prüfung.
 
+### Vorschau nach einem unterbrochenen Speichern neu laden
+
+Beim Speichern eines dateigebundenen YouTube- oder TikTok-Entwurfs merkt sich
+der Editor im Sitzungsspeicher des Tabs die gesendeten Textfelder, das Linkziel
+und den zugehörigen Ausgangsstand. Pro Portal gibt es einen solchen Eintrag.
+Er enthält weder Zugangstoken noch Freigaben, Mediendateien oder Analyseergebnisse.
+
+Nach dem Neuladen am selben Einstieg liest SMA den Portalentwurf und die
+Dateizuordnung im angemeldeten Konto. Stimmen die gesendeten Felder mit dem
+gespeicherten Stand überein, zeigt der Editor die Bestätigung. Ausstehende
+Eingaben stehen wieder im Textformular. Bei zwischenzeitlichen Änderungen
+ist **Änderungen vergleichen** vor dem Speichern erforderlich. Die
+Wiederherstellung selbst löst keinen Schreibversuch aus. Bei einem History-Link
+prüft SMA zusätzlich den zugehörigen Auftrag.
+
+Eine Bestätigung oder das bewusste Verwerfen entfernt die lokale Kopie.
+Abmeldung und Kontowechsel im Editor räumen die Einträge des vorherigen Kontos
+auf. Für eine ersetzte Datei oder einen neu angelegten Entwurf werden die
+früheren Texte nicht eingesetzt. Bei gesperrtem Browser-Sitzungsspeicher
+bleibt der Speicherabgleich im geöffneten Editor verfügbar.
+
 ## Abgleich vor der Freigabe
 
 Nach **Auftrag prüfen** vergleicht die Beitragsvorschau die gespeicherten Portaloptionen
