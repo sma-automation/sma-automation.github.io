@@ -42,8 +42,26 @@ try{
   });
   document.getElementById('save').click();await unresolved;sessionStorage.fixtureReload='1';location.reload();
  }else{
-  parent.postMessage({type:'reload-result',restored:body?.value===pending,writes:Number(sessionStorage.fixtureWrites),
-   notice:document.getElementById('saveStatus').textContent,ready:!busy&&!document.getElementById('save').disabled},location.origin);
+  const report={type:'reload-result',restored:body?.value===pending,notice:$('saveStatus').textContent,ready:!busy&&!$('save').disabled};
+  function until(test){
+   if(test())return Promise.resolve();
+   return new Promise(resolve=>{
+    const observer=new MutationObserver(()=>{if(test()){observer.disconnect();resolve();}});
+    observer.observe(document.body,{attributes:true,childList:true,subtree:true});
+   });
+  }
+  const dialog=$('draftReloadDialog'),recordKey='sma.publication.pending-save.v1.youtube';
+  async function openChoice(){
+   $('loadLatest').click();await until(()=>dialog.open||!busy);
+   if(!dialog.open)throw Error('Missing reload choice: '+$('status').textContent);
+  }
+  await openChoice();
+  report.previewShown=$('draftReloadPreview').textContent.includes('Mein früherer Beitragstext.')&&document.activeElement===$('keepDraftEdits');
+  $('keepDraftEdits').click();await until(()=>!busy);
+  report.kept=body.value===pending&&!!sessionStorage.getItem(recordKey)&&!dialog.open;
+  await openChoice();$('useStoredDraft').click();await until(()=>!busy);
+  report.loaded=$('youtube-body').value==='Mein früherer Beitragstext.'&&!sessionStorage.getItem(recordKey)&&!dialog.open;
+  report.writes=Number(sessionStorage.fixtureWrites);parent.postMessage(report,location.origin);
  }
 }catch(error){parent.postMessage({type:'reload-result',error:String(error)},location.origin);}`;
 const server=createServer(async(req,res)=>{
@@ -69,5 +87,6 @@ try{
  const match=stdout.match(/<output>([^<]+)<\/output>/);assert.ok(match,'Reloaded editor did not report its state: '+stdout.slice(-500));
  const result=JSON.parse(match[1]);assert.equal(result.restored,true,JSON.stringify(result));assert.equal(result.ready,true);
  assert.match(result.notice,/wiederhergestellt/);assert.equal(result.writes,1);
- console.log('Chromium restored the interrupted form after a real reload with no additional write.');
+ assert.ok(result.previewShown&&result.kept&&result.loaded,JSON.stringify(result));
+ console.log('Chromium restored the interrupted form, kept the edits on Back, and loaded the reviewed version without another write.');
 }finally{server.close();await rm(profile,{recursive:true,force:true});}

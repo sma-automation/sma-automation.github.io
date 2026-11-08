@@ -102,6 +102,15 @@ auf. Für eine ersetzte Datei oder einen neu angelegten Entwurf werden die
 früheren Texte nicht eingesetzt. Bei gesperrtem Browser-Sitzungsspeicher
 bleibt der Speicherabgleich im geöffneten Editor verfügbar.
 
+### Gespeicherten Entwurf im Editor laden
+
+**Gespeicherten Entwurf laden** liest die aktuelle Fassung. Bei offenen Änderungen
+zeigt SMA zuerst den gespeicherten Beitrag. **Weiter bearbeiten** behält die
+Eingaben einschließlich eines geänderten Linkziels. **Gespeicherte Fassung
+übernehmen** liest den Stand erneut. Hat er sich während der Auswahl geändert
+oder schlägt die Abfrage fehl, bleiben die Eingaben erhalten. Steht die
+Bestätigung eines Speicherversuchs noch aus, prüft SMA zuerst dessen Ergebnis.
+
 ## Abgleich vor der Freigabe
 
 Nach **Auftrag prüfen** vergleicht die Beitragsvorschau die gespeicherten Portaloptionen

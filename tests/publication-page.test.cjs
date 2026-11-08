@@ -1283,3 +1283,86 @@ test('a different account or route cannot restore a prior form and disabled sess
  const f=sharedDraft('tiktok'),p=await f.open(f.rpc,{sessionStorage:storage});
  editPortalField(p,'body','Speichern bei gesperrtem Sitzungszugriff.');await p.save();assert.equal(f.writes.length,1);
 });
+
+test('loading a saved post previews the stored version first and Back keeps the local fields and link',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=sharedDraft(portal),p=await f.open();
+  editPortalField(p,'body','Lokaler Beitrag mit offenen Änderungen.');await p.get('draftLinkShop').click();
+  p.get('source_text').value='Lokale Angaben zur Datei.';p.get('previewForm').events.input();
+  f.change({title:'Gespeicherter Titel',body:'Fassung aus einem anderen Tab.'});
+  const before=p.calls.length,opening=p.get('loadLatest').click();await compareTick();
+  assert.equal(p.get('draftReloadDialog').open,true);
+  assert.match(p.get('drafts').querySelector('textarea').value,/Lokaler Beitrag/);
+  assert.equal(p.get('draftReloadPreview').querySelector('h3').textContent,'Gespeicherter Titel');
+  await p.get('keepDraftEdits').click();await opening;
+  assert.equal(p.get('draftReloadDialog').open,false);assert.equal(p.get('source_text').value,'Lokale Angaben zur Datei.');
+  assert.equal(p.get('shopLink').href,result.preview.shop_url);assert.throws(()=>p.orderOptions.getContext(),/speichere/);
+  assert.ok(p.calls.slice(before).every(c=>!c.url&&['get','list'].includes(c.p_action)));assert.equal(f.writes.length,0);
+ }
+});
+test('only the reviewed version replaces dirty fields; a competing save during the choice leaves them intact',async()=>{
+ const f=sharedDraft('youtube'),p=await f.open();
+ editPortalField(p,'body','Mein lokaler Text zum Ersetzen.');
+ f.change({title:'Erste gespeicherte Fassung'});
+ let opening=p.get('loadLatest').click();await compareTick();
+ f.change({title:'Zweiter gespeicherter Titel'});
+ await p.get('useStoredDraft').click();await opening;
+ assert.equal(p.get('drafts').querySelector('textarea').value,'Mein lokaler Text zum Ersetzen.');
+ assert.match(p.get('status').textContent,/erneut|noch einmal/);
+ opening=p.get('loadLatest').click();await compareTick();await p.get('useStoredDraft').click();await opening;
+ assert.equal(p.get('drafts').querySelector('[data-field=title]').value,'Zweiter gespeicherter Titel');
+ assert.equal(p.orderOptions.getContext().binding.assignment_revision,6);assert.equal(f.writes.length,0);
+});
+test('manual load preserves dirty input on empty, invalid, offline or replaced file responses',async()=>{
+ for(const bad of ['empty','invalid','offline','file']){
+  const f=sharedDraft('tiktok');let failed=false;
+  const p=await f.open(async req=>{
+   if(failed&&req.p_action==='get'){
+    if(bad==='offline')throw Error('offline');
+    if(bad==='empty')return {ok:true,status:'empty'};
+    if(bad==='invalid'){const r=f.view();delete r.preview.drafts[0].review_notes;return r;}
+   }
+   return f.rpc(req);
+  });
+  editPortalField(p,'hashtags','#Behalten');p.get('source_text').value='Behalten';p.get('previewForm').events.input();
+  failed=true;if(bad==='file')f.replaceFile();await p.get('loadLatest').click();
+  assert.equal(p.get('result').hidden,false);assert.equal(p.get('drafts').querySelector('[data-field=hashtags]').value,'#Behalten');
+  assert.equal(p.get('source_text').value,'Behalten');assert.ok(!p.get('draftReloadDialog').open);
+  assert.equal(p.get('status').dataset.error,'true');assert.equal(f.writes.length,0);
+ }
+});
+test('a clean manual reload displays the latest post without prompting or starting analysis',async()=>{
+ const f=sharedDraft('tiktok'),p=await f.open();f.change({title:'Neuer Titel'});
+ const before=p.calls.length;await p.get('loadLatest').click();
+ assert.ok(!p.get('draftReloadDialog').open);assert.equal(p.get('drafts').querySelector('input').value,'Neuer Titel');
+ assert.deepEqual(p.calls.slice(before).map(c=>c.p_action),['get','list']);assert.equal(f.writes.length,0);
+});
+test('closing the reload dialog or changing account never applies a pending result',async()=>{
+ const f=sharedDraft('youtube'),p=await f.open();
+ editPortalField(p,'body','Privater, ungespeicherter Text für dieses Konto.');
+ const first=p.get('loadLatest').click();await compareTick();p.get('draftReloadDialog').close();await first;
+ assert.match(p.get('drafts').querySelector('textarea').value,/Privater, ungespeicherter/);
+ const second=p.get('loadLatest').click();await compareTick();
+ p.switchOwner();await second;assert.equal(p.get('draftReloadDialog').open,false);
+ assert.equal(p.get('draftReloadPreview').children.length,0);assert.equal(p.get('result').hidden,true);
+ assert.match(p.get('status').textContent,/melde/);assert.equal(f.writes.length,0);
+});
+test('manual reload of a general template checks source changes even when only the description was edited',async()=>{
+ const input={source_text:'Gespeicherte Beschreibung zur Textvorlage.',language:'de',media_kind:'video',platforms:['youtube']};
+ const p=await boot({latest:{...result,input}});p.get('source_text').value='Meine eigene Quellenangabe im Formular.';p.get('previewForm').events.input();
+ const before=p.calls.length,opening=p.get('loadLatest').click();await compareTick();
+ const preview=p.get('draftReloadPreview');assert.ok(preview.children.some(n=>n.textContent===input.source_text));
+ await p.get('keepDraftEdits').click();await opening;assert.match(p.get('source_text').value,/eigene Quellenangabe/);
+ const next=p.get('loadLatest').click();await compareTick();await p.get('useStoredDraft').click();await next;
+ assert.equal(p.get('source_text').value,input.source_text);assert.ok(p.calls.slice(before).every(c=>!c.url&&c.p_action==='latest'));
+});
+test('manual reload checks an uncertain write before opening a replacement choice',async()=>{
+ const f=interruptedDraft('tiktok',false),p=await f.first();
+ editPortalField(p,'body','Mein unterbrochener Speicherversuch.');await p.save();
+ editPortalField(p,'body','Noch neuere Eingabe im selben Tab.');
+ const before=p.calls.length;await p.get('loadLatest').click();
+ assert.deepEqual(p.calls.slice(before).map(c=>c.p_action),['get']);
+ assert.match(p.get('saveStatus').textContent,/noch unklar/);assert.equal(p.get('checkDraftSave').hidden,false);
+ assert.equal(p.get('drafts').querySelector('textarea').value,'Noch neuere Eingabe im selben Tab.');
+ assert.ok(!p.get('draftReloadDialog').open);assert.equal(f.sessionStorage.rows.size,1);assert.equal(f.writes.length,0);
+});
