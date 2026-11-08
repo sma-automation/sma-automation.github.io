@@ -117,17 +117,24 @@ try{
    $('workspacePostCaption').textContent===newText&&$('workspaceDraftNotice').textContent==='Gespeicherter Entwurf'&&
    !$('publicationOrderDialog').open&&Number(sessionStorage.fixtureWrites)===2;
   // The fixture's order client has only an in-memory account response. Other actions fail the test.
-  prepare.click();const review=$('publicationOrderDialog');
-  await until(()=>!review.querySelector('form').hidden);
+  const review=$('publicationOrderDialog'),reviewButton=text=>[...review.querySelectorAll('button')].find(b=>b.textContent===text);
+  const retry=reviewButton('Zielkonto erneut prüfen'),close=reviewButton('Schließen');
+  sessionStorage.fixtureFailAccount='1';prepare.click();await until(()=>!retry.hidden&&!retry.disabled);
+  if(!review.open||!review.querySelector('form').hidden||sessionStorage.fixtureOrderActions!=='account')throw Error('Account check retry missing');
+  let finish;window.fixtureAccountHold=new Promise(resolve=>{finish=resolve;});
+  const started=new Promise(resolve=>{window.fixtureAccountStarted=resolve;});retry.click();await started;
+  if(close.disabled)throw Error('Cannot leave a pending account lookup');
+  close.click();if(review.open)throw Error('Account lookup keeps the dialog open');
+  prepare.click();finish();await until(()=>!review.querySelector('form').hidden);
   const summary=review.querySelector('.order-caption');summary.querySelector('summary').click();
   report.reviewedStoredPost=review.open&&summary.open&&summary.querySelector('pre').textContent===newText&&
    review.querySelector('h3').textContent===$('youtube-title').value&&review.textContent.includes('Testvideo.webm')&&
-   review.textContent.includes('Testkanal · fixture-channel')&&sessionStorage.fixtureOrderActions==='account';
+   review.textContent.includes('Testkanal · fixture-channel')&&sessionStorage.fixtureOrderActions==='account,account';
   sessionStorage.fixtureNewerPost='1';$('order-visibility').value='private';
   $('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';
   review.querySelector('form').requestSubmit();await until(()=>!review.open);
   report.staleStopped=document.activeElement===$('loadLatest')&&$('sourcePanel').open&&!$('workspaceSource').hidden&&
-   $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account';
+   $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account,account';
   parent.postMessage(report,location.origin);
  }
 }catch(error){parent.postMessage({type:'reload-result',error:String(error)},location.origin);}`;
@@ -159,6 +166,8 @@ const server=createServer(async(req,res)=>{
 async function fixtureOrderFetch(_url,options){
  const {action,input}=JSON.parse(options.body);sessionStorage.fixtureOrderActions=[sessionStorage.fixtureOrderActions,action].filter(Boolean).join(',');
  if(action!=='account')throw Error('Unexpected synthetic order action');
+ if(sessionStorage.fixtureFailAccount){sessionStorage.removeItem('fixtureFailAccount');throw new TypeError('Synthetic network failure');}
+ if(window.fixtureAccountHold){window.fixtureAccountStarted();await window.fixtureAccountHold;}
  return {ok:true,json:async()=>({ok:true,id:input.id,stage:'account',can_upload:false,can_publish:false,
   target:{id:'fixture-channel',platform:'youtube'},account_check:{target_id:'fixture-channel',display_name:'Testkanal',policy:{}}})};
 }`;

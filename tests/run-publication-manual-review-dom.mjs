@@ -677,4 +677,58 @@ for(const field of ['title','caption']){
  const pending=t.$('preparePublicationOrder').handlers.click();t.view.clear();release();await pending;
  eq(t.requests.length,0);eq(!!t.$('publicationOrderDialog').open,false);eq(t.doc.querySelector('.order-caption'),null);
 }
+// A customer can leave an initial read, without abandoning a previously prepared order.
+const actionButton=(t,text)=>[...t.$('publicationOrderDialog').querySelectorAll('button')].find(b=>b.textContent===text);
+for(const platform of ['youtube','tiktok']){
+ let finishRead,readCount=0,repairs=0;
+ const t=fixture({platform,verifySavedDraft:()=>++readCount===1?new Promise((_,reject)=>{finishRead=reject;}):Promise.resolve(),onOutdatedDraft:()=>repairs++});
+ const dialog=t.$('publicationOrderDialog'),entry=t.$('preparePublicationOrder'),close=actionButton(t,'Schließen');
+ const old=entry.handlers.click();eq(close.disabled,false);close.handlers.click();eq(dialog.open,false);
+ await entry.handlers.click();finishRead(Object.assign(Error('Alte Antwort'),{code:'ASSIGNMENT_CHANGED'}));await old;
+ eq(dialog.open,true);eq(repairs,0);eq(readCount,2);eq(t.requests.map(r=>r.action),['account']);
+ eq(dialog.querySelector('form').hidden,false);
+}
+for(const platform of ['youtube','tiktok']){
+ let began,finishAccount,readCount=0;const sent=new Promise(resolve=>{began=resolve;});
+ const t=fixture({platform,verifySavedDraft:async()=>{readCount++;},accountResponse:account=>new Promise(resolve=>{finishAccount=()=>resolve(account);began();})});
+ const entry=t.$('preparePublicationOrder'),dialog=t.$('publicationOrderDialog'),old=entry.handlers.click();
+ await sent;eq(actionButton(t,'Schließen').disabled,false);let prevented=false;
+ dialog.handlers.cancel({preventDefault(){prevented=true;}});if(!prevented)dialog.close();
+ eq(dialog.open,false);const next=entry.handlers.click();finishAccount();await Promise.all([next,old]);
+ eq(dialog.open,true);eq(readCount,2);eq(t.requests.map(r=>r.action),['account']);
+ eq(dialog.querySelector('form').hidden,false);eq(t.approve.disabled,true);
+}
+for(const platform of ['youtube','tiktok']){
+ let fail=true,reads=0;
+ const t=fixture({platform,verifySavedDraft:async()=>{reads++;},accountResponse:account=>{
+  if(fail)throw new TypeError('Failed to fetch');return account;
+ }});
+ const dialog=t.$('publicationOrderDialog');await t.$('preparePublicationOrder').handlers.click();
+ const retry=actionButton(t,'Zielkonto erneut prüfen');
+ eq(dialog.open,true);eq(retry.hidden,false);eq(dialog.querySelector('form').hidden,true);
+ await submit(t);eq(t.requests.map(r=>r.action),['account']);fail=false;
+ await Promise.all([retry.handlers.click(),retry.handlers.click()]);
+ eq(reads,2);eq(t.requests.map(r=>r.action),['account','account']);
+ eq(dialog.querySelector('form').hidden,false);eq(retry.hidden,true);eq(t.$('order-visibility').value,'');eq(t.approve.disabled,true);
+}
+for(const code of ['TARGET_REFRESH_UNCERTAIN','TARGET_RECONNECT_REQUIRED','TARGET_PERMISSIONS_REQUIRED','TARGET_RATE_LIMITED']){
+ const t=fixture({accountResponse:()=>({ok:false,code})});await t.$('preparePublicationOrder').handlers.click();
+ eq(actionButton(t,'Zielkonto erneut prüfen').hidden,true);eq(t.$('publicationOrderDialog').querySelector('form').hidden,true);
+ await actionButton(t,'Zielkonto erneut prüfen').handlers.click();await submit(t);eq(t.requests.map(r=>r.action),['account']);
+}
+{
+ let entered,finish;const writing=new Promise(resolve=>{entered=resolve;});
+ const t=fixture({prepareResponse:async(_,response)=>{entered();await new Promise(resolve=>{finish=resolve;});return response;}});
+ const opening=t.open();await writing;const dialog=t.$('publicationOrderDialog'),close=actionButton(t,'Schließen');
+ eq(close.disabled,true);close.handlers.click();let cancelled=false;dialog.handlers.cancel({preventDefault(){cancelled=true;}});
+ eq(cancelled,true);eq(dialog.open,true);finish();await opening;eq(t.requests.map(r=>r.action),['account','prepare']);eq(close.disabled,false);
+}
+{
+ let hold=false,entered,release;const checking=new Promise(resolve=>{entered=resolve;});
+ const t=fixture({accountResponse:async account=>{if(hold){entered();await new Promise(resolve=>{release=resolve;});}return account;}});
+ await t.open();const id=t.requests[1].input.id;hold=true;const restart=restartOrder(t);await checking;
+ actionButton(t,'Schließen').handlers.click();await t.$('preparePublicationOrder').handlers.click();release();await restart;
+ eq(t.reads,[id]);eq(t.approve.hidden,true);assert.match(notice(t),/Zielkonto muss erneut geprüft/);
+ eq(t.requests.map(r=>r.action),['account','prepare','account']);
+}
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');

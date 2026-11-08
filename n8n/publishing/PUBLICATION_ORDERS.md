@@ -140,6 +140,22 @@ direkt den gespeicherten Stand. Bis der Stand geklärt ist, bleibt die Freigabe 
 Der Statusweg für bereits freigegebene Aufträge ist in
 [PORTAL_COVER_HANDOFF.md](../../docs/PORTAL_COVER_HANDOFF.md) beschrieben.
 
+### Erste Kontoprüfung schließen und erneut versuchen
+
+Während SMA beim Öffnen von **Freigabe vorbereiten** den Beitrag liest oder
+das Zielkonto prüft, lässt sich das Fenster mit **Schließen** oder **Escape**
+verlassen. Eine bereits gesendete Kontoprüfung kann zu Ende laufen. Beim
+erneuten Öffnen prüft SMA den Entwurf frisch. Läuft für dieselbe Dateizuordnung
+und Textrevision im Dialog noch die Kontoabfrage, nutzt SMA diese Antwort.
+Ein verspätetes Ergebnis öffnet ein geschlossenes Fenster nicht wieder.
+
+Bei einer unterbrochenen Verbindung bietet **Zielkonto erneut prüfen** einen
+neuen Versuch im Fenster an. Erst ein Klick darauf startet die Prüfung. Die
+Portaloptionen erscheinen nach der bestätigten Antwort ohne Vorauswahl.
+Hat der Kunde eine erneute Kontoprüfung für einen bereits vorbereiteten Auftrag
+geschlossen, wird beim Wiederöffnen dessen gespeicherte Auftrags-ID gelesen.
+Die ursprüngliche Frist gilt weiterhin.
+
 ### Vorbereiteten Auftrag im selben Tab wieder öffnen
 
 Wer nach **Auftrag prüfen** den Dialog schließt, kann ihn beim selben gespeicherten

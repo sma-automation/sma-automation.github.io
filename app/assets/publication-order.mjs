@@ -91,18 +91,32 @@ function validatedOrder(result,id){
   return result;
 }
 
+function accountResponseError(status){
+  if(status===401)return 'AUTH_REQUIRED';
+  if(status===429)return 'TARGET_RATE_LIMITED';
+  if(!status||status===408||status>=500||(status>=200&&status<300))return 'TARGET_CHECK_UNAVAILABLE';
+}
 // Reuse the exact request ID after a lost response. A different selection gets
 // a new ID; the database additionally prevents duplicates across tabs/reloads.
 export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomUUID()}) {
   let attempt=null;
   async function call(action,input) {
     const auth=await session();
-    const response=await fetcher(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
-      body:JSON.stringify({action,input}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(145000)});
-    const r=await response.json();
+    let response,r;
+    try{
+      response=await fetcher(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
+        body:JSON.stringify({action,input}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(145000)});
+      r=await response.json();
+    }catch(error){
+      if(action!=='account')throw error;
+      const code=accountResponseError(response?.status);
+      throw Object.assign(Error(orderError(code),{cause:error}),{code});
+    }
     if(!response.ok||r?.ok!==true){
       const rejected=response.ok&&r?.ok===false&&Object.hasOwn(errors,r.code);
-      throw Object.assign(Error(orderError(r?.code)),{code:r?.code,existingId:r?.existing_order_id,rejected});
+      let code=r?.code;
+      if(action==='account'&&!Object.hasOwn(errors,code))code=accountResponseError(response.status);
+      throw Object.assign(Error(orderError(code)),{code,existingId:r?.existing_order_id,rejected});
     }
     if(action==='account'){
       const targetId=r.target?.id;
@@ -180,14 +194,16 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   consentLabel.append(consent,doc.createTextNode(' Ich habe Zielkonto, Beitrag, Rechte und Kennzeichnungen geprüft und gebe diesen Auftrag zur Veröffentlichung frei.'));
   const approve=make('button','Veröffentlichung freigeben');approve.type='button';approve.disabled=true;
   const checkTarget=make('button','Zielkonto prüfen');checkTarget.type='button';checkTarget.hidden=true;
+  const retryAccount=make('button','Zielkonto erneut prüfen');retryAccount.type='button';retryAccount.className='secondary';retryAccount.hidden=true;
   const statusButton=make('button','Status erneut laden');statusButton.type='button';statusButton.className='secondary';statusButton.hidden=true;
   const restart=make('button','Vorbereitung neu starten');restart.type='button';restart.className='secondary';restart.hidden=true;
   const cancel=make('button','Vorbereitung abbrechen');cancel.type='button';cancel.className='secondary';cancel.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
-  const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,restart,statusButton,cancel,close);
+  const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,retryAccount,restart,statusButton,cancel,close);
   dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
   const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
-  let recovery=null,preparationToResume=null;
+  let recovery=null,preparationToResume=null,opening=false;
+  const pendingAccounts=new Map();
   const unresolvedMessage='Der gespeicherte Freigabestand ist noch unklar. Lade den Status erneut oder öffne unter History den Auftrag.';
   let expiryTimer=null;
   function clearExpiryTimer(){if(expiryTimer!==null)clearTimeout(expiryTimer);expiryTimer=null;}
@@ -267,7 +283,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     working=value;
     const ended=preparationEnded(order),locked=ended||recovery!==null;
     controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');
-    syncCommercial();close.disabled=value;consent.disabled=value||locked;
+    syncCommercial();close.disabled=value&&!opening;retryAccount.disabled=value;consent.disabled=value||locked;
     restart.hidden=recovery?!recovery.canRestart:order?.state!=='prepared'&&!pendingTarget(order);
     restart.disabled=value;
     cancel.hidden=!cancelStoredOrder||!!recovery||order?.approved_at!==null||!['preparing','prepared'].includes(order.state);
@@ -320,7 +336,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       post.title===context.post.title&&post.caption===context.post.caption;
   }
   function showOrder(r) {
-    checkBinding(r);
+    checkBinding(r);retryAccount.hidden=true;
     clearExpiryTimer();order=r;rememberVideoChoices(r);details.replaceChildren();
     const window=preparationWindow(r);
     if(window?.status==='active'&&!preparationEnded(r)){
@@ -552,8 +568,25 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     return {id:order.id,state:order.state,binding:context.binding,choices:order.choices,targetId:order.target?.id,persisted:true,
       code:status==='recheck'?'TARGET_OPTIONS_CHANGED':status==='expired'?'ORDER_NOT_PREPARED':null};
   }
+  function leaveOpening(){
+    if(!opening)return;
+    epoch++;opening=false;
+    if(preparationToResume?.targetId)preparationToResume.code||='TARGET_OPTIONS_CHANGED';
+    details.replaceChildren();notice.textContent='';setWorking(false);
+  }
+  function pendingAccount(key,platform){
+    const current=pendingAccounts.get(key);
+    if(current)return current;
+    const request=client.account(platform).finally(()=>{
+      if(pendingAccounts.get(key)===request)pendingAccounts.delete(key);
+    });
+    pendingAccounts.set(key,request);
+    return request;
+  }
   async function openPreparation(){
+    if(opening&&!dialog.open)leaveOpening();
     if(working)return;
+    retryAccount.hidden=true;
     if(!recovery){
       if(order?.state==='prepared'||pendingTarget(order))recovery=savedPreparation();
       else if(!order)recovery=preparationToResume;
@@ -577,10 +610,13 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     return startPreparation();
   }
   async function startPreparation(savedBeforeRestart=null){
-    preparationToResume=savedBeforeRestart;clearExpiryTimer();restart.hidden=true;
+    opening=true;retryAccount.hidden=true;preparationToResume=savedBeforeRestart;clearExpiryTimer();restart.hidden=true;
     const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;humanControls.hidden=true;humanEnabled.checked=false;for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Gespeicherter Beitrag wird geprüft …';if(!dialog.open)dialog.showModal();onOpen();setWorking(true);
     try{
       context=getContext();const platform=context.binding.platform;
+      const accountKey=JSON.stringify(context.binding);
+      // If reopened while the same check was running, keep its result through the new draft read.
+      const pending=pendingAccounts.get(accountKey);
       if(savedBeforeRestart&&JSON.stringify(savedBeforeRestart.binding)!==JSON.stringify(context.binding))preparationToResume=null;
       await checkSavedDraft(generation);
       details.append(make('p','Datei: '+context.name));appendPost(context.post);
@@ -588,9 +624,13 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       let verified=null;
       if(['youtube','tiktok'].includes(platform)){
         // A failed check or a newly connected account must not reactivate the former target.
-        try{verified=await client.account(platform);}
+        try{verified=await (pending||pendingAccount(accountKey,platform));}
+        catch(error){
+          if(generation===epoch)retryAccount.hidden=!['TARGET_CHECK_RUNNING','TARGET_CHECK_UNAVAILABLE'].includes(error.code);
+          throw error;
+        }
         finally{
-          if(savedBeforeRestart?.targetId&&savedBeforeRestart.targetId!==verified?.target.id){
+          if(generation===epoch&&savedBeforeRestart?.targetId&&savedBeforeRestart.targetId!==verified?.target.id){
             savedBeforeRestart.code||='TARGET_OPTIONS_CHANGED';
           }
         }
@@ -603,9 +643,14 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       }
       notice.textContent='Wähle die Einstellungen für diesen Beitrag.';
     }catch(e){if(generation===epoch&&!offerDraftRepair(e))notice.textContent=e.message||orderError();}
-    finally{if(generation===epoch)setWorking(false);}
+    finally{if(generation===epoch){opening=false;setWorking(false);}}
   }
   button.addEventListener('click',openPreparation);
+  retryAccount.addEventListener('click',()=>{
+    if(working||!dialog.open||retryAccount.hidden||order||recovery)return;
+    try{unchanged();}catch(error){retryAccount.hidden=true;notice.textContent=error.message;return;}
+    return startPreparation(preparationToResume);
+  });
   restart.addEventListener('click',()=>{
     if(working||restart.hidden)return;
     const prior=recovery?{...recovery,state:'prepared',binding:context.binding}:savedPreparation();
@@ -629,7 +674,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     if(prior&&(prior.persisted||!sameOptions(choices,prior.choices)))preparationToResume=null;
     return client.prepare(context.binding,choices,undefined,account?.target.id);
   }
-  controls.addEventListener('submit',event=>{event.preventDefault();if(working||order||recovery||!controls.reportValidity())return;
+  controls.addEventListener('submit',event=>{event.preventDefault();if(working||!dialog.open||controls.hidden||order||recovery||!controls.reportValidity())return;
     if(commercial?.checked&&!fields.get('brand_content_toggle').checked&&!fields.get('brand_organic_toggle').checked){notice.textContent='Wähle eigene Marke, Werbung für Dritte oder beides.';return;}
     if(context.binding.platform==='tiktok'&&fields.get('brand_content_toggle').checked&&fields.get('visibility').value==='SELF_ONLY'){notice.textContent='Werbung für Dritte kann bei TikTok nicht mit „Nur ich“ veröffentlicht werden. Bitte wähle eine andere Sichtbarkeit.';return;}
     const choices=Object.fromEntries([...fields].map(([k,e])=>[k,k==='visibility'?e.value:e.type==='checkbox'?(e.dataset.invert==='true'?!e.checked:e.checked):e.value==='true']));
@@ -671,8 +716,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
     return run(()=>client.get(order.id));
   });
-  close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>{if(!dialog.open)clearExpiryTimer();});dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
-  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  function closeDialog(){leaveOpening();retryAccount.hidden=true;dialog.close();}
+  close.addEventListener('click',()=>{if(!close.disabled)closeDialog();});
+  dialog.addEventListener('close',()=>{if(!dialog.open){leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
+  dialog.addEventListener('cancel',e=>{if(working){e.preventDefault();if(opening)closeDialog();}});
+  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
