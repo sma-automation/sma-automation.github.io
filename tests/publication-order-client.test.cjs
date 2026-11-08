@@ -87,3 +87,17 @@ test('preflight requires a nonempty target even if both response identifiers are
   await assert.rejects(client.account('youtube'));
  }
 });
+
+test('initial account errors preserve reconnect and rate limits while transport failures allow an explicit retry',async()=>{
+ for(const [status,code] of [[200,'TARGET_CHECK_UNAVAILABLE'],[401,'AUTH_REQUIRED'],[429,'TARGET_RATE_LIMITED'],[503,'TARGET_CHECK_UNAVAILABLE']]){
+  for(const invalidJson of [false,true]){
+   const t=await setup(()=>({ok:status===200,status,json:async()=>{
+    if(invalidJson)throw new SyntaxError('HTML response');
+    return {ok:false};
+   }}));
+   await assert.rejects(t.client.account('youtube'),{code});assert.equal(t.requests.length,1);
+  }
+ }
+ const t=await setup(()=>({ok:true,json:async()=>({ok:false,code:'TARGET_RECONNECT_REQUIRED'})}));
+ await assert.rejects(t.client.account('tiktok'),{code:'TARGET_RECONNECT_REQUIRED',rejected:true});
+});
