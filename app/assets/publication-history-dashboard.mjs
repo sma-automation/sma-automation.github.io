@@ -119,10 +119,13 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
    const detail=create('p',historyStatuses[entry.status][1]);
    let previewLink;
    const window=entry.approval_window||entry.preparation_window;
+   const currentPost=entry.status==='cancelled'&&['youtube','tiktok'].includes(entry.platform);
+   const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
+   if(window||currentPost){
+    previewLink=create('a',currentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen','sma-history-preview-link');
+    previewLink.href=currentPost?previewUrl+'&view=current':previewUrl;previewLink.target='_top';
+   }
    if(window){
-    previewLink=create('a','Beitragsvorschau öffnen','sma-history-preview-link');
-    const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
-    previewLink.href=previewUrl;previewLink.target='_top';
     const expire=()=>{
      status.textContent='Vorbereitung abgelaufen';
      detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';

@@ -6,14 +6,14 @@ class Element{constructor(tag='div'){this.tag=tag;this.style={};this.children=[]
 const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
 const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').split('// Existing owner-scoped')[0].replaceAll('export function','function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
-async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
+async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,currentPost=false,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:'fixture-owner'}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
  client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
  return {orderOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
@@ -538,6 +538,73 @@ test('history opens the specific prepared order directly as a saved post preview
  assert.equal(p.calls.find(c=>c.name==='sma_publication_order_v1').p_input.id,historyOrderId);
  assert.equal(p.calls.some(c=>c.url||!['get','list','check'].includes(c.p_action)),false);
  assert.equal(p.orderOptions.getContext().binding.preview_id,historySaved.id);assert.equal(p.orderOptions.previousOrder.id,historyOrderId);
+});
+const cancelledOrder={...historyOrder,state:'cancelled',approval_token:null,approval_review:null,check_error:'ORDER_CHANGED'};
+test('a cancelled order opens the current saved draft of the same file and portal without restoring any preparation',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const order={...cancelledOrder,binding:{...historyOrder.binding,platform:portal},draft:{...historyOrder.draft,platform:portal}};
+  const file={...historyFile,assignments:[{platform:portal,revision:8,status:'assigned'}]};
+  const draft={...order.draft,title:'Heutiger Titel',body:'Aktuelle Fassung für diese Datei.'};
+  const saved={...historySaved,assignment_revision:8,id:'a77a0000-0000-4000-8000-000000000021',revision:3,preview:{...historySaved.preview,drafts:[draft]}};
+  const p=await historyView({portal,order,file,saved,currentPost:true});
+  assert.deepEqual(p.views,['preview']);assert.equal(p.get('drafts').querySelector('textarea').value,draft.body);
+  assert.equal(p.orderOptions.getContext().binding.preview_id,saved.id);assert.equal(p.orderOptions.getContext().binding.assignment_revision,8);
+  assert.equal(p.orderOptions.previousOrder,undefined);assert.equal(p.orderOptions.resumeOrder,undefined);
+  assert.equal(p.get('back').href,'dashboard.html#auftrag/'+order.id);
+  assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+ }
+});
+test('editing after cancellation saves the current assignment and never writes to the old order',async()=>{
+ const file={...historyFile,assignments:[{platform:'youtube',revision:8,status:'assigned'}]};
+ const saved={...historySaved,assignment_revision:8};
+ const p=await historyView({currentPost:true,order:cancelledOrder,filesRpc:async a=>{
+  if(a.p_action==='list')return {ok:true,files:[file]};
+  if(a.p_action==='get')return saved;
+  if(a.p_action==='save')return {...saved,assignment_revision:9};
+  return {ok:true};
+ }});
+ assert.equal(p.get('result').hidden,false);
+ p.get('drafts').querySelector('textarea').value='Neu bearbeiteter Beitrag der aktuellen Version.';
+ await p.save();
+ const write=p.calls.find(c=>c.p_action==='save');
+ assert.equal(write.name,'sma_publication_files_v1');assert.equal(write.p_input.asset_id,file.id);
+ assert.equal(write.p_input.assignment_revision,8);assert.match(write.p_input.body,/Neu bearbeiteter Beitrag/);
+ assert.deepEqual(p.calls.filter(c=>c.name==='sma_publication_order_v1').map(c=>c.p_action),['get']);
+ assert.equal(p.orderOptions.getContext().binding.assignment_revision,9);
+});
+test('retry after an edit during lookup opens only the latest confirmed assignment',async()=>{
+ let revision=4;
+ const p=await historyView({currentPost:true,order:cancelledOrder,filesRpc:async req=>{
+  if(req.p_action==='get')return {...historySaved,assignment_revision:revision};
+  if(req.p_action==='list'){revision=5;return {ok:true,files:[{...historyFile,assignments:[{platform:'youtube',revision,status:'assigned'}]}]};}
+  return {ok:true};
+ }});
+ assert.deepEqual(p.views,[]);const retry=p.get('refreshFiles');assert.equal(retry.disabled,false);
+ await retry.click();assert.deepEqual(p.views,['preview']);assert.equal(p.orderOptions.getContext().binding.assignment_revision,5);
+ assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+});
+test('current-post route uses the current product and offers repair when it was removed',async()=>{
+ const draft={...historyOrder.draft,product_id:'aktueller-artikel'};
+ const saved={...historySaved,product_link_available:false,preview:{...historySaved.preview,drafts:[draft]}};
+ const p=await historyView({currentPost:true,order:cancelledOrder,saved});
+ assert.deepEqual(p.views,['source']);assert.equal(p.get('draftLinkEditor').open,true);
+ assert.equal(p.orderOptions.previousOrder,undefined);assert.equal(p.orderOptions.resumeOrder,undefined);
+ assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+});
+test('current-post link fails closed on changed files, stale assignments, invalid drafts and other order states',async()=>{
+ for(const options of [
+  {resume:true},{order:historyOrder},{order:{...cancelledOrder,approved_at:'2026-11-08T10:00:00Z'}},
+  {order:{...cancelledOrder,approval_token:'active'}},{order:{...cancelledOrder,approval_review:{}}},
+  {order:{...cancelledOrder,binding:{...historyOrder.binding,platform:'tiktok'}}},
+  {order:{ok:false,code:'ORDER_UNAVAILABLE'}},{file:null},{file:{...historyFile,revision:'replaced'}},
+  {file:{...historyFile,assignments:[]}},{file:{...historyFile,assignments:[{platform:'youtube',status:'changed',revision:4}]}},
+  {saved:{ok:true,status:'empty'}},{saved:{...historySaved,assignment_revision:7}},
+  {saved:{...historySaved,id:'invalid'}},{saved:{...historySaved,preview:{...historySaved.preview,drafts:[{...historyOrder.draft,platform:'tiktok'}]}}}
+ ]){
+  const p=await historyView({order:cancelledOrder,currentPost:true,...options});
+  assert.deepEqual(p.views,[]);assert.equal(p.get('result').hidden,true);assert.equal(p.get('inputFields').disabled,true);
+  assert.equal(p.orderOptions.resumeOrder,undefined);assert.ok(p.calls.every(c=>!c.url));
+ }
 });
 test('only a valid order preview links back to the same history order',async()=>{
  const p=await historyView();assert.equal(p.get('back').href,'dashboard.html#auftrag/'+historyOrderId);assert.equal(p.get('back').textContent,'← Zurück zum Auftrag');
