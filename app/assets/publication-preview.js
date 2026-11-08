@@ -1,6 +1,6 @@
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
-import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=1';
+import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
@@ -172,6 +172,35 @@ function editedPortalText(card){
  return {platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),
   body:card.querySelector('[data-field=body]').value.trim(),hashtags:parseHashtags(card.querySelector('[data-field=hashtags]').value)};
 }
+function hashtagCorrection(card){
+ const field=card.querySelector('[data-field=hashtags]');
+ try{parseHashtags(field.value);return null;}
+ catch(e){return {field,target:field.id,label:'Hashtags korrigieren',note:e.message};}
+}
+function draftCorrection(card){
+ for(const key of ['title','body']){
+  const field=card.querySelector('[data-field='+key+']'),value=field.value.trim();
+  const name=key==='title'?'Titel':'Beitragstext',changed=field.value!==field.defaultValue;
+  let note;
+  if(key==='title'&&(!value||value.length>80))note='Gib einen Titel mit 1–80 Zeichen ein.';
+  else if(key==='body'&&(value.length<10||value.length>1200||(changed&&[...value].length<10)))note='Der Beitragstext braucht 10–1200 Zeichen.';
+  // Link-only edits may legitimately preserve older, already stored text.
+  else if(changed){
+   if(value.includes('#'))note='Trage Hashtags im Hashtag-Feld ein und entferne das # aus dem '+name+'.';
+   else if(value.includes('@'))note='Entferne die @-Angabe aus dem '+name+'.';
+   else if(/https?:|www\.|[a-z0-9-]+\.(?:com|de|at|net|org|io|shop|co|eu)(?![\p{L}\p{N}_])|\blink[ \t\n\r]+(?:im|in|on|auf)(?![\p{L}\p{N}_])/iu.test(value))note='Entferne den Link oder Linkhinweis aus dem '+name+'. SMA ergänzt das gewählte Linkziel.';
+   else if(/[<>]/u.test(value))note='Entferne die spitzen Klammern aus dem '+name+'.';
+   else if(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u202a-\u202e\u2066-\u2069]/u.test(value))note='Der '+name+' enthält ein unzulässiges Steuerzeichen. Gib die betroffene Stelle neu ein.';
+  }
+  if(note)return {field,target:field.id,label:name+' korrigieren',note};
+ }
+ return hashtagCorrection(card);
+}
+function focusDraftCorrection(issue){
+ workspace?.show('source');
+ $('saveStatus').textContent=issue.note;status(issue.note,true);
+ issue.field.setCustomValidity(issue.note);issue.field.focus();issue.field.reportValidity?.();
+}
 function setUncertainSave(snapshot){
  uncertainSave=snapshot;$('checkDraftSave').hidden=!snapshot;$('save').hidden=!!snapshot;
 }
@@ -185,15 +214,16 @@ function syncSaveButton(){
 function updateDraftStatus(){
  syncSaveButton();
  const step=previewDraftStep();
- $('saveStatus').textContent=step?.target==='checkDraftSave'||step?.target==='compareDraft'?step.note:
+ $('saveStatus').textContent=step?.field||step?.target==='checkDraftSave'||step?.target==='compareDraft'?step.note:
   hasDraftEdits()?'Ungespeicherte Änderungen':selectedAsset?'Dieser Datei und diesem Portal zugeordnet':'Textvorlage gespeichert';
 }
 function previewDraftStep(){
  if(!selectedAsset||signedOut)return null;
  if(!current)return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
  if(uncertainSave)return {target:'checkDraftSave',label:'Speicherstand prüfen',note:'Die Speicherbestätigung für diesen Beitrag steht aus.'};
- if(!$('compareDraft').hidden)return {target:'compareDraft',label:'Änderungen vergleichen',note:'Eine andere Fassung ist gespeichert. Vergleiche sie mit deinen Eingaben.'};
- if(hasDraftEdits())return {target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
+ const card=$('drafts').children[0];
+ if(!$('compareDraft').hidden)return hashtagCorrection(card)||{target:'compareDraft',label:'Änderungen vergleichen',note:'Eine andere Fassung ist gespeichert. Vergleiche sie mit deinen Eingaben.'};
+ if(hasDraftEdits())return draftCorrection(card)||{target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
  if(hasSourceEdits())return {target:'source_text',label:'Inhaltsangaben öffnen',note:'Der Beitrag ist gespeichert. Die geänderten Inhaltsangaben sind noch nicht in diesen Text übernommen.'};
  return null;
 }
@@ -201,6 +231,7 @@ async function runPreviewDraftAction(target){
  if(busy||signedOut)return;
  const step=previewDraftStep();
  if(!step||step.target!==target){workspace.refreshPreview();return;}
+ if(step.field){focusDraftCorrection(step);return;}
  if(step.target==='save'){
   const originalFile=fileContext();
   await saveDraft();
@@ -276,7 +307,7 @@ function render(data){
     updateCaption();workspace?.refreshPreview();
    };
   }
-  card.addEventListener('input',()=>{updateDraftStatus();updateCaption();updateTabForm();});$('drafts').append(card);
+  card.addEventListener('input',event=>{event?.target?.setCustomValidity?.('');updateDraftStatus();updateCaption();updateTabForm();});$('drafts').append(card);
  }
  if(workspace&&selectedAsset&&selectedAsset.display?.draft_title!==visibleDrafts[0].title){
   selectedAsset.display={...selectedAsset.display,draft_title:visibleDrafts[0].title};
@@ -1097,6 +1128,8 @@ async function checkEditorContext(context,original){
 const draftConflict=mountDraftConflict(document);
 $('compareDraft').addEventListener('click',async()=>{
  if(busy||signedOut||$('compareDraft').hidden||!current||!selectedAsset)return;
+ const issue=hashtagCorrection($('drafts').children[0]);
+ if(issue){focusDraftCorrection(issue);return;}
  const context=fileContext(),original=current,draft=original.preview.drafts.find(d=>d.platform===selectedPortal);
  const base=comparisonBase||draft;
  const stagedLink=pendingLink;
@@ -1278,7 +1311,12 @@ $('checkDraftSave').addEventListener('click',async()=>{
 
 async function saveDraft(){
  if(busy||signedOut||!current||uncertainSave||comparisonBase||!hasFormChanges())return;
- let edits;try{edits=[...$('drafts').children].map(editedPortalText);}catch(e){status(e.message,true);return;}
+ const cards=[...$('drafts').children];
+ for(const card of cards){
+  const issue=draftCorrection(card);
+  if(issue){focusDraftCorrection(issue);return;}
+ }
+ const edits=cards.map(editedPortalText);
  const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});
  if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}
  const context=selectedAsset?fileContext():null,original=current;

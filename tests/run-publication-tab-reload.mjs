@@ -95,10 +95,15 @@ try{
   const updated=$('youtube-body'),newText='Jetzt ausdrücklich in der Vorschau gespeichert.';
   const tags=$('youtube-hashtags');
   tags.value='#Doppelt #Doppelt';tags.dispatchEvent(new Event('input',{bubbles:true}));
-  $('workspacePreviewEdits').click();$('workspaceDraftAction').click();
-  await until(()=>$('workspaceDraftNotice').textContent.includes('Hashtags'));
-  if($('workspacePostTags').textContent!==tags.value||Number(sessionStorage.fixtureWrites)!==1)throw Error('Invalid hashtags were dropped or written');
-  $('workspaceEditPost').click();tags.value='#Aktuell';tags.dispatchEvent(new Event('input',{bubbles:true}));
+  const frame=window.frameElement;
+  $('workspacePreviewEdits').click();await until(()=>frame.dataset.view==='preview',frame);
+  if($('workspaceDraftAction').textContent!=='Hashtags korrigieren'||!$('workspaceDraftNotice').textContent.includes('doppelt')||
+   !$('preparePublicationOrder').hidden||$('workspacePostTags').textContent!==tags.value)throw Error('Missing duplicate hashtag guidance');
+  const correcting=new Promise(resolve=>parent.addEventListener('popstate',resolve,{once:true}));
+  $('workspaceDraftAction').click();await correcting;
+  if(document.activeElement!==tags||$('workspaceSource').hidden||Number(sessionStorage.fixtureWrites)!==1||!tags.validity.customError)throw Error('Correction did not reach the original hashtag input');
+  tags.value='#Aktuell';tags.dispatchEvent(new Event('input',{bubbles:true}));
+  if(tags.validity.customError)throw Error('Corrected hashtags still have an error');
   updated.value=newText;updated.dispatchEvent(new Event('input',{bubbles:true}));$('workspacePreviewEdits').click();
   const action=$('workspaceDraftAction'),prepare=$('preparePublicationOrder');
   const offered=!action.hidden&&action.textContent==='Entwurf speichern'&&prepare.hidden;

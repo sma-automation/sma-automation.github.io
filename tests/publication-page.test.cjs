@@ -1404,13 +1404,40 @@ test('a competing revision or unresolved save offers its existing read and compa
  assert.equal(g.sessionStorage.rows.size,1);
 });
 
-test('invalid hashtags keep the local fields and cannot save from the preview',async()=>{
- const f=sharedDraft('youtube'),p=await f.open();
- editPortalField(p,'hashtags','#Eins #Eins');
- const before=p.calls.length;await p.workspaceOptions.onDraftAction('save');
- assert.equal(f.writes.length,0);assert.equal(p.calls.length,before);assert.match(p.get('status').textContent,/Hashtags/);
- assert.equal(p.get('drafts').children[0].querySelector('[data-field=hashtags]').value,'#Eins #Eins');
- assert.equal(p.workspaceOptions.getPreview().draftStep.target,'save');
+test('invalid post fields lead from the preview to the exact control without saving or preparing',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=sharedDraft(portal),p=await f.open(),ui=p.workspaceOptions;
+  for(const [key,value,reason] of [
+   ['title','  ',/Titel/],['title','x'.repeat(81),/80/],['body','kurz',/10/],['body','x'.repeat(1201),/1200/],
+   ['body','😀'.repeat(5),/10/],['body','Unser Video zum #Produkt',/Hashtag/],['title','Mehr auf https://example.com',/Link/],
+   ['body','Weitere Infos auf beispiel.at',/Link/],['title','Link im Profil',/Link/],['body','Unser <neuer> Beitrag',/Klammern/],
+   ['title','Titel mit \u202aSteuerzeichen',/Steuerzeichen/],['body','Ein Beitrag von @Beispiel',/@/],['hashtags','#Eins #eins',/doppelt/],
+   ['hashtags','a b c d',/drei/],['hashtags','#Nicht-erlaubt',/Unterstriche/]
+  ]){
+   const field=p.get('drafts').children[0].querySelector('[data-field='+key+']');
+   const before=p.calls.length;editPortalField(p,key,value);
+   const step=ui.getPreview().draftStep;assert.equal(step.target,portal+'-'+key);assert.match(step.note,reason);
+   await ui.onDraftAction('save');assert.equal(p.calls.length,before);
+   await ui.onDraftAction(step.target);assert.equal(field.focused,true);assert.equal(field.value,value);
+   assert.equal(p.views.at(-1),'source');assert.equal(p.get('saveStatus').textContent,step.note);
+   await p.save();assert.equal(p.calls.length,before);assert.equal(f.writes.length,0);
+   editPortalField(p,key,field.defaultValue);assert.equal(ui.getPreview().draftStep,null);
+  }
+  editPortalField(p,'body','Korrigierter und vollständiger Beitrag.');
+  assert.equal(ui.getPreview().draftStep.target,'save');await ui.onDraftAction('save');assert.equal(f.writes.length,1);
+ }
+});
+test('a pending receipt precedes corrections and invalid hashtags can be repaired before comparing revisions',async()=>{
+ const f=interruptedDraft('youtube',false),p=await f.first();
+ editPortalField(p,'body','Ein unterbrochener Speicherversuch.');await p.save();editPortalField(p,'hashtags','#Fehler #Fehler');
+ assert.equal(p.workspaceOptions.getPreview().draftStep.target,'checkDraftSave');
+ const g=sharedDraft('tiktok'),q=await g.open();
+ editPortalField(q,'title','Änderung im ersten Tab');g.change({body:'Anderer Text aus Tab zwei.'});await q.save();
+ editPortalField(q,'hashtags','#A #A');const before=q.calls.length;
+ assert.equal(q.workspaceOptions.getPreview().draftStep.target,'tiktok-hashtags');await q.get('compareDraft').click();
+ assert.equal(q.get('drafts').children[0].querySelector('[data-field=hashtags]').focused,true);
+ assert.equal(q.calls.length,before);assert.equal(q.get('compareDraft').hidden,false);
+ editPortalField(q,'hashtags','#A');assert.equal(q.workspaceOptions.getPreview().draftStep.target,'compareDraft');
 });
 test('fully reverted text, hashtags and destination restore the saved preview without a request',async()=>{
  for(const portal of ['youtube','tiktok']){
@@ -1478,4 +1505,10 @@ test('reload after undo keeps the verified stored form instead of reviving the i
  const again=await f.reload();assert.equal(f.sessionStorage.rows.size,0);
  assert.equal(again.get('drafts').querySelector('textarea').value,original.body);assert.equal(again.workspaceOptions.getPreview().draftStep,null);
  assert.equal(again.orderOptions.getContext().binding.assignment_revision,4);assert.equal(f.writes.length,0);
+});
+
+test('correcting a link alone preserves already saved text even if it contains legacy markup',async()=>{
+ const f=sharedDraft('youtube');f.change({body:'Alter archivierter Beitrag mit #Hinweis und einem Link.'});
+ const p=await f.open();await p.get('draftLinkShop').click();assert.equal(p.workspaceOptions.getPreview().draftStep.target,'save');
+ await p.workspaceOptions.onDraftAction('save');assert.equal(f.writes.length,1);assert.match(f.writes[0].body,/#Hinweis/);
 });
