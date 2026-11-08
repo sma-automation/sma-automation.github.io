@@ -13,7 +13,7 @@ async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
  return {orderOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
@@ -989,4 +989,92 @@ test('history with a withdrawn product opens only the verified saved draft for c
     {...saved,preview:{...saved.preview,drafts:[{...d,title:'Anderer Stand'}]}}]){
   const p=await historyView({saved:invalid,order,resume:true});assert.deepEqual(p.views,[]);assert.equal(p.get('result').hidden,true);
  }
+});
+
+function sharedDraft(portal){
+ const file={...supportedVideo};
+ let draft={...result.preview.drafts[0],platform:portal,product_id:'alter-artikel'},revision=1,assign=4,previewId=historySaved.id;
+ const writes=[];
+ const view=()=>({ok:true,status:'completed',id:previewId,revision,assignment_revision:assign,product_link_available:!!draft.product_id,
+  preview:{...result.preview,drafts:[structuredClone(draft)]}});
+ function change(patch){draft={...draft,...patch};revision++;assign++;}
+ async function rpc({p_action,p_input}){
+  if(p_action==='list')return {ok:true,files:[{...file,assignments:[{platform:portal,revision:assign,status:'assigned'}]}]};
+  if(p_action==='get')return view();
+  if(p_action==='save'){
+   if(p_input.assignment_revision!==assign)return {ok:false,code:'ASSIGNMENT_CONFLICT'};
+   writes.push(p_input);const {title,body,hashtags}=p_input;change({title,body,hashtags});
+   if(Object.hasOwn(p_input,'link_target')){
+    if(p_input.link_target)draft.product_id=p_input.link_target.product_id;else delete draft.product_id;
+   }
+   return view();
+  }
+  return {ok:true};
+ }
+ return {open:()=>boot({portal,asset:file.id,wide:true,filesRpc:rpc}),writes,change,view,
+  replaceFile(){file.revision='replaced';},replacePreview(){previewId=historyOrderId;}};
+}
+function editPortalField(p,key,value){
+ const card=p.get('drafts').children[0];card.querySelector('[data-field='+key+']').value=value;card.events.input();
+}
+const compareTick=()=>new Promise(resolve=>setImmediate(resolve));
+test('two editors combine independent changes on the latest revision only after explicit save',async()=>{
+ for(const platform of ['youtube','tiktok']){
+  const f=sharedDraft(platform),a=await f.open(),b=await f.open();
+  editPortalField(a,'title','Vom ersten Tab');await a.save();
+  editPortalField(b,'body','Ein anderer Beitragstext aus Tab zwei.');
+  await b.get('draftLinkShop').click();await b.save();
+  assert.equal(f.writes.length,1);assert.equal(b.get('compareDraft').hidden,false);
+  const comparing=b.get('compareDraft').click();await compareTick();
+  assert.equal(b.get('draftConflictDialog').open,true);assert.equal(b.get('draftConflictApply').disabled,false);
+  await b.get('draftConflictApply').click();await comparing;
+  const card=b.get('drafts').children[0];
+  assert.equal(card.querySelector('input').value,'Vom ersten Tab');assert.match(card.querySelector('textarea').value,/Tab zwei/);
+  assert.equal(f.writes.length,1);assert.throws(()=>b.orderOptions.getContext(),/speichere/);
+  await b.save();assert.equal(f.writes.length,2);assert.equal(f.writes[1].assignment_revision,5);assert.equal(f.writes[1].link_target,null);
+  assert.equal(f.view().preview.drafts[0].title,'Vom ersten Tab');assert.equal(b.get('compareDraft').hidden,true);
+ }
+});
+test('conflicting text, tags and product require individual choices and Back keeps local edits',async()=>{
+ const f=sharedDraft('youtube'),p=await f.open();
+ editPortalField(p,'body','Text aus diesem Tab zum Vergleichen.');editPortalField(p,'hashtags','');
+ await p.get('draftLinkShop').click();
+ f.change({body:'Gespeicherte Fassung aus dem anderen Tab.',hashtags:['Dort'],product_id:'anderer-artikel'});
+ await p.save();const first=p.get('compareDraft').click();await compareTick();
+ await p.get('draftConflictBack').click();await first;
+ assert.equal(p.get('drafts').querySelector('textarea').value,'Text aus diesem Tab zum Vergleichen.');
+ assert.equal(p.get('shopLink').href,result.preview.shop_url);assert.equal(f.writes.length,0);
+ const second=p.get('compareDraft').click();await compareTick();
+ const fields=p.get('draftConflictFields');assert.equal(p.get('draftConflictApply').disabled,true);
+ await p.get('draftConflictApply').click();assert.equal(p.get('draftConflictDialog').open,true);
+ for(const group of fields.children){
+  const radios=group.querySelectorAll('input');if(!radios.length)continue;
+  const selected=radios[0].name.endsWith('hashtags')?radios[0]:radios[1];selected.checked=true;selected.events.change();
+ }
+ assert.equal(p.get('draftConflictApply').disabled,false);
+ await p.get('draftConflictApply').click();await second;
+ assert.equal(p.get('drafts').querySelector('textarea').value,'Gespeicherte Fassung aus dem anderen Tab.');
+ assert.match(p.get('shopLink').href,/anderer-artikel/);
+ await p.save();assert.equal(f.writes[0].hashtags.length,0);assert.equal(Object.hasOwn(f.writes[0],'link_target'),false);
+});
+test('a later concurrent save requires another comparison and replacing the file or draft blocks adoption',async()=>{
+ const f=sharedDraft('tiktok'),p=await f.open();
+ editPortalField(p,'body','Meine lokalen Änderungen am Beitrag.');
+ f.change({title:'Erster externer Titel'});await p.save();
+ const compare=p.get('compareDraft').click();await compareTick();f.change({title:'Zweiter externer Titel'});
+ await p.get('draftConflictApply').click();await compare;await p.save();assert.equal(p.get('compareDraft').hidden,false);assert.equal(f.writes.length,0);
+ for(const method of ['replaceFile','replacePreview']){
+  const changed=sharedDraft('youtube'),tab=await changed.open();
+  editPortalField(tab,'body','Lokal erhaltener Text für die ursprüngliche Datei.');
+  changed.change({title:'Eine Änderung'});await tab.save();changed[method]();await tab.get('compareDraft').click();
+  assert.ok(!tab.get('draftConflictDialog').open);assert.match(tab.get('drafts').querySelector('textarea').value,/Lokal erhaltener/);assert.equal(changed.writes.length,0);
+ }
+});
+test('account change closes the comparison and clears both versions',async()=>{
+ const f=sharedDraft('youtube'),p=await f.open();
+ editPortalField(p,'body','Privater lokaler Testtext zum Vergleichen.');f.change({body:'Gespeicherter privater Testtext.'});
+ await p.save();const compare=p.get('compareDraft').click();await compareTick();
+ assert.equal(p.get('draftConflictDialog').open,true);
+ p.switchOwner();await compare;assert.equal(p.get('draftConflictDialog').open,false);assert.equal(p.get('draftConflictFields').children.length,0);
+ assert.equal(p.get('result').hidden,true);assert.equal(p.get('compareDraft').hidden,true);assert.equal(f.writes.length,0);
 });

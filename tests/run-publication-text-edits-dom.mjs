@@ -3,7 +3,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 import {parseHashtags,addHashtagField,hashtagMessage} from '../app/assets/publication-hashtags.mjs';
 import {draftDestination} from '../app/assets/publication-destination.mjs';
 const source=await readFile(new URL('../app/assets/publication-preview.js',import.meta.url),'utf8'),html=await readFile(new URL('../app/publication-preview.html',import.meta.url),'utf8');
-const render=source.slice(source.indexOf('function hasDraftEdits('),source.indexOf('async function waitForResult('));
+const render=source.slice(source.indexOf('function editedPortalText('),source.indexOf('async function waitForResult('));
 const save=source.slice(source.indexOf("$('save').addEventListener('click',async()=>{"),source.indexOf("window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')"));
 const shop='https://sma-automation.com/app/shop.html?shop=fixture',draft=platform=>({platform,title:'Synthetischer Test',body:'Ein roter Gegenstand wird gezeigt.',hashtags:['Alt','Hotel'],caption:'Ein roter Gegenstand wird gezeigt.\n\n#Alt #Hotel\n\n🛒 Zum Shop: '+shop,review_notes:[]});
 const initial={ok:true,status:'completed',id:'fixture',revision:1,assignment_revision:1,preview:{can_publish:false,language:'de',shop_url:shop,drafts:[draft('youtube'),draft('tiktok')]}};

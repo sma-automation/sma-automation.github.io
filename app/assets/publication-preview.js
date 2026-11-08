@@ -7,6 +7,7 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
+import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=14';
 import {installOrderReview} from './publication-order.mjs?v=21';
@@ -61,7 +62,7 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -149,6 +150,10 @@ function attachProduct(input,product){
 }
 function fillInput(input){if(!input)return;for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;sourceDirty=false;syncMedia();}
 function syncMedia(){if(selectedAsset){$('media_kind').value=selectedAsset.media_kind;$('media_kind').disabled=true;}else{$('media_kind').disabled=false;}if(selectedPortal){for(const c of document.querySelectorAll('[name=platforms]'))c.checked=c.value===selectedPortal;if(selectedPortal==='youtube'){$('media_kind').value='video';$('media_kind').disabled=true;}}const yt=document.querySelector('[name=platforms][value=youtube]');yt.disabled=$('media_kind').value==='image';if(yt.disabled)yt.checked=false;}
+function editedPortalText(card){
+ return {platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),
+  body:card.querySelector('[data-field=body]').value.trim(),hashtags:parseHashtags(card.querySelector('[data-field=hashtags]').value)};
+}
 function hasDraftEdits(){return dirty||pendingLink!==undefined;}
 function unavailableDraftLink(draft){
  return !!draft?.product_id&&current?.product_link_available===false&&pendingLink===undefined;
@@ -183,7 +188,7 @@ function render(data){
  if(!visibleDrafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
  const target=draftDestination(data.preview.shop_url,visibleDrafts.length===1?visibleDrafts[0]:null,data.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
- current=data;pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('drafts').replaceChildren();
+ $('compareDraft').hidden=true;current=data;pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('drafts').replaceChildren();
  $('draftLinkEditor').hidden=!(selectedPortal&&selectedAsset?.media_kind==='video'&&data.assignment_revision>0);
  const unavailable=unavailableDraftLink(visibleDrafts[0]);
  $('draftLinkEditor').open=unavailable;$('draftLinkUndo').hidden=true;
@@ -257,7 +262,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
+function clearDraft(){$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -603,10 +608,7 @@ async function openCurrentHistoryPost(id,owner){
  const order=await readHistoryOrder(id,true);
  return loadCurrentHistoryPost(order,owner);
 }
-async function loadCurrentHistoryPost(order,owner){
- const {binding}=order,expired=expiredHistoryPreparation(order);
- // A newer text may invalidate the old assignment. Other failed checks still block this preview.
- if(expired&&order.check_error&&!['ORDER_CHANGED','ASSIGNMENT_CHANGED'].includes(order.check_error))throw fileError(order.check_error);
+async function readAssignedPortalDraft(binding){
  // Read by the owned file and portal, then check that this assignment still belongs to the same file version.
  const saved=await fileRpc('get',{asset_id:binding.asset_id,platform:selectedPortal});
  if(saved.status!=='completed'||!orderUuid.test(saved.id)||!Number.isSafeInteger(saved.revision)||saved.revision<1||
@@ -617,10 +619,17 @@ async function loadCurrentHistoryPost(order,owner){
  const catalog=await optimizerCatalog();
  const file=catalog.files?.find(f=>f.id===binding.asset_id);
  if(!file||!fileFitsPortal(file))throw Error(messages.FILE_UNAVAILABLE);
- if(file.revision!==binding.asset_revision)throw Error('Die Datei wurde seit diesem Auftrag ersetzt. Wähle die aktuelle Datei unter Veröffentlichung.');
+ if(file.revision!==binding.asset_revision)throw Error('Die ausgewählte Dateiversion wurde ersetzt. Wähle die aktuelle Datei unter Veröffentlichung.');
  const assignment=file.assignments?.find(a=>a.platform===selectedPortal);
  if(assignment?.status!=='assigned')throw fileError('ASSIGNMENT_CHANGED');
  if(assignment.revision!==saved.assignment_revision)throw fileError('ASSIGNMENT_CONFLICT');
+ return {catalog,file,saved};
+}
+async function loadCurrentHistoryPost(order,owner){
+ const {binding}=order,expired=expiredHistoryPreparation(order);
+ // A newer text may invalidate the old assignment. Other failed checks still block this preview.
+ if(expired&&order.check_error&&!['ORDER_CHANGED','ASSIGNMENT_CHANGED'].includes(order.check_error))throw fileError(order.check_error);
+ const {catalog,file,saved}=await readAssignedPortalDraft(binding);
  const draft=saved.preview.drafts[0];
  const repairLink=!!draft.product_id&&saved.product_link_available===false;
  const samePreparedPost=expired&&order.state==='prepared'&&!order.check_error&&sameHistoryDraft(order,saved,draft);
@@ -915,9 +924,47 @@ for(const id of ['productChoice','catalogProduct'])$(id).addEventListener('chang
  if(choosingLinkFor&&choosingLinkFor===current&&$(id).value)return chooseDraftLink();
 });
 
+async function checkConflictContext(context,original){
+ const owner=(await session()).user.id;
+ assertFileContext(context);
+ if(owner!==previewOwnerId)throw fileError('AUTH_REQUIRED');
+ if(current!==original)throw fileError('ASSIGNMENT_CONFLICT');
+}
+const draftConflict=mountDraftConflict(document);
+$('compareDraft').addEventListener('click',async()=>{
+ if(busy||signedOut||$('compareDraft').hidden||!current||!selectedAsset)return;
+ const context=fileContext(),original=current,base=original.preview.drafts.find(d=>d.platform===selectedPortal);
+ const stagedLink=pendingLink;
+ lock(true);
+ try{
+  const local={...editedPortalText($('drafts').children[0]),product_id:draftWithLink(base).product_id??null};
+  const {saved:latest}=await readAssignedPortalDraft(context);
+  await checkConflictContext(context,original);
+  if(latest.id!==original.id)throw Error('Für diese Datei wurde ein neuer Entwurf angelegt. Deine Eingaben stehen weiterhin im Formular.');
+  const remote=latest.preview.drafts[0];
+  if(latest.revision<original.revision||latest.assignment_revision<=context.assignment_revision||
+     latest.preview.shop_url!==original.preview.shop_url||!draftDestination(latest.preview.shop_url,remote,latest.preview.language)||
+     typeof remote.title!=='string'||typeof remote.body!=='string'||!Array.isArray(remote.hashtags)||!Array.isArray(remote.review_notes))throw fileError('ASSIGNMENT_CONFLICT');
+  const values=await draftConflict.choose({...base,product_id:base.product_id??null},local,{...remote,product_id:remote.product_id??null});
+  if(!values)return;
+  await checkConflictContext(context,original);
+  const keepSourceEdits=sourceDirty;
+  if(!keepSourceEdits)showProductContext(latest.product_context,selectedAsset,savedProductSelection(latest));
+  render(latest);sourceDirty=keepSourceEdits;
+  const card=$('drafts').children[0];
+  card.querySelector('[data-field=title]').value=values.title;card.querySelector('[data-field=body]').value=values.body;
+  card.querySelector('[data-field=hashtags]').value=values.hashtags.map(tag=>'#'+tag).join(' ');
+  pendingLink=values.product_id===(remote.product_id??null)?undefined:stagedLink;
+  dirty=values.title!==remote.title||values.body!==remote.body||JSON.stringify(values.hashtags)!==JSON.stringify(remote.hashtags);
+  refreshDraftLink?.();workspace?.refreshPreview();
+  status(hasDraftEdits()?'Auswahl übernommen. Prüfe den Entwurf und speichere deine Änderungen.':'Der Entwurf entspricht dem gespeicherten Stand.');
+ }catch(e){if(!signedOut)status(e.message,true);}
+ finally{lock(false);}
+});
+
 $('save').addEventListener('click',async()=>{
  if(busy||signedOut||!current)return;
- let edits;try{edits=[...$('drafts').children].map(card=>({platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),body:card.querySelector('[data-field=body]').value.trim(),hashtags:parseHashtags(card.querySelector('[data-field=hashtags]').value)}));}catch(e){status(e.message,true);return;}
+ let edits;try{edits=[...$('drafts').children].map(editedPortalText);}catch(e){status(e.message,true);return;}
  const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});
  if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}
  const context=selectedAsset?fileContext():null;
@@ -935,7 +982,12 @@ $('save').addEventListener('click',async()=>{
    fileChanged();
   }
   status('Änderungen gespeichert.');
- }catch(e){if(!signedOut){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}}finally{lock(false);syncMedia();}
+ }catch(e){if(!signedOut){
+  $('saveStatus').textContent='Änderungen noch nicht gespeichert';
+  if(context&&['youtube','tiktok'].includes(context.platform)&&['ASSIGNMENT_CONFLICT','REVISION_CONFLICT'].includes(e.code)){
+   $('compareDraft').hidden=false;status('Inzwischen wurde eine andere Fassung gespeichert. Vergleiche die Änderungen, um deine Eingaben zu übernehmen.',true);
+  }else status(e.message,true);
+ }}finally{lock(false);syncMedia();}
 });
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
@@ -944,7 +996,7 @@ if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrd
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},
 });
-window.addEventListener('keydown',event=>{if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
+window.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('draftConflictDialog').open)return;if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 // Build the shared portal workspace before waiting for the external account client.
 lock(true);status('Deine Dateien werden geladen …');
 try{

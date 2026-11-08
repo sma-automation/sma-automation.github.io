@@ -14,6 +14,7 @@ for (const [tag, path] of template.matchAll(/<link rel="stylesheet" href="([^"?]
 const workspace = (await asset('assets/publication-destination.mjs')).replace('export function', 'function') +
   (await asset('assets/optimizer-workspace.mjs')).replace(/^import .*;$/gm, '').replace('export function', 'function');
 const productLookup = (await asset('assets/publication-catalog-lookup.mjs')).replaceAll('export function', 'function');
+const draftConflict = (await asset('assets/publication-draft-conflict.mjs')).replace('export function', 'function');
 const orderDialog = (await asset('assets/publication-order.mjs')).replaceAll('export ', '');
 const sizes = [
   ['YouTube', 1008, 728], ['YouTube', 390, 844], ['TikTok', 320, 568],
@@ -24,6 +25,7 @@ function frame([portal, width, height]) {
     ${workspace}
     ${orderDialog}
     ${productLookup}
+    const compareDrafts = (()=>{${draftConflict};return mountDraftConflict;})();
     const $ = id => document.getElementById(id);
     const portal = ${JSON.stringify(portal)};
     document.body.classList.add('portal-mode');
@@ -59,6 +61,17 @@ function frame([portal, width, height]) {
       result.noPreselection=$('catalogProduct').value==='';
       $('catalogProduct').value=item.product_id;
       result.selectedProduct=(await lookup.validate()).product_id;
+      if(['YouTube','TikTok'].includes(portal)){
+        const base={title:'Titel',body:'Vorher',hashtags:[],product_id:null};
+        const mine={...base,body:'X'.repeat(320)},saved={...base,body:'Andere Fassung',hashtags:['Gespeichert']};
+        const picking=compareDrafts(document).choose(base,mine,saved);
+        const dialog=$('draftConflictDialog'),apply=$('draftConflictApply');
+        result.comparisonFits=dialog.open&&box('draftConflictDialog').width<=innerWidth&&dialog.scrollWidth<=dialog.clientWidth+1;
+        result.requiresChoice=apply.disabled;
+        $('draftConflictFields').querySelector('input').click();apply.click();
+        const chosen=await picking;
+        result.merged=chosen.body===mine.body&&chosen.hashtags[0]==='Gespeichert'&&!dialog.open;
+      }
       parent.postMessage(result, '*');
     });
   `;
@@ -85,6 +98,7 @@ try {
     assert.equal(report.beside,width>=660);
     assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
     assert.equal(report.selectedProduct,'fixture-1');
+    if(['YouTube','TikTok'].includes(portal))assert.ok(report.comparisonFits&&report.requiresChoice&&report.merged,'Draft comparison at width '+width);
     if(width>=660)assert.ok(report.page<=height,'Short portrait post should fit one desktop screen');
   }
 } finally {

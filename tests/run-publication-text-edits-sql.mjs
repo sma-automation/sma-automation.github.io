@@ -22,6 +22,20 @@ try {
   await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);
   try{return (await db.query("select public.sma_publication_files_v1('save',$1) as r",[JSON.stringify(input)])).rows[0].r;}finally{await db.exec('reset role');}
  };
+ // Reproduce two forms opened on the same file assignment, including the read before adoption.
+ await db.exec('begin');
+ const initialRevision=(await state()).assignment.revision;
+ const firstTab=await save({assignment_revision:initialRevision,title:'Titel aus Tab eins'});
+ eq(firstTab.ok,true);
+ const committed=await state(),newBody='Die zweite Fassung zeigt das Produkt im Einsatz.';
+ eq((await save({assignment_revision:initialRevision,body:newBody})).code,'ASSIGNMENT_CONFLICT');eq(await state(),committed);
+ await db.exec('set role authenticated');
+ const latest=(await db.query("select public.sma_publication_files_v1('get',$1) as r",[JSON.stringify({asset_id:id(20),platform:'youtube'})])).rows[0].r;
+ await db.exec('reset role');
+ eq(latest.id,id(10));eq(latest.assignment_revision,initialRevision+1);eq(await state(),committed);
+ const accepted=await save({assignment_revision:latest.assignment_revision,title:latest.preview.drafts[0].title,body:newBody});
+ eq(accepted.ok,true);eq(accepted.preview.drafts[0].title,'Titel aus Tab eins');eq(accepted.preview.drafts[0].body,newBody);
+ eq(accepted.assignment_revision,initialRevision+2);await db.exec('rollback');
  const original=await state();const r=await save({hashtags:['Türzubehör','Gadget']});eq(r.ok,true);eq(r.preview.drafts[0].hashtags,['Türzubehör','Gadget']);eq(r.preview.drafts[0].caption,ds[0].body+'\n\n#Türzubehör #Gadget\n\n🛒 Zum Shop: '+shop);eq(r.preview.can_publish,false);
  let s=await state();eq(s.preview.preview.drafts[1],ds[1]);eq(s.assignment.preview_revision,s.preview.revision);eq(s.assignment.draft,r.preview.drafts[0]);eq(s.history.length,original.history.length+2);eq(s.assignments.length,original.assignments.length+1);eq(s.history.filter(h=>h.revision===1),original.history);
  eq((await save()).preview.drafts[0].hashtags,['Türzubehör','Gadget']); // old client omits optional field
