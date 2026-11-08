@@ -11,7 +11,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=16';
-import {installOrderReview} from './publication-order.mjs?v=21';
+import {installOrderReview} from './publication-order.mjs?v=22';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -664,11 +664,15 @@ function expiredHistoryPreparation(order){
  const deadline=order?.state==='prepared'?order.approval_window:order?.state==='preparing'?order.preparation_window:null;
  return deadline?.status==='expired';
 }
+function samePortalDraft(first,second){
+ return !!first&&!!second&&['platform','title','body','caption','hashtags','review_notes','product_id']
+  .every(key=>JSON.stringify(first[key])===JSON.stringify(second[key]));
+}
 function sameHistoryDraft(order,saved,draft){
  const binding=order.binding;
  return !!draft&&!!order.draft&&saved.status==='completed'&&saved.id===binding.preview_id&&saved.revision===binding.preview_revision&&
   saved.assignment_revision===binding.assignment_revision&&saved.preview.shop_url===binding.shop_url&&
-  ['platform','title','body','caption','hashtags','review_notes','product_id'].every(key=>JSON.stringify(draft[key])===JSON.stringify(order.draft[key]));
+  samePortalDraft(draft,order.draft);
 }
 async function openHistoryOrderPreview(id,owner){
  const changed='Datei oder Beitrag wurden seit diesem Auftrag geändert. Öffne den aktuellen Stand unter Veröffentlichung.';
@@ -1071,19 +1075,27 @@ function openDraftLinkEditor(){
  workspace?.show('source');$('draftLinkEditor').open=true;
  $('draftLinkEditor').scrollIntoView({block:'nearest'});$('draftLinkProduct').focus();
 }
-async function verifySavedProductLink({binding,productId}){
+async function verifySavedDraft({binding,post,productId}){
  const snapshot=current;
  assertFileContext(binding);
- const result=await fileRpc('get',{asset_id:binding.asset_id,platform:binding.platform});
- assertFileContext(binding);
- const draft=result.preview?.drafts?.find(d=>d.platform===binding.platform);
- if(current!==snapshot||result.status!=='completed'||result.id!==binding.preview_id||
-    result.revision!==binding.preview_revision||result.assignment_revision!==binding.assignment_revision||
-    result.preview?.shop_url!==snapshot?.preview?.shop_url||draft?.product_id!==productId)throw fileError('ASSIGNMENT_CHANGED');
+ const result=await fileRpc('get',{asset_id:binding.asset_id,platform:binding.platform},AbortSignal.timeout(20000));
+ await checkEditorContext(binding,snapshot);
+ const drafts=result.preview?.drafts,shown=snapshot.preview.drafts.find(d=>d.platform===binding.platform);
+ if(result.status!=='completed'||result.id!==binding.preview_id||result.revision!==binding.preview_revision||
+    result.assignment_revision!==binding.assignment_revision||result.preview?.can_publish!==false||
+    result.preview.shop_url!==snapshot.preview.shop_url||result.preview.language!==snapshot.preview.language||
+    !Array.isArray(drafts)||drafts.length!==1||!samePortalDraft(shown,drafts[0])||
+    shown.title!==post.title||shown.caption!==post.caption||shown.product_id!==productId)throw fileError('ASSIGNMENT_CHANGED');
+ if(!productId)return;
  if(typeof result.product_link_available!=='boolean')throw Error('SMA konnte den Produktlink gerade nicht prüfen. Bitte versuche es erneut.');
  current.product_link_available=result.product_link_available;
  refreshDraftLink?.();
  if(!result.product_link_available)throw fileError('PRODUCT_LINK_UNAVAILABLE');
+}
+function openOutdatedDraft(){
+ if(signedOut)return;
+ workspace?.show('source');$('sourcePanel').open=true;$('loadLatest').focus();
+ status('Die gespeicherte Fassung hat sich geändert. Lade den gespeicherten Entwurf und prüfe den aktuellen Beitrag.',true);
 }
 function setDraftLink(target){
  if(!current||!refreshDraftLink||signedOut)return;
@@ -1345,8 +1357,16 @@ async function saveDraft(){
 $('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
- getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(previewDraftStep())throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,productId:current.preview.drafts.find(d=>d.platform===selectedPortal)?.product_id,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
- verifyProductLink:verifySavedProductLink,onUnavailableLink:openDraftLinkEditor,
+ getContext:()=>{
+  if(signedOut)throw Error(messages.AUTH_REQUIRED);
+  if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');
+  const draft=current?.preview.drafts.find(d=>d.platform===selectedPortal);
+  if(!selectedAsset||!draft)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');
+  if(previewDraftStep())throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');
+  return {name:selectedAsset.name,post:{title:draft.title,caption:draft.caption},productId:draft.product_id,
+   binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};
+ },
+ verifySavedDraft,onUnavailableLink:openDraftLinkEditor,onOutdatedDraft:openOutdatedDraft,
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},
 });

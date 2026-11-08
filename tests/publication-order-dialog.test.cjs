@@ -30,7 +30,7 @@ test('status refresh replaces a consented preview with a terminal cancellation a
  }};
  const source=fs.readFileSync('app/assets/publication-order.mjs','utf8').replaceAll('export function','function').replaceAll('export const','const');
  vm.runInNewContext(source+';this.install=installOrderReview;',context);
- context.install(doc,{host:doc.body,portalName:'YouTube',readStoredOrder:async id=>{reads.push(id);return {...saved,state:'cancelled',approval_token:null};},session:async()=>({access_token:'synthetic-session'}),getContext:()=>({binding,name:'Synthetic.mp4'}),refresh:async()=>{}});
+ context.install(doc,{host:doc.body,portalName:'YouTube',readStoredOrder:async id=>{reads.push(id);return {...saved,state:'cancelled',approval_token:null};},session:async()=>({access_token:'synthetic-session'}),getContext:()=>({binding,name:'Synthetic.mp4',post:{title:'Test',caption:'Synthetic text'}}),verifySavedDraft:async()=>{},refresh:async()=>{}});
  const dialog=byId.get('publicationOrderDialog'),form=dialog.children.find(e=>e.tag==='form');
  const open=byId.get('preparePublicationOrder'),buttons=dialog.querySelectorAll('button');
  const approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
@@ -54,7 +54,7 @@ test('status refresh replaces a consented preview with a terminal cancellation a
  assert.deepEqual(reads,[firstId]);assert.deepEqual(requests.map(r=>r.action),['account','prepare','account','prepare']);
 });
 
-function tiktokDialog({checkError=null,productId,verifyProductLink,onUnavailableLink}={}) {
+function tiktokDialog({checkError=null,productId,verifySavedDraft=async()=>{},onUnavailableLink}={}) {
  const byId=new Map(),requests=[];
  class Element{
   constructor(tag){this.tag=tag;this.children=[];this.events={};this.attrs={};this.dataset={};this.hidden=false;this.disabled=false;this.checked=false;this.value='';}
@@ -75,10 +75,10 @@ function tiktokDialog({checkError=null,productId,verifyProductLink,onUnavailable
   const base={ok:true,id:req.input.id,can_upload:false,can_publish:false,target:{id:'synthetic-tiktok',platform:'tiktok'},account_check:{target_id:'synthetic-tiktok',display_name:'Synthetic TikTok',policy}};
   if(req.action==='account')return {ok:true,json:async()=>({...base,stage:'account'})};
   assert.equal(req.action,'prepare','This UI test must never submit an approval');
-  return {ok:true,json:async()=>({...base,binding,choices:req.input.choices,state:'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic',approved_at:null,approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()},check_error:checkError,draft:{caption:'Synthetic caption'},media_check:{asset_id:'asset',asset_revision:'version:1',checks:[{code:'CONTENT_REVIEW_PENDING',status:'pending',message:'Visuelle Prüfung offen.'}]}})};
+  return {ok:true,json:async()=>({...base,binding,choices:req.input.choices,state:'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic',approved_at:null,approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()},check_error:checkError,draft:{title:'Synthetic title',caption:'Synthetic caption'},media_check:{asset_id:'asset',asset_revision:'version:1',checks:[{code:'CONTENT_REVIEW_PENDING',status:'pending',message:'Visuelle Prüfung offen.'}]}})};
  }};
  vm.runInNewContext(fs.readFileSync('app/assets/publication-order.mjs','utf8').replaceAll('export function','function').replaceAll('export const','const')+';this.install=installOrderReview;',scope);
- scope.install(doc,{host:doc.body,portalName:'TikTok',session:async()=>({access_token:'synthetic'}),getContext:()=>({binding,name:'Synthetic.mp4',productId}),verifyProductLink,onUnavailableLink,refresh:async()=>{}});
+ scope.install(doc,{host:doc.body,portalName:'TikTok',session:async()=>({access_token:'synthetic'}),getContext:()=>({binding,name:'Synthetic.mp4',productId,post:{title:'Synthetic title',caption:'Synthetic caption'}}),verifySavedDraft,onUnavailableLink,refresh:async()=>{}});
  const dialog=byId.get('publicationOrderDialog'),form=dialog.querySelectorAll('form')[0];
  const get=id=>byId.get(id),change=(id,value)=>{const el=get(id);if(el.type==='checkbox')el.checked=value;else el.value=value;el.events.change?.();};
  const submit=()=>form.events.submit({preventDefault(){}});
@@ -129,7 +129,7 @@ test('a changed current file keeps approval disabled even when every declaration
 
 test('checking the product precedes account lookup and order preparation; an unavailable product opens the editor',async()=>{
  let allowed=false,checked=0,repaired=0;
- const t=tiktokDialog({productId:'art-2',verifyProductLink:async context=>{
+ const t=tiktokDialog({productId:'art-2',verifySavedDraft:async context=>{
    assert.equal(context.productId,'art-2');checked++;
    if(!allowed)throw Object.assign(Error('Artikel nicht verfügbar'),{code:'PRODUCT_LINK_UNAVAILABLE'});
  },onUnavailableLink:()=>repaired++});

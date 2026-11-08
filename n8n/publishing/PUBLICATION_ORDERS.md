@@ -113,6 +113,17 @@ Bestätigung eines Speicherversuchs noch aus, prüft SMA zuerst dessen Ergebnis.
 
 ## Abgleich vor der Freigabe
 
+Beim Öffnen von **Freigabe vorbereiten** liest SMA den gespeicherten Beitrag
+zur ausgewählten Datei und zum Portal. Erst wenn Zuordnung, Revision und Entwurf
+mit der Vorschau übereinstimmen, beginnt die Zielkontoprüfung. Vor **Auftrag
+prüfen** sieht der Kunde Dateiname, Titel und Zielkonto. **Beitragstext ansehen**
+zeigt die gespeicherte Fassung mit Hashtags und Link.
+
+Beim Klick auf **Auftrag prüfen** liest SMA den Entwurf erneut. Hat ein zweiter
+Tab inzwischen eine andere Fassung gespeichert, führt der Dialog zum Laden
+des aktuellen Entwurfs. Auch Titel und vollständiger Beitragstext eines
+zurückgegebenen offenen Auftrags müssen zur geprüften Fassung passen.
+
 Nach **Auftrag prüfen** vergleicht die Beitragsvorschau die gespeicherten Portaloptionen
 mit der Auswahl im Formular. Bei YouTube und TikTok muss das Zielkonto zum zuvor
 angezeigten Konto passen. Bei einer aktiven Vorbereitung prüft SMA auch die
