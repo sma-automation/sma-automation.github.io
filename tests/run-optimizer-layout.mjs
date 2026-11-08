@@ -46,6 +46,11 @@ function frame([portal, width, height]) {
       stage:media.height, fits:viewport.scrollWidth<=innerWidth,
       beside:body.left>=media.right-1, page:viewport.scrollHeight
     };
+    previewData.draftStep={target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
+    controller.refreshPreview();
+    const actionBox=box('workspaceDraftAction');
+    result.draftActionFits=actionBox.width>0&&actionBox.right<=innerWidth&&viewport.scrollWidth<=innerWidth&&box('preparePublicationOrder').width===0;
+    delete previewData.draftStep;
     Object.assign(previewData.draft,{shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',product_id:'fixture-1'});
     previewData.linkNotice='Der gewählte Artikel ist nicht mehr verfügbar.';
     controller.refreshPreview();
@@ -94,7 +99,7 @@ try {
     const report = reports.find(r=>r.portal===portal&&r.width===width);
     assert.ok(report, portal+' '+width);
     console.log(report);
-    assert.ok(report.fits && report.action < height/2 && report.stage <= height*0.51);
+    assert.ok(report.draftActionFits && report.fits && report.action < height/2 && report.stage <= height*0.51);
     assert.equal(report.beside,width>=660);
     assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
     assert.equal(report.selectedProduct,'fixture-1');

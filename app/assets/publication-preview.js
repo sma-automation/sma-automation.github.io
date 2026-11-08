@@ -10,7 +10,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=15';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=16';
 import {installOrderReview} from './publication-order.mjs?v=21';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
@@ -45,14 +45,16 @@ if(selectedPortal){
 }
 
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
- describeFile,onEditLink:openDraftLinkEditor,
+ describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  getPreview:()=>{
   const draft=current?.preview?.drafts.find(d=>d.platform===selectedPortal);
-  let hashtags=[];try{hashtags=parseHashtags($(selectedPortal+'-hashtags')?.value||'');}catch{}
+  const rawTags=$(selectedPortal+'-hashtags')?.value||'';
+  let hashtags=[],invalidHashtags='';try{hashtags=parseHashtags(rawTags);}catch{invalidHashtags=rawTags;}
+  const draftStep=previewDraftStep();
   return {draft:draft?{...draftWithLink(draft),hashtags,title:$(selectedPortal+'-title').value,body:$(selectedPortal+'-body').value,shop_url:current.preview.shop_url}:null,
    linkNotice:unavailableDraftLink(draft)?messages.PRODUCT_LINK_UNAVAILABLE:'',
    facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
-   draftStatus:draft?(hasDraftEdits()?'Aktuelle, noch nicht gespeicherte Änderungen':'Dieser Datei und diesem Portal zugeordnet'):''};
+   draftStep,invalidHashtags,draftStatus:draftStep?.note||(draft?'Gespeicherter Entwurf':'')};
  },
  onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
 }):null;
@@ -66,7 +68,7 @@ if(workspace){
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value||!!comparisonBase;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
- if(workspace){$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;}
+ if(workspace){$('workspaceDraftAction').disabled=value;$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -163,6 +165,32 @@ function setUncertainSave(snapshot){
  uncertainSave=snapshot;$('checkDraftSave').hidden=!snapshot;$('save').hidden=!!snapshot;
 }
 function hasDraftEdits(){return dirty||pendingLink!==undefined||!!uncertainSave||!!comparisonBase;}
+function previewDraftStep(){
+ if(!selectedAsset||signedOut)return null;
+ if(!current)return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
+ if(uncertainSave)return {target:'checkDraftSave',label:'Speicherstand prüfen',note:'Die Speicherbestätigung für diesen Beitrag steht aus.'};
+ if(!$('compareDraft').hidden)return {target:'compareDraft',label:'Änderungen vergleichen',note:'Eine andere Fassung ist gespeichert. Vergleiche sie mit deinen Eingaben.'};
+ if(hasDraftEdits())return {target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
+ if(sourceDirty)return {target:'source_text',label:'Inhaltsangaben öffnen',note:'Der Beitrag ist gespeichert. Die geänderten Inhaltsangaben sind noch nicht in diesen Text übernommen.'};
+ return null;
+}
+async function runPreviewDraftAction(target){
+ if(busy||signedOut)return;
+ const step=previewDraftStep();
+ if(!step||step.target!==target){workspace.refreshPreview();return;}
+ if(step.target==='save'){
+  const originalFile=fileContext();
+  await saveDraft();
+  if(!signedOut&&selectedAsset?.id===originalFile.asset_id&&selectedAsset.revision===originalFile.asset_revision){
+   workspace.refreshPreview(hasDraftEdits()?$('status').textContent:'');
+  }
+  return;
+ }
+ workspace.show('source');
+ if(step.target==='source_text')$('sourcePanel').open=true;
+ const control=$(step.target);control.focus();
+ if(step.target!=='source_text')control.click();
+}
 function unavailableDraftLink(draft){
  return !!draft?.product_id&&current?.product_link_available===false&&pendingLink===undefined;
 }
@@ -1225,7 +1253,7 @@ $('checkDraftSave').addEventListener('click',async()=>{
  lock(true);try{await checkDraftSave();}finally{lock(false);syncMedia();}
 });
 
-$('save').addEventListener('click',async()=>{
+async function saveDraft(){
  if(busy||signedOut||!current||uncertainSave||comparisonBase)return;
  let edits;try{edits=[...$('drafts').children].map(editedPortalText);}catch(e){status(e.message,true);return;}
  const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});
@@ -1252,10 +1280,11 @@ $('save').addEventListener('click',async()=>{
    $('compareDraft').hidden=false;status('Inzwischen wurde eine andere Fassung gespeichert. Vergleiche die Änderungen, um deine Eingaben zu übernehmen.',true);
   }else status(e.message,true);
  }}finally{lock(false);syncMedia();}
-});
+}
+$('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
- getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(hasDraftEdits()||sourceDirty)throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,productId:current.preview.drafts.find(d=>d.platform===selectedPortal)?.product_id,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
+ getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(previewDraftStep())throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,productId:current.preview.drafts.find(d=>d.platform===selectedPortal)?.product_id,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
  verifyProductLink:verifySavedProductLink,onUnavailableLink:openDraftLinkEditor,
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},

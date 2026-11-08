@@ -20,7 +20,13 @@ export function createClient(){return {auth:{onAuthStateChange(){},getSession:as
   const call=(async()=>{
    if(name==='sma_publication_files_v1'){
     if(args.p_action==='list')return {data:{ok:true,files:[file]}};
-    if(args.p_action==='save'){sessionStorage.fixtureWrites=String(Number(sessionStorage.fixtureWrites||0)+1);offline=true;throw Error('lost reply');}
+    if(args.p_action==='save'){
+     sessionStorage.fixtureWrites=String(Number(sessionStorage.fixtureWrites||0)+1);
+     if(!sessionStorage.fixtureReload){offline=true;throw Error('lost reply');}
+     if(args.p_input.assignment_revision!==saved.assignment_revision)return {data:{ok:false,code:'ASSIGNMENT_CONFLICT'}};
+     const {title,body,hashtags}=args.p_input;Object.assign(draft,{title,body,hashtags,caption:body});
+     saved.revision++;file.assignments[0].revision=++saved.assignment_revision;return {data:saved};
+    }
     if(args.p_action==='get'){if(offline)throw Error('offline');return {data:saved};}
    }
    return {data:{ok:false,code:'UNAVAILABLE'}};
@@ -50,13 +56,17 @@ try{
   if($('workspacePostCaption').textContent!==pending||sessionStorage.fixtureWrites)throw Error('Edited preview saved or showed stale text');
   parent.history.back();await until(()=>!$('workspaceSource').hidden);
   if(body.value!==pending||$('youtube-body')!==body)throw Error('Browser Back lost the draft');
+  $('workspacePreviewEdits').click();await until(()=>frame.dataset.view==='preview',frame);
+  if(!$('preparePublicationOrder').hidden||$('workspaceDraftAction').textContent!=='Entwurf speichern')throw Error('Unstored post offers preparation');
   const unresolved=new Promise(resolve=>{
    const observer=new MutationObserver(()=>{if(!busy&&!document.getElementById('checkDraftSave').hidden){
     observer.disconnect();resolve();
    }});
    observer.observe(document.body,{attributes:true,childList:true,subtree:true});
   });
-  document.getElementById('save').click();await unresolved;sessionStorage.fixtureReload='1';location.reload();
+  $('workspaceDraftAction').click();await unresolved;
+  if($('workspaceDraftAction').textContent!=='Speicherstand prüfen'||!$('preparePublicationOrder').hidden)throw Error('Lost reply offered another save');
+  sessionStorage.fixtureReload='1';location.reload();
  }else{
   const report={type:'reload-result',restored:body?.value===pending,notice:$('saveStatus').textContent,ready:!busy&&!$('save').disabled};
   const dialog=$('draftReloadDialog'),recordKey='sma.publication.pending-save.v1.youtube';
@@ -70,7 +80,22 @@ try{
   report.kept=body.value===pending&&!!sessionStorage.getItem(recordKey)&&!dialog.open;
   await openChoice();$('useStoredDraft').click();await until(()=>!busy);
   report.loaded=$('youtube-body').value==='Mein früherer Beitragstext.'&&!sessionStorage.getItem(recordKey)&&!dialog.open;
-  report.writes=Number(sessionStorage.fixtureWrites);parent.postMessage(report,location.origin);
+  report.writes=Number(sessionStorage.fixtureWrites);
+  const updated=$('youtube-body'),newText='Jetzt ausdrücklich in der Vorschau gespeichert.';
+  const tags=$('youtube-hashtags');
+  tags.value='#Doppelt #Doppelt';tags.dispatchEvent(new Event('input',{bubbles:true}));
+  $('workspacePreviewEdits').click();$('workspaceDraftAction').click();
+  await until(()=>$('workspaceDraftNotice').textContent.includes('Hashtags'));
+  if($('workspacePostTags').textContent!==tags.value||Number(sessionStorage.fixtureWrites)!==1)throw Error('Invalid hashtags were dropped or written');
+  $('workspaceEditPost').click();tags.value='#Aktuell';tags.dispatchEvent(new Event('input',{bubbles:true}));
+  updated.value=newText;updated.dispatchEvent(new Event('input',{bubbles:true}));$('workspacePreviewEdits').click();
+  const action=$('workspaceDraftAction'),prepare=$('preparePublicationOrder');
+  const offered=!action.hidden&&action.textContent==='Entwurf speichern'&&prepare.hidden;
+  action.click();action.click();await until(()=>!busy);
+  report.savedInPreview=offered&&!$('workspacePreview').hidden&&action.hidden&&!prepare.hidden&&!prepare.disabled&&
+   $('workspacePostCaption').textContent===newText&&$('workspaceDraftNotice').textContent==='Gespeicherter Entwurf'&&
+   !$('publicationOrderDialog').open&&Number(sessionStorage.fixtureWrites)===2;
+  parent.postMessage(report,location.origin);
  }
 }catch(error){parent.postMessage({type:'reload-result',error:String(error)},location.origin);}`;
 // Use the dashboard's actual frame and history handlers around the synthetic editor.
@@ -111,6 +136,6 @@ try{
  const match=stdout.match(/<output>([^<]+)<\/output>/);assert.ok(match,'Reloaded editor did not report its state: '+stdout.slice(-500));
  const result=JSON.parse(match[1]);assert.equal(result.restored,true,JSON.stringify(result));assert.equal(result.ready,true);
  assert.match(result.notice,/wiederhergestellt/);assert.equal(result.writes,1);
- assert.ok(result.previewShown&&result.kept&&result.loaded,JSON.stringify(result));
- console.log('Chromium restored the interrupted form, kept the edits on Back, and loaded the reviewed version without another write.');
+ assert.ok(result.previewShown&&result.kept&&result.loaded&&result.savedInPreview,JSON.stringify(result));
+ console.log('Chromium distinguished a lost save from a confirmed preview save and kept order preparation separate.');
 }finally{server.close();await rm(profile,{recursive:true,force:true});}
