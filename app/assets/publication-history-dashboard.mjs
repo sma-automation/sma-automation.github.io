@@ -59,15 +59,40 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  const chapterReaders={texts:textHistory,assignments:assignmentHistory,edits:editorHistory,analyses:analysisHistory};
  const requestedChapters=new Set();
  const switcher=create('div',null,'sma-history-switcher');switcher.setAttribute('role','group');switcher.setAttribute('aria-label','History-Bereich');
- let chapterTabs;
- if(textCard||assignmentCard||editorCard||analysisCard){
+ let chapterTabs,editPanel,editPicker;
+ const editViews=[
+  {key:'edits',label:'Bild und Video',en:'Images and video',card:editorCard},
+  {key:'texts',label:'Beitragstexte',en:'Post text',card:textCard},
+  {key:'assignments',label:'Dateizuordnungen',en:'File assignments',card:assignmentCard}
+ ].filter(view=>view.card);
+ let editKey=editViews[0]?.key;
+ if(editViews.length){
+  editPanel=create('section',null,'sma-chapter-panel');
+  activityCard.after(editPanel);
+  if(editViews.length>1){
+   const label=create('label',null,'sma-history-edit-picker'),name=create('span');
+   translated(name,'Verlauf anzeigen','Show history');
+   editPicker=create('select');editPicker.id='historyEditType';label.htmlFor=editPicker.id;
+   for(const view of editViews){
+    const option=create('option');option.value=view.key;translated(option,view.label,view.en);editPicker.append(option);
+   }
+   label.append(name,editPicker);editPanel.append(label);
+   editPicker.addEventListener('change',changeEditView);
+  }
+  for(const view of editViews){editPanel.append(view.card);view.card.hidden=view.key!==editKey;}
+ }
+ function changeEditView(){
+  if(!editViews.some(view=>view.key===editPicker.value))return;
+  editKey=editPicker.value;
+  for(const view of editViews)view.card.hidden=view.key!==editKey;
+  if(chapterTabs?.selected==='edits')loadSelectedChapter();
+ }
+ if(editPanel||analysisCard){
   activityCard.id='historyOrderCard';
   chapterTabs=createChapterTabs({doc,id:'sma-history',list:switcher,onSelect:loadSelectedChapter,entries:[
    {key:'orders',label:'Aufträge',en:'Orders',panel:activityCard},
-   ...(textCard?[{key:'texts',label:'Portaltexte',en:'Platform texts',panel:textCard}]:[]),
-   ...(assignmentCard?[{key:'assignments',label:'Dateiverlauf',en:'File history',panel:assignmentCard}]:[]),
-   ...(editorCard?[{key:'edits',label:'Bearbeitungen',en:'Editing drafts',panel:editorCard}]:[]),
-   ...(analysisCard?[{key:'analyses',label:'Analysen',en:'Analyses',panel:analysisCard}]:[])
+   ...(editPanel?[{key:'edits',label:'Bearbeiten',en:'Edit',panel:editPanel}]:[]),
+   ...(analysisCard?[{key:'analyses',label:'Analyse',en:'Analysis',panel:analysisCard}]:[])
   ]});page.insertBefore(switcher,activityCard);
  }
  const analyticsCard=page.querySelector('#historyAnalyticsSlot')?.closest('.card');
@@ -79,6 +104,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  let pagesBeforeBatch=0,pageNumber=0,lastResult=null,entries=[],cursor=null,busy=false,disposed=false,invalidOwner=false,generation=0,selection,summary;
  const active=()=>!disposed&&!invalidOwner&&page.classList.contains('active')&&ownerWindow.document.visibilityState!=='hidden';
  function loadSelectedChapter(key=chapterTabs?.selected){
+  if(key==='edits')key=editKey;
   const reader=chapterReaders[key];
   if(!reader||!active()||requestedChapters.has(key))return;
   // The orders response supplies the shared period, including the server's current month.
@@ -223,5 +249,5 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  if(orderId&&!page.classList.contains('active'))doc.querySelector('button[data-page="history"]')?.click();
  load();
- return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

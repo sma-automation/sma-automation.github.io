@@ -28,15 +28,18 @@ Der Veröffentlichungsstatus bleibt unabhängig vom Coverstatus. Eine erfolgreic
 Coverübertragung erhöht weder die Zahl öffentlicher Beiträge noch ersetzt sie
 eine Veröffentlichungsbestätigung.
 
-### Datenabruf beim Kapitelwechsel
+### Kapitel der History
 
-Beim Öffnen von **History** lädt SMA die Aufträge und die Monatsübersicht mit
-einem Abruf. Portaltexte, Dateiverlauf, Bearbeitungen und Analysen werden beim
-ersten Öffnen des jeweiligen Kapitels für den gewählten Zeitraum geladen.
-Beim Zurückwechseln bleibt die zuletzt angezeigte Seite dieses Kapitels erhalten.
-Nach einem Monatswechsel lädt SMA die Übersicht und das gerade geöffnete Kapitel
-für den neuen Zeitraum. Nach dem Verlassen der History werden die geladenen
-Listen verworfen.
+**Aufträge** zeigt die Veröffentlichungsaufträge und ihre Kennzahlen.
+**Bearbeiten** öffnet die gespeicherten Bild- und Videobearbeitungen. Über
+**Verlauf anzeigen** sind dort auch **Beitragstexte** und **Dateizuordnungen**
+erreichbar. **Analyse** zeigt die bisherigen Analyseversuche.
+
+Beim Öffnen der History lädt SMA die Aufträge und die Monatsübersicht mit einem
+Abruf. Die anderen Listen lädt SMA beim ersten Öffnen für den gewählten Zeitraum.
+Beim Zurückwechseln bleibt die zuletzt angezeigte Seite jeder Liste erhalten.
+Nach einem Monatswechsel werden die Übersicht und die gerade ausgewählte Liste
+für den neuen Zeitraum geladen.
 
 ### Aus der Beitragsvorschau zum Auftrag zurückkehren
 
