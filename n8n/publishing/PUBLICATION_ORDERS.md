@@ -98,6 +98,21 @@ kann SMA nach dem ausdrücklichen Klick eine neue Vorbereitung anfordern.
 Nach dem Schließen des gesamten Tabs ist die gespeicherte
 Vorbereitung unter **History → Aufträge** erreichbar.
 
+### Offene Vorbereitung abbrechen
+
+Im geöffneten Auftragsdialog beendet **Vorbereitung abbrechen** den angezeigten
+Auftrag. Das geht auch, wenn die Zielkontoprüfung noch offen ist. Die Datei
+und der gespeicherte Beitrag bleiben verfügbar. Über **Abgebrochenen Auftrag
+in der History öffnen** führt die Vorschau zum Eintrag mit dem Status
+**Abgebrochen**. **Schließen** lässt eine offene Vorbereitung für später bestehen.
+
+Der Dialog sendet die Auftrags-ID direkt an den bestehenden Kunden-RPC
+`sma_publication_order_v1` mit der Aktion `cancel`. Abbruch und Freigabe
+laufen unter derselben Kundensperre. Eine bereits gespeicherte Freigabe oder
+ein Eintrag im Freigabejournal sperrt den Abbruch. Bei einer unterbrochenen
+Antwort liest der Dialog den Stand derselben ID. Ein erneuter Abbruch eines
+bereits abgebrochenen Auftrags behält dessen Zeitstempel bei.
+
 ## Unterbrochene Vorbereitung – 7. November 2026
 
 Fehlt nach **Auftrag prüfen** die Antwort, liest SMA den gespeicherten Stand

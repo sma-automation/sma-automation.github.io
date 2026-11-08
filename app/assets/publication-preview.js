@@ -9,7 +9,7 @@ import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=14';
-import {installOrderReview} from './publication-order.mjs?v=20';
+import {installOrderReview} from './publication-order.mjs?v=21';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -516,9 +516,11 @@ if(workspace&&orderUuid.test(params.get('order'))){
  back.href='dashboard.html#auftrag/'+params.get('order').toLowerCase();
  back.textContent='← Zurück zum Auftrag';
 }
-async function readStoredOrder(id){
+const readStoredOrder=id=>storedOrderRequest('get',id);
+const cancelStoredOrder=id=>storedOrderRequest('cancel',id);
+async function storedOrderRequest(action,id){
  if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
- const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:'get',p_input:{id}})
+ const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:action,p_input:{id}})
   .abortSignal(AbortSignal.timeout(20000));
  if(error)throw fileError('FILE_SYNC_UNAVAILABLE');
  if(signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
@@ -876,7 +878,7 @@ $('save').addEventListener('click',async()=>{
  }catch(e){if(!signedOut){status(e.message,true);$('saveStatus').textContent='Änderungen noch nicht gespeichert';}}finally{lock(false);syncMedia();}
 });
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
-if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
+if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewHeader'):$('save').parentElement,
  getContext:()=>{if(signedOut)throw Error(messages.AUTH_REQUIRED);if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');if(!selectedAsset||!current)throw Error('Bitte wähle zuerst eine Datei und erstelle einen gespeicherten Beitrag.');if(hasDraftEdits()||sourceDirty)throw Error('Bitte speichere zuerst deine Änderungen oder erstelle einen aktuellen Beitrag.');return {name:selectedAsset.name,productId:current.preview.drafts.find(d=>d.platform===selectedPortal)?.product_id,binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision}};},
  verifyProductLink:verifySavedProductLink,onUnavailableLink:openDraftLinkEditor,
  refresh:()=>ensureFreshFile(fileContext()),

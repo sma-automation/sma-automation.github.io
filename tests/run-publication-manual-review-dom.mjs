@@ -5,7 +5,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube',accountResponse,approvalResponse,storedResponse,prepareResponse,refresh=async()=>{}}={}){
+function fixture({option=true,platform='youtube',accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,refresh=async()=>{}}={}){
  const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
@@ -33,7 +33,11 @@ function fixture({option=true,platform='youtube',accountResponse,approvalRespons
   return response;
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
- const view=scope.install(doc,{host:doc.body,portalName:platform,readStoredOrder:async id=>{
+ const cancellations=[];
+ const view=scope.install(doc,{host:doc.body,portalName:platform,cancelStoredOrder:async id=>{
+  cancellations.push(id);
+  return cancelResponse(id,savedPreparation);
+ },readStoredOrder:async id=>{
   reads.push(id);
   if(!storedResponse)return {...savedPreparation,...reloadPatch};
   return storedResponse(id,{ok:true,id,binding,can_publish:false,can_upload:false,state:'approved',
@@ -46,7 +50,7 @@ function fixture({option=true,platform='youtube',accountResponse,approvalRespons
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
  const open=async()=>{await $('preparePublicationOrder').handlers.click();$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';if(platform==='youtube'){$('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';}await dialog.querySelector('form').handlers.submit({preventDefault(){}});};
- return {$,doc,view,binding,requests,reads,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,setDirty:value=>dirty=value,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+ return {$,doc,view,binding,requests,reads,cancellations,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,setDirty:value=>dirty=value,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
 }
 {
  const t=fixture();await t.open();
@@ -239,12 +243,12 @@ for(const missing of [false,true]){
  t.view.clear();release();await pending;eq(t.requests.map(r=>r.action),['account']);eq(t.reads.length,0);
 }
 // A new tab has no previous request ID or form state. Only an explicit target check may write.
-function unfinishedHistory(platform='youtube'){
+function unfinishedHistory(platform='youtube',cancelResponse){
  const id='ab660000-0000-4000-9000-000000000088',expires_at=new Date(Date.now()+60000).toISOString();
  const choices=platform==='youtube'?{visibility:'private',made_for_kids:false,contains_synthetic_media:true}:
   {visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,brand_organic_toggle:false,brand_content_toggle:false};
  let stored,loseReply=false;
- const t=fixture({platform,storedResponse:()=>stored,prepareResponse:async(req,response)=>{
+ const t=fixture({platform,cancelResponse,storedResponse:()=>stored,prepareResponse:async(req,response)=>{
   eq(req.input.id,id);eq(req.input.choices,choices);
   stored={...await response.json(),approval_window:{status:'active',expires_at},preparation_window:null};
   if(loseReply)timeout();
@@ -601,5 +605,47 @@ for(const bad of [null,'',savedId,'https://example.invalid/',[otherOrderId]]){
  const done=authorize(t);await reading;await t.status.handlers.click();eq(t.reads,[otherOrderId]);
  t.view.clear();finish();await done;eq(historyLink(t),null);eq(notice(t),'');
  eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+}
+const cancelButton=t=>[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Vorbereitung abbrechen');
+const cancelled=row=>({...row,state:'cancelled',approved_at:null,approval_token:null,approval_window:null,preparation_window:null});
+for(const platform of ['youtube','tiktok']){
+ const t=fixture({platform,cancelResponse:(_,row)=>cancelled(row)}),button=cancelButton(t);
+ eq(button.hidden,true);await t.open();eq(button.hidden,false);
+ t.ready();await button.handlers.click();eq(t.cancellations,[savedId]);eq(t.reads,[]);
+ eq(t.requests.map(r=>r.action),['account','prepare']);eq(button.hidden,true);
+ assert.match(notice(t),/storniert/);eq(t.approve.hidden,true);eq(t.$('order-final-consent').checked,false);
+ eq(historyLink(t)?.getAttribute('href'),'dashboard.html#auftrag/'+savedId);
+ eq(historyLink(t)?.textContent,'Abgebrochenen Auftrag in der History öffnen');
+ await button.handlers.click();await t.approve.handlers.click();eq(t.cancellations.length,1);
+ const pending=unfinishedHistory(platform,()=>{throw Error('lost');});
+ pending.resume();pending.patchSaved({state:'cancelled',approval_token:null,preparation_window:null});
+ await cancelButton(pending).handlers.click();eq(pending.cancellations,[pending.id]);
+ eq(pending.reads,[pending.id]);eq(pending.requests,[]);assert.match(notice(pending),/storniert/);
+}
+{
+ let saved,readable=false;
+ const t=fixture({prepareResponse:async(_,r)=>{saved=await r.json();return r;},
+  cancelResponse:()=>{throw Error('lost');},storedResponse:()=>{if(!readable)throw Error('offline');return saved;}});
+ await t.open();await cancelButton(t).handlers.click();eq(t.approve.disabled,true);eq(cancelButton(t).hidden,true);
+ readable=true;await t.status.handlers.click();eq(cancelButton(t).hidden,false);eq(t.approve.disabled,true);
+ assert.match(notice(t),/noch vorbereitet/);eq(t.cancellations,[savedId]);eq(t.reads,[savedId,savedId]);
+}
+{
+ // The second tab approved first. All subsequent status reads stay off the dispatcher.
+ let saved;
+ const t=fixture({prepareResponse:async(_,r)=>{saved=await r.json();return r;},
+  cancelResponse:()=>({ok:false,code:'ORDER_NOT_CANCELLABLE'}),
+  storedResponse:()=>({...saved,state:'approved',approved_at:new Date().toISOString(),approval_token:null,approval_window:null})});
+ await t.open();await cancelButton(t).handlers.click();await t.status.handlers.click();await reopen(t);
+ eq(historyLink(t)?.getAttribute('href'),'dashboard.html#auftrag/'+savedId);eq(t.approve.hidden,true);eq(cancelButton(t).hidden,true);
+ eq(t.cancellations,[savedId]);eq(t.reads,[savedId,savedId,savedId]);eq(t.requests.map(r=>r.action),['account','prepare']);
+}
+{
+ let finish,entered;const writing=new Promise(resolve=>entered=resolve);
+ const t=fixture({cancelResponse:(_,row)=>{entered();return new Promise(resolve=>finish=()=>resolve(cancelled(row)));}});
+ await t.open();const button=cancelButton(t);
+ t.setDirty(true);await button.handlers.click();eq(t.cancellations,[]);t.setDirty(false);
+ const done=button.handlers.click();await writing;await button.handlers.click();await t.approve.handlers.click();
+ t.view.clear();finish();await done;eq(t.cancellations,[savedId]);eq(t.reads,[]);eq(notice(t),'');eq(t.requests.length,2);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');
