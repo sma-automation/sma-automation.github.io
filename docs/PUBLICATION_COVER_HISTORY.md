@@ -51,6 +51,14 @@ von höchstens 20 Aufträgen mit der bestehenden History-Funktion. Vorherige
 Seiten müssen dafür nicht einzeln geladen werden. Der Rücklink enthält nur die
 Auftrags-ID im URL-Fragment.
 
+### Beitrag aus der Vorschau bearbeiten
+
+**Beitragstext bearbeiten** öffnet das Textfeld des angezeigten Portalentwurfs.
+Mit **Beitragsvorschau öffnen** sieht der Kunde seine aktuellen Eingaben an der
+ausgewählten Datei. Er kann zur Korrektur zurückkehren. Erst **Entwurf speichern**
+speichert die Änderung. Der in der History aufgezeichnete Auftrag behält seinen
+damaligen Beitragstext.
+
 ### Gespeicherter Beitragstext
 
 Unter **History → Aufträge** zeigt ein aufgeklappter Auftrag seinen damaligen

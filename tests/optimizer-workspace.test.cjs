@@ -29,6 +29,8 @@ function setup(previewData={}){
  const languageField=el('div');languageField.append(byId.get('language'));byId.get('sourcePanel').append(languageField);
  const form=el('form');form.value='Noch nicht gespeicherte Kundeneingabe';byId.get('sourcePanel').append(form);
  for(const name of ['checks','note','notice']){const node=el('div');node.className=name;node.textContent='Pending verification';byId.get('result').append(node);}
+ const actions=el('div');actions.append(byId.get('save'));byId.get('result').append(actions);
+ const field=el('textarea','instagram-body');byId.get('result').append(field);
  const video=el('video');byId.get('assetPreview').append(video);
  byId.get('result').hidden=true;
  const doc={body,createElement:t=>el(t),getElementById:id=>{const node=byId.get(id);let root=node;while(root?.parentElement)root=root.parentElement;return root===body?node:null},querySelector:s=>s==='main'?main:searchLabel};
@@ -138,4 +140,16 @@ test('the separate preview shows the unavailable destination as plain text and r
  assert.ok(link.textContent.endsWith('&produkt=item'));assert.equal(link.href,undefined);
  delete data.draft.product_id;data.linkNotice='';p.workspace.refreshPreview();
  assert.equal(p.get('workspaceLinkIssue').hidden,true);assert.equal(link.href,data.draft.shop_url);
+});
+
+test('a file draft opens its existing text field and returns to the preview with the local changes',()=>{
+ const data={draft:{body:'Gespeicherter Beitrag'}},p=setup(data);
+ const field=p.get('instagram-body');p.workspace.selection({name:'Aktueller Clip',media_kind:'video'});
+ p.get('result').hidden=false;p.workspace.textAvailable(true);p.workspace.show('preview');
+ const edit=p.get('workspaceEditPost');assert.equal(edit.hidden,false);edit.click();
+ assert.equal(p.get('workspaceSource').hidden,false);assert.equal(field.focused,true);
+ field.value='Eigene Korrektur';data.draft.body=field.value;p.get('workspacePreviewEdits').click();
+ assert.equal(p.get('workspacePostCaption').textContent,field.value);assert.equal(p.loads(),0);
+ data.draft=null;p.workspace.textAvailable(false);p.workspace.refreshPreview();assert.equal(edit.hidden,true);
+ p.workspace.selection(null);assert.equal(p.get('workspacePreviewEdits').hidden,true);
 });

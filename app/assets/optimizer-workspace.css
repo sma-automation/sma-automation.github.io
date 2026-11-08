@@ -295,6 +295,7 @@ body.wide #workspacePreviewHeader {
 body.wide #workspacePreviewHeader > div { min-width: 0; }
 body.wide #workspacePreviewHeader #preparePublicationOrder { margin: 0; padding: 8px 14px; min-height: 40px; }
 body.wide #workspacePreviewHeader #workspacePreviewName { margin: 2px 0 0; }
+body.wide #workspaceEditPost:not([hidden]) { display: block; margin-top: 12px; }
 body.wide #workspacePostProfile { padding: 8px 12px; }
 body.wide #workspacePostAvatar { width: 28px; height: 28px; font-size: 18px; }
 body.wide #workspacePost #assetPreviewStatus { padding: 6px 10px; }
