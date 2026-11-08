@@ -360,3 +360,39 @@ angelegt, geändert oder gelöscht. Die Bereinigungsfälle wurden nur lokal gepr
 Alle neun Veröffentlichungsaufträge behalten Digest
 `a19d817047175d3e2fe2315ff5f9b21b`; weiterhin null Operatorfreigaben,
 Provider- und Coverversuche. Keine Änderung an Tarifen, Shopify oder n8n.
+
+## Eigene SMA-Master vor Katalogfreigabe prüfen (08.11.2026)
+
+Der **rein lokale, lesende Prüfweg** `n8n/publishing/verify-gallery-master.mjs`
+kontrolliert einen zukünftigen Originalmaster und seine bereits vorbereitete AAC-Datei,
+bevor ein Betreiber deren Verwendung im SMA-Katalog ausdrücklich genehmigt:
+
+```sh
+python3 n8n/publishing/prepare-gallery-audio.py /privat/master.wav /privat/ausgabe
+node n8n/publishing/verify-gallery-master.mjs /privat/master.wav /privat/ausgabe/render/<MASTER_SHA256>/<AAC_SHA256>.aac
+```
+
+- Der Master muss aus exakt einem Audio-Stream bestehen, WAV/MP3 sein, maximal
+  8 MB groß und höchstens zehn Minuten lang sein.
+- Die vorbereitete Datei muss rohes AAC-LC mit 48 kHz Stereo sein, maximal
+  1,5 MB umfassen und anhand dekodierbarer AAC-Frames die 60-Sekunden-Ausgabe
+  abdecken. Eine bloß geschätzte ADTS-Containerdauer ist kein Prüfbeleg.
+- Die AAC wird mit dem **aktiven SMA-Vorbereitungsprogramm** in einem temporären
+  Verzeichnis neu erzeugt und bytegenau verglichen. Ein verfälschtes oder zu
+  einem anderen Master gehörendes Sidecar wird abgelehnt.
+- Ein Erfolg liefert nur den erwarteten, inhaltsadressierten Storage-Pfad,
+  Prüfsummen, Größe und Dateiformat für die spätere **manuelle** Bereitstellung.
+
+Der Befehl nimmt **keine Freigabe** vor. Er kann weder hochladen noch
+`listed` setzen, Credits vergeben, Kaufen oder Veröffentlichen. Für eine
+echte Freigabe sind die Qualität, Rechte, das korrekte eigene Musikstück
+und eine ausdrückliche Betreiberentscheidung weiterhin erforderlich.
+Kein Master, keine AAC und kein Kundentest wird durch das Repository
+öffentlich gemacht.
+
+Lokaler Vorlauf mit einem neu komponierten 32-Sekunden-Musikentwurf:
+WAV und AAC technisch valide, erneutes AAC-Rendering bytegenau identisch,
+manipulierte AAC korrekt zurückgewiesen. Drei unabhängige Unit-Tests
+prüfen Hash-/Dateinamenbindung, Grenzen und AAC-Eigenschaften. Dies ist
+**kein** Live-Katalogtest. Der erste freigegebene SMA-Musikmaster und der
+anschließende echte Testkonto-Durchlauf fehlen weiterhin.
