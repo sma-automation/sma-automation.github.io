@@ -10,14 +10,14 @@ function savedTextReceipt(previous,input){
  const draft={...previous.preview.drafts[0],title:input.title,body:input.body,hashtags:input.hashtags};
  return {...previous,revision:previous.revision+1,assignment_revision:input.assignment_revision+1,preview:{...previous.preview,drafts:[draft]}};
 }
-async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,currentPost=false,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
- const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:'fixture-owner'}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
+async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
+ const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:ownerId}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
  client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:()=> '12345678-1234-4123-8123-123456789abc'},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name)=>{workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
  return {orderOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
@@ -1015,7 +1015,7 @@ function sharedDraft(portal){
   }
   return {ok:true};
  }
- return {open:(filesRpc=rpc)=>boot({portal,asset:file.id,wide:true,filesRpc}),rpc,writes,change,view,
+ return {open:(filesRpc=rpc,options={})=>boot({portal,asset:file.id,wide:true,filesRpc,...options}),rpc,writes,change,view,
   replaceFile(){file.revision='replaced';},replacePreview(){previewId=historyOrderId;}};
 }
 function editPortalField(p,key,value){
@@ -1177,4 +1177,109 @@ test('a timed-out save that reaches the database after the read cannot create a 
  editPortalField(p,'body','Eine verspätet gespeicherte Fassung.');await p.save();
  assert.equal(f.writes.length,0);assert.match(p.get('saveStatus').textContent,/erneut speichern/);
  await f.rpc(delayed);await p.save();assert.equal(f.writes.length,1);assert.equal(p.get('compareDraft').hidden,false);
+});
+
+function tabStorage(){
+ const rows=new Map();
+ return {rows,getItem:k=>rows.get(k)??null,setItem:(k,v)=>rows.set(k,v),removeItem:k=>rows.delete(k)};
+}
+function interruptedDraft(portal,commit,extra={}){
+ const f=sharedDraft(portal),sessionStorage=tabStorage();
+ const options={sessionStorage,...extra};
+ let offline=false;
+ const first=()=>f.open(async req=>{
+  if(offline&&req.p_action==='get')throw Error('Offline');
+  if(req.p_action!=='save')return f.rpc(req);
+  if(commit)await f.rpc(req);offline=true;throw Error('Lost reply');
+ },options);
+ return {...f,sessionStorage,first,reload:(rpc=f.rpc)=>f.open(rpc,options)};
+}
+test('reloading an interrupted save restores the correct file and waits for an explicit save',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=interruptedDraft(portal,false),old=await f.first();
+  editPortalField(old,'body','Text aus einem unterbrochenen Speicherversuch.');await old.get('draftLinkShop').click();await old.save();
+  assert.equal(f.sessionStorage.rows.size,1);
+  const stored=[...f.sessionStorage.rows.values()][0];assert.doesNotMatch(stored,/private-session-token|access_token|approval_token|source_text/);
+  const p=await f.reload();assert.equal(f.writes.length,0);assert.deepEqual(p.views,['text']);
+  assert.match(p.get('drafts').querySelector('textarea').value,/unterbrochenen/);assert.equal(p.get('shopLink').href,result.preview.shop_url);
+  assert.throws(()=>p.orderOptions.getContext(),/speichere/);assert.equal(p.orderOptions.resumeOrder,undefined);
+  assert.ok(p.calls.every(c=>!c.url&&['get','list','check'].includes(c.p_action)));
+  await p.save();assert.equal(f.writes.length,1);assert.equal(f.writes[0].assignment_revision,4);assert.equal(f.writes[0].link_target,null);
+  assert.equal(f.sessionStorage.rows.size,0);
+ }
+});
+test('a committed save is confirmed after reload without a second write; later raw input is preserved',async()=>{
+ for(const more of [false,true]){
+  const f=interruptedDraft('youtube',true),old=await f.first();
+  editPortalField(old,'body','Meine bereits gespeicherte Fassung.');await old.save();
+  if(more)editPortalField(old,'hashtags','#Neu #Noch-offen');
+  const p=await f.reload();assert.equal(f.writes.length,1);
+  if(more){
+   assert.equal(p.get('drafts').querySelector('[data-field=hashtags]').value,'#Neu #Noch-offen');
+   assert.equal(p.get('compareDraft').hidden,true);assert.match(p.get('saveStatus').textContent,/wiederhergestellt/);
+  }else{
+   assert.match(p.get('status').textContent,/aus diesem Tab.*gespeichert/);
+   assert.equal(p.orderOptions.getContext().binding.assignment_revision,5);assert.equal(f.sessionStorage.rows.size,0);
+  }
+ }
+});
+test('a newer concurrent draft requires comparison before restored input can be saved',async()=>{
+ const f=interruptedDraft('tiktok',false),old=await f.first();
+ editPortalField(old,'body','Eigene Eingabe aus dem früheren Tabstand.');await old.save();f.change({title:'Titel aus dem zweiten Tab'});
+ const p=await f.reload();assert.equal(p.get('compareDraft').hidden,false);assert.equal(p.get('save').disabled,true);
+ await p.save();assert.equal(f.writes.length,0);
+ const compare=p.get('compareDraft').click();await compareTick();await p.get('draftConflictBack').click();await compare;
+ assert.equal(p.get('save').disabled,true);assert.match(p.get('drafts').querySelector('textarea').value,/Eigene Eingabe/);
+ const choose=p.get('compareDraft').click();await compareTick();await p.get('draftConflictApply').click();await choose;
+ assert.equal(p.get('drafts').querySelector('input').value,'Titel aus dem zweiten Tab');
+ assert.match(p.get('drafts').querySelector('textarea').value,/Eigene Eingabe/);assert.equal(p.get('save').disabled,false);
+ await p.save();assert.equal(f.writes[0].assignment_revision,5);
+});
+test('failed recovery reads can be retried; replaced files, different drafts and logout do not restore cached inputs',async()=>{
+ for(const variant of ['retry','file','draft','logout']){
+  const f=interruptedDraft('youtube',false),old=await f.first();
+  editPortalField(old,'body','Lokaler Testtext nur für die ursprüngliche Zuordnung.');await old.save();
+  if(variant==='file')f.replaceFile();if(variant==='draft')f.replacePreview();if(variant==='logout')old.signOut();
+  let fail=variant==='retry';
+  const p=await f.reload(req=>{if(fail&&req.p_action==='get')throw Error('offline');return f.rpc(req);});
+  if(variant==='retry'){
+   assert.equal(f.sessionStorage.rows.size,1);fail=false;await p.get('refreshFiles').click();
+   assert.match(p.get('drafts').querySelector('textarea').value,/Lokaler Testtext/);
+  }else{
+   assert.doesNotMatch(p.get('drafts').querySelector('textarea')?.value||'',/Lokaler Testtext/);
+   assert.equal(f.sessionStorage.rows.size,0);
+  }
+  assert.equal(f.writes.length,0);
+ }
+});
+test('a save already in flight survives reload and its late completion cannot clear the restored form',async()=>{
+ const store=tabStorage(),opts={sessionStorage:store,newUuid:require('node:crypto').randomUUID};
+ const f=sharedDraft('youtube');let release;
+ const old=await f.open(req=>req.p_action==='save'?new Promise(resolve=>{release=async()=>resolve(await f.rpc(req));}):f.rpc(req),opts);
+ editPortalField(old,'body','Zwischengesicherte Fassung während der Antwort.');const writing=old.save();await compareTick();
+ assert.equal(store.rows.size,1);
+ const p=await f.open(f.rpc,opts);assert.match(p.get('drafts').querySelector('textarea').value,/Zwischengesicherte/);
+ await release();await writing;assert.equal(f.writes.length,1);assert.equal(store.rows.size,1);
+ const again=await f.open(f.rpc,opts);assert.match(again.get('status').textContent,/aus diesem Tab.*gespeichert/);assert.equal(store.rows.size,0);
+});
+test('history recovery checks the original order and restores the latest assigned draft without resuming or writing',async()=>{
+ const f=interruptedDraft('tiktok',false,{orderId:historyOrderId,currentPost:true,
+  orderResponse:{...cancelledOrder,binding:{...cancelledOrder.binding,platform:'tiktok',asset_revision:supportedVideo.revision}}});
+ const old=await f.first();editPortalField(old,'body','Änderungen am heutigen TikTok-Text.');await old.save();
+ const p=await f.reload();
+ assert.match(p.get('drafts').querySelector('textarea').value,/heutigen TikTok/);assert.equal(p.orderOptions.resumeOrder,undefined);
+ assert.equal(p.get('back').href,'dashboard.html#auftrag/'+historyOrderId);
+ assert.deepEqual(p.calls.filter(c=>c.name==='sma_publication_order_v1').map(c=>c.p_action),['get']);assert.equal(f.writes.length,0);
+});
+test('a different account or route cannot restore a prior form and disabled session storage permits normal saving',async()=>{
+ for(const other of [{ownerId:'another-owner'},{asset:'another-file'}]){
+  const f=interruptedDraft('youtube',false),old=await f.first();
+  editPortalField(old,'body','Eigenes lokales Formular nur für diesen Einstieg.');await old.save();
+  const p=await f.open(f.rpc,{sessionStorage:f.sessionStorage,...other});
+  assert.doesNotMatch(p.get('drafts').querySelector('textarea')?.value||'',/Eigenes lokales/);
+  if(other.ownerId)assert.equal(f.sessionStorage.rows.size,0);
+ }
+ const storage=tabStorage();storage.setItem=()=>{throw Error('quota exceeded');};
+ const f=sharedDraft('tiktok'),p=await f.open(f.rpc,{sessionStorage:storage});
+ editPortalField(p,'body','Speichern bei gesperrtem Sitzungszugriff.');await p.save();assert.equal(f.writes.length,1);
 });
