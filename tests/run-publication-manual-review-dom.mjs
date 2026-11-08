@@ -5,7 +5,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube',accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,refresh=async()=>{}}={}){
+function fixture({option=true,platform='youtube',post={title:'Synthetic title',caption:'Synthetic caption'},verifySavedDraft=async()=>{},onOutdatedDraft,accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,refresh=async()=>{}}={}){
  const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
@@ -25,7 +25,7 @@ function fixture({option=true,platform='youtube',accountResponse,approvalRespons
    const account={...common,stage:'account'};
    return {ok:true,json:async()=>accountResponse?accountResponse(account):account};
   }
-  const response={ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{title:'Synthetic title',caption:'Synthetic caption'},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',approval_window:{status:'active',expires_at:new Date(clock+1800000).toISOString()},human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
+  const response={ok:true,json:async()=>({...common,binding,choices:req.input.choices||{visibility:'private'},state:req.action==='approve'?'approved':'prepared',approved_at:req.action==='approve'?new Date(clock).toISOString():null,draft:{...post},approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-token',approval_window:{status:'active',expires_at:new Date(clock+1800000).toISOString()},human_review_option:option?{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}:null,...(req.action==='get'?reloadPatch:{})})};
   if(req.action==='prepare'){
    savedPreparation=await response.json();
    if(prepareResponse)return prepareResponse(req,response);
@@ -40,12 +40,12 @@ function fixture({option=true,platform='youtube',accountResponse,approvalRespons
  },readStoredOrder:async id=>{
   reads.push(id);
   if(!storedResponse)return {...savedPreparation,...reloadPatch};
-  return storedResponse(id,{ok:true,id,binding,can_publish:false,can_upload:false,state:'approved',
+  return storedResponse(id,{ok:true,id,binding,draft:{...post},can_publish:false,can_upload:false,state:'approved',
    approved_at:new Date(clock).toISOString(),target:{id:'synthetic-channel',platform},account_check:{target_id:'synthetic-channel'},choices:{visibility:platform==='youtube'?'private':'SELF_ONLY'},approval_policy:'media-consent-2026-11-03.1'});
  },session:async()=>({access_token:'synthetic'}),getContext:()=>{
   if(dirty)throw Error('Bitte speichere zuerst deine Änderungen.');
-  return {binding:currentBinding,name:'Synthetic.mp4'};
- },refresh});
+  return {binding:currentBinding,name:'Synthetic.mp4',post:{...post}};
+ },verifySavedDraft,onOutdatedDraft,refresh});
  const $=id=>doc.getElementById(id),dialog=$('publicationOrderDialog'),buttons=[...dialog.querySelectorAll('button')],approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
  const change=(id,value=true)=>{const e=$(id);e.checked=value;e.handlers.change();};
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
@@ -65,7 +65,7 @@ function fixture({option=true,platform='youtube',accountResponse,approvalRespons
 }
 // The read-only return from History uses the saved ID, target and choices.
 for(const platform of ['youtube','tiktok']){
- const t=fixture({platform}),expiry=new Date(Date.now()+60000).toISOString();
+ const t=fixture({platform,post:{title:'Saved title',caption:'Saved caption'}}),expiry=new Date(Date.now()+60000).toISOString();
  const saved={ok:true,id:'ab660000-0000-4000-9000-000000000099',binding:t.binding,state:'prepared',approved_at:null,
   approval_window:{status:'active',expires_at:expiry},approval_policy:'media-consent-2026-11-03.1',
   approval_token:'saved-token',can_upload:false,can_publish:false,target:{id:'saved-channel',platform},
@@ -248,7 +248,7 @@ function unfinishedHistory(platform='youtube',cancelResponse){
  const choices=platform==='youtube'?{visibility:'private',made_for_kids:false,contains_synthetic_media:true}:
   {visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,brand_organic_toggle:false,brand_content_toggle:false};
  let stored,loseReply=false;
- const t=fixture({platform,cancelResponse,storedResponse:()=>stored,prepareResponse:async(req,response)=>{
+ const t=fixture({post:{title:'History',caption:'Saved caption'},platform,cancelResponse,storedResponse:()=>stored,prepareResponse:async(req,response)=>{
   eq(req.input.id,id);eq(req.input.choices,choices);
   stored={...await response.json(),approval_window:{status:'active',expires_at},preparation_window:null};
   if(loseReply)timeout();
@@ -647,5 +647,34 @@ for(const platform of ['youtube','tiktok']){
  t.setDirty(true);await button.handlers.click();eq(t.cancellations,[]);t.setDirty(false);
  const done=button.handlers.click();await writing;await button.handlers.click();await t.approve.handlers.click();
  t.view.clear();finish();await done;eq(t.cancellations,[savedId]);eq(t.reads,[]);eq(notice(t),'');eq(t.requests.length,2);
+}
+// Verify the saved post before account lookup and again before creating the user's order.
+for(const platform of ['youtube','tiktok']){
+ const post={title:'Gespeicherter <Titel>',caption:'Text\n#Aktuell\nhttps://example.test/kunde'},sequence=[];
+ let stale=true;const t=fixture({platform,post,
+  verifySavedDraft:async ctx=>{sequence.push('read');eq(ctx.post.title,post.title);if(stale)throw Object.assign(Error('Entwurf geändert'),{code:'ASSIGNMENT_CHANGED'});},
+  onOutdatedDraft:()=>sequence.push('editor'),accountResponse:account=>{sequence.push('account');return account;}});
+ const entry=t.$('preparePublicationOrder'),dialog=t.$('publicationOrderDialog');
+ await entry.handlers.click();eq(t.requests.length,0);eq(sequence,['read','editor']);eq(!!dialog.open,false);
+ stale=false;await entry.handlers.click();eq(sequence,['read','editor','read','account']);
+ eq(dialog.querySelector('h3').textContent,post.title);eq(dialog.querySelector('pre').textContent,post.caption);
+ eq(dialog.querySelector('pre a'),null);eq(dialog.querySelector('details').hasAttribute('open'),false);
+ assert.match(dialog.textContent,/Synthetic.mp4/);assert.match(dialog.textContent,/Synthetic · synthetic-channel/);
+ eq(t.requests.map(r=>r.action),['account']);eq(t.reads,[]);
+ t.$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';stale=true;
+ await submit(t);eq(sequence.at(-1),'editor');eq(t.requests.map(r=>r.action),['account']);eq(!!dialog.open,false);
+}
+for(const field of ['title','caption']){
+ let stored;const t=fixture({prepareResponse:async(_,response)=>{stored=await response.json();
+  return {ok:true,json:async()=>({...stored,draft:{...stored.draft,[field]:'Fremder Inhalt'}})};},
+  storedResponse:()=>({...stored,draft:{...stored.draft,[field]:'Fremder Inhalt'}})});
+ await t.open();eq(t.requests.map(r=>r.action),['account','prepare']);eq(t.reads,[stored.id]);
+ eq(t.approve.disabled,true);eq(t.$('order-final-consent').checked,false);
+ assert.doesNotMatch(t.doc.body.textContent,/Fremder Inhalt/);assert.match(t.doc.body.textContent,/anderen Beitragstext oder Titel/);
+}
+{
+ let release;const t=fixture({verifySavedDraft:()=>new Promise(resolve=>{release=resolve;})});
+ const pending=t.$('preparePublicationOrder').handlers.click();t.view.clear();release();await pending;
+ eq(t.requests.length,0);eq(!!t.$('publicationOrderDialog').open,false);eq(t.doc.querySelector('.order-caption'),null);
 }
 console.log(checks+' manual review DOM checks passed; only synthetic requests.');

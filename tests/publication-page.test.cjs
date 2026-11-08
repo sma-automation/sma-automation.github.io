@@ -971,13 +971,13 @@ test('a product that disappears after opening is detected on a scoped re-read; s
  const options=p.orderOptions,context=options.getContext();
  assert.equal(context.productId,'art-1');assert.equal(context.binding.productId,undefined);
  response={...response,product_link_available:false};
- await assert.rejects(options.verifyProductLink(context),{code:'PRODUCT_LINK_UNAVAILABLE'});
+ await assert.rejects(options.verifySavedDraft(context),{code:'PRODUCT_LINK_UNAVAILABLE'});
  assert.equal(p.get('draftLinkIssue').hidden,false);assert.equal(p.get('shopLink').href,undefined);
  options.onUnavailableLink();assert.equal(p.views.at(-1),'source');assert.equal(p.get('draftLinkEditor').open,true);
- response={...response,product_link_available:true};await options.verifyProductLink(context);
+ response={...response,product_link_available:true};await options.verifySavedDraft(context);
  assert.equal(p.get('draftLinkIssue').hidden,true);assert.ok(p.get('shopLink').href.endsWith('&produkt=art-1'));
- response={...response,product_link_available:null};await assert.rejects(options.verifyProductLink(context),/Produktlink gerade nicht prüfen/);
- response={...response,assignment_revision:3,product_link_available:true};await assert.rejects(options.verifyProductLink(context),{code:'ASSIGNMENT_CHANGED'});
+ response={...response,product_link_available:null};await assert.rejects(options.verifySavedDraft(context),/Produktlink gerade nicht prüfen/);
+ response={...response,assignment_revision:3,product_link_available:true};await assert.rejects(options.verifySavedDraft(context),{code:'ASSIGNMENT_CHANGED'});
  assert.equal(p.calls.filter(c=>c.url).length,0);
 });
 test('history with a withdrawn product opens only the verified saved draft for correction, including a resume link',async()=>{
@@ -1511,4 +1511,26 @@ test('correcting a link alone preserves already saved text even if it contains l
  const f=sharedDraft('youtube');f.change({body:'Alter archivierter Beitrag mit #Hinweis und einem Link.'});
  const p=await f.open();await p.get('draftLinkShop').click();assert.equal(p.workspaceOptions.getPreview().draftStep.target,'save');
  await p.workspaceOptions.onDraftAction('save');assert.equal(f.writes.length,1);assert.match(f.writes[0].body,/#Hinweis/);
+});
+test('order preparation re-reads a plain shop draft and matches the full displayed post before account lookup',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=sharedDraft(portal);let transform=row=>row;
+  const p=await f.open(async req=>{
+   const row=await f.rpc(req);
+   if(req.p_action==='get'){delete row.preview.drafts[0].product_id;return transform(row);}
+   return row;
+  });
+  const options=p.orderOptions,context=options.getContext(),draft=f.view().preview.drafts[0];
+  assert.equal(context.post.title,draft.title);assert.equal(context.post.caption,draft.caption);
+  assert.equal(context.binding.post,undefined);
+  const before=p.calls.length;await options.verifySavedDraft(context);assert.deepEqual(p.calls.slice(before).map(c=>c.p_action),['get']);
+  for(const key of ['title','body','caption','hashtags','review_notes','product_id']){
+   transform=row=>{row.preview.drafts[0][key]=Array.isArray(draft[key])?['Andere Fassung']:'Geänderter Stand';return row;};
+   await assert.rejects(options.verifySavedDraft(context),{code:'ASSIGNMENT_CHANGED'});
+  }
+  transform=row=>({...row,assignment_revision:row.assignment_revision+1});
+  await assert.rejects(options.verifySavedDraft(context),{code:'ASSIGNMENT_CHANGED'});
+  options.onOutdatedDraft();assert.equal(p.views.at(-1),'source');assert.equal(p.get('loadLatest').focused,true);
+  assert.ok(p.calls.slice(before).every(c=>!c.url&&c.p_action==='get'));assert.equal(f.writes.length,0);
+ }
 });

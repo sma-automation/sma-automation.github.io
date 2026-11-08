@@ -27,7 +27,12 @@ export function createClient(){return {auth:{onAuthStateChange(){},getSession:as
      const {title,body,hashtags}=args.p_input;Object.assign(draft,{title,body,hashtags,caption:body});
      saved.revision++;file.assignments[0].revision=++saved.assignment_revision;return {data:saved};
     }
-    if(args.p_action==='get'){if(offline)throw Error('offline');return {data:saved};}
+    if(args.p_action==='get'){
+     if(offline)throw Error('offline');
+     if(sessionStorage.fixtureNewerPost){return {data:{...saved,revision:saved.revision+1,assignment_revision:saved.assignment_revision+1,
+      preview:{...saved.preview,drafts:[{...draft,title:'Späterer Titel'}]}}};}
+     return {data:saved};
+    }
    }
    return {data:{ok:false,code:'UNAVAILABLE'}};
   })();
@@ -111,6 +116,18 @@ try{
   report.savedInPreview=offered&&!$('workspacePreview').hidden&&action.hidden&&!prepare.hidden&&!prepare.disabled&&
    $('workspacePostCaption').textContent===newText&&$('workspaceDraftNotice').textContent==='Gespeicherter Entwurf'&&
    !$('publicationOrderDialog').open&&Number(sessionStorage.fixtureWrites)===2;
+  // The fixture's order client has only an in-memory account response. Other actions fail the test.
+  prepare.click();const review=$('publicationOrderDialog');
+  await until(()=>!review.querySelector('form').hidden);
+  const summary=review.querySelector('.order-caption');summary.querySelector('summary').click();
+  report.reviewedStoredPost=review.open&&summary.open&&summary.querySelector('pre').textContent===newText&&
+   review.querySelector('h3').textContent===$('youtube-title').value&&review.textContent.includes('Testvideo.webm')&&
+   review.textContent.includes('Testkanal · fixture-channel')&&sessionStorage.fixtureOrderActions==='account';
+  sessionStorage.fixtureNewerPost='1';$('order-visibility').value='private';
+  $('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';
+  review.querySelector('form').requestSubmit();await until(()=>!review.open);
+  report.staleStopped=document.activeElement===$('loadLatest')&&$('sourcePanel').open&&!$('workspaceSource').hidden&&
+   $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account';
   parent.postMessage(report,location.origin);
  }
 }catch(error){parent.postMessage({type:'reload-result',error:String(error)},location.origin);}`;
@@ -138,6 +155,13 @@ const server=createServer(async(req,res)=>{
   if(path==='/client.mjs')return send('text/javascript',client);
   if(path!=='/app/publication-preview.html'&&!/^\/app\/assets\/[\w.-]+\.(css|m?js)$/.test(path)){res.writeHead(404).end();return;}
   let source=await readFile(new URL('..'+path,import.meta.url),'utf8');
+  if(path==='/app/assets/publication-order.mjs')source=source.replace('fetcher=fetch','fetcher=fixtureOrderFetch')+`
+async function fixtureOrderFetch(_url,options){
+ const {action,input}=JSON.parse(options.body);sessionStorage.fixtureOrderActions=[sessionStorage.fixtureOrderActions,action].filter(Boolean).join(',');
+ if(action!=='account')throw Error('Unexpected synthetic order action');
+ return {ok:true,json:async()=>({ok:true,id:input.id,stage:'account',can_upload:false,can_publish:false,
+  target:{id:'fixture-channel',platform:'youtube'},account_check:{target_id:'fixture-channel',display_name:'Testkanal',policy:{}}})};
+}`;
   if(path==='/app/assets/publication-preview.js')source=source.replace("import('https://esm.sh/@supabase/supabase-js@2')","import('/client.mjs')")+exercise;
   send(path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript',source);
  }catch{res.writeHead(500).end();}
@@ -152,6 +176,6 @@ try{
  const match=stdout.match(/<output>([^<]+)<\/output>/);assert.ok(match,'Reloaded editor did not report its state: '+stdout.slice(-500));
  const result=JSON.parse(match[1]);assert.equal(result.restored,true,JSON.stringify(result));assert.equal(result.ready,true);
  assert.match(result.notice,/wiederhergestellt/);assert.equal(result.writes,1);
- assert.ok(result.previewShown&&result.kept&&result.loaded&&result.savedInPreview,JSON.stringify(result));
+ assert.ok(result.previewShown&&result.kept&&result.loaded&&result.savedInPreview&&result.reviewedStoredPost&&result.staleStopped,JSON.stringify(result));
  console.log('Chromium distinguished a lost save from a confirmed preview save and kept order preparation separate.');
 }finally{server.close();await rm(profile,{recursive:true,force:true});}
