@@ -21,7 +21,7 @@ let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignment
 let pendingLink,refreshDraftLink,choosingLinkFor,uncertainSave=null;
 const tabDrafts=tabDraftStore(window);
 let startupDraft=null,tabRecord=null,comparisonBase=null;
-let reviewStatus=null;
+let reviewStatus=null,reloadChoice=null;
 let retryHistoryPreview=false;
 let orderReview=null;
 let selectedMediaFacts=null;
@@ -69,7 +69,8 @@ function lock(value){value=value||signedOut||automaticMode!==null;busy=value;ord
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
-async function rpc(action,input={},id=null){const {data,error}=await supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
+async function rpc(action,input={},id=null,signal){const request=supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});
+ const {data,error}=await (signal?request.abortSignal(signal):request);if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 // Read controlled fields directly: FormData omits the disabled fields during a Magic run.
 function sourceInput(){
  const english=$('language').value==='en';
@@ -187,11 +188,19 @@ function caption(d,body,tags=d.hashtags){
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
  return [body.trim(),tags.map(x=>'#'+x).join(' '),'🛒 '+target.label+': '+target.url].filter(Boolean).join('\n\n');
 }
+function visibleSavedDrafts(data){
+ if(data?.status!=='completed'||data.preview?.can_publish!==false||!Array.isArray(data.preview.drafts))throw Error(errorText(data));
+ const drafts=data.preview.drafts.filter(d=>!selectedPortal||d?.platform===selectedPortal);
+ if(!drafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
+ if(drafts.some(d=>!d||!Object.hasOwn(names,d.platform)||typeof d.title!=='string'||typeof d.body!=='string'||
+    typeof d.caption!=='string'||!Array.isArray(d.hashtags)||!d.hashtags.every(t=>typeof t==='string')||
+    !Array.isArray(d.review_notes)||!d.review_notes.every(n=>typeof n==='string')||
+    !draftDestination(data.preview.shop_url,d,data.preview.language)))throw Error(messages.PREPARATION_UNAVAILABLE);
+ return drafts;
+}
 function render(data){
  if(signedOut)throw Error(messages.AUTH_REQUIRED);
- if(data.status!=='completed'||!data.preview||data.preview.can_publish!==false)throw Error(errorText(data));
- const visibleDrafts=data.preview.drafts.filter(d=>!selectedPortal||d.platform===selectedPortal);
- if(!visibleDrafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
+ const visibleDrafts=visibleSavedDrafts(data);
  const target=draftDestination(data.preview.shop_url,visibleDrafts.length===1?visibleDrafts[0]:null,data.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
  forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;current=data;pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('drafts').replaceChildren();
@@ -275,7 +284,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
+function clearDraft(){closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -868,7 +877,76 @@ $('pickerRefresh').addEventListener('click',refreshFiles);
 $('previewForm').addEventListener('input',event=>{if(event?.target!==$('productChoice'))sourceDirty=true;attempt=null;});
 $('media_kind').addEventListener('change',syncMedia);
 $('language').addEventListener('change',()=>{sourceDirty=true;attempt=null;});
-$('loadLatest').addEventListener('click',async()=>{if(!busy){await loadLatest();if(current)workspace?.show('text');}});
+function closeReloadChoice(accepted){
+ const settle=reloadChoice;reloadChoice=null;
+ $('draftReloadPreview').replaceChildren();
+ if($('draftReloadDialog').open)$('draftReloadDialog').close();
+ settle?.(accepted);
+}
+function reviewStoredDraft(saved){
+ const preview=$('draftReloadPreview');preview.replaceChildren();
+ const add=(tag,text)=>{const node=document.createElement(tag);node.textContent=text;preview.append(node);};
+ for(const draft of visibleSavedDrafts(saved)){
+  add('h3',selectedPortal?draft.title:names[draft.platform]+' · '+draft.title);add('p',draft.caption);
+  if(saved.product_link_available===false&&draft.product_id)add('p',messages.PRODUCT_LINK_UNAVAILABLE);
+ }
+ if(sourceDirty&&typeof saved.input?.source_text==='string'){
+  add('h3','Gespeicherte Beschreibung');add('p',originalSource(saved.input.source_text));
+ }
+ $('draftReloadDialog').showModal();
+ return new Promise(resolve=>{reloadChoice=resolve;});
+}
+$('keepDraftEdits').addEventListener('click',()=>closeReloadChoice(false));
+$('useStoredDraft').addEventListener('click',()=>closeReloadChoice(true));
+$('draftReloadDialog').addEventListener('close',()=>{if(!$('draftReloadDialog').open&&reloadChoice)closeReloadChoice(false);});
+
+async function readDraftForReload(context){
+ let saved;
+ if(context)saved=(await readAssignedPortalDraft(context,AbortSignal.timeout(20000))).saved;
+ else{
+  saved=await rpc('latest',selectedPortal?{platform:selectedPortal}:{},null,AbortSignal.timeout(20000));
+  if(saved.status==='empty')throw Error('Es ist noch keine Textvorlage gespeichert.');
+  if(saved.status==='processing'){
+   const id=saved.id;saved=await waitForResult(id);
+   if(saved.id!==id)throw Error(messages.PREPARATION_UNAVAILABLE);
+  }
+ }
+ visibleSavedDrafts(saved);
+ if(typeof saved.id!=='string'||!Number.isSafeInteger(saved.revision)||saved.revision<1||
+    (saved.input!=null&&(typeof saved.input!=='object'||Array.isArray(saved.input)||
+     (saved.input.source_text!=null&&typeof saved.input.source_text!=='string')||
+     (saved.input.platforms!=null&&!Array.isArray(saved.input.platforms))))||
+    (saved.product_context?.state==='ambiguous'&&Array.isArray(saved.product_context.choices)&&
+     saved.product_context.choices.some(item=>!item||typeof item.product_id!=='string')))throw Error(messages.PREPARATION_UNAVAILABLE);
+ return saved;
+}
+function reloadVersion(saved){
+ return JSON.stringify([saved.id,saved.revision,saved.assignment_revision,saved.preview.shop_url,saved.preview.language,
+  saved.product_link_available,saved.input?.source_text,saved.input?.language,saved.input?.media_kind,saved.input?.platforms,
+  visibleSavedDrafts(saved).map(d=>[d.platform,d.title,d.body,d.hashtags,d.product_id,d.caption,d.review_notes])]);
+}
+$('loadLatest').addEventListener('click',async()=>{
+ if(busy||signedOut)return;
+ const context=selectedAsset?fileContext():null,original=current;
+ lock(true);
+ try{
+  if(uncertainSave){await checkDraftSave();return;}
+  let saved=await readDraftForReload(context);
+  await checkEditorContext(context,original);
+  if(hasDraftEdits()||sourceDirty){
+   if(!await reviewStoredDraft(saved)||signedOut)return;
+   const fresh=await readDraftForReload(context);
+   await checkEditorContext(context,original);
+   if(reloadVersion(saved)!==reloadVersion(fresh))throw Error('Der Entwurf wurde während der Auswahl geändert. Deine Eingaben sind erhalten. Lade die gespeicherte Fassung erneut.');
+   saved=fresh;
+  }
+  const keepSource=sourceDirty&&!saved.input;
+  if(!keepSource)showProductContext(saved.product_context,selectedAsset,savedProductSelection(saved));
+  fillInput(saved.input);render(saved);sourceDirty=keepSource;workspace?.show('text');
+  status(selectedAsset?'Gespeicherter Portalbeitrag geladen.':'Gespeicherte Textvorlage geladen.');
+ }catch(error){if(!signedOut)status(error.message,true);}
+ finally{lock(false);syncMedia();}
+});
 async function generatePreview({withinAutomatic=false}={}){
  if(signedOut||(busy&&!withinAutomatic))return false;const input=sourceInput();if(!input.platforms.length){status(messages.INVALID_INPUT,true);return;}
  const context=selectedAsset?fileContext():null;
@@ -1181,7 +1259,7 @@ if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrd
  refresh:()=>ensureFreshFile(fileContext()),
  onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},
 });
-window.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('draftConflictDialog').open)return;if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
+window.addEventListener('keydown',event=>{if(event.key==='Escape'&&($('draftConflictDialog').open||$('draftReloadDialog').open))return;if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 // Build the shared portal workspace before waiting for the external account client.
 lock(true);status('Deine Dateien werden geladen …');
 try{
