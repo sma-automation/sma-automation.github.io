@@ -10,7 +10,7 @@ function savedTextReceipt(previous,input){
  const draft={...previous.preview.drafts[0],title:input.title,body:input.body,hashtags:input.hashtags};
  return {...previous,revision:previous.revision+1,assignment_revision:input.assignment_revision+1,preview:{...previous.preview,drafts:[draft]}};
 }
-async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions,workspaceOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
+async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions,workspaceOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:ownerId}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
  client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
@@ -31,7 +31,7 @@ test('publication order uses the selected saved revision and rejects unsaved edi
  const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[{...ownFile,assignments:[]}]}:a.p_action==='get'?{...result,assignment_revision:4}:{ok:true,status:'empty'}});
  const context=p.orderOptions.getContext();
  assert.deepEqual(JSON.parse(JSON.stringify(context.binding)),{asset_id:ownFile.id,asset_revision:ownFile.revision,platform:'youtube',assignment_revision:4,preview_id:result.id,preview_revision:result.revision});
- p.get('drafts').children[0].events.input();assert.throws(()=>p.orderOptions.getContext(),/speichere/);
+ editPortalField(p,'title','Titel vor dem Speichern');assert.throws(()=>p.orderOptions.getContext(),/speichere/);
  p.signOut();assert.throws(()=>p.orderOptions.getContext(),/melde/);
 });
 test('file editor never falls back to unrelated latest portal text',async()=>{const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async args=>args.p_action==='list'?{ok:true,files:[ownFile]}:{ok:true,status:'empty'}});assert.equal(p.calls.some(c=>c.p_action==='latest'),false);assert.equal(p.get('result').hidden,true);assert.equal(p.get('source_text').value,'');assert.equal(p.calls.find(c=>c.p_action==='get').p_input.asset_id,ownFile.id);});
@@ -1162,6 +1162,8 @@ test('a no-op receipt may keep its revision; a definitive save rejection does no
   if(reject)return {ok:false,code:'INVALID_EDIT'};
   throw new Error('no reply for identical draft');
  });
+ // The raw field changed, but trimming for the save yields the original payload.
+ editPortalField(p,'body',f.view().preview.drafts[0].body+' ');
  await p.save();assert.match(p.get('status').textContent,/Fassung im Formular ist.*gespeichert/);
  assert.equal(p.orderOptions.getContext().binding.assignment_revision,4);
  editPortalField(p,'body','Text mit ungültigem Testinhalt.');reject=true;
@@ -1409,4 +1411,71 @@ test('invalid hashtags keep the local fields and cannot save from the preview',a
  assert.equal(f.writes.length,0);assert.equal(p.calls.length,before);assert.match(p.get('status').textContent,/Hashtags/);
  assert.equal(p.get('drafts').children[0].querySelector('[data-field=hashtags]').value,'#Eins #Eins');
  assert.equal(p.workspaceOptions.getPreview().draftStep.target,'save');
+});
+test('fully reverted text, hashtags and destination restore the saved preview without a request',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=sharedDraft(portal),p=await f.open(),draft=f.view().preview.drafts[0];
+  const before=p.calls.length,ui=p.workspaceOptions;
+  editPortalField(p,'body',draft.body+' ');editPortalField(p,'title','Lokaler Titel');
+  editPortalField(p,'hashtags','#Unfertig-');await p.get('draftLinkShop').click();
+  editPortalField(p,'hashtags',draft.hashtags.map(t=>'#'+t).join(' '));
+  editPortalField(p,'title',draft.title);await p.get('draftLinkUndo').click();
+  assert.equal(ui.getPreview().draftStep.target,'save','the remaining space is an open input');
+  editPortalField(p,'body',draft.body);assert.equal(ui.getPreview().draftStep,null);
+  assert.match(p.get('saveStatus').textContent,/zugeordnet/);assert.equal(p.orderOptions.getContext().binding.assignment_revision,4);
+  assert.equal(p.get('save').disabled,true);await p.save();await ui.onDraftAction('save');assert.equal(p.calls.length,before);assert.equal(f.writes.length,0);
+ }
+});
+test('source description and language can be reverted independently after the edited post is saved',async()=>{
+ const f=sharedDraft('youtube'),input={source_text:'Beschreibung des Videos aus dem gespeicherten Entwurf.',language:'de',media_kind:'video',platforms:['youtube']};
+ const p=await f.open(async req=>req.p_action==='get'?{...f.view(),input}:f.rpc(req)),ui=p.workspaceOptions;
+ p.get('source_text').value='Eine neue Inhaltsbeschreibung.';p.get('previewForm').events.input();
+ p.get('language').value='en';p.get('language').events.change();
+ editPortalField(p,'title','Gespeicherter neuer Titel');await ui.onDraftAction('save');
+ assert.equal(ui.getPreview().draftStep.target,'source_text');
+ const before=p.calls.length;p.get('source_text').value=input.source_text;p.get('previewForm').events.input();
+ assert.equal(ui.getPreview().draftStep.target,'source_text');
+ p.get('language').value='de';p.get('language').events.change();assert.equal(ui.getPreview().draftStep,null);
+ assert.equal(p.orderOptions.getContext().binding.assignment_revision,5);assert.equal(p.calls.length,before);
+});
+test('reverting to the old text during an unknown write preserves recovery and any later confirmed change',async()=>{
+ const f=sharedDraft('youtube');let offline=false;
+ const p=await f.open(async req=>{
+  if(offline&&req.p_action==='get')throw Error('offline');
+  const reply=await f.rpc(req);if(req.p_action==='save'){offline=true;throw Error('lost receipt');}return reply;
+ });
+ const original=f.view().preview.drafts[0].body;
+ editPortalField(p,'body','Diese Fassung ist trotz Antwortverlust gespeichert.');await p.save();
+ editPortalField(p,'body',original);assert.equal(p.workspaceOptions.getPreview().draftStep.target,'checkDraftSave');
+ offline=false;await p.get('checkDraftSave').click();assert.equal(p.workspaceOptions.getPreview().draftStep.target,'save');
+ assert.equal(p.get('drafts').children[0].querySelector('textarea').value,original);
+ editPortalField(p,'body',f.view().preview.drafts[0].body);assert.equal(p.workspaceOptions.getPreview().draftStep,null);assert.equal(f.writes.length,1);
+});
+test('undoing local edits after a conflict cannot clear the requirement to compare the newer revision',async()=>{
+ const f=sharedDraft('tiktok'),p=await f.open(),old=f.view().preview.drafts[0];
+ editPortalField(p,'title','Eigener Titel');f.change({title:'Anderer gespeicherter Titel'});await p.save();
+ editPortalField(p,'title',old.title);assert.equal(p.workspaceOptions.getPreview().draftStep.target,'compareDraft');
+ assert.throws(()=>p.orderOptions.getContext(),/speichere/);assert.equal(f.writes.length,0);
+});
+
+test('undoing an unconfirmed write can return to the server-verified original without creating another revision',async()=>{
+ const f=sharedDraft('tiktok');let offline=false;
+ const p=await f.open(req=>{
+  if(req.p_action==='save'){offline=true;throw Error('lost write');}
+  if(offline&&req.p_action==='get')throw Error('offline');return f.rpc(req);
+ });
+ const original=f.view().preview.drafts[0].body;
+ editPortalField(p,'body','Ein unterbrochener Schreibversuch.');await p.save();editPortalField(p,'body',original);
+ assert.equal(p.workspaceOptions.getPreview().draftStep.target,'checkDraftSave');offline=false;await p.get('checkDraftSave').click();
+ assert.equal(p.workspaceOptions.getPreview().draftStep,null);assert.equal(p.get('save').disabled,true);
+ assert.match(p.get('saveStatus').textContent,/zuletzt gelesenen/);assert.equal(f.writes.length,0);
+});
+test('reload after undo keeps the verified stored form instead of reviving the interrupted text',async()=>{
+ const f=interruptedDraft('youtube',false),first=await f.first(),original=f.view().preview.drafts[0];
+ editPortalField(first,'body','Noch nicht bestätigte Fassung aus diesem Tab.');await first.save();
+ const recovered=await f.reload();assert.equal(recovered.workspaceOptions.getPreview().draftStep.target,'save');
+ editPortalField(recovered,'body',original.body);assert.equal(recovered.workspaceOptions.getPreview().draftStep,null);
+ const again=await f.reload();assert.equal(f.sessionStorage.rows.size,0);
+ assert.equal(again.get('drafts').querySelector('textarea').value,original.body);assert.equal(again.workspaceOptions.getPreview().draftStep,null);
+ assert.equal(again.orderOptions.getContext().binding.assignment_revision,4);assert.equal(f.writes.length,0);
 });
