@@ -6,6 +6,10 @@ class Element{constructor(tag='div'){this.tag=tag;this.style={};this.children=[]
 const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
 const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').split('// Existing owner-scoped')[0].replaceAll('export function','function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
+function savedTextReceipt(previous,input){
+ const draft={...previous.preview.drafts[0],title:input.title,body:input.body,hashtags:input.hashtags};
+ return {...previous,revision:previous.revision+1,assignment_revision:input.assignment_revision+1,preview:{...previous.preview,drafts:[draft]}};
+}
 async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,currentPost=false,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions;const win={addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:'fixture-owner'}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
@@ -350,7 +354,7 @@ test('stale, missing and future timestamps refresh before generation without rel
 });
 test('automatic refresh before saving preserves edited title, body and source fields',async()=>{
  let listed=0;
- const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile({verified_at:++listed===1?staleTime:new Date().toISOString(),assignments:[{platform:'youtube',revision:4,status:'assigned'}]})]}:a.p_action==='get'?{...result,assignment_revision:4}:a.p_action==='save'?{...result,assignment_revision:5}:{ok:true,status:'empty'},fetchResponse:async()=>({ok:true})});
+ const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile({verified_at:++listed===1?staleTime:new Date().toISOString(),assignments:[{platform:'youtube',revision:4,status:'assigned'}]})]}:a.p_action==='get'?{...result,assignment_revision:4}:a.p_action==='save'?savedTextReceipt(result,a.p_input):{ok:true,status:'empty'},fetchResponse:async()=>({ok:true})});
  const card=p.get('drafts').children[0];card.querySelector('[data-field=title]').value='Mein bearbeiteter Titel';card.querySelector('textarea').value='Mein bearbeiteter Beitragstext bleibt erhalten.';card.events.input();
  p.get('source_text').value='Meine zusätzlichen eigenen gesicherten Angaben.';p.get('previewForm').events.input();
  await p.save();const save=p.calls.find(c=>c.p_action==='save');
@@ -625,7 +629,7 @@ test('editing after cancellation saves the current assignment and never writes t
  const p=await historyView({currentPost:true,order:cancelledOrder,filesRpc:async a=>{
   if(a.p_action==='list')return {ok:true,files:[file]};
   if(a.p_action==='get')return saved;
-  if(a.p_action==='save')return {...saved,assignment_revision:9};
+  if(a.p_action==='save')return savedTextReceipt(saved,a.p_input);
   return {ok:true};
  }});
  assert.equal(p.get('result').hidden,false);
@@ -1011,7 +1015,7 @@ function sharedDraft(portal){
   }
   return {ok:true};
  }
- return {open:()=>boot({portal,asset:file.id,wide:true,filesRpc:rpc}),writes,change,view,
+ return {open:(filesRpc=rpc)=>boot({portal,asset:file.id,wide:true,filesRpc}),rpc,writes,change,view,
   replaceFile(){file.revision='replaced';},replacePreview(){previewId=historyOrderId;}};
 }
 function editPortalField(p,key,value){
@@ -1077,4 +1081,100 @@ test('account change closes the comparison and clears both versions',async()=>{
  assert.equal(p.get('draftConflictDialog').open,true);
  p.switchOwner();await compare;assert.equal(p.get('draftConflictDialog').open,false);assert.equal(p.get('draftConflictFields').children.length,0);
  assert.equal(p.get('result').hidden,true);assert.equal(p.get('compareDraft').hidden,true);assert.equal(f.writes.length,0);
+});
+
+test('lost and malformed save replies confirm a committed portal draft by reading only',async()=>{
+ for(const [portal,loss] of [['youtube','transport'],['tiktok','empty'],['youtube','wrong-fields']]){
+  const f=sharedDraft(portal);const p=await f.open(async req=>{
+   const reply=await f.rpc(req);
+   if(req.p_action!=='save')return reply;
+   if(loss==='transport')throw new Error('Network connection lost');
+   if(loss==='empty')return null;
+   reply.preview.drafts[0].body='Ein anderer Beitragstext.';return reply;
+  });
+  editPortalField(p,'body','Ein gespeicherter Beitrag nach Netzunterbrechung.');
+  editPortalField(p,'hashtags','#Neu');await p.get('draftLinkShop').click();
+  const before=p.calls.length;await p.save();
+  assert.deepEqual(p.calls.slice(before).map(c=>c.p_action),['save','get','list']);assert.equal(f.writes.length,1);
+  assert.match(p.get('status').textContent,/Fassung im Formular ist.*gespeichert/);assert.equal(p.get('checkDraftSave').hidden,true);
+  assert.equal(p.orderOptions.getContext().binding.assignment_revision,5);assert.equal(p.get('shopLink').href,result.preview.shop_url);
+ }
+});
+test('a lost uncommitted request preserves the form and retries only after clicking save again',async()=>{
+ const f=sharedDraft('tiktok');let dropped=true;
+ const p=await f.open(req=>{if(req.p_action==='save'&&dropped){dropped=false;throw new Error('Offline');}return f.rpc(req);});
+ editPortalField(p,'body','Noch nicht gespeicherter lokaler Text.');
+ await p.save();assert.match(p.get('saveStatus').textContent,/erneut speichern/);assert.equal(f.writes.length,0);
+ assert.match(p.get('drafts').querySelector('textarea').value,/lokaler Text/);assert.equal(p.get('save').hidden,false);
+ await p.save();assert.equal(f.writes.length,1);assert.equal(f.writes[0].assignment_revision,4);
+});
+test('an unavailable receipt enables only status reads; newer input survives a later confirmation',async()=>{
+ const f=sharedDraft('youtube');let offline=false;
+ const p=await f.open(async req=>{
+  if(req.p_action==='get'&&offline)throw Error('offline');
+  const reply=await f.rpc(req);
+  if(req.p_action==='save'){offline=true;throw Error('lost');}
+  return reply;
+ });
+ editPortalField(p,'body','Mein abgesendeter Entwurf in diesem Tab.');await p.save();
+ assert.equal(p.get('save').hidden,true);assert.equal(p.get('checkDraftSave').hidden,false);assert.match(p.get('saveStatus').textContent,/unklar/);
+ assert.throws(()=>p.orderOptions.getContext(),/speichere/);
+ const start=p.calls.length;await p.get('checkDraftSave').click();await p.save();
+ assert.deepEqual(p.calls.slice(start).map(c=>c.p_action),['get']);
+ editPortalField(p,'body','Weitere lokale Eingabe nach dem ersten Speichern.');offline=false;
+ await p.get('checkDraftSave').click();assert.equal(f.writes.length,1);assert.equal(p.get('compareDraft').hidden,true);
+ assert.match(p.get('saveStatus').textContent,/gesendete Fassung ist gespeichert/);
+ assert.match(p.get('drafts').querySelector('textarea').value,/Weitere lokale Eingabe/);
+ await p.save();assert.equal(f.writes.length,2);assert.equal(f.writes[1].assignment_revision,5);
+});
+test('a different saved field or link never confirms the sent version',async()=>{
+ for(const patch of [{title:'Neuer Titel'},{body:'Ein weiterer bearbeiteter Text.'},{hashtags:['Andere']},{product_id:'anderer-artikel'}]){
+  const f=sharedDraft('tiktok');const p=await f.open(async req=>{
+   const reply=await f.rpc(req);if(req.p_action==='save'){f.change(patch);throw Error('lost');}return reply;
+  });
+  editPortalField(p,'body','Meine lokale Beschreibung zum Vergleichen.');await p.save();
+  assert.equal(f.writes.length,1);assert.equal(p.get('compareDraft').hidden,false);assert.match(p.get('saveStatus').textContent,/andere Fassung/);
+  assert.match(p.get('drafts').querySelector('textarea').value,/Meine lokale Beschreibung/);
+ }
+});
+test('file replacement and a different draft never supply a receipt; logout discards a late read',async()=>{
+ for(const replace of ['replaceFile','replacePreview']){
+  const f=sharedDraft('youtube');const p=await f.open(async req=>{
+   const reply=await f.rpc(req);if(req.p_action==='save'){f[replace]();throw Error('lost');}return reply;
+  });
+  editPortalField(p,'body','Text für die ursprüngliche Datei.');await p.save();
+  assert.equal(f.writes.length,1);assert.equal(p.get('checkDraftSave').hidden,false);assert.match(p.get('saveStatus').textContent,/nicht mehr zugeordnet/);
+  assert.equal(p.get('compareDraft').hidden,true);
+ }
+ let release,reading=false;const f=sharedDraft('youtube');const p=await f.open(async req=>{
+  if(req.p_action==='get'&&reading)return new Promise(r=>{release=r;});
+  const reply=await f.rpc(req);if(req.p_action==='save'){reading=true;throw Error('lost');}return reply;
+ });
+ editPortalField(p,'body','Privater Text für den alten Zugriff.');const done=p.save();await compareTick();p.signOut();release(f.view());await done;
+ assert.equal(p.get('checkDraftSave').hidden,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde/);
+ assert.equal(f.writes.length,1);
+});
+
+test('a no-op receipt may keep its revision; a definitive save rejection does not start a receipt read',async()=>{
+ const f=sharedDraft('youtube');let reject=false;
+ const p=await f.open(req=>{
+  if(req.p_action!=='save')return f.rpc(req);
+  if(reject)return {ok:false,code:'INVALID_EDIT'};
+  throw new Error('no reply for identical draft');
+ });
+ await p.save();assert.match(p.get('status').textContent,/Fassung im Formular ist.*gespeichert/);
+ assert.equal(p.orderOptions.getContext().binding.assignment_revision,4);
+ editPortalField(p,'body','Text mit ungültigem Testinhalt.');reject=true;
+ const before=p.calls.length;await p.save();assert.deepEqual(p.calls.slice(before).map(c=>c.p_action),['save']);
+ assert.equal(p.get('checkDraftSave').hidden,true);assert.equal(f.writes.length,0);
+});
+test('a timed-out save that reaches the database after the read cannot create a second revision',async()=>{
+ const f=sharedDraft('tiktok');let delayed;
+ const p=await f.open(req=>{
+  if(req.p_action==='save'&&!delayed){delayed=req;throw Error('timeout');}
+  return f.rpc(req);
+ });
+ editPortalField(p,'body','Eine verspätet gespeicherte Fassung.');await p.save();
+ assert.equal(f.writes.length,0);assert.match(p.get('saveStatus').textContent,/erneut speichern/);
+ await f.rpc(delayed);await p.save();assert.equal(f.writes.length,1);assert.equal(p.get('compareDraft').hidden,false);
 });

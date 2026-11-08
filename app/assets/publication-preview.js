@@ -17,7 +17,7 @@ const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:
 const messages={CAPTION_TOO_LONG:'Der gesamte Beitrag mit Link ist zu lang. Bitte kürze den Text oder die Hashtags.',CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 messages.PRODUCT_LINK_UNAVAILABLE='Der verlinkte Artikel ist in deinem öffentlichen Shop nicht mehr eindeutig verfügbar. Wähle einen anderen Artikel oder die Shop-Startseite und speichere den Entwurf.';
 let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0,dirty=false;
-let pendingLink,refreshDraftLink,choosingLinkFor;
+let pendingLink,refreshDraftLink,choosingLinkFor,uncertainSave=null;
 let reviewStatus=null;
 let retryHistoryPreview=false;
 let orderReview=null;
@@ -62,7 +62,7 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;$('save').disabled=value;for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -154,7 +154,10 @@ function editedPortalText(card){
  return {platform:card.dataset.platform,title:card.querySelector('[data-field=title]').value.trim(),
   body:card.querySelector('[data-field=body]').value.trim(),hashtags:parseHashtags(card.querySelector('[data-field=hashtags]').value)};
 }
-function hasDraftEdits(){return dirty||pendingLink!==undefined;}
+function setUncertainSave(snapshot){
+ uncertainSave=snapshot;$('checkDraftSave').hidden=!snapshot;$('save').hidden=!!snapshot;
+}
+function hasDraftEdits(){return dirty||pendingLink!==undefined||!!uncertainSave;}
 function unavailableDraftLink(draft){
  return !!draft?.product_id&&current?.product_link_available===false&&pendingLink===undefined;
 }
@@ -188,7 +191,7 @@ function render(data){
  if(!visibleDrafts.length)throw Error('Für dieses Portal ist noch keine Vorschau gespeichert.');
  const target=draftDestination(data.preview.shop_url,visibleDrafts.length===1?visibleDrafts[0]:null,data.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
- $('compareDraft').hidden=true;current=data;pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('drafts').replaceChildren();
+ setUncertainSave(null);$('compareDraft').hidden=true;current=data;pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('drafts').replaceChildren();
  $('draftLinkEditor').hidden=!(selectedPortal&&selectedAsset?.media_kind==='video'&&data.assignment_revision>0);
  const unavailable=unavailableDraftLink(visibleDrafts[0]);
  $('draftLinkEditor').open=unavailable;$('draftLinkUndo').hidden=true;
@@ -219,7 +222,14 @@ function render(data){
 }
 async function waitForResult(id){for(let i=0;i<50;i++){const r=await rpc('get',{},id);if(r.status==='completed')return r;if(r.status==='failed')throw Error(errorText(r));if(r.status==='empty')throw Error('Die Anfrage ist noch nicht angekommen. Du kannst sie erneut versuchen.');await new Promise(resolve=>setTimeout(resolve,3000));}throw Error('Die Erstellung läuft noch. Bitte lade gleich die letzte Vorschau.');}
 function fileError(code){return Object.assign(Error(errorText({code})),{code});}
-async function fileRpc(action,input={}){const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:action,p_input:input});if(error)throw fileError('FILE_SYNC_UNAVAILABLE');if(!data?.ok)throw fileError(data?.code);return data;}
+async function fileRpc(action,input={},signal){
+ const request=supabase.rpc('sma_publication_files_v1',{p_action:action,p_input:input});
+ const {data,error}=await (signal?request.abortSignal(signal):request);
+ if(error)throw fileError('FILE_SYNC_UNAVAILABLE');
+ if(data?.ok===false&&typeof data.code==='string')throw Object.assign(fileError(data.code),{rejected:true});
+ if(data?.ok!==true)throw fileError('FILE_SYNC_UNAVAILABLE');
+ return data;
+}
 function fileContext(){return {asset_id:selectedAsset.id,asset_revision:selectedAsset.revision,platform:selectedPortal,assignment_revision:assignmentRevision};}
 function assertFileContext(context){
  if(signedOut)throw fileError('AUTH_REQUIRED');
@@ -262,7 +272,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
+function clearDraft(){setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;dirty=false;sourceDirty=false;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -338,8 +348,8 @@ function describeFile(file){
  const title=file.display?.product||file.display?.draft_title||readableFilename(file.display?.source_name)||readableFilename(file.name)||fallback;
  return {title,version:[variant,duration].filter(Boolean).join(' · ')};
 }
-async function optimizerCatalog(){
- return fileRpc('list',workspace?{platform:selectedPortal}:{});
+async function optimizerCatalog(signal){
+ return fileRpc('list',workspace?{platform:selectedPortal}:{},signal);
 }
 function renderSelectedFile(refreshCover=false){
  showProductContext(null,null);
@@ -608,18 +618,18 @@ async function openCurrentHistoryPost(id,owner){
  const order=await readHistoryOrder(id,true);
  return loadCurrentHistoryPost(order,owner);
 }
-async function readAssignedPortalDraft(binding){
+async function readAssignedPortalDraft(binding,signal){
  // Read by the owned file and portal, then check that this assignment still belongs to the same file version.
- const saved=await fileRpc('get',{asset_id:binding.asset_id,platform:selectedPortal});
+ const saved=await fileRpc('get',{asset_id:binding.asset_id,platform:selectedPortal},signal);
  if(saved.status!=='completed'||!orderUuid.test(saved.id)||!Number.isSafeInteger(saved.revision)||saved.revision<1||
     !Number.isSafeInteger(saved.assignment_revision)||saved.assignment_revision<1||saved.preview?.can_publish!==false||
     !Array.isArray(saved.preview.drafts)||saved.preview.drafts.length!==1||saved.preview.drafts[0]?.platform!==selectedPortal){
   throw Error('Für diese Datei ist aktuell kein gespeicherter Beitrag für '+names[selectedPortal]+' verfügbar.');
  }
- const catalog=await optimizerCatalog();
+ const catalog=await optimizerCatalog(signal);
  const file=catalog.files?.find(f=>f.id===binding.asset_id);
- if(!file||!fileFitsPortal(file))throw Error(messages.FILE_UNAVAILABLE);
- if(file.revision!==binding.asset_revision)throw Error('Die ausgewählte Dateiversion wurde ersetzt. Wähle die aktuelle Datei unter Veröffentlichung.');
+ if(!file||!fileFitsPortal(file))throw fileError('FILE_UNAVAILABLE');
+ if(file.revision!==binding.asset_revision)throw Object.assign(Error('Die ausgewählte Dateiversion wurde ersetzt. Wähle die aktuelle Datei unter Veröffentlichung.'),{code:'FILE_CHANGED'});
  const assignment=file.assignments?.find(a=>a.platform===selectedPortal);
  if(assignment?.status!=='assigned')throw fileError('ASSIGNMENT_CHANGED');
  if(assignment.revision!==saved.assignment_revision)throw fileError('ASSIGNMENT_CONFLICT');
@@ -924,7 +934,7 @@ for(const id of ['productChoice','catalogProduct'])$(id).addEventListener('chang
  if(choosingLinkFor&&choosingLinkFor===current&&$(id).value)return chooseDraftLink();
 });
 
-async function checkConflictContext(context,original){
+async function checkEditorContext(context,original){
  const owner=(await session()).user.id;
  assertFileContext(context);
  if(owner!==previewOwnerId)throw fileError('AUTH_REQUIRED');
@@ -939,7 +949,7 @@ $('compareDraft').addEventListener('click',async()=>{
  try{
   const local={...editedPortalText($('drafts').children[0]),product_id:draftWithLink(base).product_id??null};
   const {saved:latest}=await readAssignedPortalDraft(context);
-  await checkConflictContext(context,original);
+  await checkEditorContext(context,original);
   if(latest.id!==original.id)throw Error('Für diese Datei wurde ein neuer Entwurf angelegt. Deine Eingaben stehen weiterhin im Formular.');
   const remote=latest.preview.drafts[0];
   if(latest.revision<original.revision||latest.assignment_revision<=context.assignment_revision||
@@ -947,7 +957,7 @@ $('compareDraft').addEventListener('click',async()=>{
      typeof remote.title!=='string'||typeof remote.body!=='string'||!Array.isArray(remote.hashtags)||!Array.isArray(remote.review_notes))throw fileError('ASSIGNMENT_CONFLICT');
   const values=await draftConflict.choose({...base,product_id:base.product_id??null},local,{...remote,product_id:remote.product_id??null});
   if(!values)return;
-  await checkConflictContext(context,original);
+  await checkEditorContext(context,original);
   const keepSourceEdits=sourceDirty;
   if(!keepSourceEdits)showProductContext(latest.product_context,selectedAsset,savedProductSelection(latest));
   render(latest);sourceDirty=keepSourceEdits;
@@ -962,27 +972,114 @@ $('compareDraft').addEventListener('click',async()=>{
  finally{lock(false);}
 });
 
+function finishDraftSave(result,context){
+ const applied=pendingLink,sourceWasDirty=sourceDirty;
+ render(result);
+ if(!context)return;
+ sourceDirty=sourceWasDirty;
+ if(applied!==undefined){
+  if(!$('catalogLookup').hidden)catalogLookup.setContext(selectedAsset,selectedPortal,applied);
+  if(!$('productChoiceField').hidden)$('productChoice').value=applied?.product_id||'';
+ }
+ fileChanged();
+}
+
+function sameEditableDraft(a,b){
+ return a.title===b.title&&a.body===b.body&&JSON.stringify(a.hashtags)===JSON.stringify(b.hashtags)&&
+  (a.product_id??null)===(b.product_id??null);
+}
+function validSaveReceipt(saved,{context,original}){
+ const draft=saved?.preview?.drafts?.[0];
+ return saved?.status==='completed'&&saved.id===original.id&&saved.preview?.can_publish===false&&
+  saved.preview.shop_url===original.preview.shop_url&&Array.isArray(saved.preview.drafts)&&saved.preview.drafts.length===1&&
+  draft?.platform===context.platform&&typeof draft.title==='string'&&typeof draft.body==='string'&&
+  Array.isArray(draft.hashtags)&&Array.isArray(draft.review_notes)&&!!draftDestination(saved.preview.shop_url,draft,saved.preview.language)&&
+  Number.isSafeInteger(saved.revision)&&saved.revision>=original.revision&&
+  Number.isSafeInteger(saved.assignment_revision)&&(saved.assignment_revision>context.assignment_revision||
+   (saved.assignment_revision===context.assignment_revision&&saved.revision===original.revision&&
+    sameEditableDraft(draft,original.preview.drafts.find(d=>d.platform===context.platform))));
+}
+async function writePortalDraft(input,snapshot){
+ try{
+  const saved=await fileRpc('save',input,AbortSignal.timeout(25000));
+  if(validSaveReceipt(saved,snapshot)&&sameEditableDraft(saved.preview.drafts[0],snapshot.sent))return saved;
+ }catch(error){
+  if(error?.rejected)throw error;
+ }
+ throw fileError('DRAFT_SAVE_UNCONFIRMED');
+}
+async function checkDraftSave(){
+ const snapshot=uncertainSave;
+ if(!snapshot)return;
+ const {context,original,sent}=snapshot;
+ $('saveStatus').textContent='Gespeicherte Fassung wird geprüft …';
+ try{
+  await checkEditorContext(context,original);
+  const {saved}=await readAssignedPortalDraft(context,AbortSignal.timeout(20000));
+  await checkEditorContext(context,original);
+  if(uncertainSave!==snapshot)return;
+  if(saved.id!==original.id)throw fileError('ASSIGNMENT_CHANGED');
+  const stored=saved.preview.drafts[0],base=original.preview.drafts.find(d=>d.platform===context.platform);
+  const advanced=saved.assignment_revision>context.assignment_revision;
+  if(!validSaveReceipt(saved,snapshot))throw Error();
+  const confirmed=sameEditableDraft(stored,sent);
+  const localProduct=draftWithLink(base).product_id??null;
+  if(confirmed&&localProduct===(stored.product_id??null)){
+   // Keep raw text, including unfinished hashtags typed after a failed receipt read.
+   const fields=['title','body','hashtags'],card=$('drafts').children[0];
+   const raw=fields.map(key=>card.querySelector('[data-field='+key+']').value);
+   let edited=true;
+   try{edited=!sameEditableDraft({...editedPortalText(card),product_id:localProduct},stored);}catch{}
+   finishDraftSave(saved,context);
+   if(edited){
+    const restored=$('drafts').children[0];
+    fields.forEach((key,i)=>{restored.querySelector('[data-field='+key+']').value=raw[i];});
+    dirty=true;refreshDraftLink?.();workspace?.refreshPreview();
+   }
+   const message=edited?'Die gesendete Fassung ist gespeichert. Deine späteren Texteingaben sind noch offen.':'Die Fassung im Formular ist als Entwurf gespeichert.';
+   $('saveStatus').textContent=message;status(message);return;
+  }
+  setUncertainSave(null);
+  $('compareDraft').hidden=!advanced;
+  const message=advanced
+   ? (confirmed?'Die gesendete Fassung ist gespeichert. Deine späteren Eingaben kannst du vergleichen.':'Eine andere Fassung ist gespeichert. Du kannst deine Eingaben mit ihr vergleichen.')
+   : 'Deine Eingaben sind im gespeicherten Stand noch nicht enthalten. Du kannst den Entwurf erneut speichern.';
+  $('saveStatus').textContent=message;status(message);
+ }catch(error){
+  if(signedOut||uncertainSave!==snapshot)return;
+  const message=['FILE_CHANGED','FILE_UNAVAILABLE','ASSIGNMENT_CHANGED'].includes(error.code)
+   ? 'Die ursprüngliche Dateiversion oder der Entwurf ist nicht mehr zugeordnet. Deine Eingaben stehen weiterhin im Formular.'
+   : 'Der Speicherstand ist noch unklar. Prüfe ihn erneut. Deine Eingaben bleiben im Formular.';
+  $('saveStatus').textContent=message;status(message,true);
+ }
+}
+$('checkDraftSave').addEventListener('click',async()=>{
+ if(busy||signedOut||!uncertainSave)return;
+ lock(true);try{await checkDraftSave();}finally{lock(false);syncMedia();}
+});
+
 $('save').addEventListener('click',async()=>{
- if(busy||signedOut||!current)return;
+ if(busy||signedOut||!current||uncertainSave)return;
  let edits;try{edits=[...$('drafts').children].map(editedPortalText);}catch(e){status(e.message,true);return;}
  const drafts=current.preview.drafts.map(d=>edits.find(e=>e.platform===d.platform)||{platform:d.platform,title:d.title,body:d.body});
  if(drafts.some(d=>!d.title||d.title.length>80||d.body.length<10||d.body.length>1200)){status(messages.INVALID_EDIT,true);return;}
- const context=selectedAsset?fileContext():null;
+ const context=selectedAsset?fileContext():null,original=current;
+ const recoverable=context&&['youtube','tiktok'].includes(context.platform);
+ const edit=edits[0],base=original.preview.drafts.find(d=>d.platform===selectedPortal);
+ const snapshot=recoverable?{original,context,sent:{...edit,product_id:draftWithLink(base).product_id??null}}:null;
  lock(true);$('saveStatus').textContent='Wird gespeichert …';
  try{
   await ensureFreshFile(context);
-  const result=context?await withFreshFile(context,()=>fileRpc('save',{...context,title:edits[0].title,body:edits[0].body,hashtags:edits[0].hashtags,...(pendingLink===undefined?{}:{link_target:pendingLink})})):await rpc('save',{revision:current.revision,drafts},current.id);
-  const applied=pendingLink;
-  render(result);
-  if(context){
-   if(applied!==undefined){
-    if(!$('catalogLookup').hidden)catalogLookup.setContext(selectedAsset,selectedPortal,applied);
-    if(!$('productChoiceField').hidden)$('productChoice').value=applied?.product_id||'';
-   }
-   fileChanged();
-  }
+  const input={...context,title:edit.title,body:edit.body,hashtags:edit.hashtags,...(pendingLink===undefined?{}:{link_target:pendingLink})};
+  const result=context?await withFreshFile(context,()=>snapshot?writePortalDraft(input,snapshot):fileRpc('save',input)):
+   await rpc('save',{revision:original.revision,drafts},original.id);
+  finishDraftSave(result,context);
   status('Änderungen gespeichert.');
  }catch(e){if(!signedOut){
+  if(e.code==='DRAFT_SAVE_UNCONFIRMED'&&current===original){
+   $('compareDraft').hidden=true;setUncertainSave(snapshot);
+   await checkDraftSave();return;
+  }
   $('saveStatus').textContent='Änderungen noch nicht gespeichert';
   if(context&&['youtube','tiktok'].includes(context.platform)&&['ASSIGNMENT_CONFLICT','REVISION_CONFLICT'].includes(e.code)){
    $('compareDraft').hidden=false;status('Inzwischen wurde eine andere Fassung gespeichert. Vergleiche die Änderungen, um deine Eingaben zu übernehmen.',true);
