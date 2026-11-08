@@ -144,8 +144,11 @@ Die beiden Kundenleser liefern für eine noch ungebundene Vorbereitung das
 zusätzliche Feld `preparation_window`. Die Frist endet 30 Minuten nach dem
 ursprünglichen Erstellen. Der bestehende Freigabetoken und die persönliche
 Prüfoption werden weiterhin erst für einen fertig vorbereiteten Auftrag mit
-gültigem Kontonachweis ausgegeben. Nach Fristablauf führt der History-Link
-zur Beitragsvorschau für einen Neustart.
+gültigem Kontonachweis ausgegeben. Nach Fristablauf öffnet der History-Link
+für YouTube und TikTok den aktuellen Beitrag derselben Dateiversion und
+desselben Portals. Bestätigt der Server den Ablauf erst während des
+Wiederöffnens, zeigt die Vorschau ebenfalls diesen Entwurf. Eine neue
+Vorbereitung kann der Kunde dort ausdrücklich starten.
 
 ## Verbindungsabbruch bei der Freigabe – 7. November 2026
 

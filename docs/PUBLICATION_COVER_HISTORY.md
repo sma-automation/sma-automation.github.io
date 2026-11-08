@@ -66,18 +66,23 @@ stimmten alle zehn im Testkonto gelesenen Texte exakt mit den gespeicherten
 Aufträgen überein. Die Auftragsdaten und die bisherigen History-Felder hatten
 vor und nach der Änderung dieselben Prüfsummen.
 
-### Nach einem Abbruch am Beitrag weiterarbeiten
+### Nach Abbruch oder Fristablauf am Beitrag weiterarbeiten
 
-Bei einem abgebrochenen YouTube- oder TikTok-Auftrag führt **Aktuellen Beitrag
+Bei einem abgebrochenen oder abgelaufenen YouTube- oder TikTok-Auftrag führt **Aktuellen Beitrag
 öffnen** zum derzeit gespeicherten Entwurf für dieselbe Dateiversion und dasselbe
 Portal. Der Text im aufgeklappten History-Eintrag zeigt weiterhin den damaligen
 Stand. Beim Bearbeiten und Speichern verwendet die Vorschau die aktuelle
 Dateizuordnung. Bei einem entfernten Produkt öffnet sie die Linkkorrektur.
 
 Wechselt die Textrevision beim Laden, bietet **Vorschau erneut laden** einen
-neuen Abgleich. Eine ersetzte Datei lässt sich unter **Veröffentlichung** auswählen. Die Freigabevorbereitung für den
-aktuellen Beitrag startet erst auf Klick. Der Abbruch und die früheren
-Portaleinstellungen gehören weiterhin zum ursprünglichen Auftrag.
+neuen Abgleich. Eine ersetzte Datei lässt sich unter **Veröffentlichung** auswählen.
+Die Freigabevorbereitung für den aktuellen Beitrag startet erst auf Klick.
+
+Läuft die Frist bei geöffneter History ab, wechselt der Link zu **Aktuellen
+Beitrag öffnen**. Die Vorschau liest beim Öffnen die vom Server gespeicherte
+Frist. Bei einem neueren Text beginnt der Kunde mit dessen aktueller
+Zuordnung. Beim identischen YouTube-Entwurf stehen die bisherigen Videoangaben
+unter den bestehenden Konto- und Dateiprüfungen weiterhin zur Auswahl.
 
 ## Technik
 

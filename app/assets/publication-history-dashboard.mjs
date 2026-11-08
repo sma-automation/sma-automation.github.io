@@ -119,7 +119,8 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
    const detail=create('p',historyStatuses[entry.status][1]);
    let previewLink;
    const window=entry.approval_window||entry.preparation_window;
-   const currentPost=entry.status==='cancelled'&&['youtube','tiktok'].includes(entry.platform);
+   const supportsCurrentPost=['youtube','tiktok'].includes(entry.platform);
+   const currentPost=entry.status==='cancelled'&&supportsCurrentPost;
    const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
    if(window||currentPost){
     previewLink=create('a',currentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen','sma-history-preview-link');
@@ -129,18 +130,19 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
     const expire=()=>{
      status.textContent='Vorbereitung abgelaufen';
      detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';
-     previewLink.href=previewUrl;previewLink.textContent='Beitragsvorschau öffnen';
+     previewLink.href=previewUrl;previewLink.textContent=supportsCurrentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen';
     };
     const remaining=Date.parse(window.expires_at)-Date.now();
-    if(window.status==='recheck'){status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';}
-    else if(window.status==='expired'||remaining<=0)expire();
-    else{
+    if(window.status==='expired'||remaining<=0)expire();
+    else if(window.status==='recheck'){
+     status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';
+    }else{
      detail.textContent=entry.status==='preparing'
        ? 'Das Zielkonto ist noch offen. Du kannst diese Vorbereitung bis '+format(window.expires_at)+' Uhr (Wien) fortsetzen.'
        : 'Vorbereitung gültig bis '+format(window.expires_at)+' Uhr (Wien).';
      previewLink.href=previewUrl+'&resume=1';previewLink.textContent='Vorbereitung fortsetzen';
-     expiryTimers.push(setTimeout(expire,remaining+1));
     }
+    if(window.status!=='expired'&&remaining>0)expiryTimers.push(setTimeout(expire,remaining+1));
    }
    const dates=create('small','Erstellt: '+format(entry.created_at)+' · Stand: '+format(entry.updated_at));
    const coverDetail=create('p',historyCoverStatuses[entry.cover.status][1],'sma-history-cover-detail');
