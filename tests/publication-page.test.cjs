@@ -153,7 +153,7 @@ test('clicking a wide gallery tile immediately opens its post preview without a 
  assert.match(card['aria-label'],/^Beitragsvorschau öffnen:/);
  await card.events.click();
  assert.equal(p.views.at(-1),'preview');
- assert.equal(p.get('selectedFileName').textContent,ownFile.name);
+ assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+ownFile.name);
  assert.equal(p.get('fileSwitchNotice').hidden,true);
  const reads=p.calls.filter(c=>c.name==='sma_publication_files_v1'&&c.p_action==='get').length;
  await p.get('filePickerList').children[0].querySelector('button').events.click();
@@ -170,9 +170,9 @@ test('wide gallery asks before discarding edits and then opens the chosen file p
  await tile.events.click();
  assert.equal(p.get('fileSwitchNotice').hidden,false);
  assert.notEqual(p.views.at(-1),'preview','the confirmation must precede navigation');
- assert.equal(p.get('selectedFileName').textContent,ownFile.name);
+ assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+ownFile.name);
  await p.get('confirmFileSwitch').events.click();
- assert.equal(p.get('selectedFileName').textContent,other.name);
+ assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+other.name);
  assert.equal(p.get('fileSwitchNotice').hidden,true);
  assert.equal(p.views.at(-1),'preview');
 });
