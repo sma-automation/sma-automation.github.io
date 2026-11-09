@@ -147,6 +147,35 @@ test('customer file browser selects the actual photo by ID and loads its recogni
  assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);
  assert.equal(p.calls.filter(c=>c.url).length,0);
 });
+test('clicking a wide gallery tile immediately opens its post preview without a separate button',async()=>{
+ const p=await boot({portal:'tiktok',wide:true,files:[ownFile],filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ownFile]}:{ok:true,status:'empty'}});
+ const card=p.get('filePickerList').children[0].querySelector('button');
+ assert.match(card['aria-label'],/^Beitragsvorschau öffnen:/);
+ await card.events.click();
+ assert.equal(p.views.at(-1),'preview');
+ assert.equal(p.get('selectedFileName').textContent,ownFile.name);
+ assert.equal(p.get('fileSwitchNotice').hidden,true);
+ const reads=p.calls.filter(c=>c.name==='sma_publication_files_v1'&&c.p_action==='get').length;
+ await p.get('filePickerList').children[0].querySelector('button').events.click();
+ assert.equal(p.views.at(-1),'preview','the already-selected tile can reopen its preview');
+ assert.equal(p.calls.filter(c=>c.name==='sma_publication_files_v1'&&c.p_action==='get').length,reads,'same-file preview does not fetch another assignment');
+ assert.equal(p.calls.filter(c=>c.url?.includes('sma-publication-preview-v1')).length,0,'opening a preview never generates a post');
+});
+test('wide gallery asks before discarding edits and then opens the chosen file preview',async()=>{
+ const other={...ownFile,id:'fa110000-0000-4000-8000-000000000002',name:'Zweite Datei.mp4'};
+ const files=[ownFile,other],p=await boot({portal:'tiktok',wide:true,asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files}:{ok:true,status:'empty'}});
+ p.get('source_text').value='Diese noch nicht gespeicherten Angaben sollen nicht einfach überschrieben werden.';
+ p.get('previewForm').events.input();
+ const tile=p.get('filePickerList').children[1].querySelector('button');
+ await tile.events.click();
+ assert.equal(p.get('fileSwitchNotice').hidden,false);
+ assert.notEqual(p.views.at(-1),'preview','the confirmation must precede navigation');
+ assert.equal(p.get('selectedFileName').textContent,ownFile.name);
+ await p.get('confirmFileSwitch').events.click();
+ assert.equal(p.get('selectedFileName').textContent,other.name);
+ assert.equal(p.get('fileSwitchNotice').hidden,true);
+ assert.equal(p.views.at(-1),'preview');
+});
 test('optimizer gallery pages four files and searches across every page',async()=>{
  const files=Array.from({length:9},(_,i)=>({...ownFile,id:'file-'+i,name:'Clip '+i+'.mp4'}));
  const p=await boot({portal:'youtube',wide:true,files});
