@@ -437,3 +437,49 @@ Musiktitel werden separat geprüft und erst mit ausdrücklicher Freigabe
 bereitgestellt. Weder ein bestätigter Live-Kundendurchlauf der automatischen
 Galerievertonung noch ein echter Musikkauf wird durch diese UI-Korrektur
 behauptet. Die Paketregeln Delta inklusive und Alpha/Beta Credits bleiben bestehen.
+
+## Erster realer Galerie-Vertonungsdurchlauf (09.11.2026)
+
+**Status:** Technischer Kunden-End-to-End-Lauf in `kunde_3182` erfolgreich,
+Hörprobe im angemeldeten Dashboard noch offen. Diese Prüfung ersetzt die
+historischen offenen Hinweise oben hinsichtlich der **ersten gespeicherten
+Kundenfassung**, nicht die später geplante Bedien-/Hörprüfung.
+
+- Das aktive Delta-Testkonto lud ausschließlich über das bestehende Dashboard
+  `Datei hinzufügen` den **eigenen stummen 10-Sekunden-MP4-Testclip** hoch:
+  `SMA_STUMMER_GALERIE_TEST_10S_2026-11-09.mp4`.
+- In `sma_private.publication_uploads_v1` steht **completed**; der
+  Datei-Katalog `sma_private.publication_files_v1` enthält das unveränderte
+  Original: Asset `d24864ab-8743-46ed-9067-2eebae35ccac`, 1.951.847 Bytes.
+- Der n8n-/Galerie-Musik-Pfad erzeugte mit dem **nur für Techniktests
+  freigeschalteten Titel SMA Pulse 01** genau einen Auftrag in
+  `sma_private.gallery_music_v1`:
+  `1b6d8375-b104-4a13-a1ec-4428ddb52383`, `state=completed`,
+  `failures=0`, `background_skip=false`.
+- Zugehöriger Titelmaster: SHA-256
+  `f1f5743d415dddff2ed9e36fbf1836acba22d1f28e2df345291bd84fb1137e89`.
+  Vom Prozess gebundener erwarteter Ergebnis-Hash:
+  `aa4f169c20be5b1a1f5a1916d93bb516745f190f5523ddf69a1e8b5f91747074`.
+- Die zurückgemeldete fertiggestellte Version
+  `SMA_STUMMER_GALERIE_TEST_10S_2026-11-09 – mit SMA-Musik.mp4`
+  wurde in Drive übernommen und mit abgeschlossenem Upload im Dateikatalog
+  registriert: `result_id=48755463-b8c9-4519-9adb-b4877883dc58`,
+  **2.125.747 Bytes**, `available=true`. Genau **ein** solcher
+  Ergebnisdatensatz und genau **eine** Ziel-Drive-ID wurden gezählt;
+  es gab keinen zweiten Ergebnisauftrag.
+- `sma_private.music_track_unlocks_v1` enthielt weiterhin **0** Zeilen:
+  kein Musikguthaben durch den Delta-Test verbraucht.
+- Zeitpunkt der Auftragsanlage laut PostgreSQL:
+  **09.11.2026 12:58:02 UTC**, Ergebnis-Upload fertig:
+  **12:58:13 UTC**. Die Vorgänge erfordern kein dauerhaft offenes Dashboard;
+  der aktive Cron `sma-gallery-soundtrack-v1` läuft minütlich.
+
+**Abgrenzung:** Die Datenbank- und Upload-Nachweise bestätigen Speicherung,
+Idempotenz und technischen Abschluss, aber **noch keine unabhängige visuelle
+oder akustische Wiedergabeprüfung der erzeugten MP4**. Deshalb das fertige
+Video im angemeldeten Dashboard explizit öffnen und die Tonspur anhören.
+Keine Social-Media-Veröffentlichung, kein Provider-/Cover-Abnahmeversuch und
+kein Kauf wurden ausgeführt. Der Testtitel bleibt provisorisch; die vier
+anderen privaten Demos wurden nicht in den SMA-Katalog aufgenommen.
+Die neun vorhandenen Veröffentlichungsaufträge sind kein Teil dieser
+Galerie-Prüfung und dürfen unverändert bleiben. PR #57/#69 separat offen.
