@@ -405,7 +405,7 @@ für den tatsächlichen, lokal dekodierbaren AAC-LC-/ADTS-Stream den MIME-Typ
 mit HTTP 415 / `InvalidMimeType` zurück. Der bisherige Bucket erlaubte nur
 `audio/aac`, `audio/mpeg` und `audio/wav`.
 
-Die begrenzte Kompatibilitätskorrektur
+Die am 09.11.2026 als Migration `20261109105637_gallery_music_windows_aac_mime_compat_v1.sql` installierte, geprüfte Kompatibilitätskorrektur
 `supabase/sql/gallery-music-windows-aac-mime.sql` lässt zusätzlich exakt
 `audio/vnd.dlna.adts` im weiterhin privaten `sma-katalog`-Bucket zu.
 Der Hintergrund-Dispatcher berücksichtigt diese zweite Schreibweise nur
