@@ -7,8 +7,9 @@ Analyseergebnis noch eine unabhängige Prüfung oder Annahmegarantie des Portals
 
 ## Bedienung
 
-In **Datei → Ausgewählte Datei ansehen → Beitragsvorschau** steht für unterstützte
-Videos **Originalvideo laden** zur Verfügung. Bereits gespeicherte Videos hatten
+In **Datei → gewünschte Dateikachel anklicken → Beitragsvorschau** steht für unterstützte
+Videos **Originalvideo laden** zur Verfügung. Der frühere Zwischenbutton
+„Ausgewählte Datei ansehen“ entfällt seit PR #180. Bereits gespeicherte Videos hatten
 zuvor ausschließlich ein Vorschaubild. Der neue Player lädt auf ausdrücklichen
 Klick die unveränderte Originaldatei über den vorhandenen Editor-Quellweg:
 Eigentümer, Kundenordner, Dateistand, Größe und Prüfsumme werden geprüft.
