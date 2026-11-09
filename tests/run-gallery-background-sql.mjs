@@ -87,5 +87,17 @@ try{
  assert.equal((await value("select public.sma_music_credits_v1('overview','{}') v")).credits,0);
  const jobId=await backgroundFlow({db,value,pick,uid,sha,file,browserJob:browser});
  await checkSoundtrackProduct({db,value,sql,uid,jobId});
- console.log('Background dispatch, package rights, ticket replay, cross-renderer retries, quota and fallback passed.');
+ // Test-only titles are withdrawn once the first technical gallery proof is done.
+ // A new silent customer file may remain pending, but must not trigger n8n
+ // or spend credits while no official catalogue title is listed.
+ const third=await file(3,'no-published-music.mp4');
+ assert.equal(await value("select count(*)::int v from sma_private.gallery_music_v1 where source_id=$1 and state='pending'",[third]),1);
+ const sentBefore=await value('select count(*)::int v from net.sent');
+ await db.exec("update sma_private.music_catalog_v1 set listed=false where sha256='"+sha+"'");
+ assert.equal(await value("select count(*)::int v from sma_private.music_catalog_ready_v1"),0);
+ assert.equal(await value('select sma_private.gallery_background_tick_v1() v'),null);
+ assert.equal(await value('select count(*)::int v from net.sent'),sentBefore);
+ assert.equal(await value("select background_attempts v from sma_private.gallery_music_v1 where source_id=$1",[third]),0);
+ assert.equal(await value("select state v from sma_private.gallery_music_v1 where source_id=$1",[third]),'pending');
+ console.log('Background dispatch, package rights, ticket replay, cross-renderer retries, quota, fallback and unlisted-track gate passed.');
 }finally{await db.close();}
