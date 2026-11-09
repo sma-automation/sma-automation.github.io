@@ -52,7 +52,8 @@ try{
  if(!sessionStorage.fixtureReload){
   if(!body)throw Error('Editor did not open');
   const frame=window.frameElement;
-  $('workspaceViewFile').click();await until(()=>frame.dataset.view==='preview',frame);
+  await until(()=>$('filePickerList')?.querySelector('.gallery-select'));
+  $('filePickerList').querySelector('.gallery-select').click();await until(()=>frame.dataset.view==='preview',frame);
   const returned=new Promise(resolve=>parent.addEventListener('popstate',resolve,{once:true}));
   $('workspaceEditPost').click();await returned;
   if(parent.history.state?.view!=='source'||$('workspaceSource').hidden||document.activeElement!==body)throw Error('Editing lost the selected text field');

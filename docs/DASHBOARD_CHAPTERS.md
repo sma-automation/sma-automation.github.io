@@ -64,3 +64,27 @@ und die seitliche Innenfläche dieser drei History-Reiter bei Bildschirmbreiten
 bis 359 px. In einer lokalen Chromium-Layoutprüfung passten die drei Reiter
 bei 320 px nebeneinander; die Darstellung bei 360 px und auf Desktop blieb
 unverändert. Das ist **kein** angemeldeter Live-Browsernachweis.
+
+## Direkter Galerie-Klick zur Beitragsvorschau (09.11.2026)
+
+In **Veröffentlichung → Portal optimieren → Deine Dateien** öffnet ein Klick
+auf die zugelassene Bild-/Videokachel nun sofort die **Beitragsvorschau**
+für die angeklickte Datei und das aktive Portal, auch wenn die Datei schon
+ausgewählt ist. Der zusätzliche Button **„Ausgewählte Datei ansehen“**
+entfällt. Die Dateikachel bleibt dabei eine echte, beschriftete Schaltfläche
+mit Tastaturbedienung; „Dateidetails“, Suche, Paginierung, Upload und
+„Dateien aktualisieren“ bleiben erhalten.
+
+Bei einem Dateiwandel prüft der bisherige Pfad weiterhin ungespeicherte
+Änderungen und verlangt vor dem Wechsel ausdrücklich eine Entscheidung;
+erst **nach** dem zulässigen Dateiaustausch und dem Laden des zugehörigen
+Entwurfs geht es zur Vorschau. **← Datei** kehrt zur Galerie zurück und
+fokussiert nach Möglichkeit die ausgewählte Kachel, sonst den Dateireiter.
+Browser-Zurück/Vorwärts verwendet weiterhin die bestehende, getrennte
+Vorschau-Route. Es wird kein Portaltext automatisch erstellt oder gespeichert,
+keine Datei freigegeben und nichts veröffentlicht.
+
+Regressionen: Ein-Klick-Öffnen, bereits ausgewählte Datei, Schutz
+ungespeicherter Angaben, fehlender Zweitbutton und Rückweg in die Galerie.
+Die ursprünglichen n8n-Workflows, Credits, Katalogfreigaben und vorhandenen
+Veröffentlichungsaufträge bleiben unverändert.
