@@ -90,7 +90,7 @@ try{
  // Test-only titles are withdrawn once the first technical gallery proof is done.
  // A new silent customer file may remain pending, but must not trigger n8n
  // or spend credits while no official catalogue title is listed.
- const third=await file(3,'no-published-music.mp4');
+ const third=await file(27,'no-published-music.mp4');
  assert.equal(await value("select count(*)::int v from sma_private.gallery_music_v1 where source_id=$1 and state='pending'",[third]),1);
  const sentBefore=await value('select count(*)::int v from net.sent');
  await db.exec("update sma_private.music_catalog_v1 set listed=false where sha256='"+sha+"'");
