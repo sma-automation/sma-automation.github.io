@@ -7,4 +7,28 @@ await test('a changed editor file or destroyed view rejects late selection',asyn
 await test('saved music automatically reloads without changing the recipe or needing local selection',async()=>{const html=await readFile('app/media-editor.html','utf8'),{document:doc}=parseHTML(html);let changes=0;const setting={...recipe,volume:38,start_ms:500},view=mountMediaMusic({doc,library:{list:async()=>[],source:async()=>wav},onChange:()=>changes++,setBusy:()=>{},createURL:()=> 'blob:saved',revokeURL:()=>{}});view.setContext(file,setting);await view.getSource(setting);assert.equal(doc.getElementById('musicPlayer').hidden,false);assert.deepEqual(view.getSetting(),setting);assert.equal(await view.getSource(setting),wav);assert.equal(changes,0);assert.match(doc.getElementById('musicStatus').textContent,/bereit/);view.destroy();});
 await test('late stored-music bytes do not reappear after file change or teardown',async()=>{for(const end of ['file','destroy']){const {document:doc}=parseHTML(await readFile('app/media-editor.html','utf8'));let release,signal,urls=0;const view=mountMediaMusic({doc,library:{list:async()=>[],source:(_m,s)=>{signal=s;return new Promise(r=>release=r);}},onChange:()=>{},setBusy:()=>{},createURL:()=>{urls++;return 'blob:late';},revokeURL:()=>{}});view.setContext(file,recipe);await tick();if(end==='file')view.setContext({...file,id:'new'});else view.destroy();assert.equal(signal.aborted,true);release(wav);await tick();assert.equal(urls,0);assert.equal(doc.getElementById('musicPlayer').hidden,true);view.destroy();}});
 await test('dashboard replaces only music chapters and restores exact nodes when owner changes',async()=>{const {document:doc}=parseHTML('<html><head></head><body><div id="sma-music-panel-tracks"><p>Original tracks</p></div><div id="sma-music-panel-playlist"><p>Original playlist</p></div><p id="other">Other content</p></body></html>');const old=doc.querySelector('#sma-music-panel-tracks p');let watch;const view=mountMusicLibraryDashboard({doc,api:{list:async()=>rows},stylesheetUrl:'music.css',expectedOwnerId:'own',watchOwner:fn=>{watch=fn;return {unsubscribe(){}};}});await tick();assert.equal(doc.querySelectorAll('.sma-music-library').length,2);assert.equal(doc.querySelector('#sma-music-panel-playlist').querySelectorAll('.sma-music-row').length,1);watch('other');assert.equal(doc.querySelectorAll('.sma-music-library').length,0);assert.equal(doc.querySelector('#sma-music-panel-tracks p'),old);assert.equal(doc.getElementById('other').textContent,'Other content');view.destroy();});
+await test('mounts all music chapters from generated navigation without replacing existing controls',async()=>{
+ const {document:doc}=parseHTML('<html><head></head><body><section id="page-music"><section class="sma-chapter-panel" data-chapter="tracks"><div id="existing-track-card">Saved upload UI</div></section><section class="sma-chapter-panel" data-chapter="playlist"><div id="existing-playlist-card">Saved favorites UI</div></section><section class="sma-chapter-panel" data-chapter="catalog"></section></section><span id="unrelated">Retained</span></body></html>');
+ const trackCard=doc.getElementById('existing-track-card'),playlistCard=doc.getElementById('existing-playlist-card');
+ const owner='owner';let watch,unsubscribed=0,reads=0;
+ const api={list:async()=>{reads++;return [];},catalog:{overview:async()=>({ok:true,plan:'delta',credits:0,tracks:[{name:'SMA Pulse 01',sha256:'a'.repeat(64),size_bytes:5644844,mime_type:'audio/wav',available:true}]})}};
+ const view=mountMusicLibraryDashboard({doc,api,stylesheetUrl:'music.css',expectedOwnerId:owner,watchOwner:fn=>{watch=fn;return {unsubscribe(){unsubscribed++;}};}});
+ await tick();
+ assert.equal(doc.querySelectorAll('#page-music .sma-music-library').length,3);
+ assert.equal(doc.querySelector('#sma-music-panel-catalog .sma-music-row strong').textContent,'SMA Pulse 01');
+ assert.equal(doc.querySelectorAll('#sma-music-panel-tracks .sma-music-library').length,1);
+ assert.equal(doc.querySelectorAll('#sma-music-panel-playlist .sma-music-library').length,1);
+ assert.equal(doc.getElementById('existing-track-card'),trackCard);
+ assert.equal(doc.getElementById('existing-playlist-card'),playlistCard);
+ assert.equal(reads,2);
+ watch('another-owner');
+ assert.equal(doc.querySelectorAll('.sma-music-library').length,0);
+ assert.equal(doc.querySelectorAll('[id^="sma-music-panel-"]').length,0);
+ assert.equal(doc.getElementById('existing-track-card'),trackCard);
+ assert.equal(doc.getElementById('existing-playlist-card'),playlistCard);
+ assert.equal(doc.getElementById('unrelated').textContent,'Retained');
+ assert.equal(unsubscribed,1);
+ view.destroy();
+});
+
 console.log(n+' music-library DOM scenarios passed.');

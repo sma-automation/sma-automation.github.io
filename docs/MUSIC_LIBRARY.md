@@ -417,3 +417,23 @@ Das ist **keine** automatische Musik- oder Veröffentlichungsfreigabe.
 Der operative Test bleibt offen, bis genau eine AAC-Datei im korrekten Pfad
 liegt und der gespeicherte Titel bewusst auf `listed=true` geschaltet wird.
 Ein vorher fehlgeschlagener Upload darf nicht als vorhandenes Objekt gelten.
+
+## Dashboard-Einbindung und Testmusik (09.11.2026)
+
+Die Kapitel-Navigation legt für **Tracks**, **Meine Playlist** und **SMA-Musik**
+eigene Bereiche an, kann deren früher erwartete festen Element-IDs jedoch
+weglassen. Die Dashboard-Einbindung sucht daher zunächst die vorhandenen Hosts;
+fehlen sie, ergänzt sie unter dem jeweiligen Kapitel einen eigenen Host,
+**ohne** bereits vorhandene Formulare, Karten, Medien oder Listener zu ersetzen.
+Beim Besitzerwechsel und Abbau werden diese zusätzlich angelegten Hosts entfernt.
+Die DOM-Regression prüft alle drei Kapitel, den Kataloginhalt, den Erhalt der
+Originalelemente und die vollständige Wiederherstellung.
+
+**Operativer Unterschied:** Die Freigabe von **SMA Pulse 01** am 09.11.2026
+ist ein **technischer Testtitel**, keine endgültige Kunden-Musikauswahl.
+Vier weitere Demo-Kompositionen bleiben privat in Google Drive und werden
+nicht in den SMA-Katalog aufgenommen. Die später gelieferten offiziellen
+Musiktitel werden separat geprüft und erst mit ausdrücklicher Freigabe
+bereitgestellt. Weder ein bestätigter Live-Kundendurchlauf der automatischen
+Galerievertonung noch ein echter Musikkauf wird durch diese UI-Korrektur
+behauptet. Die Paketregeln Delta inklusive und Alpha/Beta Credits bleiben bestehen.
