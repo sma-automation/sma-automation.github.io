@@ -520,3 +520,35 @@ dass die gespeicherte Kunden-MP4 tatsächlich hörbar ist.
 Die abschließende Hörprüfung bleibt eine explizite Aktion
 **Beitragsvorschau → Originalvideo laden → Abspielen**.
 Diese Bedienung erzeugt keine Veröffentlichungsfreigabe.
+
+## Hörprüfung des echten Kunden-Testvideos bestätigt (09.11.2026)
+
+**Abnahme durch den angemeldeten Dashboard-Benutzer:** In
+**Veröffentlichung → TikTok optimieren → direkte Dateikachel → Beitragsvorschau**
+wurde für die Datei
+`SMA_STUMMER_GALERIE_TEST_10S_2026-11-09 – mit SMA-Musik.mp4`
+über **Originalvideo laden** der echte MP4-Player geöffnet. Anschließend
+bestätigte der Benutzer ausdrücklich **„es läuft musik“**; der vorliegende
+Screenshot zeigt den geladenen HTML5-Videoplayer der passenden 10-Sekunden-Datei
+mit Tonsteuerung.
+
+Damit ist neben dem bereits dokumentierten erfolgreichen Hintergrundauftrag,
+der genau einen Kunden-Galerieeintrag mit verifizierter Ergebnismenge und
+Dateibindung erzeugte, **auch die praktische Audio-Wiedergabe im SMA-Dashboard
+bestätigt**. Die Feststellung gilt für diesen konkreten Testkunden und die
+konkrete Testdatei, nicht pauschal für alle Formate, Titel oder Browser.
+
+**Betriebsgrenzen:** Der hierfür verwendete technische Titel `SMA Pulse 01`
+bleibt **`listed=false`** und wird nicht als Kundenmusik angeboten. Sein
+privater WAV/AAC-Master und die fertige Test-MP4 bleiben als Nachweis erhalten.
+Die vier weiteren Testkompositionen wurden nicht in den Kundenkatalog gestellt.
+Bis zur ausdrücklichen Freigabe der später gelieferten offiziellen Titel
+bleibt der Musikkatalog leer; der Zeitplan darf ohne freigegebenen Titel
+keinen neuen automatischen Musikauftrag auslösen. Kein Credit, kein Kauf,
+keine Auftragsfreigabe und kein Social-Media-Posting durch diese Abnahme.
+
+Der frühere Hinweis „Hörprüfung noch offen“ in den historischen Abschnitten
+bezeichnet nur den **damaligen Stand vor dieser tatsächlichen Nutzerprüfung**.
+Der Galerie-Vertonungspfad kann für die SMA-Kernversion jetzt als
+**technisch end-to-end inkl. Hörtest geprüft** gelten; das endgültige
+Musiksortiment und weitere Kundenakzeptanztests bleiben separat offen.
