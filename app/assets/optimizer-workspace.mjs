@@ -60,13 +60,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const search = make('details', 'workspaceSearch');
   search.append(make('summary', null, 'Datei suchen'), doc.querySelector('label[for="fileSearch"]'), $('fileSearch'));
   pickerBody.prepend(search, $('fileSwitchNotice'));
-  const viewFile = button('workspaceViewFile', 'Ausgewählte Datei ansehen', () => show('preview'));
-  viewFile.setAttribute('aria-controls', preview.id);
-  viewFile.disabled = true;
-  galleryActions.append(viewFile);
+  // Clicking a gallery tile opens the post preview directly; no extra action button.
 
   const previewBack = button('workspacePreviewBack', '← Datei', () => {
-    show('files'); viewFile.focus();
+    show('files');
+    // Return focus to the selected gallery tile, or to its chapter tab.
+    const selectedTile = $('filePickerList')?.querySelector('.gallery-select[aria-pressed="true"]');
+    (selectedTile || buttons.files).focus();
   });
   const previewNav = make('nav', 'workspacePreviewNav');
   previewNav.setAttribute('aria-label', 'Vorschaunavigation');
@@ -269,7 +269,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       const description = file ? describe(file) : null;
       selectedName.textContent = description?.title || 'Noch keine Datei ausgewählt';
       selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
-      viewFile.disabled = !file; previewEdits.hidden = !file;
+      previewEdits.hidden = !file;
       if (active === 'preview') {
         if (file) refreshPreview();
         else show('files');
