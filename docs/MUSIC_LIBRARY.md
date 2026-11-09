@@ -396,3 +396,24 @@ manipulierte AAC korrekt zurückgewiesen. Drei unabhängige Unit-Tests
 prüfen Hash-/Dateinamenbindung, Grenzen und AAC-Eigenschaften. Dies ist
 **kein** Live-Katalogtest. Der erste freigegebene SMA-Musikmaster und der
 anschließende echte Testkonto-Durchlauf fehlen weiterhin.
+
+## Windows-AAC-Upload (09.11.2026)
+
+Bei der erstmaligen Einpflege von **SMA Pulse 01** meldete der Windows-Browser
+für den tatsächlichen, lokal dekodierbaren AAC-LC-/ADTS-Stream den MIME-Typ
+`audio/vnd.dlna.adts`. Supabase Storage wies den korrekten Upload deshalb
+mit HTTP 415 / `InvalidMimeType` zurück. Der bisherige Bucket erlaubte nur
+`audio/aac`, `audio/mpeg` und `audio/wav`.
+
+Die begrenzte Kompatibilitätskorrektur
+`supabase/sql/gallery-music-windows-aac-mime.sql` lässt zusätzlich exakt
+`audio/vnd.dlna.adts` im weiterhin privaten `sma-katalog`-Bucket zu.
+Der Hintergrund-Dispatcher berücksichtigt diese zweite Schreibweise nur
+für den bestehenden strikten Pfad `render/<master-sha>/<aac-sha>.aac`
+und die unveränderte Grenze von 1,5 MB. Zugangsrechte, Trackfreischaltung,
+Kundenbindung, Audio-Hash-Abgleich, Preise und Veröffentlichung bleiben unverändert.
+Das ist **keine** automatische Musik- oder Veröffentlichungsfreigabe.
+
+Der operative Test bleibt offen, bis genau eine AAC-Datei im korrekten Pfad
+liegt und der gespeicherte Titel bewusst auf `listed=true` geschaltet wird.
+Ein vorher fehlgeschlagener Upload darf nicht als vorhandenes Objekt gelten.
