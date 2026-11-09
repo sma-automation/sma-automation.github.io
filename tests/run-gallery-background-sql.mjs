@@ -26,6 +26,8 @@ try{
  create function net.http_post(url text,body jsonb,headers jsonb,timeout_milliseconds int) returns bigint language sql as
  $$insert into net.sent values($2,$1) returning 1::bigint$$;`);
  await db.exec(await sql('gallery-music-background'));
+ await db.exec(await sql('gallery-music-windows-aac-mime'));
+ assert.equal(await value("select 'audio/vnd.dlna.adts'=any(allowed_mime_types) v from storage.buckets where id='sma-katalog'"),true);
  await db.exec(await sql('gallery-music-scheduled-probe'));
  await db.exec('insert into sma_private.gallery_background_probe_v1(singleton) values(true)');
  assert.equal(Number(await value('select sma_private.gallery_background_tick_v1() v')),1);
@@ -44,12 +46,17 @@ try{
  await db.query("insert into storage.objects values('sma-katalog',$1,$2)",[render,{size:10000,mimetype:'audio/aac'}]);
  assert.equal(await value('select sma_private.gallery_background_tick_v1() v'),null);
  assert.equal(await value('select count(*)::int v from net.sent'),0);
+ // The Windows browser reports ADTS bytes as audio/vnd.dlna.adts. It is still
+ // the same hash-bound .aac sidecar, not a new format or a broader wildcard.
+ await db.query("update storage.objects set metadata=jsonb_set(metadata,'{mimetype}',to_jsonb($1::text)) where bucket_id='sma-katalog' and name=$2",['audio/vnd.dlna.adts',render]);
  await db.exec("update public.sma_kunden set paket='Delta'");
  await db.exec('set role authenticated');
  await assert.rejects(()=>rpc('take',{id:randomUUID(),ticket:randomUUID()}),/permission denied/);
  await assert.rejects(()=>pick(),/permission denied/);
  await db.exec('reset role');
  assert.equal(Number(await value('select sma_private.gallery_background_tick_v1() v')),1);
+ // Existing audio/aac sidecars must still work for subsequent customers/jobs.
+ await db.query("update storage.objects set metadata=jsonb_set(metadata,'{mimetype}',to_jsonb($1::text)) where bucket_id='sma-katalog' and name=$2",['audio/aac',render]);
  const ticket=await value('select body v from net.sent');
  assert.equal(await pick(),null);
  const take=()=>rpc('take',ticket);
