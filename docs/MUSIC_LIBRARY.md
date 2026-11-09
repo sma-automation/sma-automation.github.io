@@ -483,3 +483,40 @@ kein Kauf wurden ausgeführt. Der Testtitel bleibt provisorisch; die vier
 anderen privaten Demos wurden nicht in den SMA-Katalog aufgenommen.
 Die neun vorhandenen Veröffentlichungsaufträge sind kein Teil dieser
 Galerie-Prüfung und dürfen unverändert bleiben. PR #57/#69 separat offen.
+
+## Rückzug der Testmusik nach erfolgreichem Kundentest (09.11.2026)
+
+**Live-Supabase:** Der technische Titel **SMA Pulse 01** wurde nach dem
+nachgewiesenen einmaligen Galerie-Durchlauf aus dem **sichtbaren**
+SMA-Musikkatalog genommen: `sma_private.music_catalog_v1.listed=false`.
+Das ist keine Löschung des Masters. Unmittelbar nach dem Rückzug ergaben
+die serverseitigen Kontrollabfragen:
+
+- **0** freigegebene Titel in `sma_private.music_catalog_ready_v1`;
+- **1** unverändert gespeicherten WAV-Master und **1** AAC-Sidecar im
+  privaten `sma-katalog`-Bucket;
+- **1** erhaltenen abgeschlossenen Test-Vertonungsauftrag und dessen
+  fertig registrierte MP4-Datei (2.125.747 Bytes);
+- **0** verbrauchte beziehungsweise freigeschaltete Musik-Credits.
+
+Vier zusätzliche Instrumental-Demos waren zu keinem Zeitpunkt im
+Kundenkatalog freigegeben. Der Hintergrund-Dispatcher benötigt weiterhin
+einen `listed`-Titel mit bestätigtem WAV/AAC, gültigem Kundenpaket und
+gebundener Dateirevision; ohne einen solchen Titel darf ein neu
+eintreffender stummer Clip **keinen n8n-Vertonungsauftrag auslösen**.
+Der SQL-Regressionstest prüft diesen Fall jetzt ausdrücklich mit einem
+eigenen neuen Testvideo und kontrolliert die Anzahl ausgehender Aufrufe
+und die unveränderte Hintergrund-Anzahl der Versuche.
+
+**Unabhängige lokale Medienprüfung:** Aus dem eigenen stummen
+10-Sekunden-MP4 und dem unveränderten AAC-Sidecar lässt sich mit dem
+Repository-Muxer eine gültige MP4 mit H.264-Video und AAC-LC-Stereoton bei
+48 kHz herstellen. Dekodiertes Audio hat einen messbaren Pegel
+(Mittel ca. −26,3 dBFS, Spitze ca. −13,4 dBFS). Die lokale
+Reproduktion (2.125.633 Bytes) war **nicht bytegleich** zum in
+Supabase registrierten Kundenergebnis (2.125.747 Bytes);
+folglich ist diese Kontrolle **kein** unabhängiger Beweis,
+dass die gespeicherte Kunden-MP4 tatsächlich hörbar ist.
+Die abschließende Hörprüfung bleibt eine explizite Aktion
+**Beitragsvorschau → Originalvideo laden → Abspielen**.
+Diese Bedienung erzeugt keine Veröffentlichungsfreigabe.
