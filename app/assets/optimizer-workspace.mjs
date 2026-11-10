@@ -64,7 +64,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   pickerBody.prepend(search, $('fileSwitchNotice'));
   // Clicking a gallery tile opens the post preview directly; no extra action button.
 
-  const previewBack = button('workspacePreviewBack', '← Datei', () => {
+  const previewBack = button('workspacePreviewBack', '← Zu den Dateien', () => {
     show('files');
     // Return focus to the selected gallery tile, or to its chapter tab.
     const selectedTile = $('filePickerList')?.querySelector('.gallery-select[aria-pressed="true"]');
@@ -88,9 +88,15 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const headingRow = make('div', 'workspacePreviewHeader');
   const headingText = make('div');
   headingText.append(previewHeading, previewName);
-  const previewActions = make('div', 'workspacePreviewActions');
-  previewActions.append($('deviceBrowse'));
-  headingRow.append(headingText, previewActions);
+  // Keep file replacement accessible, but not as another primary button.
+  const previewActions = make('details', 'workspacePreviewActions');
+  const fileActionTitle = make('summary', null, 'Dateiaktionen');
+  fileActionTitle.setAttribute('aria-label', 'Datei hinzufügen oder wechseln');
+  previewActions.append(fileActionTitle, $('deviceBrowse'));
+  const previewPrimary = make('div', 'workspacePreviewPrimary');
+  previewPrimary.setAttribute('aria-label', 'Nächster Schritt');
+  previewNav.append(previewActions);
+  headingRow.append(headingText, previewPrimary);
   const uploadIntro = make('p', 'workspaceUploadIntro', 'Noch keine Datei ausgewählt. Über „Datei hinzufügen“ kannst du ein passendes Bild oder Video auswählen. Es wird dadurch nichts veröffentlicht.');
   uploadIntro.hidden = true;
   const draftState = make('div', 'workspaceDraftState');
@@ -106,7 +112,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     $('source_text')?.focus();
   });
   manualDraft.className = 'secondary'; manualDraft.hidden = true;
-  draftState.append(draftNotice, draftAction, manualDraft, previewRepeat);
+  const draftTools = make('div', 'workspaceDraftTools');
+  draftTools.append(draftAction, manualDraft, previewRepeat);
+  draftState.append(draftNotice, draftTools);
   // Keep the existing device-upload handler, progress and retry controls
   // together in the expanded preview. No new endpoint or upload behavior.
   preview.append(previewNav, headingRow, $('uploadPanel'), uploadIntro, draftState, previewTabs, postView, detailView);
@@ -305,6 +313,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     empty.hidden = !$('result').hidden;
     if (key === 'preview') {
       const uploadOnly = !selectedFile;
+      previewActions.open = uploadOnly;
+      previewPrimary.hidden = uploadOnly;
       uploadIntro.hidden = !uploadOnly;
       draftState.hidden = uploadOnly;
       previewTabs.hidden = uploadOnly;
