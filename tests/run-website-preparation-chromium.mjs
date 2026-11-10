@@ -59,8 +59,7 @@ function frame(f){
   'setTimeout(()=>{const field=document.querySelector("[name=website_url]");',
   ' field.value="https://edited.test-website.org/";',
   ' field.dispatchEvent(new Event("input",{bubbles:true}));},90);'
-  ].join('
-'):''),
+  ].join('\n'):''),
   'setTimeout(()=>{',
   ' const root=document.getElementById("smaWebsitePreparation");',
   ' const input=root.querySelector("[name=website_url]");',
