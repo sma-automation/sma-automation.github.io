@@ -37,7 +37,7 @@ test('authenticated checked orders resume one provider operation without changin
  const eligible=(state,action,ok=true)=>vm.runInNewContext(expr,{$json:{id:'test-id',state,ok},$:()=>({first:()=>({json:{action}})})});
  for(const state of ['preparing','prepared','approved','blocked','cancelled','failed'])for(const action of ['prepare','approve','get','account'])assert.equal(eligible(state,action),false);
  assert.equal(eligible('checked','get'),true);assert.equal(eligible('checked','approve'),true);assert.equal(eligible('checked','prepare'),false);assert.equal(eligible('checked','get',false),false);
- const kickoff=n['Providerweg im Hintergrund'];assert.equal(kickoff.parameters.options.waitForSubWorkflow,true);assert.equal(kickoff.parameters.workflowId.value,'JPtiMBrudXLxxSrz');
+ const kickoff=n['Providerweg im Hintergrund'];assert.equal(kickoff.parameters.options.waitForSubWorkflow,true);assert.equal(kickoff.parameters.workflowId.value,'JaidX5YeKl6ZTqjQ'); // Installed 47-node provider + cover copy
  assert.equal(reachable(w,w.nodes[0].name,new Set(['Dashboard-Antwort'])).has(kickoff.name),false);
  for(const port of w.connections[kickoff.name].main)assert.equal(port[0].node,'Auftragsantwort nach Providerstart');
  const original=[{json:{ok:true,id:'test-id',state:'checked',can_upload:false,can_publish:false}}];
@@ -47,6 +47,14 @@ test('authenticated checked orders resume one provider operation without changin
  assert.equal(restored,original);
  assert.equal(reachable(w,w.nodes[0].name,new Set(['Geprüften Providerauftrag fortsetzen?'])).has(kickoff.name),false);
  assert.ok(!reachable(w,'Auftragsantwort nach Providerstart').has(kickoff.name));
+});
+test('API source targets the installed provider-cover copy, not the older provider-only dispatcher',()=>{
+ const api=load('publication-order-api');
+ const providerOnly=load('provider-dispatch');
+ assert.equal(providerOnly.nodes.length,29);
+ assert.equal(api.nodes.filter(n=>n.name==='Providerweg im Hintergrund').length,1);
+ assert.equal(api.nodes.find(n=>n.name==='Providerweg im Hintergrund').parameters.workflowId.value,'JaidX5YeKl6ZTqjQ');
+ assert.notEqual('JPtiMBrudXLxxSrz','JaidX5YeKl6ZTqjQ');
 });
 test('n8n transfer code verifies and slices the restored binary instead of sending an entire file twice',async()=>{
  const w=load('provider-dispatch'),n=w.nodes.find(x=>x.name==='Provider-Dateirest auswählen'),crypto=require('node:crypto');
