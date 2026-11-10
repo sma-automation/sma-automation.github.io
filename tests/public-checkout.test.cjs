@@ -60,7 +60,7 @@ test('database failures do not leak details or produce a checkout URL',async()=>
 });
 
 test('checkout rejects fractional cents instead of silently rounding a seller price',async()=>{
- for(const price of [0.001,1.234,39.999,'10.005','0.001','1e2','39.90 ','12.','.5',
+ for(const price of [0.001,1.234,39.999,'10.005','0.001','12.3001','39.900001','1e2','39.90 ','12.','.5',
                       true,[],{},'NaN',Infinity,1e20]){
   const r=await request(app({products:[{...product,preis:price}]}));
   assert.equal(r.status,409,'rejected invalid price '+String(price));
@@ -69,7 +69,7 @@ test('checkout rejects fractional cents instead of silently rounding a seller pr
 });
 
 test('checkout preserves exact cents for decimal string and numeric shop prices',async()=>{
- for(const [price,expected] of [['0.01',0.01],['12.30',12.3],[39.9,39.9],[0,0],[0.1,0.1],[0.29,0.29]]){
+ for(const [price,expected] of [['0.01',0.01],['12.30',12.3],['12.3000',12.3],['0.0000',0],[39.9,39.9],[0,0],[0.1,0.1],[0.29,0.29]]){
   const r=await request(app({products:[{...product,preis:price}]}),body([{produkt_id:id,menge:3}]));
   assert.equal(r.status,200,'accepted exact decimal '+String(price));
   assert.equal(r.data.warenkorb[0].einzelpreis,expected);
