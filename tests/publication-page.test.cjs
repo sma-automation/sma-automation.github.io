@@ -305,7 +305,7 @@ test('new YouTube video offers explicit Magic from preview, and one click saves 
  assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'cached recognition is reused');
 });
 
-test('video preview accepts one early Magic click while the saved draft is read',async()=>{
+test('video Magic visibly loads and cannot start until the saved draft check completes',async()=>{
  const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
  let resolveRead;let requests=0;
  const p=await boot({portal:'instagram',wide:true,formTracksDom:true,
@@ -317,22 +317,29 @@ test('video preview accepts one early Magic click while the saved draft is read'
  const click=p.get('filePickerList').children[0].querySelector('button').click();
  for(let i=0;i<5&&!resolveRead;i++)await new Promise(r=>setImmediate(r));
  assert.equal(typeof resolveRead,'function');
- assert.ok(p.views.includes('preview'),'open the authenticated gallery video immediately');
- assert.equal(p.get('workspaceDraftAction').disabled,false,'one early Magic click must be possible');
+ assert.ok(p.views.includes('preview'),'selected video preview opens during the read');
+ assert.equal(p.get('workspaceDraftAction').disabled,true,'preview Magic remains disabled during loading');
+ assert.equal(p.get('magicText').disabled,true,'source Magic remains disabled during loading');
+ assert.equal(p.get('magicReadiness').dataset.state,'loading');
+ assert.match(p.get('magicReadiness').textContent,/wird vorbereitet/);
+ assert.equal(p.get('workspaceDraftAction').dataset.magicState,'loading');
+ assert.match(p.workspaceOptions.getPreview().draftStep.note,/wird vorbereitet/);
  await p.workspaceOptions.onDraftAction('magic_text');
- await p.workspaceOptions.onDraftAction('magic_text');
- assert.equal(requests,0,'never create text before the saved draft is checked');
- assert.equal(p.get('workspaceDraftAction').disabled,true,'queue exactly one click');
+ assert.equal(requests,0,'a premature event cannot start generation');
  resolveRead({ok:true,status:'empty'});
  await click;
- for(let i=0;i<10&&!requests;i++)await new Promise(r=>setImmediate(r));
- assert.equal(requests,1,'the customer click starts the existing guarded pipeline once');
+ assert.equal(p.get('workspaceDraftAction').disabled,false,'Magic becomes enabled after a verified empty draft');
+ assert.equal(p.get('magicText').disabled,false);
+ assert.equal(p.get('magicReadiness').dataset.state,'ready');
+ assert.match(p.get('magicReadiness').textContent,/ist bereit/);
+ await p.workspaceOptions.onDraftAction('magic_text');
+ assert.equal(requests,1,'one explicit ready click starts the existing guarded pipeline');
  assert.equal(p.calls.filter(c=>c.p_action==='assign').length,1);
  assert.equal(p.get('result').hidden,false);
- assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'use cached analysis');
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'reuse validated video recognition');
 });
 
-test('early Magic click does not overwrite an already saved video draft',async()=>{
+test('a saved video draft cannot be replaced by a click during loading',async()=>{
  const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
  let resolveRead;
  const p=await boot({portal:'instagram',wide:true,formTracksDom:true,
@@ -341,12 +348,25 @@ test('early Magic click does not overwrite an already saved video draft',async()
   magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
  const click=p.get('filePickerList').children[0].querySelector('button').click();
  for(let i=0;i<5&&!resolveRead;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(p.get('workspaceDraftAction').disabled,true);
  await p.workspaceOptions.onDraftAction('magic_text');
  resolveRead({...instagramResult,assignment_revision:1,input:{source_text:'Bereits geprüfte Fakten.',language:'de',media_kind:'video',platforms:['instagram']}});
  await click;await new Promise(r=>setImmediate(r));
  assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-preview-v1')),false);
  assert.equal(p.get('result').hidden,false);
- assert.match(p.get('status').textContent,/konnte noch nicht starten/);
+ assert.match(p.get('status').textContent,/Zugeordneten Beitragstext geladen/);
+});
+
+test('failed draft loading keeps Magic unavailable with a readable error instead of false readiness',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ const p=await boot({portal:'instagram',asset:file.id,wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+   a.p_action==='get'?Promise.reject(Error('NETWORK_UNAVAILABLE')):{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
+ assert.equal(p.get('magicText').disabled,true);
+ assert.equal(p.get('magicReadiness').dataset.state,'error');
+ assert.match(p.get('magicReadiness').textContent,/nicht vorbereitet/);
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-preview-v1')),false);
 });
 
 test('Magic uses an already completed video analysis even if background status read was late',async()=>{
