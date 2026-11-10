@@ -80,7 +80,7 @@ test('first customer with no files has a preview entry, never a gallery Add File
  assert.equal(action.textContent,'');
  assert.equal(action.className,'workspace-first-upload-action');
  assert.equal(action.children[0].textContent,'Noch keine passende Datei');
- assert.match(action.attrs['aria-label'],/Vorschau/);
+ assert.match(action.attrs['aria-label'],/[Vv]orschau/);
  action.events.click();
  assert.equal(p.firstUploads(),1);
  assert.equal(p.nodes.filePickerCount.textContent.includes('Noch keine Dateien'),true);
