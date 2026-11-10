@@ -141,6 +141,9 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  const observer=new win.MutationObserver(()=>{if(!chapterNavigation&&!page.classList.contains('active')&&activeView!=='overview')openView('overview',{focus:false,scroll:false});if(page.classList.contains('active')&&!dirty&&!loaded)load();});
  observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
  if(chapterNavigation)openView('website',{focus:false,scroll:false});
- if(page.classList.contains('active'))load();
+ // Chapter navigation can make the website panel visible without ever adding
+ // the legacy "active" class to #page-website. Initialize its read-only
+ // preparation state regardless, otherwise the disabled fieldset never unlocks.
+ if(chapterNavigation||page.classList.contains('active'))void load();
  return {openChapter:chapterNavigation?(name)=>openView(name,{focus:false,scroll:false}):undefined,destroy(){destroyed=true;setupView?.destroy();wordpressView?.destroy();domainView?.destroy();observer.disconnect();page.classList.remove('sma-website-managed','sma-website-detail');if(placeholder&&root.parentNode)root.replaceWith(placeholder);else root.remove();css.remove();}};
 }
