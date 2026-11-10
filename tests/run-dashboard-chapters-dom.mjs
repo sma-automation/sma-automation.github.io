@@ -86,6 +86,18 @@ await test('Shop delegates to original iframe controls, retains order page and r
  const second=f.replaceShop();assert.notEqual(first,second);assert.equal(first.querySelector('.shop-sections').style.display,'');assert.equal(second.getElementById('bestellungen').hidden,false);second.getElementById('showProducts').click();assert.equal(tabs.selected,'products');
  f.destroy();assert.equal(f.frame.style.height,'900px');assert.equal(second.querySelector('.shop-sections').style.display,'');assert.equal(f.$('#smaProductDetails').hidden,false);
 });
+await test('website preparation loads and unlocks fields even if host does not mark the page active',async()=>{
+ const f=fixture(),page=f.$('#page-website'),fields=f.$('#smaWebsitePreparation fieldset');
+ assert.equal(page.classList.contains('active'),false,'Real chapter navigation can show a page without the legacy active class');
+ await tick();await tick();
+ assert.deepEqual(f.calls,['get'],'The saved preparation must load when the dashboard chapter is mounted');
+ assert.equal(fields.disabled,false,'The customer must be able to edit the existing website URL');
+ assert.equal(f.$('[name="website_url"]').disabled,false,'The website URL should be editable after successful load');
+ assert.equal(f.$('#smaWebsitePreparation [type="submit"]').disabled,false,'Saving must be available after initial load');
+ page.classList.add('active');await tick();
+ assert.deepEqual(f.calls,['get'],'A subsequent navigation event must not repeat the initial load');
+ f.destroy();
+});
 await test('Website chapters and existing shortcuts remain synchronized without losing unsaved input',async()=>{
  const f=fixture(),root=f.$('#page-website'),tabs=f.view.controllers.get('website');root.classList.add('active');await tick();await tick();assert.deepEqual(f.calls,['get']);
  const input=f.$('[name=desired_domain]');input.value='unsaved.example.org';input.dispatchEvent(new f.window.Event('input',{bubbles:true}));tabs.select('company');assert.equal(f.$('[data-company-profile-dashboard]').closest('[data-website-view]').dataset.websiteView,'company');tabs.select('website');assert.equal(input.value,'unsaved.example.org');
