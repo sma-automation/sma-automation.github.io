@@ -1148,11 +1148,13 @@ function assertVariantBaseline(snapshot){
 async function generateTextVariant(){
  if(busy||signedOut||!workspace||!selectedAsset||!current)return;
  if(hasDraftEdits()||hasSourceEdits()||uncertainSave||comparisonBase){
-  status('Speichere oder verwerfe zuerst deine Änderungen. Deine bisherige Fassung bleibt unverändert.',true);return;
+  const message='Speichere oder verwerfe zuerst deine Änderungen. Deine bisherige Fassung bleibt unverändert.';
+  status(message,true);workspace?.setVariantFeedback?.(message,true);return;
  }
  const input=sourceInput();
  if(input.source_text.length<30){
-  status('Für eine neue Variante fehlen noch gesicherte Inhaltsangaben. Ergänze die Beschreibung unter „Inhalt und Ziel“.',true);return;
+  const message='Für eine neue Variante fehlen noch gesicherte Inhaltsangaben. Ergänze die Beschreibung unter „Inhalt und Ziel“.';
+  status(message,true);workspace?.setVariantFeedback?.(message,true);return;
  }
  const snapshot={binding:fileContext(),preview_id:current.id,preview_revision:current.revision,source_key:sourceFormKey(),
   product_key:JSON.stringify([$('productChoice').value,catalogLookup.selected()?.product_id||''])};
@@ -1161,7 +1163,8 @@ async function generateTextVariant(){
   variantAttempt={id:crypto.randomUUID(),signature,finished:false};
  }
  const request=variantAttempt;
- lock(true);status('Neue Textvariante wird erstellt. Der gespeicherte Beitrag bleibt erhalten …');
+ lock(true);workspace?.setVariantFeedback?.('Neue Variante wird erstellt …',false);
+ status('Neue Textvariante wird erstellt. Der gespeicherte Beitrag bleibt erhalten …');
  try{
   await ensureFreshFile(snapshot.binding);assertVariantBaseline(snapshot);
   const product=await getDraftProduct(snapshot.binding);assertVariantBaseline(snapshot);
@@ -1193,17 +1196,20 @@ async function generateTextVariant(){
   if(data.id===current.id)throw Error(messages.PREPARATION_UNAVAILABLE);
   variantCandidate={data,snapshot};
   request.finished=true;
-  workspace.setVariant?.(draft);
   workspace.show('source');
+  workspace.setVariant?.(draft);
+  workspace.setVariantFeedback?.('Neue Variante bereit. Prüfe die Angaben und wähle dann „Variante übernehmen“.',false);
+  workspace.revealVariant?.();
   status('Neue Textvariante bereit. Prüfe sie und wähle „Variante übernehmen“ oder „Weitere Variante erstellen“. Die gespeicherte Fassung ist unverändert.');
- }catch(error){if(!signedOut)status(error.message,true);}
+ }catch(error){if(!signedOut){status(error.message,true);workspace?.setVariantFeedback?.(error.message,true);}}
  finally{lock(false);syncMedia();}
 }
 async function acceptTextVariant(){
  if(busy||signedOut||!variantCandidate||!selectedAsset||!current)return;
  const {data,snapshot}=variantCandidate;
  if(hasDraftEdits()||hasSourceEdits()){
-  status('Bitte speichere oder verwerfe zuerst deine aktuellen Änderungen. Die neue Variante bleibt zur Auswahl stehen.',true);return;
+  const message='Bitte speichere oder verwerfe zuerst deine aktuellen Änderungen. Die neue Variante bleibt zur Auswahl stehen.';
+  status(message,true);workspace?.setVariantFeedback?.(message,true);return;
  }
  lock(true);status('Die gewählte Variante wird für genau diese Datei und dieses Portal gespeichert …');
  try{
@@ -1218,7 +1224,7 @@ async function acceptTextVariant(){
   fileChanged();
   workspace.show('preview');
   status('Textvariante übernommen und gespeichert. Frühere Fassungen bleiben im Dateiverlauf. Noch keine Veröffentlichungsfreigabe.');
- }catch(error){if(!signedOut)status(error.message,true);}
+ }catch(error){if(!signedOut){status(error.message,true);workspace?.setVariantFeedback?.(error.message,true);}}
  finally{lock(false);syncMedia();}
 }
 $('previewForm').addEventListener('submit',event=>{event.preventDefault();return generatePreview();});
