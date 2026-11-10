@@ -27,6 +27,8 @@ let retryHistoryPreview=false;
 let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
+// Ignore a stale background Magic-Effect status read after file switch or user action.
+let magicLoadTicket=0;
 let pendingProductFocus=null;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
 const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-video-magic-effect-v1';
@@ -846,15 +848,16 @@ async function loadHistoryPreview(){
  }
 }
 async function loadLatest(){const file=selectedAsset;lock(true);try{
- await loadMediaCheck();
+ // Media facts may refresh independently; draft readiness must not wait for this read.
+ void loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
  if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
  showProductContext(data.product_context,file,savedProductSelection(data));
  if(data.status==='empty'){clearDraft();if(!$('productChoiceField').hidden)$('sourcePanel').open=true;status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
- }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
+ }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();void loadMagicEffect(true);}}
 
-function resetMagic(){automaticInputSignature=null;pendingAutomatic=null;$('magicReplaceNotice').hidden=true;magicState=null;$('magicPanel').hidden=!selectedAsset||!['image','video'].includes(selectedAsset.media_kind);$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
+function resetMagic(){magicLoadTicket++;automaticInputSignature=null;pendingAutomatic=null;$('magicReplaceNotice').hidden=true;magicState=null;$('magicPanel').hidden=!selectedAsset||!['image','video'].includes(selectedAsset.media_kind);$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
 function magicPhotoHint(file=selectedAsset){
  if(!file||file.media_kind!=='image')return '';
  const formatUnsupported=file.mime_type&&!['image/jpeg','image/png','image/webp'].includes(file.mime_type);
@@ -900,17 +903,22 @@ function showMagic(r,file){
 }
 async function magicRpc(file){const {data,error}=await supabase.rpc(file.media_kind==='video'?'sma_publication_video_magic_v1':'sma_publication_magic_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error('Die Erkennung ist gerade nicht verfügbar.');return data.analysis;}
 async function loadMagicEffect(autoStart=false){
- const file=selectedAsset;resetMagic();if(!file||!['image','video'].includes(file.media_kind))return;
+ const file=selectedAsset;resetMagic();const ticket=magicLoadTicket;if(!file||!['image','video'].includes(file.media_kind))return;
  const hint=magicHint(file);if(hint){$('magicStatus').textContent=hint;return;}
  try{
-  const r=await magicRpc(file);if(!showMagic(r,file))return;
-  if(autoStart&&(r.status==='processing'||(file.media_kind==='image'&&r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
+  const r=await magicRpc(file);
+  if(ticket!==magicLoadTicket||busy||automaticMode!==null||!photoStillSelected(file))return;
+  if(!showMagic(r,file))return;
+  // Do not auto-resume a processing video when opening its preview: a long
+  // status-poll loop would keep the Magic controls locked. The explicit
+  // "Erkennungsstand laden" action remains available to the customer.
+  if(autoStart&&file.media_kind==='image'&&r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))await recognizePhoto();
  }catch(e){if(photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto({withinAutomatic=false}={}){
  if(signedOut||(busy&&!withinAutomatic)||!selectedAsset||!['image','video'].includes(selectedAsset.media_kind)||magicState?.status==='completed')return;
  const hint=magicHint();if(hint){$('magicStatus').textContent=hint;return;}
- const file=selectedAsset,context=fileContext();lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
+ const file=selectedAsset,context=fileContext();magicLoadTicket++;lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
  try{
   await ensureFreshFile(context);
   if(magicState?.status!=='processing'){
@@ -961,7 +969,7 @@ async function runMagicAction(mode,replace=false){
   $('magicReplaceNotice').scrollIntoView({block:'nearest'});$('cancelMagicReplace').focus();return;
  }
  pendingAutomatic=null;$('magicReplaceNotice').hidden=true;
- const file=selectedAsset,context=fileContext();automaticMode=mode;lock(true);
+ const file=selectedAsset,context=fileContext();magicLoadTicket++;automaticMode=mode;lock(true);
  status(mode==='text'?'Magic Effect: Datei erkennen und Beitragstext vorbereiten …':'Magic Effect: Inhalt erkennen und übernehmen …');
  try{
   await ensureFreshFile(context);
