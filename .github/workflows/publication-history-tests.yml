@@ -20,6 +20,10 @@ on:
       - app/assets/publication-tab-draft.mjs
       - app/assets/publication-draft-conflict.mjs
       - app/assets/publication-preview.js
+      - n8n/publishing/prepare-preview.cjs
+      - n8n/publishing/preview-workflow.json
+      - supabase/sql/publication-shop-invitation.sql
+      - tests/run-publication-shop-invitation-sql.mjs
       - app/publication-preview.html
       - tests/*publication-text-edits*
       - tests/publication-hashtags.test.cjs
@@ -164,6 +168,7 @@ jobs:
           node tests/run-publication-manual-review-dom.mjs
           node tests/run-original-video-preview-dom.mjs
           node tests/run-publication-text-edits-sql.mjs
+          node tests/run-publication-shop-invitation-sql.mjs
           node tests/run-publication-draft-product-links-sql.mjs
           node tests/run-publication-text-edits-dom.mjs
           node tests/run-publication-history-sql.mjs
