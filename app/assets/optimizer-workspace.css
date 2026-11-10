@@ -391,7 +391,7 @@ body.wide #workspacePost #assetPreviewMedia { max-height: var(--stage-height); }
 body.wide.post-preview-open #workspacePreview { color:#1f2b40; }
 body.wide.post-preview-open #workspacePreviewNav {
   display:flex;align-items:center;justify-content:flex-start;
-  flex-wrap:wrap;gap:8px 16px;margin:0 0 22px;padding:0 0 12px;
+  flex-wrap:wrap;gap:8px 16px;margin:0 0 16px;padding:0 0 10px;
   border-bottom:1px solid #e6eaf2;
 }
 body.wide.post-preview-open #workspacePreviewNav #back {
@@ -431,7 +431,7 @@ body.wide.post-preview-open #workspacePreviewActions:not([open]) #deviceBrowse {
 body.wide.post-preview-open #workspacePreviewActions #deviceBrowse:hover {background:#f3f6ff}
 body.wide.post-preview-open #workspacePreviewHeader {
   display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
-  gap:12px 18px;margin:0 0 16px;
+  gap:12px 18px;margin:0 0 12px;
 }
 body.wide.post-preview-open #workspacePreviewHeading {
   margin:0;font-size:24px;font-weight:650;line-height:1.25;letter-spacing:-.015em;
@@ -451,7 +451,7 @@ body.wide.post-preview-open #workspacePreviewPrimary #preparePublicationOrder {
 body.wide.post-preview-open #workspacePreviewPrimary #preparePublicationOrder:hover:not(:disabled) {background:#3157cd}
 body.wide.post-preview-open #workspaceDraftState {
   display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
-  gap:8px 14px;margin:0 0 14px;padding:10px 14px;
+  gap:8px 14px;margin:0 0 10px;padding:9px 14px;
   border:1px solid #e3e8f1;border-radius:10px;background:#f8fafc;
 }
 body.wide.post-preview-open #workspaceDraftNotice {
@@ -472,7 +472,7 @@ body.wide.post-preview-open #workspaceDraftTools button:hover:not(:disabled) {
   border-color:#d3def6;background:#edf2ff;
 }
 body.wide.post-preview-open #workspacePreviewTabs {
-  display:flex;align-items:end;gap:24px;flex-wrap:wrap;margin:0 0 14px;
+  display:flex;align-items:end;gap:24px;flex-wrap:wrap;margin:0 0 12px;
   border-bottom:1px solid #e1e6ef;
 }
 body.wide.post-preview-open #workspacePreviewTabs button {
