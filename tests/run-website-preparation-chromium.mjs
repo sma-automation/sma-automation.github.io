@@ -32,24 +32,35 @@ const shop='https://sma-automation.com/app/shop.html?shop=sma-testkunde';
 const fixtures=[
  {name:'legacy-active',isActive:true,shopUrl:shop},
  {name:'chapters-not-active',isActive:false,shopUrl:shop},
- {name:'no-shop',isActive:false,shopUrl:null}
+ {name:'no-shop',isActive:false,shopUrl:null},
+ {name:'stalled-auth',isActive:false,shopUrl:shop,stalledAuth:true},
+ {name:'late-read-preserves-input',isActive:false,shopUrl:shop,lateRead:true}
 ];
 function frame(f){
  const js=code+'\n'+[
   'const report={scenario:'+JSON.stringify(f.name)+'};',
   'const page=document.getElementById("page-website");',
   'const view=mountWebsitePreparation({',
-  ' page,chapterNavigation:true,stylesheetUrl:"data:text/css,",getOwnerId:async()=>"test-owner",',
+  ' page,chapterNavigation:true,stylesheetUrl:"data:text/css,",',
+  ' getOwnerId:async()=>'+(f.stalledAuth?'new Promise(()=>{})':'"test-owner"')+',',
   ' setupRequest:async(action)=>{report.setup=(report.setup||[]).concat(action);return {ok:true,available:false,draft_exists:true,job:null};},',
   ' domainRequest:async(action)=>{report.domain=(report.domain||[]).concat(action);return {ok:true,revision:1,state:"unprepared",hostname:"eu2.wpsandbox.org"};},',
   ' wordpressRequest:async()=>({ok:false,code:"NOT_CONNECTED"}),',
   ' wordpressSyncRequest:async()=>({ok:false,code:"NOT_CONNECTED"}),',
-  ' request:async(action)=>{report.calls=(report.calls||[]).concat(action);return {',
+  ' request:async(action)=>{report.calls=(report.calls||[]).concat(action);',
+  (f.lateRead?'  await new Promise(resolve=>setTimeout(resolve,400));':'')+
+  ' return {',
   '  ok:true,state:"preparation",revision:1,can_publish:false,',
   '  updated_at:"2026-11-10T19:44:21Z",shop_url:'+JSON.stringify(f.shopUrl)+',',
   '  draft:{mode:"existing",website_url:'+JSON.stringify(site)+',desired_domain:""}',
   ' }}',
   '});',
+  (f.lateRead?[
+  'setTimeout(()=>{const field=document.querySelector("[name=website_url]");',
+  ' field.value="https://edited.test-website.org/";',
+  ' field.dispatchEvent(new Event("input",{bubbles:true}));},90);'
+  ].join('
+'):''),
   'setTimeout(()=>{',
   ' const root=document.getElementById("smaWebsitePreparation");',
   ' const input=root.querySelector("[name=website_url]");',
@@ -90,10 +101,15 @@ try{
  for(const f of fixtures){
   const result=reports.find(r=>r.scenario===f.name);assert.ok(result,f.name);
   console.log(result);
-  assert.deepEqual(result.calls,['get'],f.name+' must load the preparation');
-  assert.equal(result.inputValue,site);
-  assert.equal(result.fieldsetDisabled,false,f.name+' fieldset');
-  assert.equal(result.submitDisabled,false,f.name+' save action');
+  if(f.stalledAuth){
+   assert.deepEqual(result.calls||[],[],'No request may start without an authenticated owner');
+   assert.equal(result.submitDisabled,true,'Save must remain gated during a stalled owner lookup');
+  }else{
+   assert.deepEqual(result.calls,['get'],f.name+' must load the preparation');
+   assert.equal(result.submitDisabled,false,f.name+' save action');
+  }
+  assert.equal(result.inputValue,f.lateRead?'https://edited.test-website.org/':f.stalledAuth?'':site);
+  assert.equal(result.fieldsetDisabled,false,f.name+' fieldset must allow address editing');
   assert.equal(result.actualDisabled,false,f.name+' native browser state');
   assert.equal(result.isFocused,true,f.name+' should be keyboard-editable');
   assert.equal(result.hit,'INPUT',f.name+' input should receive pointer events');
