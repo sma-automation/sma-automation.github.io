@@ -94,6 +94,28 @@ def verify_nodes(workflow):
         raise GateError("WORKFLOW_SETTINGS_CHANGED")
     if set(settings) - set(REQUIRED_SETTINGS) - {"binaryMode", "timeSavedMode"}:
         raise GateError("UNKNOWN_WORKFLOW_SETTINGS")
+    # A checksum must be in the upload path, not just present on the canvas.
+    # The complete parity check below still rejects every other graph drift.
+    sha_node = next((n for n in nodes if n["name"] == "Provider-Dateiprüfsumme bestätigen"), None)
+    if sha_node is None or sha_node.get("type") != "n8n-nodes-base.code":
+        raise GateError("CRITICAL_CHECKSUM_NODE_MISSING")
+    connections = workflow.get("connections")
+    if not isinstance(connections, dict):
+        raise GateError("CRITICAL_CHECKSUM_ROUTE_CHANGED")
+    for source, dest in (
+        ("Provider-Videodatei lesen", "Provider-Dateiprüfsumme bestätigen"),
+        ("Provider-Dateiprüfsumme bestätigen", "Provider-Dateistand rückprüfen"),
+        ("Provider-Dateistand rückprüfen", "Provider-Prüfnachweise verbinden"),
+    ):
+        flow = connections.get(source, {})
+        branches = flow.get("main", []) if isinstance(flow, dict) else []
+        destinations = [
+            edge.get("node")
+            for branch in branches if isinstance(branch, list)
+            for edge in branch if isinstance(edge, dict)
+        ]
+        if dest not in destinations:
+            raise GateError("CRITICAL_CHECKSUM_ROUTE_CHANGED")
     return nodes
 
 

@@ -1,5 +1,40 @@
 # TikTok: verbindliche Kennzeichnung von KI-generierten Videos
 
+## Aktueller offener Live-Nachweis – 10. November 2026
+
+Der bestehende Workflow `JaidX5YeKl6ZTqjQ` war in der Browser-UI als
+**Published** sichtbar. Ein erster DOM-Leselauf listete 46 Knotennamen und
+ließ den Prüfbaustein `Provider-Dateiprüfsumme bestätigen` aus. Eine
+gezielte zweite Browserprüfung meldete den SHA-256-Knoten als vorhanden,
+zählte aber weiterhin 46 Elemente und gab eine Kantenfolge an, die
+**nicht** mit der im Repository gepinnten 29-Node-Baseline übereinstimmt.
+Diese Browserergebnisse sind damit **widersprüchlich**; weder das
+Nichtvorhandensein des SHA-Knotens noch die Zahl 46 sind als Live-Fakt
+bestätigt.
+
+Die aktuelle Quellvorlage besteht aus **29 Basisnodes plus 18 Covernodes,
+zusammen 47**. Der direkte, nur lesende interne API-Zugriff auf den
+Workflow lieferte HTTP 401. Der private JSON-Export konnte über die
+Browser-Automatisierung nicht gelesen werden. Deshalb wurde **keine**
+vollständige Export-Parität nachgewiesen, und PR #199 bleibt gesperrt.
+
+Die Offline-Releaseprüfung `n8n/publishing/check-aigc-rollout.py`
+verlangt nicht nur exakt 47 Nodes mit geprüfter Workflow-ID und
+unverändertem Kantenbestand. Sie kontrolliert ausdrücklich die
+SHA-256-Prüfroute
+`Provider-Videodatei lesen` →
+`Provider-Dateiprüfsumme bestätigen` →
+`Provider-Dateistand rückprüfen` →
+`Provider-Prüfnachweise verbinden`.
+Fehlt der Prüfknoten, wird er umbenannt oder umgangen, muss der spätere
+Import **ohne jeglichen Live-Schreibvorgang** gestoppt werden.
+
+**Nächster Nachweis:** Ein frischer privater Export der veröffentlichten
+47-Node-Version muss gegen die lokale, nicht veröffentlichende
+`--installed-export`-Prüfung laufen. Kein Herunterladen von Tokens ins
+öffentliche Repository und kein weiteres Passwortverlangen im Chat.
+Bis dahin weder n8n noch Supabase noch den Dashboard-Client umstellen.
+
 ## Quellabgleich nach PR #197 – 10. November 2026
 
 Der ältere PR #185 wurde isoliert auf den aktuellen SMA-Kernstand

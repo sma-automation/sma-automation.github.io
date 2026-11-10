@@ -117,6 +117,23 @@ test('gate refuses a drifted provider URL, code or graph, without printing secre
  assert.match(exportAndCheck(graph,'changed-edges').stderr,/INSTALLED_EDGES_DRIFT/);
 });
 
+test('critical SHA-256 verification cannot be removed or bypassed even at 47 nodes',()=>{
+ const removed=JSON.parse(JSON.stringify(installed));
+ const checksum=removed.nodes.find(n=>n.name==='Provider-Dateiprüfsumme bestätigen');
+ assert.ok(checksum,'the 47-node source must include SHA-256 verification');
+ checksum.name='Synthetic replacement';
+ assert.match(exportAndCheck(removed,'missing-checksum').stderr,/CRITICAL_CHECKSUM_NODE_MISSING/);
+ const bypass=JSON.parse(JSON.stringify(installed));
+ const source=bypass.connections['Provider-Videodatei lesen'];
+ for(const branch of source.main) for(const edge of branch)
+  if(edge.node==='Provider-Dateiprüfsumme bestätigen')
+   edge.node='Provider-Dateistand rückprüfen';
+ assert.match(exportAndCheck(bypass,'bypass-checksum').stderr,/CRITICAL_CHECKSUM_ROUTE_CHANGED/);
+ const broken=JSON.parse(JSON.stringify(installed));
+ broken.nodes.find(n=>n.name==='Provider-Dateiprüfsumme bestätigen').type='n8n-nodes-base.noOp';
+ assert.match(exportAndCheck(broken,'wrong-checksum-type').stderr,/CRITICAL_CHECKSUM_NODE_MISSING/);
+});
+
 test('gate rejects missing, malformed or oversized private exports before any changes',()=>{
  const notFound=run(['--installed-export',path.join(output,'missing.json')]);
  assert.notEqual(notFound.status,0);
