@@ -72,6 +72,10 @@ try {
   eq((await asCustomer({...base,choices:{...baseChoices,is_aigc}})).code,'FILE_UNAVAILABLE');
  }
  eq((await asCustomer({...base,platform:'youtube',choices:{visibility:'private',made_for_kids:false,contains_synthetic_media:false,is_aigc:false}})).code,'INVALID_CHOICES');
+ // The real publication media function delegates to the private comparison
+ // projection. Only its model output is simulated in this local database;
+ // all order/consent/account SQL functions above remain the installed sources.
+ await db.exec("create function sma_private.publication_comparison_media_v1(b jsonb,d jsonb,m jsonb) returns jsonb language sql stable as $select m$;");
  // A realistic isolated preview and file demonstrate that both true and false
  // are saved as bound, immutable choices (not just accepted by the shape gate).
  await db.query("insert into sma_private.publication_files_v1(id,customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,width_px,height_px,duration_ms) values($1,91,$2,'synthetic_aigc_video','Synthetic.mp4','video','video/mp4','version:1',now(),1000,720,1280,10000)",[id(1),uid]);
