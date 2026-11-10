@@ -7,22 +7,24 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 const read=p=>readFile(new URL('../app/'+p,import.meta.url),'utf8');
-const [model,button,catalog,website,css]=await Promise.all([
+const [model,button,catalog,website,css,setup,domain,wordpress,sync]=await Promise.all([
  'assets/website-domain-model.mjs','assets/shop-button.mjs',
  'assets/shop-catalog-model.mjs','assets/website-domain.mjs',
- 'assets/website-domain.css'
+ 'assets/website-domain.css','assets/website-setup.mjs',
+ 'assets/domain-verification.mjs','assets/wordpress-connection.mjs',
+ 'assets/wordpress-sync.mjs'
 ].map(read));
 const expose=(source,returned)=>source.replace(/^import .*;$/gm,'')
  .replace(/\bexport (?:function|const|async function)\b/g,x=>x.replace('export ',''))
  +'\nreturn {'+returned+'};';
 const code=[
- 'const {createWebsiteDraftClient,safeShopLink}=(()=>{'+expose(model,'createWebsiteDraftClient,safeShopLink')+'})();',
+ 'const {createWebsiteDraftClient,safeShopLink,normalizeWebsite,normalizeDomain}=(()=>{'+expose(model,'createWebsiteDraftClient,safeShopLink,normalizeWebsite,normalizeDomain')+'})();',
  'const {createShopButton}=(()=>{'+expose(button,'createShopButton')+'})();',
  'const {createShopCatalog}=(()=>{'+expose(catalog,'createShopCatalog')+'})();',
- 'const mountWebsiteSetup=()=>null;',
- 'const mountWordpressConnection=()=>({load(){},invalidate(){},setDraft(){},destroy(){}});',
- 'const mountDomainVerification=()=>({load(){},invalidate(){},setDraft(){},destroy(){}});',
- 'const domainVerificationTarget=()=>null;',
+ 'const {mountWebsiteSetup}=(()=>{'+expose(setup,'mountWebsiteSetup')+'})();',
+ 'const {mountWordpressSync}=(()=>{'+expose(sync,'mountWordpressSync')+'})();',
+ 'const {mountWordpressConnection}=(()=>{'+expose(wordpress,'mountWordpressConnection')+'})();',
+ 'const {mountDomainVerification,domainVerificationTarget}=(()=>{'+expose(domain,'mountDomainVerification,domainVerificationTarget')+'})();',
  expose(website,'mountWebsitePreparation').replace(/^return \{mountWebsitePreparation\};$/m,'')
 ].join('\n');
 const site='https://eu2.wpsandbox.org/site/s-qa73zdpavg6dm/';
@@ -38,7 +40,10 @@ function frame(f){
   'const page=document.getElementById("page-website");',
   'const view=mountWebsitePreparation({',
   ' page,chapterNavigation:true,stylesheetUrl:"data:text/css,",getOwnerId:async()=>"test-owner",',
+  ' setupRequest:async(action)=>{report.setup=(report.setup||[]).concat(action);return {ok:true,available:false,draft_exists:true,job:null};},',
+  ' domainRequest:async(action)=>{report.domain=(report.domain||[]).concat(action);return {ok:true,revision:1,state:"unprepared",hostname:"eu2.wpsandbox.org"};},',
   ' wordpressRequest:async()=>({ok:false,code:"NOT_CONNECTED"}),',
+  ' wordpressSyncRequest:async()=>({ok:false,code:"NOT_CONNECTED"}),',
   ' request:async(action)=>{report.calls=(report.calls||[]).concat(action);return {',
   '  ok:true,state:"preparation",revision:1,can_publish:false,',
   '  updated_at:"2026-11-10T19:44:21Z",shop_url:'+JSON.stringify(f.shopUrl)+',',
