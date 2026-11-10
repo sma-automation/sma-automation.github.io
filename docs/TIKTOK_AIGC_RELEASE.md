@@ -85,3 +85,11 @@ Provider-Versuchen wurde ausschließlich gelesen und nicht verändert.
 
 **Wichtig:** Der erfolgreiche Test beweist den sicheren SQL-Änderungsweg. Er ist **keine** Freigabe des koordinierten Produktivrollouts und ersetzt keinen echten YouTube-/TikTok-Abnahmetest.
 
+## Ergänzende Sicherheitsabnahme – 10.11.2026
+
+- Ein zusätzlicher SQL-Rolloutschutz stoppt die Migration, falls noch ein **nicht stornierter** TikTok-Auftrag ohne ausdrückliches `is_aigc`-Boolean existiert. Alte stornierte Aufträge werden nicht verändert und behalten ihre historischen Angaben.
+- `tests/run-publication-tiktok-aigc-sql.mjs` erstellt eine **vollständig isolierte PGlite-Datenbank**, installiert die tatsächlichen Order-/Account-/Review-Funktionen mit ihren getesteten Erweiterungen und prüft 25 Fälle: Legacy-Sperre, doppelte Installation, gültige Ja/Nein-Werte, unzulässige Datentypen, falsche Portalzuordnung, Berechtigungen und unveränderte leere Provider-Journale. Der Test ist fest in `.github/workflows/publication-history-tests.yml` aufgenommen.
+- GitHub Actions auf Commit `d5cada373db2478abe09ddaff69532b94cbb992a`: **718 Repository-Tests ohne Fehler, 25 isolierte AIGC-SQL-Prüfungen bestanden**, einschließlich bestehender History-/Musik-/Cover-Szenarien. Beide GitHub-Workflows erfolgreich.
+- Erneute Supabase-Live-Dry-Run-Prüfung: Migration innerhalb einer **einzigen `BEGIN`/`ROLLBACK`-Transaktion** ausgeführt und die geänderte Funktion innerhalb der Transaktion überprüft. Nach `ROLLBACK` blieb der ursprüngliche Funktions-MD5 `ce9dc4edbe66a00ce89924c1a91b49d1` erhalten. Weiterhin **10 Bestandsaufträge, 0 aktive alte TikTok-Aufträge, 0 Uploadberechtigungen, 0 Provider-Versuche und 0 Provider-Ereignisse**.
+
+**Rolloutgrenze unverändert:** Kein Merge und kein dauerhaftes Supabase-/n8n-Update, bevor neue Arbeitskopie, Datenbankvalidierung und Client gemeinsam bereitgestellt und erneut geprüft werden. Keine Social-Media-Veröffentlichung ohne separate ausdrückliche Freigabe.
