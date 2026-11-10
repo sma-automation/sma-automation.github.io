@@ -34,13 +34,13 @@ function gallery(wide){
   $:id=>{assert.ok(nodes[id],id);return nodes[id];},
   workspace:wide?{galleryVisible:()=>true}:null,
   assets,selectedAsset:{id:'synthetic-video'},selectedPortal:'youtube',filePickerPage:0,busy:false,
-  describeFile:file=>({title:file.name.replace(/\\.mp4$/,'').replaceAll('_',' '),version:file.media_kind==='video'?'Video · 10 Sek.':'Bild'}),
+  describeFile:file=>({title:file.name.replace(/\.mp4$/,'').replaceAll('_',' '),version:file.media_kind==='video'?'Video · 10 Sek.':'Bild'}),
   fileFitsPortal:file=>file.media_kind==='video',
   pickerThumbnails:{reset(){},observe(){observed++;}},
   requestFileSelection(){throw Error('Unexpected click in static gallery test');},
   names:{youtube:'YouTube'}
  };
- vm.runInNewContext(renderer+'\\nrenderFilePicker();',ctx);
+ vm.runInNewContext(renderer+'\nrenderFilePicker();',ctx);
  return {rows:nodes.filePickerList.children,observed,nodes};
 }
 
