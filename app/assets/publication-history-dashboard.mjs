@@ -1,6 +1,6 @@
 import {mountPublicationAnalysisHistory} from './publication-analysis-history-dashboard.mjs?v=1';
 import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
-import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
+import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=2';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
 import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';

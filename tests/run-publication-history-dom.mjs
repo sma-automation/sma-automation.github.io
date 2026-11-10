@@ -188,7 +188,23 @@ const assignments=(entries=[assignmentEntry()],extra={})=>({ok:true,version:1,mo
 await test('file assignments in Edit show truthful baseline, literal saved text and independent totals',async()=>{
  const f=fixture({requestTexts:()=>texts(),requestAssignments:()=>assignments([assignmentEntry(1,{file_name:'<img src=x onerror=alert(1)>',body:'<script>alert(1)</script>'})])});await tick();
  assert.equal(f.page.querySelectorAll('[role=tab]').length,2);await openEditHistory(f,'assignments');const card=f.$('#historyAssignmentCard');assert.equal(card.hidden,false);assert.ok(f.$('#historyTextCard').closest('[hidden]'));assert.equal(f.$('#historyOrderCard').hidden,true);
- assert.match(card.textContent,/Übernommener Stand/);assert.match(card.textContent,/Frühere Änderungen sind nicht enthalten/);assert.match(card.textContent,/Zuletzt gespeichert: 04.10.2026/);assert.match(card.textContent,/<script>/);assert.equal(card.querySelector('script,img,a'),null);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyAssignmentCard'),null);
+ assert.match(card.textContent,/Übernommener Stand/);assert.match(card.textContent,/Frühere Änderungen sind nicht enthalten/);assert.match(card.textContent,/Zuletzt gespeichert: 04.10.2026/);assert.match(card.textContent,/<script>/);assert.equal(card.querySelector('script,img'),null);const link=card.querySelector('a.sma-history-preview-link');assert.equal(link?.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&asset='+assignmentEntry().asset_id);assert.equal(link?.getAttribute('target'),'_top');assert.match(link.textContent,/Aktuellen Beitrag bearbeiten/);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyAssignmentCard'),null);
+});
+await test('all four portal history rows link to the selected CURRENT file in the guarded editor',async()=>{
+ const platforms=['youtube','tiktok','instagram','facebook'];
+ const rows=platforms.map((platform,i)=>assignmentEntry(i+1,{platform,asset_id:entry(i+100).id,file_name:platform+' clip.mp4',event_kind:'assigned'}));
+ const f=fixture({requestAssignments:()=>assignments(rows)});await openEditHistory(f,'assignments');
+ const links=[...f.$('#historyAssignmentCard').querySelectorAll('a.sma-history-preview-link')];
+ assert.equal(links.length,4);
+ for(let i=0;i<links.length;i++){
+  const href='/app/publication-preview.html?wide=1&portal='+platforms[i]+'&asset='+rows[i].asset_id;
+  assert.equal(links[i].getAttribute('href'),href);
+  assert.equal(links[i].getAttribute('target'),'_top');
+  assert.match(links[i].textContent,/Aktuellen Beitrag bearbeiten/);
+ }
+ assert.equal(f.$('#historyAssignmentCard').querySelector('script,img'),null);
+ f.owner('other');assert.equal(f.$('#historyAssignmentCard a'),null);
+ f.view.destroy();
 });
 await test('file pages buffer twenty, display five and preserve their page when switching chapters',async()=>{
  const rows=Array.from({length:20},(_,i)=>assignmentEntry(i)),next={before_at:rows.at(-1).recorded_at,before_id:rows.at(-1).id},calls=[];
