@@ -29,9 +29,8 @@ let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
 // Ignore a stale background Magic-Effect status read after file switch or user action.
 let magicLoadTicket=0;
-// The user may explicitly request Magic while the saved draft is still loading.
-// Queue only that one intention; never skip the owner/file/assignment checks.
-let loadingVideoDraft=false,queuedMagicContext=null;
+// Keep Magic unavailable until the owner's saved draft has finished loading.
+let loadingVideoDraft=false,magicPreparationError=null;
 let pendingProductFocus=null;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
 const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-video-magic-effect-v1';
@@ -75,7 +74,7 @@ if(workspace){
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
- if(workspace){$('workspaceDraftAction').disabled=value&&!(loadingVideoDraft&&!queuedMagicContext&&!signedOut&&selectedAsset?.media_kind==='video'&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
+ if(workspace){$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -231,8 +230,8 @@ function previewDraftStep(){
   // directly in the expanded preview. Manual text entry stays available.
   // This only displays a button; recognition starts on an explicit click.
   if(!missingVideoMetadata(selectedAsset).length&&!magicHint(selectedAsset)){
-   return {target:'magic_text',label:loadingVideoDraft?'✨ Magic Effect vormerken':'✨ Magic Effect · Beitragstext erstellen',
-    note:loadingVideoDraft?'SMA prüft den gespeicherten Beitrag. Du kannst Magic Effect bereits vormerken; ein neuer Text startet nur bei leerem Entwurf.':'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
+   return {target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',
+    note:loadingVideoDraft?'Magic Effect wird vorbereitet … SMA prüft die Datei und den gespeicherten Beitrag. Danach wird der Button freigegeben.':'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
   }
   return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
  }
@@ -244,14 +243,7 @@ function previewDraftStep(){
  return null;
 }
 async function runPreviewDraftAction(target){
- if(signedOut)return;
- if(busy&&loadingVideoDraft&&target==='magic_text'&&!queuedMagicContext&&selectedAsset?.media_kind==='video'&&!current&&previewDraftStep()?.target===target){
-  queuedMagicContext={...fileContext(),owner:previewOwnerId};
-  workspace.refreshPreview('Magic Effect ist vorgemerkt. SMA prüft zuerst den gespeicherten Dateistand.');
-  $('workspaceDraftAction').disabled=true;
-  return;
- }
- if(busy)return;
+ if(busy||signedOut||magicPreparationError)return;
  const step=previewDraftStep();
  if(!step||step.target!==target){workspace.refreshPreview();return;}
  if(step.field){focusDraftCorrection(step);return;}
@@ -554,10 +546,10 @@ async function requestFileSelection(id,discard=false){
  if(id&&(!file||!fileFitsPortal(file)))return;
  if((selectedAsset?.id||'')===id){if(workspace&&id)workspace.show('preview');else if(!workspace)$('filePicker').close();return;}
  if((hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
- pendingAssetId=null;$('fileSwitchNotice').hidden=true;queuedMagicContext=null;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
+ pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
- // A video is viewable as soon as the authenticated catalogue has selected it.
- // Its Magic button can be clicked once while the bound draft is still loading.
+ // Show the file preview immediately, but keep Magic disabled until the
+ // bound draft and account have finished loading.
  if(workspace&&file?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
  await loadLatest();
  // The card click itself opens the preview after its matching saved draft is loaded.
@@ -862,8 +854,8 @@ async function loadHistoryPreview(){
  }
 }
 async function loadLatest(){
- const file=selectedAsset,context=file?fileContext():null;
- let noDraftConfirmed=false;
+ const file=selectedAsset;
+ magicPreparationError=null;
  loadingVideoDraft=!!(workspace&&file?.media_kind==='video');
  lock(true);
  try{
@@ -875,7 +867,6 @@ async function loadLatest(){
   if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
   showProductContext(data.product_context,file,savedProductSelection(data));
   if(data.status==='empty'){
-   noDraftConfirmed=true;
    clearDraft();
    if(!$('productChoiceField').hidden)$('sourcePanel').open=true;
    status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');
@@ -887,28 +878,15 @@ async function loadLatest(){
   render(result);
   status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(e){
+  magicPreparationError=e.message||'Die gespeicherten Angaben konnten nicht geladen werden.';
   if(selectedAsset)clearDraft();
-  status(e.message,true);
+  status(magicPreparationError,true);
  }finally{
   loadingVideoDraft=false;
   lock(false);
   syncMedia();
   workspace?.refreshPreview();
   if(file?.media_kind==='video')void loadMagicEffect(true);else await loadMagicEffect(true);
-  const queued=queuedMagicContext;
-  queuedMagicContext=null;
-  if(queued&&file&&context&&!signedOut&&selectedAsset?.id===context.asset_id&&
-     selectedAsset.revision===context.asset_revision&&
-     assignmentRevision===context.assignment_revision&&queued.owner===previewOwnerId){
-   if(noDraftConfirmed&&!busy&&!magicHint(file)){
-    // This is the one explicit click already made by the customer.
-    // The normal Magic pipeline still checks fresh Drive bytes, account and product.
-    workspace.show('source');
-    void runMagicAction('text');
-   }else{
-    status('Magic Effect konnte noch nicht starten. Prüfe den gespeicherten Beitrag oder lade die Dateivorschau erneut.',true);
-   }
-  }
  }
 }
 
@@ -1008,16 +986,46 @@ function magicActionHint(){
  return magicHint()||'';
 }
 
+function magicUiReadiness(){
+ if(!selectedAsset)return {state:'none',message:''};
+ if(signedOut)return {state:'error',message:'Magic Effect ist nicht verfügbar. Bitte melde dich erneut an.'};
+ if(magicPreparationError)return {state:'error',message:'Magic Effect konnte nicht vorbereitet werden. Bitte die Dateivorschau erneut laden.'};
+ if(automaticMode!==null)return {state:'working',message:'Magic Effect arbeitet … Videoanalyse und Texterstellung laufen.'};
+ if(loadingVideoDraft||busy)return {state:'loading',message:'Magic Effect wird vorbereitet … Datei und gespeicherter Beitrag werden geprüft.'};
+ const hint=magicHint();
+ if(hint)return {state:'unavailable',message:hint};
+ if(magicState?.status==='processing')return {state:'working',message:'Videoanalyse läuft noch. Du kannst den Erkennungsstand laden.'};
+ return {state:'ready',message:'Magic Effect ist bereit. Du kannst jetzt deinen Beitragstext erstellen.'};
+}
 function syncMagicActions(){
- const hint=magicActionHint();
- for(const id of ['magicSource','magicText'])$(id).disabled=busy||!!hint;
+ const hint=magicActionHint(),ready=magicUiReadiness();
+ for(const id of ['magicSource','magicText']){
+  const el=$(id);
+  el.disabled=busy||!!hint||!!magicPreparationError||signedOut;
+  el.dataset.magicState=ready.state;
+  el.setAttribute('aria-busy',String(['loading','working'].includes(ready.state)));
+  el.title=ready.message;
+ }
  $('magicSource').textContent=automaticMode==='source'?'✨ Inhalt wird vorbereitet …':'✨ Magic Effect';
  $('magicText').textContent=automaticMode==='text'?'✨ Text wird vorbereitet …':workspace?'✨ Magic Effect':'✨ Magic Effect · Text erstellen';
+ const indicator=$('magicReadiness');
+ indicator.hidden=ready.state==='none';
+ indicator.dataset.state=ready.state;
+ indicator.textContent=ready.message;
+ if(workspace){
+  const action=$('workspaceDraftAction'),notice=$('workspaceDraftNotice');
+  const magicStep=previewDraftStep()?.target==='magic_text';
+  action.dataset.magicState=magicStep?ready.state:'none';
+  action.setAttribute('aria-busy',String(magicStep&&['loading','working'].includes(ready.state)));
+  action.title=magicStep?ready.message:'';
+  notice.dataset.magicState=magicStep?ready.state:'none';
+ }
  $('magicSourceHint').textContent=hint||(selectedAsset?.media_kind==='video'?'Analysiert dein Video mit Bildfolge, lesbaren Aufschriften und vorhandener Sprache und trägt die Beschreibung ein.':'Erkennt dein Foto und trägt die Beschreibung automatisch ein.');
  $('magicTextHint').textContent=hint||(workspace?'Inhalt erkennen und passenden Beitragstext vorbereiten.':'Erkennt deine Datei, übernimmt den Inhalt und erstellt einen passenden Text für '+(names[selectedPortal]||'die gewählten Portale')+' mit Hashtags und Shop-Link. Du kannst den fertigen Entwurf anschließend prüfen und bearbeiten.');
 }
+
 async function runMagicAction(mode,replace=false){
- if(busy||signedOut||!['source','text'].includes(mode))return;
+ if(busy||signedOut||magicPreparationError||!['source','text'].includes(mode))return;
  const hint=magicActionHint();if(hint){status(hint,true);return;}
  if((hasDraftEdits()||(hasSourceEdits()&&automaticInputSignature!==JSON.stringify(sourceInput())))&&!replace){
   pendingAutomatic=mode;$('magicReplaceNotice').hidden=false;
@@ -1614,7 +1622,7 @@ syncMedia();sourceBaseline=sourceFormKey();lock(true);status('Deine Dateien werd
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){tabDrafts.clearOwner(previewOwnerId);startupDraft=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;queuedMagicContext=null;loadingVideoDraft=false;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){tabDrafts.clearOwner(previewOwnerId);startupDraft=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
