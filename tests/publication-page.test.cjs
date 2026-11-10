@@ -304,6 +304,66 @@ test('new YouTube video offers explicit Magic from preview, and one click saves 
  assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'cached recognition is reused');
 });
 
+test('video preview accepts one early Magic click while the saved draft is read',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ let resolveRead;let requests=0;
+ const p=await boot({portal:'instagram',wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+    a.p_action==='get'?new Promise(resolve=>{resolveRead=resolve}):
+    a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis}),
+  fetchResponse:async url=>{if(url.endsWith('/sma-publication-preview-v1'))requests++;return instagramResult;}});
+ const click=p.get('filePickerList').children[0].querySelector('button').click();
+ for(let i=0;i<5&&!resolveRead;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(typeof resolveRead,'function');
+ assert.ok(p.views.includes('preview'),'open the authenticated gallery video immediately');
+ assert.equal(p.get('workspaceDraftAction').disabled,false,'one early Magic click must be possible');
+ await p.workspaceOptions.onDraftAction('magic_text');
+ await p.workspaceOptions.onDraftAction('magic_text');
+ assert.equal(requests,0,'never create text before the saved draft is checked');
+ assert.equal(p.get('workspaceDraftAction').disabled,true,'queue exactly one click');
+ resolveRead({ok:true,status:'empty'});
+ await click;
+ for(let i=0;i<10&&!requests;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(requests,1,'the customer click starts the existing guarded pipeline once');
+ assert.equal(p.calls.filter(c=>c.p_action==='assign').length,1);
+ assert.equal(p.get('result').hidden,false);
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'use cached analysis');
+});
+
+test('early Magic click does not overwrite an already saved video draft',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ let resolveRead;
+ const p=await boot({portal:'instagram',wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+   a.p_action==='get'?new Promise(resolve=>{resolveRead=resolve}):{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
+ const click=p.get('filePickerList').children[0].querySelector('button').click();
+ for(let i=0;i<5&&!resolveRead;i++)await new Promise(r=>setImmediate(r));
+ await p.workspaceOptions.onDraftAction('magic_text');
+ resolveRead({...instagramResult,assignment_revision:1,input:{source_text:'Bereits geprüfte Fakten.',language:'de',media_kind:'video',platforms:['instagram']}});
+ await click;await new Promise(r=>setImmediate(r));
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-preview-v1')),false);
+ assert.equal(p.get('result').hidden,false);
+ assert.match(p.get('status').textContent,/konnte noch nicht starten/);
+});
+
+test('Magic uses an already completed video analysis even if background status read was late',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ let cached=false;
+ const p=await boot({portal:'instagram',asset:file.id,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+   a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:cached?videoAnalysis:{...videoAnalysis,status:'unrecognized',result:null}}),
+  fetchResponse:async()=>instagramResult});
+ await new Promise(r=>setImmediate(r));
+ cached=true;
+ await p.get('magicText').click();
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false);
+ assert.equal(p.calls.filter(c=>c.url?.endsWith('/sma-publication-preview-v1')).length,1);
+ assert.equal(p.get('result').hidden,false);
+});
+
 test('preview Magic keeps user text until explicit replacement consent and offers manual fallback',async()=>{
  const ready={...supportedVideo,width_px:720,height_px:1280};
  const p=await boot({portal:'youtube',asset:ready.id,wide:true,formTracksDom:true,
