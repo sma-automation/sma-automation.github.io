@@ -219,7 +219,16 @@ function updateDraftStatus(){
 }
 function previewDraftStep(){
  if(!selectedAsset||signedOut)return null;
- if(!current)return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
+ if(!current){
+  // The file is already selected: offer its existing one-click Magic pipeline
+  // directly in the expanded preview. Manual text entry stays available.
+  // This only displays a button; recognition starts on an explicit click.
+  if(!missingVideoMetadata(selectedAsset).length&&!magicHint(selectedAsset)){
+   return {target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',
+    note:'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
+  }
+  return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
+ }
  if(uncertainSave)return {target:'checkDraftSave',label:'Speicherstand prüfen',note:'Die Speicherbestätigung für diesen Beitrag steht aus.'};
  const card=$('drafts').children[0];
  if(!$('compareDraft').hidden)return hashtagCorrection(card)||{target:'compareDraft',label:'Änderungen vergleichen',note:'Eine andere Fassung ist gespeichert. Vergleiche sie mit deinen Eingaben.'};
@@ -232,6 +241,13 @@ async function runPreviewDraftAction(target){
  const step=previewDraftStep();
  if(!step||step.target!==target){workspace.refreshPreview();return;}
  if(step.field){focusDraftCorrection(step);return;}
+ if(step.target==='magic_text'){
+  // Reuse the existing, journal-free recognition -> caption -> assignment
+  // pipeline. It verifies freshness, owner and version again before writing.
+  workspace.show('source');
+  await runMagicAction('text');
+  return;
+ }
  if(step.target==='save'){
   const originalFile=fileContext();
   await saveDraft();
