@@ -1,5 +1,35 @@
 # Dauerhafte Provider-Ergebnisse und sichere Wiederaufnahme
 
+## Quellabgleich nach PR #195 – 10. November 2026
+
+Seit der Cover-Erweiterung vom 06.11.2026 ruft die veröffentlichte Auftrags-API
+`RdtCqCWRi7P4W7B0` den separaten **47-Node-Provider-/Coverworkflow**
+`JaidX5YeKl6ZTqjQ` auf. Die ältere **29-Node-Providerkopie**
+`JPtiMBrudXLxxSrz` bleibt unverändert erhalten, ist aber nicht mehr das dokumentierte
+Ziel des API-Nodes `Providerweg im Hintergrund`.
+
+Nach Übernahme der alten PR-#57-Quellen durch PR #195 am 10.11.2026 war der
+Repository-Export `publication-order-api-workflow.json` noch auf die ältere
+29-Node-Kopie eingestellt. Die Quellangleichung setzt ausschließlich dessen
+Subworkflow-ID auf `JaidX5YeKl6ZTqjQ` und sichert den Verweis im Node-Test ab.
+Keine vorhandenen HTTP-Nodes, Kanten, Berechtigungen oder Freigaben werden geändert.
+Das aktualisierte JSON ist **keine** neue n8n-Bereitstellung und soll nicht
+ungeprüft in den veröffentlichten Workflow importiert werden.
+
+Reproduzierbare Quellerzeugung mit aktuellem Cover-Ziel (erzeugte Dateien vor
+einem Import gegen den installierten Export vergleichen):
+
+```sh
+python3 n8n/publishing/build-publication-orders.py \\
+  --worker-id zLlhr1I1vKm2AiiU \\
+  --account-id LR2Qng41OIYuVHAR \\
+  --comparison-delivery-id ZFO9NSh5nHSn3ues \\
+  --provider-dispatch-id JaidX5YeKl6ZTqjQ
+```
+
+Die nachfolgenden Abschnitte beschreiben weiterhin den historischen
+Provider-only-Betriebsstand vom 03.11.2026.
+
 Stand 3. November 2026, Fortsetzung von PR #57. **Datenbankjournal und interne n8n-Anschlüsse sind installiert und veröffentlicht. Automatischer Inhaltsabgleich für YouTube und TikTok live geprüft. Kein Social-Media-Upload, kein Posting und keine Upload-Testfreigabe.**
 
 ## Installiert und nachgewiesen
