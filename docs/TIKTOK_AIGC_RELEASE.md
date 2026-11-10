@@ -75,3 +75,13 @@ bevor TikTok die dafür nötige Freigabe tatsächlich bestätigt.
 Die Alt-PRs #57 und #69 bleiben eigenständig offen.
 Das Live-Journal mit 10 Kundenaufträgen, 0 Freigaben und 0
 Provider-Versuchen wurde ausschließlich gelesen und nicht verändert.
+
+## Abnahmebelege vom 10.11.2026
+
+- GitHub-Actions-Workflow „Publication history checks“: **718 Node-Tests bestanden, 0 fehlgeschlagen**. Die ergänzten AIGC-DOM- und 47-Node-Offline-Tests waren erfolgreich. Bestehende SQL-, History-, Cover- und Musikregressionen bestanden.
+- GitHub-Actions-Workflow „Dashboard chapter navigation checks“: erfolgreich.
+- Verbundene Supabase-Instanz (PostgreSQL 17): Die unveränderte kanonische AIGC-Migration wurde innerhalb einer ausdrücklichen `BEGIN`/`ROLLBACK`-Transaktion testweise kompiliert und angewendet. Der Test verifizierte die geänderte Funktion *innerhalb* der Transaktion, danach die vollständige Rücknahme.
+- Nach `ROLLBACK`: Order-Funktions-MD5 weiterhin `ce9dc4edbe66a00ce89924c1a91b49d1`, `is_aigc` **nicht** produktiv installiert, zehn Bestandsaufträge, null Operator-Uploadfreigaben. Keine Kunden- oder Provider-Datensätze geschrieben.
+
+**Wichtig:** Der erfolgreiche Test beweist den sicheren SQL-Änderungsweg. Er ist **keine** Freigabe des koordinierten Produktivrollouts und ersetzt keinen echten YouTube-/TikTok-Abnahmetest.
+
