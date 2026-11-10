@@ -95,3 +95,16 @@ test('history comparison is portal scoped and does not leak into preview output'
  const p=makePreview(response(input.platforms.map(draft)),c);
  assert.equal(p.can_publish,false);assert.ok(!JSON.stringify(p).includes('völlig anderer'));
 });
+
+test('both staged n8n code nodes use the exact validated customer-CTA formatter',()=>{
+ const fs=require('node:fs');
+ const source=fs.readFileSync('n8n/publishing/prepare-preview.cjs','utf8').split('\nmodule.exports = ')[0].trimEnd();
+ const workflow=JSON.parse(fs.readFileSync('n8n/publishing/preview-workflow.json','utf8'));
+ for(const name of ['Textauftrag vorbereiten','Text und Shop-Link prüfen']){
+  const nodes=workflow.nodes.filter(n=>n.name===name);
+  assert.equal(nodes.length,1);
+  assert.ok(nodes[0].parameters.jsCode.startsWith(source),
+   'The staged production copy must not use the old caption or model schema: '+name);
+  assert.match(nodes[0].parameters.jsCode,/Schau doch mal in meinem Shop vorbei!/u);
+ }
+});
