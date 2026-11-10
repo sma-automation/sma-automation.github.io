@@ -86,19 +86,29 @@ function tiktokDialog({checkError=null,productId,verifySavedDraft=async()=>{},on
  return {doc,dialog,get,change,submit,approve,requests,open:()=>get('preparePublicationOrder').events.click()};
 }
 
-test('TikTok interactions and advertising start off, and account-forced switches stay disabled',async()=>{
+test('TikTok AIGC is an explicit required selection; it is never guessed',async()=>{
  const t=tiktokDialog();await t.open();
+ assert.equal(t.get('order-is_aigc').value,'');
+ t.change('order-visibility','SELF_ONLY');await t.submit();
+ assert.deepEqual(t.requests.map(r=>r.action),['account']);
+ t.change('order-is_aigc','true');await t.submit();
+ assert.equal(t.requests.at(-1).input.choices.is_aigc,true);
+ assert.ok(t.dialog.querySelectorAll('li').some(e=>e.textContent==='KI-generierter Inhalt: Ja'));
+});
+
+test('TikTok interactions and advertising start off, and account-forced switches stay disabled',async()=>{
+ const t=tiktokDialog();await t.open();t.change('order-is_aigc','false');
  assert.equal(t.get('order-visibility').value,'');
  for(const k of ['disable_comment','disable_duet','disable_stitch','commercial','brand_organic_toggle','brand_content_toggle'])assert.equal(t.get('order-'+k).checked,false);
  assert.equal(t.get('order-disable_comment').disabled,false);assert.equal(t.get('order-disable_duet').disabled,true);assert.equal(t.get('order-disable_stitch').disabled,true);
  t.change('order-visibility','SELF_ONLY');await t.submit();
- assert.deepEqual(t.requests.at(-1).input.choices,{visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,brand_organic_toggle:false,brand_content_toggle:false});
+ assert.deepEqual(t.requests.at(-1).input.choices,{visibility:'SELF_ONLY',is_aigc:false,disable_comment:true,disable_duet:true,disable_stitch:true,brand_organic_toggle:false,brand_content_toggle:false});
  assert.ok(t.dialog.querySelectorAll('li').some(e=>e.textContent==='Visuelle Prüfung offen.'));
  assert.equal(t.get('order-review-tiktok_music_terms').parentElement.hidden,false);assert.equal(t.get('order-review-tiktok_branded_terms').parentElement.hidden,true);
 });
 
 test('TikTok advertising requires a selection, displays the label, and blocks private third-party content',async()=>{
- const t=tiktokDialog();await t.open();t.change('order-visibility','SELF_ONLY');t.change('order-commercial',true);
+ const t=tiktokDialog();await t.open();t.change('order-is_aigc','false');t.change('order-visibility','SELF_ONLY');t.change('order-commercial',true);
  assert.equal(t.get('order-brand_content_toggle').disabled,true);await t.submit();assert.equal(t.requests.length,1);
  t.change('order-visibility','MUTUAL_FOLLOW_FRIENDS');t.change('order-brand_content_toggle',true);t.change('order-brand_organic_toggle',true);
  assert.equal(t.get('order-visibility').children.find(e=>e.value==='SELF_ONLY').disabled,true);
@@ -114,14 +124,14 @@ test('TikTok advertising requires a selection, displays the label, and blocks pr
 });
 
 test('switching commercial disclosure off clears prior brand choices',async()=>{
- const t=tiktokDialog();await t.open();t.change('order-visibility','MUTUAL_FOLLOW_FRIENDS');t.change('order-commercial',true);t.change('order-brand_organic_toggle',true);
+ const t=tiktokDialog();await t.open();t.change('order-is_aigc','false');t.change('order-visibility','MUTUAL_FOLLOW_FRIENDS');t.change('order-commercial',true);t.change('order-brand_organic_toggle',true);
  assert.ok(t.dialog.querySelectorAll('p').some(e=>e.textContent?.includes('Werbeinhalt')));
  t.change('order-commercial',false);assert.equal(t.get('order-brand_organic_toggle').checked,false);assert.equal(t.get('order-brand_organic_toggle').parentElement.hidden,true);
  await t.submit();assert.equal(t.requests.at(-1).input.choices.brand_organic_toggle,false);
 });
 
 test('a changed current file keeps approval disabled even when every declaration is checked',async()=>{
- const t=tiktokDialog({checkError:'FILE_CHANGED'});await t.open();t.change('order-visibility','SELF_ONLY');await t.submit();
+ const t=tiktokDialog({checkError:'FILE_CHANGED'});await t.open();t.change('order-is_aigc','false');t.change('order-visibility','SELF_ONLY');await t.submit();
  for(const key of ['content_checked','media_rights','music_rights','tiktok_music_terms'])t.change('order-review-'+key,true);
  t.change('order-final-consent',true);assert.equal(t.approve.disabled,true);
  assert.ok(t.dialog.querySelectorAll('p').some(e=>e.textContent?.includes('Die Datei wurde geändert')));
@@ -135,7 +145,7 @@ test('checking the product precedes account lookup and order preparation; an una
  },onUnavailableLink:()=>repaired++});
  await t.open();
  assert.equal(checked,1);assert.equal(repaired,1);assert.equal(t.dialog.open,false);assert.deepEqual(t.requests,[]);
- allowed=true;await t.open();assert.deepEqual(t.requests.map(r=>r.action),['account']);
+ allowed=true;await t.open();t.change('order-is_aigc','false');assert.deepEqual(t.requests.map(r=>r.action),['account']);
  t.change('order-visibility','SELF_ONLY');allowed=false;await t.submit();
  assert.equal(checked,3);assert.equal(repaired,2);assert.equal(t.dialog.open,false);
  assert.deepEqual(t.requests.map(r=>r.action),['account']);
