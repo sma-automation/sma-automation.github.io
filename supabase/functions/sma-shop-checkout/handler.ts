@@ -9,9 +9,12 @@ const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'ob
 function exactCents(value: unknown): number | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const decimal = String(value);
-  if (!/^[0-9]+(?:\.[0-9]{1,2})?$/.test(decimal)) return null;
+  if (decimal.length > 64 || !/^[0-9]+(?:\.[0-9]+)?$/.test(decimal)) return null;
   const [whole, fraction = ''] = decimal.split('.');
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  // Numeric columns may preserve trailing zeros beyond two decimals.
+  // Those are exact cents; any nonzero fractional-cent digit is unsafe.
+  if (fraction.length > 2 && !/^0+$/.test(fraction.slice(2))) return null;
+  const cents = Number(whole) * 100 + Number(fraction.slice(0, 2).padEnd(2, '0'));
   return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
 }
 
