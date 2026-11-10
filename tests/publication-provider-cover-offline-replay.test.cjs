@@ -99,6 +99,42 @@ test('actual n8n TikTok init node inserts only the reserved cover timestamp',asy
  await assert.rejects(run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,cover:{...cover,video_asset_id:id(99)}})}),/COVER_BINDING_INVALID/);
 });
 
+
+test('YouTube and TikTok init preserve exactly the saved owner shop CTA and product link',async()=>{
+ const ownerShop='https://sma-automation.com/app/shop.html?shop=fixture';
+ const ownerCaption='Kurzer sachlicher Beitrag über einen sichtbaren Testablauf.\n\n'+
+  'Schau doch mal in meinem Shop vorbei!\n\n#SMA #Test\n\n🛒 Zum Shop: '+ownerShop;
+ const youtube={...youtubeIntent,operation:'init',sequence:1,size_bytes:1347227,
+  draft:{title:'Synthetischer Test – Türgriff',caption:ownerCaption},
+  choices:{visibility:'private',made_for_kids:false,contains_synthetic_media:true}};
+ const yt=await run('Provideranfrage erstellen',{lookups:refs(youtube)});
+ assert.equal(yt.request.url,'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status');
+ assert.equal(yt.request.body.snippet.title,youtube.draft.title);
+ assert.equal(yt.request.body.snippet.description,ownerCaption);
+ assert.equal(yt.request.body.snippet.description.split(ownerShop).length-1,1);
+ assert.equal(yt.request.body.snippet.description.split('Schau doch mal').length-1,1);
+ assert.equal(yt.request.body.status.privacyStatus,'private');
+ assert.equal(yt.request.body.status.containsSyntheticMedia,true);
+ assert.equal(yt.request.headers.Authorization,'Bearer '+token);
+
+ const productCaption='A factual description of the test video.\n\n'+
+  'Feel free to visit my shop!\n\n#SMA #Test\n\n🛒 View product: '+
+  ownerShop+'&produkt=sku_01';
+ const tiktok={...tiktokIntent,draft:{title:'Synthetic test',caption:productCaption}};
+ const tt=await run('Provideranfrage erstellen',{lookups:refs(tiktok)});
+ assert.equal(tt.request.url,'https://open.tiktokapis.com/v2/post/publish/video/init/');
+ assert.equal(tt.request.body.post_info.title,productCaption);
+ assert.equal(tt.request.body.post_info.title.split(ownerShop).length-1,1);
+ assert.equal(tt.request.body.post_info.title.split('Feel free to visit my shop!').length-1,1);
+ assert.equal(tt.request.body.post_info.title.endsWith(ownerShop+'&produkt=sku_01'),true);
+ assert.equal(tt.request.body.post_info.privacy_level,'SELF_ONLY');
+ assert.equal(tt.request.body.post_info.video_cover_timestamp_ms,1000);
+ assert.equal(tt.request.headers.Authorization,'Bearer '+token);
+ // Offline result is an intended request only, never a provider receipt or post.
+ assert.equal(yt.request.body.status.privacyStatus,'private');
+ assert.equal(tt.request.body.source_info.source,'FILE_UPLOAD');
+});
+
 test('actual n8n YouTube cover request uses only validated PNG and bound video ID',async()=>{
  const r=await run('Coveranfrage erstellen',{lookups:refs(youtubeIntent),data:png});
  assert.equal(r.request.method,'POST');
