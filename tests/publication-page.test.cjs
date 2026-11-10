@@ -323,7 +323,7 @@ test('video Magic visibly loads and cannot start until the saved draft check com
  assert.equal(p.get('magicReadiness').dataset.state,'loading');
  assert.match(p.get('magicReadiness').textContent,/wird vorbereitet/);
  assert.equal(p.get('workspaceDraftAction').dataset.magicState,'loading');
- assert.match(p.get('workspaceDraftNotice').textContent,/wird vorbereitet/);
+ assert.match(p.workspaceOptions.getPreview().draftStep.note,/wird vorbereitet/);
  await p.workspaceOptions.onDraftAction('magic_text');
  assert.equal(requests,0,'a premature event cannot start generation');
  resolveRead({ok:true,status:'empty'});
