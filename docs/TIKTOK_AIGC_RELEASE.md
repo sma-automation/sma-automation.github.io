@@ -55,6 +55,14 @@ Quellen:
    Pflichtauswahl, unveränderte Caption, echtes Ja/Nein,
    fehlende/falsche Flags, exakte Coverbindung und kein Posting.
    `node --test tests/*.test.cjs` ist die CI-Regression.
+5. **Nicht sendender Upload-Plan:** Auch der getrennte
+   `n8n/publishing/provider-upload-plan.cjs` benötigt bei TikTok das
+   ausdrückliche Boolean `is_aigc`, trägt es unverändert unter
+   `post_info.is_aigc` ein und lehnt fehlende, als Text angegebene oder
+   zusätzliche Felder ab. Der Plan hat weiterhin `dispatch_enabled:false`,
+   `can_upload:false` und `can_publish:false`. Beide möglichen Werte,
+   der unveränderte Caption-Text und die Ablehnungsfälle werden in
+   `tests/provider-results.test.cjs` geprüft.
 
 ## Rollout erst nach technischer Abnahme
 
