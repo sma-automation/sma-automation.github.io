@@ -65,6 +65,10 @@ Live installiert: Migration `website_wordpress_connection_tickets`, `sma-wordpre
 
 Die isolierten Testabhängigkeiten sind fest auf PHP.wasm 3.1.62 gesetzt. Das Paket nennt Node >=24.18 und npm >=11.16; der aktuelle Lauf verwendete Node 24.22.1/npm 11.9 und meldete eine npm-Versionswarnung. Installation und Lauf waren erfolgreich. Kein Produktionspaket wurde geändert.
 
+## Ergänzender Nachweis auf echtem WordPress/MariaDB
+
+Der [kostenfreie lokale Praxistest](WORDPRESS_PRACTICAL_TEST.md) wurde am 4. November 2026 erfolgreich ausgeführt. Er ergänzt die älteren PHP-/Speicher-Doubles um eine echte WordPress-7.1.4-Installation, PHP, MariaDB/InnoDB, REST-Dispatch, Transaktionsrücknahme und zwei parallele PHP-/Datenbankverbindungen. **29 native Prüfungen und der konkurrierende Fall bestanden.** Er verwendet weder eine externe WordPress-Seite noch die reale SMA-Anmeldung/Ticketfreigabe. Die unveränderten Plugin- und Server-Signaturquellen wurden am 10. November gegen den aktuellen Code geprüft. Es gab keine zusätzliche Hostingbuchung, Datenbankänderung oder Veröffentlichung. Ein positiver Live-HTTPS-Test bleibt offen.
+
 ## Noch zu verbinden
 
 1. WordPress-Zieladresse festlegen, den Baustein auf der freigegebenen Testseite installieren und die einmalige Admin-Freigabe durchführen. Echte TLS-Verbindung, WordPress-Rechte, MySQL-Transaktionen und Darstellung dort prüfen. Der SMA-Testshop ist keine externe WordPress-Installation.

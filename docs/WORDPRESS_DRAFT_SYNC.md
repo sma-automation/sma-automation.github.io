@@ -1,6 +1,6 @@
 # WordPress-Produktentwurf mit dauerhafter Wiederaufnahme
 
-Stand: 4. November 2026. Migration `wordpress_durable_product_draft_sync_v1` und Edge-Endpoint `sma-wordpress-sync` Version 1 sind bereitgestellt. Der neue Kundeneinstieg baut auf der bestehenden WordPress-Freigabe auf. Es ist weiterhin **keine externe WordPress-Webseite verbunden**; kein realer Produktentwurf wurde angelegt. Ein positiver Ende-zu-Ende-Test mit WordPress/MySQL und dessen Erweiterungen bleibt offen.
+Stand: 4. November 2026. Migration `wordpress_durable_product_draft_sync_v1` und Edge-Endpoint `sma-wordpress-sync` Version 1 sind bereitgestellt. Der neue Kundeneinstieg baut auf der bestehenden WordPress-Freigabe auf. Es ist weiterhin **keine externe WordPress-Webseite verbunden**, und kein externer Produktentwurf wurde angelegt. Der ergänzende [kostenfreie lokale Praxistest](WORDPRESS_PRACTICAL_TEST.md) mit echtem WordPress 7.1.4 und MariaDB/InnoDB hat 29 Prüfungen sowie einen konkurrierenden Schreibfall bestanden. Der vollständige externe Ende-zu-Ende-Test mit SMA-Anmeldung, Ticket, WordPress-Adminfreigabe und öffentlichem TLS bleibt offen.
 
 ## Kundenablauf
 
@@ -44,5 +44,7 @@ node tests/run-wordpress-dom.mjs
 node tests/run-wordpress-sync-dom.mjs
 npm exec --yes --package=deno@2.9.6 -- deno check supabase/functions/sma-wordpress-sync/index.ts supabase/functions/sma-wordpress-connect/index.ts
 ```
+
+Der [native WordPress-/MariaDB-Test](WORDPRESS_PRACTICAL_TEST.md) ergänzt die zuvor dokumentierten Doubles; er setzt keine bestehende Kundendatenbank ein und begründet **keinen** live freigegebenen WordPress-Anschluss.
 
 Nächste externe Abnahme: eine konkret freigegebene WordPress-Testseite verbinden, einmaligen Produktentwurf erzeugen, echte TLS-/MySQL-/Plugin-Nebenwirkungen und Darstellung prüfen. Keine Hostingbuchung, Tarifänderung, Domain-/DNS-Änderung oder Veröffentlichung wurde ausgeführt.
