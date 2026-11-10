@@ -86,12 +86,28 @@ python3 n8n/publishing/check-aigc-rollout.py --installed-export /GESCHUETZT/aktu
 ```
 
 Nur `INSTALLED_BASELINE_MATCH; AIGC_CANDIDATE_SOURCE_READY; NO_DEPLOYMENT`
-bestätigt den erwarteten alten 47-Node-Codebestand. Abweichende Nodes,
-Verbindungen, Einstellungen, Trigger, Retries und teilweise aktiviertes
-AIGC führen zum Abbruch. Der Prüfer liest nur lokale Dateien – er kann
-**nicht** verifizieren, ob ein vorgelegter Export wirklich frisch aus n8n
-stammt. Direkt vor dem Rollout Workflow-ID, Exportzeit und veröffentlichten
-Stand in n8n gesondert feststellen.
+bestätigt den erwarteten alten 47-Node-Codebestand. Der Prüfer verlangt
+zusätzlich **exakt** die Workflow-ID `JaidX5YeKl6ZTqjQ`, den Namen
+`SMA – Auftrag – Provider und Cover V1` und `active=true`. Ein Export
+ohne ID, aus einer Kopie oder von einem inaktiven Workflow wird abgewiesen.
+Abweichende Nodes, Verbindungen, Einstellungen, Trigger, Retries und teilweise
+aktiviertes AIGC führen ebenso zum Abbruch.
+
+Der Prüfer liest nur lokale Dateien – er kann **nicht** verifizieren, ob
+ein vorgelegter Export wirklich frisch aus n8n stammt oder ob eine neuere
+*nicht veröffentlichte* Entwurfsfassung im Editor vom aktiven Stand abweicht.
+Den Export deshalb direkt vor der Abnahme frisch aus der verbundenen
+n8n-Instanz laden und den **veröffentlichten** Workflowstand zusätzlich
+im n8n-Dashboard bestätigen. Wo die CLI zur Verfügung steht, kann der
+`--published`-Export des konkreten Workflows genutzt werden;
+auf n8n Cloud ist die UI-Downloadfunktion verfügbar. Ein privater
+Workflowexport kann Credential-Namen und HTTP-Header enthalten und darf
+nicht in ein öffentliches Repository oder ungeschützt in einen Chat
+hochgeladen werden.
+
+Offizielle Dokumentation:
+https://docs.n8n.io/build/manage-workflows/export-and-import
+und https://docs.n8n.io/hosting/cli-commands/ (Export der veröffentlichten Fassung).
 
 Danach vor einem Schreibvorgang **lesend** prüfen: Supabase-Funktions-MD5
 `ce9dc4edbe66a00ce89924c1a91b49d1`, keine nicht stornierten TikTok-
