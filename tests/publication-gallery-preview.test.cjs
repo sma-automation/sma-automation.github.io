@@ -11,7 +11,7 @@ const end=source.indexOf('function openFilePicker(trigger){',start);
 assert.ok(start>0&&end>start);
 const renderer=source.slice(start,end);
 
-function gallery(wide){
+function gallery(wide, overrideAssets){
  class Element{
   constructor(tag){this.tag=tag;this.children=[];this.className='';this.classes=new Set();
    this.classList={toggle:(s,v)=>v?this.classes.add(s):this.classes.delete(s)};
@@ -24,15 +24,15 @@ function gallery(wide){
  const names=['fileSearch','workspaceFiles','filePickerList','filePickerCount',
   'filePicker','filePickerPages','filePageCount','filePrevious','fileNext'];
  const nodes=Object.fromEntries(names.map(n=>[n,new Element(n)]));
- const assets=[
+ const assets=overrideAssets??[
   {id:'synthetic-video',name:'SMA_STUMMER_GALERIE_TEST_10S.mp4',media_kind:'video',mime_type:'video/mp4',size_bytes:1951847},
   {id:'synthetic-image',name:'Titelbild.png',media_kind:'image',mime_type:'image/png',size_bytes:60000}
  ];
- let observed=0;
+ let observed=0, firstUploadCalls=0;
  const ctx={
   document:{createElement:tag=>new Element(tag)},
   $:id=>{assert.ok(nodes[id],id);return nodes[id];},
-  workspace:wide?{galleryVisible:()=>true}:null,
+  workspace:wide?{galleryVisible:()=>true,openEmptyPreview(){firstUploadCalls++}}:null,
   assets,selectedAsset:{id:'synthetic-video'},selectedPortal:'youtube',filePickerPage:0,busy:false,
   describeFile:file=>({title:file.name.replace(/\.mp4$/,'').replaceAll('_',' '),version:file.media_kind==='video'?'Video · 10 Sek.':'Bild'}),
   fileFitsPortal:file=>file.media_kind==='video',
@@ -41,7 +41,7 @@ function gallery(wide){
   names:{youtube:'YouTube'}
  };
  vm.runInNewContext(renderer+'\nrenderFilePicker();',ctx);
- return {rows:nodes.filePickerList.children,observed,nodes};
+ return {rows:nodes.filePickerList.children,observed,nodes,firstUploads:()=>firstUploadCalls};
 }
 
 test('wide gallery shows preview, title and variant, never Dateidetails beneath titles',()=>{
@@ -70,4 +70,31 @@ test('legacy file picker retains file-details disclosure outside wide dashboard'
   assert.equal(details.children[0].tag,'summary');
   assert.equal(details.children[0].textContent,'Dateidetails');
  }
+});
+
+test('first customer with no files has a preview entry, never a gallery Add File button',()=>{
+ const p=gallery(true,[]);
+ assert.equal(p.rows.length,1);
+ const entry=p.rows[0],action=entry.children[0];
+ assert.equal(entry.className,'workspace-first-upload');
+ assert.equal(action.textContent,'');
+ assert.equal(action.className,'workspace-first-upload-action');
+ assert.equal(action.children[0].textContent,'Noch keine passende Datei');
+ assert.match(action.attrs['aria-label'],/[Vv]orschau/);
+ action.events.click();
+ assert.equal(p.firstUploads(),1);
+ assert.equal(p.nodes.filePickerCount.textContent.includes('Noch keine Dateien'),true);
+ const standalone=gallery(false,[]);
+ assert.equal(standalone.rows.length,0,'legacy file picker is not modified');
+});
+
+test('a YouTube account with images only can access preview uploader but not upload from a tile',()=>{
+ const p=gallery(true,[{id:'image-only',name:'Foto.jpg',media_kind:'image',mime_type:'image/jpeg',size_bytes:111111}]);
+ assert.equal(p.rows.length,2);
+ assert.equal(p.rows[0].children[0].disabled,true);
+ assert.equal(p.rows[1].className,'workspace-first-upload');
+ p.rows[1].children[0].events.click();
+ assert.equal(p.firstUploads(),1);
+ const hasVideo=gallery(true,[{id:'own-video',name:'Clip.mp4',media_kind:'video',mime_type:'video/mp4',size_bytes:1000}]);
+ assert.equal(hasVideo.rows.length,1,'no additional upload tile when a suitable video is available');
 });

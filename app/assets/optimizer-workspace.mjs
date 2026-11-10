@@ -91,6 +91,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const previewActions = make('div', 'workspacePreviewActions');
   previewActions.append($('deviceBrowse'));
   headingRow.append(headingText, previewActions);
+  const uploadIntro = make('p', 'workspaceUploadIntro', 'Noch keine Datei ausgewählt. Über „Datei hinzufügen“ kannst du ein passendes Bild oder Video auswählen. Es wird dadurch nichts veröffentlicht.');
+  uploadIntro.hidden = true;
   const draftState = make('div', 'workspaceDraftState');
   const draftNotice = make('p', 'workspaceDraftNotice');
   draftNotice.setAttribute('role', 'status');
@@ -99,7 +101,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   draftState.append(draftNotice, draftAction);
   // Keep the existing device-upload handler, progress and retry controls
   // together in the expanded preview. No new endpoint or upload behavior.
-  preview.append(previewNav, headingRow, $('uploadPanel'), draftState, previewTabs, postView, detailView);
+  preview.append(previewNav, headingRow, $('uploadPanel'), uploadIntro, draftState, previewTabs, postView, detailView);
   const post = make('article', 'workspacePost');
   post.setAttribute('aria-label', 'Darstellung des Beitrags');
   post.dataset.portal = portalName.toLowerCase();
@@ -243,10 +245,12 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   main.append(toolbar, statusRow, $('magicReplaceNotice'), files, source, preview);
 
   function show(key) {
+    const firstUpload = key === 'upload';
+    if (firstUpload) key = 'preview';
     if (key === 'text') key = 'source';
     if (key === 'folder') { key = 'files'; search.open = true; }
     if (!Object.hasOwn(panels, key)) return;
-    if (key === 'preview' && !selectedFile) return;
+    if (key === 'preview' && !selectedFile && !firstUpload) return;
     const changed = active !== key;
     active = key;
     doc.body.classList.toggle('post-preview-open', key === 'preview');
@@ -260,7 +264,17 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     toolbar.hidden = key === 'preview';
     statusRow.hidden = key === 'preview';
     empty.hidden = !$('result').hidden;
-    if (key === 'preview') { refreshPreview(); previewTab('post'); previewBack.focus(); }
+    if (key === 'preview') {
+      const uploadOnly = !selectedFile;
+      uploadIntro.hidden = !uploadOnly;
+      draftState.hidden = uploadOnly;
+      previewTabs.hidden = uploadOnly;
+      postView.hidden = uploadOnly;
+      detailView.hidden = true;
+      previewHeading.textContent = uploadOnly ? 'Datei für ' + portalName + ' vorbereiten' : 'Vorschau für ' + portalName;
+      if (!uploadOnly) { refreshPreview(); previewTab('post'); }
+      previewBack.focus();
+    }
     if (changed && key === 'files') onGallery();
     if (changed) options.onView?.(key);
   }
@@ -268,6 +282,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   return {
     show,
     galleryVisible: () => active === 'files',
+    openEmptyPreview() { if (!selectedFile) show('upload'); },
     refreshPreview(feedback) { if (active === 'preview') refreshPreview(feedback); },
     textAvailable(value) { empty.hidden = value; if (!value) clearPreview(); else if (active === 'preview') refreshPreview(); },
     selection(file) {
