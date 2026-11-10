@@ -38,17 +38,39 @@ function setup(previewData={}){
  let loads=0;const workspace=ctx.create(doc,'Instagram',()=>loads++,{getPreview:()=>previewData});
  return {workspace,main,form,video,pickerBody,get:id=>byId.get(id),loads:()=>loads};
 }
-test('two-section editor retains original gallery, upload controls and form nodes',()=>{
+test('gallery keeps refresh while existing upload control moves to the opened preview',()=>{
  const p=setup();assert.equal(p.get('workspaceFiles').hidden,false);assert.equal(p.get('workspaceSource').hidden,true);
  assert.equal(p.pickerBody.parentElement,p.get('workspaceFiles'));assert.equal(p.get('filePicker').hidden,true);
  assert.deepEqual(p.get('optimizerToolbar').children.map(n=>n.textContent),['Datei','Inhalt und Ziel']);
- assert.equal(p.get('deviceBrowse').parentElement,p.get('workspaceGalleryActions'));
+ assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
+ assert.equal(p.get('uploadPanel').parentElement,p.get('workspacePreview'));
  assert.equal(p.get('refreshFiles').parentElement,p.get('workspaceGalleryActions'));
- assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['deviceBrowse','refreshFiles'],'no separate gallery preview button');
+ assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles'],'gallery shows no upload button');
+ assert.equal(p.get('workspacePreview').hidden,true,'upload control is hidden until a gallery file is opened');
  assert.equal(p.get('magicActionsSource').hidden,true);assert.equal(p.get('magicActionsText').hidden,false);
  assert.equal(p.get('assetPanel').hidden,true);assert.equal(p.get('resultFileActions').hidden,true);
  assert.equal(p.get('exampleFiles').hidden,true);assert.equal(p.get('workspaceViewFile'),undefined);
 });
+test('Add File remains reachable inside the preview and its details tab, never in the gallery',()=>{
+ const p=setup();
+ assert.equal(p.get('workspaceGalleryActions').children.length,1);
+ p.workspace.selection({id:'own',name:'SMA Testvideo.mp4',media_kind:'video'});
+ p.workspace.show('preview');
+ assert.equal(p.get('workspaceFiles').hidden,true);
+ assert.equal(p.get('workspacePreview').hidden,false);
+ assert.equal(p.get('deviceBrowse').textContent,'Datei hinzufügen');
+ assert.equal(p.get('workspacePreviewActions').parentElement,p.get('workspacePreviewHeader'));
+ assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
+ assert.equal(p.get('uploadPanel').parentElement,p.get('workspacePreview'));
+ p.get('workspaceDetailTab').click();
+ assert.equal(p.get('workspaceDetailView').hidden,false);
+ assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
+ p.get('workspacePreviewBack').click();
+ assert.equal(p.get('workspaceFiles').hidden,false);
+ assert.equal(p.get('workspacePreview').hidden,true);
+ assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles']);
+});
+
 test('combined content and text preserve edits, disclosure state and original language control',()=>{
  const p=setup();p.workspace.selection({id:'own',name:'Mein Video',media_kind:'video'});
  p.get('workspaceTab-source').click();assert.equal(p.get('sourcePanel').open,false);
