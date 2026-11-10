@@ -370,7 +370,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
       previewEdits.hidden = !file;
       if (active === 'preview') {
-        if (file) refreshPreview();
+        // A file added from the empty preview must reveal its complete
+        // post/details tabs and publication step without a page reload.
+        if (file) show('preview');
         else show('files');
       }
     },
