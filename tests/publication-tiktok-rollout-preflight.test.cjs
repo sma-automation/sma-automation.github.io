@@ -34,7 +34,8 @@ try{
   count++;
  }
  assert.equal(count,4);
- installed.active=true; // Stored n8n copy is already published; this is just a fixture.
+ installed.id='JaidX5YeKl6ZTqjQ';
+ installed.active=true; // Synthetic stand-in for an existing published workflow.
 }catch(error){
  rmSync(output,{recursive:true,force:true});
  throw error;
@@ -66,6 +67,21 @@ test('synthetic installed provider-and-cover copy matches the pre-AIGC 47-node b
  assert.match(r.stdout,/INSTALLED_BASELINE_MATCH/);
  assert.match(r.stdout,/AIGC_CANDIDATE_SOURCE_READY/);
  assert.match(r.stdout,/NO_DEPLOYMENT/);
+});
+
+test('matching code from a copied, renamed or inactive workflow never proves live readiness',()=>{
+ const copied=JSON.parse(JSON.stringify(installed));
+ copied.id='ANOTHER_WORKFLOW_ID';
+ assert.match(exportAndCheck(copied,'copied-workflow').stderr,/INSTALLED_WORKFLOW_ID_UNVERIFIED/);
+ const missing=JSON.parse(JSON.stringify(installed));
+ delete missing.id;
+ assert.match(exportAndCheck(missing,'missing-id').stderr,/INSTALLED_WORKFLOW_ID_UNVERIFIED/);
+ const renamed=JSON.parse(JSON.stringify(installed));
+ renamed.name='Unbekannte Arbeitskopie';
+ assert.match(exportAndCheck(renamed,'renamed-workflow').stderr,/INSTALLED_WORKFLOW_NAME_CHANGED/);
+ const inactive=JSON.parse(JSON.stringify(installed));
+ inactive.active=false;
+ assert.match(exportAndCheck(inactive,'inactive-workflow').stderr,/INSTALLED_WORKFLOW_INACTIVE/);
 });
 
 test('gate refuses existing AIGC modifications instead of silently applying them again',()=>{
