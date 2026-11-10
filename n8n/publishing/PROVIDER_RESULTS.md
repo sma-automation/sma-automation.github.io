@@ -16,15 +16,12 @@ Keine vorhandenen HTTP-Nodes, Kanten, Berechtigungen oder Freigaben werden geän
 Das aktualisierte JSON ist **keine** neue n8n-Bereitstellung und soll nicht
 ungeprüft in den veröffentlichten Workflow importiert werden.
 
-Reproduzierbare Quellerzeugung mit aktuellem Cover-Ziel (erzeugte Dateien vor
+Reproduzierbare Quellerzeugung mit aktuellem Cover-Ziel **nur in einer isolierten
+Arbeitskopie** (der Generator schreibt API- und Worker-Exporte; beide vor
 einem Import gegen den installierten Export vergleichen):
 
 ```sh
-python3 n8n/publishing/build-publication-orders.py \\
-  --worker-id zLlhr1I1vKm2AiiU \\
-  --account-id LR2Qng41OIYuVHAR \\
-  --comparison-delivery-id ZFO9NSh5nHSn3ues \\
-  --provider-dispatch-id JaidX5YeKl6ZTqjQ
+python3 n8n/publishing/build-publication-orders.py --worker-id zLlhr1I1vKm2AiiU --account-id LR2Qng41OIYuVHAR --comparison-delivery-id ZFO9NSh5nHSn3ues --provider-dispatch-id JaidX5YeKl6ZTqjQ
 ```
 
 Die nachfolgenden Abschnitte beschreiben weiterhin den historischen
