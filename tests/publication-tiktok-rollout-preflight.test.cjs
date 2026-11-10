@@ -36,6 +36,8 @@ try{
  assert.equal(count,4);
  installed.id='JaidX5YeKl6ZTqjQ';
  installed.active=true; // Synthetic stand-in for an existing published workflow.
+ installed.versionId='synthetic-version-a';
+ installed.activeVersionId='synthetic-version-a';
 }catch(error){
  rmSync(output,{recursive:true,force:true});
  throw error;
@@ -82,6 +84,24 @@ test('matching code from a copied, renamed or inactive workflow never proves liv
  const inactive=JSON.parse(JSON.stringify(installed));
  inactive.active=false;
  assert.match(exportAndCheck(inactive,'inactive-workflow').stderr,/INSTALLED_WORKFLOW_INACTIVE/);
+});
+
+test('an active badge with unverified or divergent published version cannot pass the rollout gate',()=>{
+ const missing=JSON.parse(JSON.stringify(installed));
+ delete missing.activeVersionId;
+ assert.match(exportAndCheck(missing,'no-published-version').stderr,/PUBLISHED_VERSION_UNVERIFIED/);
+ const unknown=JSON.parse(JSON.stringify(installed));
+ unknown.activeVersionId=null;
+ assert.match(exportAndCheck(unknown,'null-published-version').stderr,/PUBLISHED_VERSION_UNVERIFIED/);
+ const staleDraft=JSON.parse(JSON.stringify(installed));
+ staleDraft.versionId='synthetic-unpublished-draft-b';
+ assert.match(exportAndCheck(staleDraft,'draft-ahead-of-published').stderr,/SAVED_DRAFT_DIFFERS_FROM_PUBLISHED/);
+ const blank=JSON.parse(JSON.stringify(installed));
+ blank.versionId='';
+ assert.match(exportAndCheck(blank,'blank-draft-version').stderr,/PUBLISHED_VERSION_UNVERIFIED/);
+ const equal=exportAndCheck(installed,'same-version-ids');
+ assert.equal(equal.status,0,equal.stderr);
+ assert.match(equal.stdout,/INSTALLED_BASELINE_MATCH/);
 });
 
 test('gate refuses existing AIGC modifications instead of silently applying them again',()=>{
