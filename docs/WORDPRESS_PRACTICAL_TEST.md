@@ -2,6 +2,56 @@
 
 Historischer Praxistest vom **4. November 2026**, übertragen auf den aktuellen SMA-Code am **10. November 2026**. Ursprüngliche Testbasis: `website-v1` nach PR #68 (`1a10658293db7c33614915d0adbdcb7ac8013442`). Der GitHub-Quellabgleich bestätigte: `wordpress/sma-bridge/{sma-bridge.php,protocol.php,store.php}`, der SMA-Signaturadapter und der Edge-Einstieg `sma-wordpress-sync` sind gegenüber dem dokumentierten nativen Test **bytegenau unverändert**. Die archivierten 29 WordPress-/MariaDB-Prüfungen und 359 damaligen Node-Tests sind historische Ergebnisse, **kein heute erneut ausgeführter nativer Test**. Kundenoberfläche, Schrift, produktives Plugin und ZIP wurden nicht verändert.
 
+## Externer WordPress-Smoke-Test ohne Hostingbuchung – 10. November 2026
+
+Eine isolierte, automatisch ablaufende Gratis-Sandbox bei WPSandbox wurde
+ausschließlich für synthetische Prüfdaten angelegt. Die für die zweite
+Testinstanz öffentliche, zeitlich begrenzte HTTPS-Adresse lautete
+`https://eu2.wpsandbox.org/site/s-qa73zdpavg6dm/`. Der Anbieter
+stellte WordPress **6.8.1** und PHP **8.4** bereit. Eine Anmeldung, neue
+Zahlungsdaten und eine Hostingbuchung waren nicht erforderlich.
+
+Das unveränderte SMA-Plugin-ZIP von
+`https://sma-automation.com/app/downloads/sma-wordpress-bridge.zip`
+wurde bereits während des Erstellens der zweiten Sandbox installiert.
+Die WordPress-Pluginliste zeigte den **SMA Webseiten-Anschluss
+(Testkandidat)** und den Status **Active**. Eine Browsermeldung meldete
+widersprüchlich eine PHP-Anforderung; der tatsächliche SMA-Pluginheader
+in `wordpress/sma-bridge/sma-bridge.php` verlangt **PHP >= 8.1**
+und **WordPress >= 6.8**, also nicht mehr als die verwendeten Versionen.
+Die Browserwarnung wurde daher *nicht* als nachgewiesener
+Inkompatibilitätsfehler gewertet.
+
+**Unabhängig bestätigter externer HTTP-Nachweis:** Ein nicht
+authentifizierter Abruf von `/wp-json/` der zweiten Sandbox lieferte
+`sma-bridge/v1` unter `namespaces` und den Pfad
+`/sma-bridge/v1/command` mit ausschließlich `POST` in den
+registrierten Methoden. Ein `GET` auf diesen nur für POST registrierten
+Pfad ergab `404 rest_no_route`. Diese Beobachtungen belegen die
+aktivierte WordPress-REST-Registrierung, nicht die vollständige
+Befehlsautorisierung.
+
+**Nicht abgeschlossen:** Das Browserwerkzeug konnte keinen kontrollierten
+unsignierten `POST` senden; der erwartete `403 sma_not_authorized`
+ist deshalb **nicht extern nachgewiesen**. Ebenso sind weder das
+SMA-seitige Benutzerlogin, die einmalige WordPress-Administratorfreigabe,
+Ticket-/Schlüsselübertragung, ein signiertes `inspect`, ein
+`sync_draft`-Auftrag noch die tatsächliche externe Produktentwurfsseite
+getestet. Der aktuelle SMA-Kundenbestand enthält **keine** verifizierte
+WordPress-Verbindung und **keinen** WordPress-Sync-Auftrag. Alle
+bestehenden Kunden- und WordPress-Seiten blieben unverändert.
+
+Diese Gratis-Testseite lebt nur wenige Stunden und ist **kein**
+dauerhaftes Kundenhosting. Sie wurde nicht als Ziel in SMA gespeichert.
+Die echte Ende-zu-Ende-Abnahme benötigt eine vom Testkunden vorbereitete
+Zieladresse und eine ausdrückliche WordPress-Administratorfreigabe.
+Subdirectory-URLs und Zugangscodes einer Testanbieter-Website sind vor
+einem echten `sma-wordpress-connect`-Aufruf gesondert mit der
+produktiv installierten Zielprüfung abzugleichen. Keinen öffentlichen
+Schreibzugriff, Secret oder Testfreigabe automatisch erzeugen.
+
+---
+
 ## Ergebnis und verbleibende Grenze
 
 Ein kostenloser lokaler Integrationstest läuft jetzt mit **echtem WordPress 7.1.4, PHP 8.3.6 und MariaDB 10.11.14/InnoDB**. Er verwendet den unveränderten SMA-Baustein, echte WordPress-REST-Registrierung, WordPress-Seiten und zwei unabhängige PHP-/Datenbankverbindungen. **29 Prüfungen und der konkurrierende Aufruf bestanden.** Die vorhandenen **359 Node-Tests** bestehen ebenfalls.
