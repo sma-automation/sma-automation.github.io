@@ -311,6 +311,7 @@ body.wide #workspaceDraftState{display:flex;align-items:center;flex-wrap:wrap;ga
 :is(#workspaceDraftNotice,#portalStatus,#status,#saveStatus){overflow-wrap:anywhere}
 body.wide #workspaceDraftNotice{font-size:13px;color:#52617a;margin:4px 0}
 body.wide #workspaceDraftAction{margin:4px 0}
+body.wide #workspaceManualDraft{margin:4px 0;padding:8px 12px;min-height:40px;border:1px solid #ced6e7;border-radius:9px;background:#edf1f8;color:#3157cd;font-size:13px;font-weight:500;line-height:1.4}
 body.wide #workspaceEditPost:not([hidden]) { display: block; margin-top: 12px; }
 body.wide #workspacePostProfile { padding: 8px 12px; }
 body.wide #workspacePostAvatar { width: 28px; height: 28px; font-size: 18px; }

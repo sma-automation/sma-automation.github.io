@@ -283,6 +283,47 @@ test('new video waits for explicit Magic click, then recognizes, generates and a
  assert.equal(JSON.parse(requests[1].options.body).media_kind,'video');assert.equal(p.calls.find(c=>c.p_action==='assign').p_input.asset_revision,supportedVideo.revision);
  assert.match(p.get('magicSummary').textContent,/keine Tonspur/);assert.equal(p.get('result').hidden,false);
 });
+test('new YouTube video offers explicit Magic from preview, and one click saves only a draft',async()=>{
+ const ready={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ const p=await boot({portal:'youtube',asset:ready.id,wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ready]}:a.p_action==='assign'?{...result,assignment_revision:1}:{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis}),fetchResponse:async()=>result});
+ const initial=p.workspaceOptions.getPreview().draftStep;
+ assert.equal(initial.target,'magic_text');
+ assert.match(initial.label,/Magic Effect.*Beitragstext erstellen/);
+ assert.equal(p.calls.some(c=>c.url),false,'opening a preview must not start a paid recognition or caption request');
+ await p.workspaceOptions.onDraftAction('magic_text');
+ const captions=p.calls.filter(c=>c.url?.endsWith('/sma-publication-preview-v1'));
+ assert.equal(captions.length,1);
+ assert.equal(JSON.parse(captions[0].options.body).source_text,videoAnalysis.result.source_text);
+ assert.deepEqual(JSON.parse(captions[0].options.body).platforms,['youtube']);
+ assert.equal(p.calls.filter(c=>c.p_action==='assign').length,1);
+ assert.equal(p.get('result').hidden,false);
+ assert.equal(p.get('saveStatus').textContent.includes('zugeordnet'),true);
+ assert.equal(p.calls.some(c=>c.name==='sma_publication_order_v1'),false);
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'cached recognition is reused');
+});
+
+test('preview Magic keeps user text until explicit replacement consent and offers manual fallback',async()=>{
+ const ready={...supportedVideo,width_px:720,height_px:1280};
+ const p=await boot({portal:'youtube',asset:ready.id,wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ready]}:{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
+ assert.equal(p.workspaceOptions.getPreview().draftStep.target,'magic_text');
+ p.get('source_text').value='Meine eigenen noch nicht gespeicherten Angaben zum Video.';
+ p.get('previewForm').events.input();
+ await p.workspaceOptions.onDraftAction('magic_text');
+ assert.equal(p.get('magicReplaceNotice').hidden,false);
+ assert.equal(p.get('source_text').value,'Meine eigenen noch nicht gespeicherten Angaben zum Video.');
+ assert.equal(p.calls.some(c=>c.url),false);
+ const missing=await boot({portal:'youtube',asset:ownFile.id,wide:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ownFile]}:{ok:true,status:'empty'}});
+ assert.equal(missing.workspaceOptions.getPreview().draftStep.target,'source_text');
+ await missing.workspaceOptions.onDraftAction('source_text');
+ assert.equal(missing.get('sourcePanel').open,true);
+ assert.equal(missing.calls.some(c=>c.url),false);
+});
+
 test('cached video recognition survives reopen without provider call and respects existing customer edits',async()=>{
  const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:videoFiles,formTracksDom:true,magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
  assert.equal(p.get('source_text').value,videoAnalysis.result.source_text);assert.equal(p.calls.some(c=>c.url),false);

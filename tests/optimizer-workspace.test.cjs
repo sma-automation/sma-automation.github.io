@@ -21,12 +21,12 @@ function setup(previewData={}){
  const el=(tag,id)=>{const node=new Element(tag);if(id)node.id=id;return node};
  const main=el('main'),body=el('body'),pickerBody=el('div'),searchLabel=el('label');
  body.append(main);const header=el('header');header.append(el('a','back'));main.append(header);
- const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','catalogLookup','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles','sourceSummary','generate','loadLatest','language','resultHeading','save'];
+ const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','catalogLookup','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles','sourceSummary','source_text','generate','loadLatest','language','resultHeading','save'];
  for(const id of ids)main.append(el('div',id));
  byId.get('filePicker').append(pickerBody);pickerBody.append(searchLabel,byId.get('fileSearch'),byId.get('fileSwitchNotice'));
  for(const id of ['pickerRefresh','chooseGeneralTemplate']){const parent=el('div');parent.append(byId.get(id));pickerBody.append(parent)}
  byId.get('assetPanel').append(byId.get('deviceBrowse'),byId.get('browseFiles'),byId.get('refreshFiles'),byId.get('magicPanel'));
- const languageField=el('div');languageField.append(byId.get('language'));byId.get('sourcePanel').append(languageField);
+ const languageField=el('div');languageField.append(byId.get('language'));byId.get('sourcePanel').append(languageField,byId.get('source_text'));
  const form=el('form');form.value='Noch nicht gespeicherte Kundeneingabe';byId.get('sourcePanel').append(form);
  for(const name of ['checks','note','notice']){const node=el('div');node.className=name;node.textContent='Pending verification';byId.get('result').append(node);}
  const actions=el('div');actions.append(byId.get('save'));byId.get('result').append(actions);
@@ -96,6 +96,24 @@ test('a customer with no files can reach the existing Add File control through a
  assert.equal(p.get('workspaceUploadIntro').hidden,true);
  assert.equal(p.get('workspacePreviewTabs').hidden,false);
  assert.equal(p.get('workspacePreviewHeading').textContent,'Vorschau für Instagram');
+});
+
+test('preview auto-text offer keeps a manual, non-network editor alternative',()=>{
+ const data={draftStep:{target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',note:'Noch kein Portalbeitrag.'}};
+ const p=setup(data);
+ p.workspace.selection({id:'own',name:'Video.mp4',media_kind:'video'});
+ p.workspace.show('preview');
+ assert.equal(p.get('workspaceDraftAction').textContent,data.draftStep.label);
+ assert.equal(p.get('workspaceDraftAction').dataset.target,'magic_text');
+ assert.equal(p.get('workspaceManualDraft').hidden,false);
+ p.get('workspaceManualDraft').click();
+ assert.equal(p.get('workspaceSource').hidden,false);
+ assert.equal(p.get('sourcePanel').open,true);
+ assert.equal(p.get('source_text').focused,true);
+ p.workspace.show('preview');
+ data.draftStep={target:'source_text',label:'Zum Texteditor',note:'Manuelle Beschreibung nötig.'};
+ p.workspace.refreshPreview();
+ assert.equal(p.get('workspaceManualDraft').hidden,true,'manual link is not duplicated for an unsupported file');
 });
 
 test('combined content and text preserve edits, disclosure state and original language control',()=>{

@@ -49,8 +49,13 @@ function frame([portal, width, height]) {
       uploadFits:box('deviceBrowse').width>0&&box('deviceBrowse').right<=innerWidth,
       beside:body.left>=media.right-1, page:viewport.scrollHeight
     };
+    previewData.draftStep={target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',note:'Die Dateivorschau hat noch keinen Beitrag.'};
+    controller.refreshPreview();
+    const magicBox=box('workspaceDraftAction'),manualBox=box('workspaceManualDraft');
+    result.magicOfferFits=magicBox.width>0&&magicBox.right<=innerWidth&&manualBox.width>0&&manualBox.right<=innerWidth&&viewport.scrollWidth<=innerWidth;
     previewData.draftStep={target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
     controller.refreshPreview();
+    result.manualHiddenAfterSave=$('workspaceManualDraft').hidden;
     const actionBox=box('workspaceDraftAction');
     result.draftActionFits=actionBox.width>0&&actionBox.right<=innerWidth&&viewport.scrollWidth<=innerWidth&&box('preparePublicationOrder').width===0;
     previewData.draftStep={target:'tiktok-hashtags',label:'Hashtags korrigieren',note:'Der Hashtag #'+ 'W'.repeat(50)+' ist doppelt. Verwende ihn nur einmal.'};
@@ -106,6 +111,7 @@ try {
     assert.ok(report, portal+' '+width);
     console.log(report);
     assert.ok(report.correctionFits && report.draftActionFits && report.fits && report.action < height/2 && report.stage <= height*0.51);
+    assert.ok(report.magicOfferFits&&report.manualHiddenAfterSave,'One-click Magic and manual fallback fit '+portal+' '+width);
     assert.ok(report.uploadInPreview&&report.uploadProgressInPreview&&report.uploadFits,'Preview upload action must fit '+portal+' at '+width);
     assert.equal(report.beside,width>=660);
     assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
