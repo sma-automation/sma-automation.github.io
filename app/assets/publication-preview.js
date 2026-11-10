@@ -231,8 +231,8 @@ function previewDraftStep(){
   // directly in the expanded preview. Manual text entry stays available.
   // This only displays a button; recognition starts on an explicit click.
   if(!missingVideoMetadata(selectedAsset).length&&!magicHint(selectedAsset)){
-   return {target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',
-    note:'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
+   return {target:'magic_text',label:loadingVideoDraft?'✨ Magic Effect vormerken':'✨ Magic Effect · Beitragstext erstellen',
+    note:loadingVideoDraft?'SMA prüft den gespeicherten Beitrag. Du kannst Magic Effect bereits vormerken; ein neuer Text startet nur bei leerem Entwurf.':'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
   }
   return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
  }
@@ -558,7 +558,7 @@ async function requestFileSelection(id,discard=false){
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
  // A video is viewable as soon as the authenticated catalogue has selected it.
  // Its Magic button can be clicked once while the bound draft is still loading.
- if(workspace&&file?.media_kind==='video')workspace.show('preview');
+ if(workspace&&file?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
  await loadLatest();
  // The card click itself opens the preview after its matching saved draft is loaded.
  // Keep the existing unsaved-edits confirmation and never navigate a stale/foreign file.
@@ -893,6 +893,7 @@ async function loadLatest(){
   loadingVideoDraft=false;
   lock(false);
   syncMedia();
+  workspace?.refreshPreview();
   if(file?.media_kind==='video')void loadMagicEffect(true);else await loadMagicEffect(true);
   const queued=queuedMagicContext;
   queuedMagicContext=null;
@@ -1632,7 +1633,7 @@ try{
   await loadHistoryPreview();
  }else{
   let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}
-  if(ready&&workspace&&selectedAsset?.media_kind==='video')workspace.show('preview');
+  if(ready&&workspace&&selectedAsset?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
   if(ready)await loadLatest();
  }
 }catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
