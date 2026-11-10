@@ -4,6 +4,17 @@ const HOST = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 const ORIGINS = new Set(['https://sma-automation.com', 'https://www.sma-automation.com']);
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 
+// A shop price is exact cents, never a silently rounded fractional-cent
+// amount. Supabase NUMERIC may arrive as either a decimal string or a number.
+function exactCents(value: unknown): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const decimal = String(value);
+  if (!/^[0-9]+(?:\.[0-9]{1,2})?$/.test(decimal)) return null;
+  const [whole, fraction = ''] = decimal.split('.');
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
+}
+
 export function createHandler(liveEnabled: () => boolean) {
   return async (req: Request, ctx: any): Promise<Response> => {
     const origin = req.headers.get('origin') || '';
@@ -80,10 +91,9 @@ export function createHandler(liveEnabled: () => boolean) {
         if (url.protocol !== 'https:' || url.hostname !== domain || url.port || url.username || url.password || url.search || url.hash || !match) return reply(409, 'Ungültige Shopify-Kaufadresse oder Variante.');
         if (variants.has(match[1])) return reply(409, 'Mehrere Produkte verweisen auf dieselbe Shopify-Variante.');
         variants.add(match[1]);
-        const price = p.preis === null ? NaN : Number(p.preis);
-        const cents = Math.round(price * 100);
+        const cents = exactCents(p.preis);
         const code = String(p.waehrung || '').toUpperCase();
-        if (!Number.isFinite(price) || price < 0 || !Number.isSafeInteger(cents) || !/^[A-Z]{3}$/.test(code) || (currency && currency !== code)) return reply(409, 'Preis oder Währung prüfen.');
+        if (cents === null || !/^[A-Z]{3}$/.test(code) || (currency && currency !== code)) return reply(409, 'Preis oder Währung prüfen.');
         currency = code;
         totalCents += cents * count;
         if (!Number.isSafeInteger(totalCents)) return reply(409, 'Warenkorbwert zu groß.');
