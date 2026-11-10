@@ -144,6 +144,16 @@ def verify_installed(installed, original, patcher):
         raise GateError("INSTALLED_WORKFLOW_NAME_CHANGED")
     if installed.get("active") is not True:
         raise GateError("INSTALLED_WORKFLOW_INACTIVE")
+    # Since n8n 2.0, a Published workflow can have a newer saved draft.
+    # An active badge alone DOES NOT prove that exported nodes are the
+    # version executing in production. Both version IDs are mandatory;
+    # reject ambiguous metadata rather than approving the wrong graph.
+    saved_version = installed.get("versionId")
+    published_version = installed.get("activeVersionId")
+    if not isinstance(saved_version, str) or not isinstance(published_version, str) or not saved_version or not published_version:
+        raise GateError("PUBLISHED_VERSION_UNVERIFIED")
+    if saved_version != published_version:
+        raise GateError("SAVED_DRAFT_DIFFERS_FROM_PUBLISHED")
     # Compare the existing installed copy with what the original, pre-AIGC
     # 47-node copy must look like. Only known n8n export defaults are ignored.
     current_nodes = verify_nodes(installed)
