@@ -106,6 +106,7 @@ test('an active badge with unverified or divergent published version cannot pass
 
 test('gate refuses existing AIGC modifications instead of silently applying them again',()=>{
  const changed=JSON.parse(JSON.stringify(target));changed.id='JaidX5YeKl6ZTqjQ';changed.active=true;
+ changed.versionId=installed.versionId;changed.activeVersionId=installed.activeVersionId;
  const r=exportAndCheck(changed,'already-modified');
  assert.notEqual(r.status,0);
  assert.match(r.stderr,/AIGC_ROLLOUT_BLOCKED: INSTALLED_NODE_DRIFT/);
