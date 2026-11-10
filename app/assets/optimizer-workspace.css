@@ -293,6 +293,12 @@ body.wide #workspacePreviewHeader {
   gap: 6px 14px;
 }
 body.wide #workspacePreviewHeader > div { min-width: 0; }
+/* The original device-upload action belongs to the opened file preview, not
+   the gallery. Keep it easy to reach without lengthening thumbnail cards. */
+body.wide #workspacePreviewActions { display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto;flex-wrap:wrap; }
+body.wide #workspacePreviewActions #deviceBrowse {min-height:40px;padding:8px 14px;margin:0;font-size:14px;font-weight:500;line-height:1.4;border-radius:9px;background:#4065d8;color:#fff;white-space:normal;}
+body.wide #workspacePreviewActions #deviceBrowse:disabled {opacity:.6;cursor:not-allowed;}
+body.wide #workspacePreview > #uploadPanel {margin:8px 0 14px;max-width:100%;}
 body.wide #workspacePreviewHeader #preparePublicationOrder { margin: 0; padding: 8px 14px; min-height: 40px; }
 body.wide #workspacePreviewHeader #workspacePreviewName { margin: 2px 0 0; }
 body.wide #workspaceDraftState{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px}
