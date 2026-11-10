@@ -112,6 +112,6 @@ test('website loading errors are shown beside save and disabled buttons do not f
  assert.match(page,/REQUEST_TIMEOUT:'Die SMA-Verbindung antwortet nicht/);
  assert.match(css,/#smaWebsitePreparation button:disabled\{cursor:not-allowed\}/);
  assert.match(css,/#smaWebsitePreparation\[aria-busy="true"\] button:disabled\{cursor:progress\}/);
- assert.match(dashboard,/website-domain\.mjs\?v=17/);
+ assert.match(dashboard,/website-domain\.mjs\?v=18/);
  assert.match(dashboard,/website-domain\.css\?v=5/);
 });
