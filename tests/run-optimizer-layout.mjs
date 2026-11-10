@@ -85,6 +85,8 @@ function frame([portal, width, height]) {
       });
       controller.show('source');
       const variant=box('workspaceVariantPanel');
+      result.variantBeforeSaved=variant.top<box('result').top;
+      controller.revealVariant();
       result.variantFits=variant.width>0&&variant.left>=0&&variant.right<=innerWidth&&
         ['workspaceVariantAdopt','workspaceVariantNext','workspaceVariantDiscard'].every(id=>{
           const b=box(id);return b.width>0&&b.left>=0&&b.right<=innerWidth;
@@ -128,6 +130,7 @@ try {
     assert.ok(report.magicOfferFits&&report.manualHiddenAfterSave,'One-click Magic and manual fallback fit '+portal+' '+width);
     assert.ok(report.uploadInPreview&&report.uploadProgressInPreview&&report.uploadFits,'Preview upload action must fit '+portal+' at '+width);
     assert.ok(report.variantFits,'Variant comparison and controls must fit '+portal+' at '+width);
+    assert.ok(report.variantBeforeSaved,'Candidate must appear above the saved editor '+portal+' at '+width);
     assert.equal(report.beside,width>=660);
     assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
     assert.equal(report.selectedProduct,'fixture-1');
