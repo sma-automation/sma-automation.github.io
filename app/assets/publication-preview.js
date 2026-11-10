@@ -913,7 +913,7 @@ async function loadMagicEffect(autoStart=false){
   // status-poll loop would keep the Magic controls locked. The explicit
   // "Erkennungsstand laden" action remains available to the customer.
   if(autoStart&&file.media_kind==='image'&&r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))await recognizePhoto();
- }catch(e){if(photoStillSelected(file))$('magicStatus').textContent=e.message;}
+ }catch(e){if(ticket===magicLoadTicket&&!busy&&photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto({withinAutomatic=false}={}){
  if(signedOut||(busy&&!withinAutomatic)||!selectedAsset||!['image','video'].includes(selectedAsset.media_kind)||magicState?.status==='completed')return;
