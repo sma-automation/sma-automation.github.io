@@ -16,6 +16,16 @@ test('init request preserves exact stored texts and choices and requires a journ
  assert.equal(y.body.snippet.title,i.draft.title);assert.equal(y.body.snippet.description,i.draft.caption);assert.equal(t.body.post_info.title,tk.draft.caption);
  for(const bad of [{...i,lease_id:null},{...i,ok:false},{...i,sequence:0},{...i,platform:'facebook'},{...i,choices:{visibility:'private'}}])assert.throws(()=>providerRequest(bad,'synthetic-token',now));
 });
+test('provider metadata preserves the exact customer-shop invitation for both portals',()=>{
+ const caption='Farbige Linien im SMA-Testvideo.\\n\\nSchau doch mal in meinem Shop vorbei!\\n\\n#SMA #Video\\n\\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde';
+ for(const value of [i,tk]){
+  const draft={...value.draft,caption},request=providerRequest({...value,draft},'synthetic-token',now);
+  assert.equal(value.platform==='youtube'?request.body.snippet.description:request.body.post_info.title,caption);
+  assert.equal(request.body_type,'json');
+  assert.equal(request.headers.Authorization,'Bearer synthetic-token');
+ }
+});
+
 test('YouTube recovery probes empty then sends only the confirmed remainder',()=>{
  const p=providerRequest({...i,operation:'probe'},'synthetic-token',now);assert.equal(p.headers['Content-Range'],'bytes */1000');assert.equal(p.headers['Content-Length'],'0');assert.equal(p.body_type,'none');
  const r=providerRequest({...i,operation:'upload',received_bytes:600},'synthetic-token',now);assert.equal(r.offset,600);assert.equal(r.headers['Content-Length'],'400');assert.equal(r.headers['Content-Range'],'bytes 600-999/1000');
