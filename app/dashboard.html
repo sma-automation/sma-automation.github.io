@@ -9,7 +9,7 @@
 import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=2';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
 import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
-import {mountWebsitePreparation} from './assets/website-domain.mjs?v=15';
+import {mountWebsitePreparation} from './assets/website-domain.mjs?v=16';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
@@ -164,7 +164,7 @@ frame.addEventListener('load',()=>{
         const response=await supabase.rpc('sma_website_setup_v1',{p_action:action,p_input:input});
         if(response.error)throw new Error('UNAVAILABLE');return response.data;
       },
-      stylesheetUrl:new URL('./assets/website-domain.css?v=4',location.href).href,
+      stylesheetUrl:new URL('./assets/website-domain.css?v=5',location.href).href,
       wordpressRequest:async(action,input={})=>{
         const {data,error}=await supabase.auth.getSession();
         if(error||!data?.session||data.session.user.id!==ownerId)throw Object.assign(new Error('AUTH_REQUIRED'),{code:'AUTH_REQUIRED'});

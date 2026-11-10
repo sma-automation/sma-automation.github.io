@@ -61,3 +61,57 @@ test('a second save is blocked while the first request is in flight',async()=>{
  await client.load();const pending=client.save(draft);await called;
  await assert.rejects(()=>client.save(draft),/BUSY/);release();await pending;
 });
+
+test('a stalled owner session is bounded and a fresh load can succeed',async()=>{
+ const m=await ready;let attempts=0;
+ const client=m.createWebsiteDraftClient({
+  getOwnerId:async()=>++attempts===1?new Promise(()=>{}):'owner',
+  request:async()=>empty(),uuid:()=>id,timeoutMs:10
+ });
+ await assert.rejects(()=>client.load(),/REQUEST_TIMEOUT/);
+ assert.equal((await client.load()).revision,0);
+ assert.equal(attempts,3,'Owner is checked before and after the response');
+});
+
+test('a stalled preparation GET releases the client for a retry',async()=>{
+ const m=await ready;let requests=0;
+ const client=m.createWebsiteDraftClient({
+  getOwnerId:async()=>'owner',uuid:()=>id,timeoutMs:10,
+  request:async()=>++requests===1?new Promise(()=>{}):empty()
+ });
+ await assert.rejects(()=>client.load(),/REQUEST_TIMEOUT/);
+ assert.equal((await client.load()).revision,0);
+ assert.equal(requests,2);
+});
+
+test('an uncertain timed-out save retries the same idempotent UUID and revision',async()=>{
+ const m=await ready,requests=[];let nextId=0;
+ const client=m.createWebsiteDraftClient({
+  getOwnerId:async()=>'owner',timeoutMs:10,
+  uuid:()=>id.slice(0,-1)+String(++nextId),
+  request:async(action,input)=>{
+   if(action==='get')return empty();
+   requests.push({...input});
+   if(requests.length===1)return new Promise(()=>{});
+   return saved(draft);
+  }
+ });
+ await client.load();
+ await assert.rejects(()=>client.save(draft),/REQUEST_TIMEOUT/);
+ assert.equal((await client.save(draft)).revision,1);
+ assert.deepEqual(requests[0],requests[1]);
+ assert.equal(nextId,1,'Never create a different save intent after a timeout');
+});
+
+test('website loading errors are shown beside save and disabled buttons do not fake a pending request',()=>{
+ const fs=require('node:fs');
+ const page=fs.readFileSync('app/assets/website-domain.mjs','utf8');
+ const css=fs.readFileSync('app/assets/website-domain.css','utf8');
+ const dashboard=fs.readFileSync('app/dashboard.html','utf8');
+ assert.match(page,/\$\('form'\)\.after\(status\)/);
+ assert.match(page,/REQUEST_TIMEOUT:'Die SMA-Verbindung antwortet nicht/);
+ assert.match(css,/#smaWebsitePreparation button:disabled\{cursor:not-allowed\}/);
+ assert.match(css,/#smaWebsitePreparation\[aria-busy="true"\] button:disabled\{cursor:progress\}/);
+ assert.match(dashboard,/website-domain\.mjs\?v=16/);
+ assert.match(dashboard,/website-domain\.css\?v=5/);
+});
