@@ -64,6 +64,53 @@ Quellen:
    der unveränderte Caption-Text und die Ablehnungsfälle werden in
    `tests/provider-results.test.cjs` geprüft.
 
+## Offline-Rolloutkontrolle für den installierten Provider-/Coverworkflow
+
+**Quellenprüfung – ohne Live-Zugriff:**
+
+```sh
+python3 n8n/publishing/check-aigc-rollout.py --source-only
+```
+
+Die Meldung `SOURCE_PREFLIGHT_OK; LIVE_EXPORT_NOT_VERIFIED; NO_DEPLOYMENT`
+bestätigt ausschließlich die gepinnten Quellen, den inerten 47-Node-Kandidaten
+und die SQL-Guards. Sie ist **keine** Freigabe für einen n8n-Import.
+
+**Pflichtprüfung vor einem späteren n8n-Rollout:** Den aktuellen privaten
+Export des installierten 47-Node-Workflows `JaidX5YeKl6ZTqjQ` in einem
+geschützten lokalen Ordner sichern. Niemals private Exporte oder Token ins
+öffentliche GitHub-Repository übernehmen. Auf demselben Computer prüfen:
+
+```sh
+python3 n8n/publishing/check-aigc-rollout.py --installed-export /GESCHUETZT/aktueller-provider-cover-export.json
+```
+
+Nur `INSTALLED_BASELINE_MATCH; AIGC_CANDIDATE_SOURCE_READY; NO_DEPLOYMENT`
+bestätigt den erwarteten alten 47-Node-Codebestand. Abweichende Nodes,
+Verbindungen, Einstellungen, Trigger, Retries und teilweise aktiviertes
+AIGC führen zum Abbruch. Der Prüfer liest nur lokale Dateien – er kann
+**nicht** verifizieren, ob ein vorgelegter Export wirklich frisch aus n8n
+stammt. Direkt vor dem Rollout Workflow-ID, Exportzeit und veröffentlichten
+Stand in n8n gesondert feststellen.
+
+Danach vor einem Schreibvorgang **lesend** prüfen: Supabase-Funktions-MD5
+`ce9dc4edbe66a00ce89924c1a91b49d1`, keine nicht stornierten TikTok-
+Aufträge ohne Boolean `choices.is_aigc`, null Provider-/Operatorfreigaben.
+Den alten DB-Funktionsstand und den vorhandenen n8n-Export privat sichern.
+
+Reihenfolge einer später separat freigegebenen Abnahme: Datenbankvalidierung,
+dann 47-Node-Provider-/Coverkopie, zuletzt der versionierte Dashboard-Client.
+Bei einem Fehler Teilausrollung stoppen, alte geprüfte Quellen wiederherstellen
+und **keine** Provideranfrage blind wiederholen. Der 29-Node-Dispatcher sowie
+geschützte Originalworkflows werden nicht überschrieben.
+
+Die Rolloutkontrolle ist unabhängig von der persönlichen Kundenfreigabe und
+der separaten Operator-Uploadberechtigung. Sie erzeugt keine Veröffentlichung.
+
+Offline-Abnahme vor diesem Dokumentationsnachtrag: **774/774 Node-Tests** und
+**38 isolierte AIGC-SQL-Prüfungen** bestanden; der Live-n8n-Export wurde
+nicht gelesen. PR #199 bleibt Draft.
+
 ## Rollout erst nach technischer Abnahme
 
 Die Änderungen dürfen **nicht** einzeln gemergt oder in die laufenden
@@ -94,7 +141,7 @@ die externe Freigabe nicht. Zusätzlich bleibt das Zusammenspiel
 SMA darf Kunden keine öffentliche Veröffentlichung versprechen,
 bevor TikTok die dafür nötige Freigabe tatsächlich bestätigt.
 
-Die Alt-PRs #57 und #69 bleiben eigenständig offen.
+PR #57 wurde nach Ersatz durch #195 ohne Merge geschlossen; PR #69 bleibt unabhängig offen.
 Das Live-Journal mit 10 Kundenaufträgen, 0 Freigaben und 0
 Provider-Versuchen wurde ausschließlich gelesen und nicht verändert.
 
