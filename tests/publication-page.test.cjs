@@ -285,7 +285,7 @@ test('new video waits for explicit Magic click, then recognizes, generates and a
 });
 test('new YouTube video offers explicit Magic from preview, and one click saves only a draft',async()=>{
  const ready={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
- const p=await boot({portal:'youtube',asset:ready.id,formTracksDom:true,
+ const p=await boot({portal:'youtube',asset:ready.id,wide:true,formTracksDom:true,
   filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ready]}:a.p_action==='assign'?{...result,assignment_revision:1}:{ok:true,status:'empty'},
   magicResponse:async()=>({ok:true,analysis:videoAnalysis}),fetchResponse:async()=>result});
  const initial=p.workspaceOptions.getPreview().draftStep;
@@ -306,7 +306,7 @@ test('new YouTube video offers explicit Magic from preview, and one click saves 
 
 test('preview Magic keeps user text until explicit replacement consent and offers manual fallback',async()=>{
  const ready={...supportedVideo,width_px:720,height_px:1280};
- const p=await boot({portal:'youtube',asset:ready.id,formTracksDom:true,
+ const p=await boot({portal:'youtube',asset:ready.id,wide:true,formTracksDom:true,
   filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ready]}:{ok:true,status:'empty'},
   magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
  assert.equal(p.workspaceOptions.getPreview().draftStep.target,'magic_text');
@@ -316,7 +316,7 @@ test('preview Magic keeps user text until explicit replacement consent and offer
  assert.equal(p.get('magicReplaceNotice').hidden,false);
  assert.equal(p.get('source_text').value,'Meine eigenen noch nicht gespeicherten Angaben zum Video.');
  assert.equal(p.calls.some(c=>c.url),false);
- const missing=await boot({portal:'youtube',asset:ownFile.id,
+ const missing=await boot({portal:'youtube',asset:ownFile.id,wide:true,
   filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ownFile]}:{ok:true,status:'empty'}});
  assert.equal(missing.workspaceOptions.getPreview().draftStep.target,'source_text');
  await missing.workspaceOptions.onDraftAction('source_text');
