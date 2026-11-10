@@ -98,7 +98,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   draftNotice.setAttribute('role', 'status');
   const draftAction = button('workspaceDraftAction', '', () => options.onDraftAction?.(draftAction.dataset.target));
   draftAction.className = 'secondary'; draftAction.hidden = true;
-  draftState.append(draftNotice, draftAction);
+  const manualDraft = button('workspaceManualDraft', 'Inhalt selbst beschreiben', () => {
+    show('source');
+    $('sourcePanel').open = true;
+    $('source_text')?.focus();
+  });
+  manualDraft.className = 'secondary'; manualDraft.hidden = true;
+  draftState.append(draftNotice, draftAction, manualDraft);
   // Keep the existing device-upload handler, progress and retry controls
   // together in the expanded preview. No new endpoint or upload behavior.
   preview.append(previewNav, headingRow, $('uploadPanel'), uploadIntro, draftState, previewTabs, postView, detailView);
@@ -156,6 +162,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     draftAction.dataset.target = step?.target || '';
     draftAction.textContent = step?.label || '';
     draftAction.hidden = !step;
+    manualDraft.hidden = step?.target !== 'magic_text';
     editPost.hidden = !data.draft;
     postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
     postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
