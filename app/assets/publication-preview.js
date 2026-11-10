@@ -488,7 +488,10 @@ function renderFilePicker(){
    const version=document.createElement('small');version.textContent=description.version;
    caption.append(title,version);row.append(caption);
   }
-  row.append(info);$('filePickerList').append(row);if(workspace?.galleryVisible()||$('filePicker').open)pickerThumbnails.observe(visual,file);else visual.textContent=file.media_kind==='video'?'▶':'▧';
+  // Wide gallery: the opened preview already has a dedicated Dateidetails tab.
+  // Retain legacy picker details only outside the optimizer workspace.
+  if(!workspace)row.append(info);
+  $('filePickerList').append(row);if(workspace?.galleryVisible()||$('filePicker').open)pickerThumbnails.observe(visual,file);else visual.textContent=file.media_kind==='video'?'▶':'▧';
  }
  $('filePickerPages').hidden=count<=1;$('filePageCount').textContent='Seite '+(filePickerPage+1)+' von '+count;
  $('filePrevious').disabled=busy||filePickerPage===0;$('fileNext').disabled=busy||filePickerPage>=count-1;
