@@ -26,6 +26,17 @@ test('provider metadata preserves the exact customer-shop invitation for both po
  }
 });
 
+test('private YouTube handoff keeps the customer shop invitation and cannot silently become public',()=>{
+ const caption='Sichtbares SMA-Testbild.\\n\\nSchau doch mal in meinem Shop vorbei!\\n\\n#SMATest\\n\\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde';
+ const raw={...i,choices:{...i.choices,visibility:'private'},draft:{...i.draft,caption}};
+ const req=providerRequest(raw,'synthetic-token',now);
+ assert.equal(req.body.status.privacyStatus,'private');
+ assert.equal(req.body.snippet.description,caption);
+ assert.equal(req.body.snippet.title,i.draft.title);
+ assert.equal(req.body_type,'json');
+ assert.throws(()=>providerRequest({...raw,choices:{...raw.choices,visibility:'UNSPECIFIED'}},'synthetic-token',now));
+});
+
 test('YouTube recovery probes empty then sends only the confirmed remainder',()=>{
  const p=providerRequest({...i,operation:'probe'},'synthetic-token',now);assert.equal(p.headers['Content-Range'],'bytes */1000');assert.equal(p.headers['Content-Length'],'0');assert.equal(p.body_type,'none');
  const r=providerRequest({...i,operation:'upload',received_bytes:600},'synthetic-token',now);assert.equal(r.offset,600);assert.equal(r.headers['Content-Length'],'400');assert.equal(r.headers['Content-Range'],'bytes 600-999/1000');
