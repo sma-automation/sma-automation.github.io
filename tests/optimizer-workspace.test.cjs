@@ -71,6 +71,33 @@ test('Add File remains reachable inside the preview and its details tab, never i
  assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles']);
 });
 
+test('a customer with no files can reach the existing Add File control through an empty preview',()=>{
+ const p=setup();
+ p.workspace.openEmptyPreview();
+ assert.equal(p.get('workspaceFiles').hidden,true);
+ assert.equal(p.get('workspacePreview').hidden,false);
+ assert.equal(p.get('workspaceUploadIntro').hidden,false);
+ assert.equal(p.get('workspacePreviewHeading').textContent,'Datei für Instagram vorbereiten');
+ assert.equal(p.get('workspacePostView').hidden,true,'no invented post without a file');
+ assert.equal(p.get('workspaceDetailView').hidden,true,'no invented file facts');
+ assert.equal(p.get('workspacePreviewTabs').hidden,true);
+ assert.equal(p.get('workspaceDraftState').hidden,true,'no approval step for empty media');
+ assert.equal(p.get('deviceBrowse').textContent,'Datei hinzufügen');
+ assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
+ assert.equal(p.get('uploadPanel').parentElement,p.get('workspacePreview'));
+ p.get('workspacePreviewBack').click();
+ assert.equal(p.get('workspaceFiles').hidden,false);
+ assert.equal(p.get('workspacePreview').hidden,true);
+ p.workspace.show('preview');
+ assert.equal(p.get('workspacePreview').hidden,true,'normal preview still requires real media');
+ p.workspace.selection({id:'fixture-video',name:'Neues Video.mp4',media_kind:'video'});
+ p.workspace.show('preview');
+ assert.equal(p.get('workspacePreview').hidden,false);
+ assert.equal(p.get('workspaceUploadIntro').hidden,true);
+ assert.equal(p.get('workspacePreviewTabs').hidden,false);
+ assert.equal(p.get('workspacePreviewHeading').textContent,'Vorschau für Instagram');
+});
+
 test('combined content and text preserve edits, disclosure state and original language control',()=>{
  const p=setup();p.workspace.selection({id:'own',name:'Mein Video',media_kind:'video'});
  p.get('workspaceTab-source').click();assert.equal(p.get('sourcePanel').open,false);
