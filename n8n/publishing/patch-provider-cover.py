@@ -66,7 +66,7 @@ def patch(source):
  w.code('Coverantwort auswerten',core('provider-cover.cjs')+'\nreturn [{json:youtubeCoverObservation($json)}];',4560,1000,onError='continueErrorOutput')
  w.code('Unklare Coverantwort',"return [{json:{state:'uncertain',code:'COVER_RESPONSE_UNCERTAIN'}}];",4560,1300)
  rpc('Coverergebnis speichern',"={{ {p_action:'cover_finish',p_id:$('Coveranfrage reservieren').first().json.id,p_lease:$('Coveranfrage reservieren').first().json.lease_id,p_data:$json} }}",4800)
- w.code('Coverstatus zurückgeben',"return [{json:{ok:$json.ok===true,state:'complete',cover_state:['complete','failed','uncertain'].includes($json.cover_state)?$json.cover_state:'blocked',can_upload:false,can_publish:false}}];",5040,1000)
+ w.code('Coverstatus zurückgeben',"const allowed=['complete','failed','uncertain'];const ok=$json?.ok===true&&allowed.includes($json.cover_state);return [{json:{ok,state:'complete',cover_state:ok?$json.cover_state:'uncertain',can_upload:false,can_publish:false}}];",5040,1000)
  chain=['YouTube-Cover bereit?','Cover-Dateistand lesen','Cover-Metadaten bestätigen','Coverdatei laden','Coverbytes prüfen','Cover-Dateistand rückprüfen','Cover-Prüfnachweise verbinden','Coveranfrage reservieren','Coveranfrage reserviert?','Geprüfte Coverdatei übernehmen','Coveranfrage erstellen','YouTube-Cover übertragen','Coverantwort auswerten','Coverergebnis speichern','Coverstatus zurückgeben']
  for a,b in zip(chain,chain[1:]):w.edge(a,b)
  w.edge('Coveranfrage reserviert?','Coverstatus zurückgeben',1)
