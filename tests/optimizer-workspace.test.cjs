@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const source=fs.readFileSync('app/assets/publication-destination.mjs','utf8').replace('export function','function')+fs.readFileSync('app/assets/optimizer-workspace.mjs','utf8').replace(/^import .*;$/gm,'').replace('export function','function');
-function setup(previewData={}){
+function setup(previewData={},callbacks={}){
  const byId=new Map();
  class Element{
   constructor(tag){this.tag=tag;this.children=[];this.events={};this.attrs={};this.dataset={};this.hidden=false;this.classes=new Set();this.style={setProperty(k,v){this[k]=v},removeProperty(k){delete this[k]}};this.classList={contains:n=>this.classes.has(n),add:n=>this.classes.add(n),toggle:(n,v)=>v?this.classes.add(n):this.classes.delete(n)};}
@@ -35,7 +35,7 @@ function setup(previewData={}){
  byId.get('result').hidden=true;
  const doc={body,createElement:t=>el(t),getElementById:id=>{const node=byId.get(id);let root=node;while(root?.parentElement)root=root.parentElement;return root===body?node:null},querySelector:s=>s==='main'?main:searchLabel};
  const ctx={};vm.runInNewContext(source+';this.create=createOptimizerWorkspace',ctx);
- let loads=0;const workspace=ctx.create(doc,'Instagram',()=>loads++,{getPreview:()=>previewData});
+ let loads=0;const workspace=ctx.create(doc,'Instagram',()=>loads++,{getPreview:()=>previewData,...callbacks});
  return {workspace,main,form,video,pickerBody,get:id=>byId.get(id),loads:()=>loads};
 }
 test('gallery keeps refresh while existing upload control moves to the opened preview',()=>{
@@ -114,6 +114,39 @@ test('preview auto-text offer keeps a manual, non-network editor alternative',()
  data.draftStep={target:'source_text',label:'Zum Texteditor',note:'Manuelle Beschreibung nötig.'};
  p.workspace.refreshPreview();
  assert.equal(p.get('workspaceManualDraft').hidden,true,'manual link is not duplicated for an unsupported file');
+});
+
+test('new text variant can be reviewed, repeated and adopted without replacing current preview',()=>{
+ let requests=0,accepted=0,discarded=0;
+ const draft={title:'Gespeicherter Titel',body:'Gespeicherte Beschreibung',hashtags:['Original']};
+ const p=setup({draft,draftStep:null},{
+  onNewVariant:()=>requests++,onAcceptVariant:()=>accepted++,onDiscardVariant:()=>discarded++
+ });
+ p.workspace.selection({id:'video',name:'Eigenes Video.mp4',media_kind:'video'});
+ p.get('result').hidden=false;
+ p.workspace.textAvailable(true);
+ assert.equal(p.get('workspaceRepeat').hidden,false);
+ p.workspace.show('preview');
+ assert.equal(p.get('workspacePreviewRepeat').hidden,false);
+ assert.equal(p.get('workspacePostTitle').textContent,draft.title);
+ p.get('workspacePreviewRepeat').click();
+ assert.equal(requests,1);
+ p.workspace.setVariant({title:'Andere Überschrift',body:'Eine andere, sachlich passende Beschreibung.',hashtags:['Neu']});
+ assert.equal(p.get('workspaceVariantPanel').hidden,false);
+ assert.equal(p.get('workspaceVariantTitle').textContent,'Andere Überschrift');
+ assert.equal(p.get('workspaceVariantBody').textContent,'Eine andere, sachlich passende Beschreibung.');
+ assert.equal(p.get('workspaceVariantTags').textContent,'#Neu');
+ assert.equal(p.get('workspacePostTitle').textContent,draft.title,'saved preview must remain unchanged');
+ p.get('workspaceVariantNext').click();assert.equal(requests,2);
+ p.get('workspaceVariantAdopt').click();assert.equal(accepted,1);
+ p.get('workspaceVariantDiscard').click();assert.equal(discarded,1);
+ p.workspace.lockVariant(true);
+ for(const id of ['workspaceRepeat','workspacePreviewRepeat','workspaceVariantNext','workspaceVariantAdopt','workspaceVariantDiscard'])assert.equal(p.get(id).disabled,true);
+ p.workspace.lockVariant(false);
+ p.workspace.selection(null);
+ assert.equal(p.get('workspaceVariantPanel').hidden,true);
+ p.workspace.textAvailable(false);
+ assert.equal(p.get('workspaceRepeat').hidden,true);
 });
 
 test('combined content and text preserve edits, disclosure state and original language control',()=>{
