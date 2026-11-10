@@ -39,8 +39,8 @@ test('opening a video no longer enters a long automatic status-poll loop',()=>{
 
 test('manual recognition invalidates any older background load',()=>{
  const reset=between('function resetMagic(){','\nfunction magicPhotoHint(');
- const recognize=between('async function recognizePhoto(','\n\$('recognizePhoto').addEventListener');
- const action=between('async function runMagicAction(','\n\$('magicSource').addEventListener');
+ const recognize=between('async function recognizePhoto(', "\n$('recognizePhoto').addEventListener");
+ const action=between('async function runMagicAction(', "\n$('magicSource').addEventListener");
  assert.match(reset,/magicLoadTicket\+\+/);
  assert.match(recognize,/magicLoadTicket\+\+;lock\(true\)/);
  assert.match(action,/magicLoadTicket\+\+;automaticMode=mode;lock\(true\)/);
