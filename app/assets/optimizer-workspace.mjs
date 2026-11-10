@@ -98,13 +98,15 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   draftNotice.setAttribute('role', 'status');
   const draftAction = button('workspaceDraftAction', '', () => options.onDraftAction?.(draftAction.dataset.target));
   draftAction.className = 'secondary'; draftAction.hidden = true;
+  const previewRepeat = button('workspacePreviewRepeat', 'Neue Textvariante erstellen', () => { show('source'); options.onNewVariant?.(); });
+  previewRepeat.className = 'secondary'; previewRepeat.hidden = true;
   const manualDraft = button('workspaceManualDraft', 'Inhalt selbst beschreiben', () => {
     show('source');
     $('sourcePanel').open = true;
     $('source_text')?.focus();
   });
   manualDraft.className = 'secondary'; manualDraft.hidden = true;
-  draftState.append(draftNotice, draftAction, manualDraft);
+  draftState.append(draftNotice, draftAction, manualDraft, previewRepeat);
   // Keep the existing device-upload handler, progress and retry controls
   // together in the expanded preview. No new endpoint or upload behavior.
   preview.append(previewNav, headingRow, $('uploadPanel'), uploadIntro, draftState, previewTabs, postView, detailView);
@@ -163,6 +165,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     draftAction.textContent = step?.label || '';
     draftAction.hidden = !step;
     manualDraft.hidden = step?.target !== 'magic_text';
+    previewRepeat.hidden = !data.draft || !!step;
     editPost.hidden = !data.draft;
     postTitle.textContent = draft.title || 'Noch kein Titel vorbereitet';
     postCaption.textContent = draft.body || 'Noch kein Beitragstext vorbereitet.';
@@ -239,6 +242,27 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   resultDetails.append($('portalNote'), ...resultNotes);
   $('result').append(resultDetails);
   $('save').textContent = 'Entwurf speichern';
+  const repeat = button('workspaceRepeat', 'Neue Textvariante erstellen', () => options.onNewVariant?.());
+  repeat.className = 'secondary'; repeat.hidden = true;
+  $('save').parentElement.append(repeat);
+  const variantPanel = make('section', 'workspaceVariantPanel');
+  variantPanel.setAttribute('aria-label', 'Neue Textvariante zur Auswahl');
+  variantPanel.hidden = true;
+  const variantHeading = make('h3', 'workspaceVariantHeading', 'Neue Textvariante');
+  const variantTitle = make('strong', 'workspaceVariantTitle');
+  const variantBody = make('p', 'workspaceVariantBody');
+  const variantTags = make('p', 'workspaceVariantTags');
+  const variantNotice = make('p', 'workspaceVariantNotice',
+    'Dein gespeicherter Beitrag bleibt unverändert, bis du diese Variante übernimmst.');
+  const variantActions = make('div', 'workspaceVariantActions');
+  const adopt = button('workspaceVariantAdopt', 'Variante übernehmen', () => options.onAcceptVariant?.());
+  const next = button('workspaceVariantNext', 'Weitere Variante erstellen', () => options.onNewVariant?.());
+  next.className = 'secondary';
+  const discard = button('workspaceVariantDiscard', 'Verwerfen', () => options.onDiscardVariant?.());
+  discard.className = 'secondary';
+  variantActions.append(adopt, next, discard);
+  variantPanel.append(variantHeading, variantTitle, variantBody, variantTags, variantNotice, variantActions);
+  $('result').append(variantPanel);
   const previewEdits = button('workspacePreviewEdits', 'Beitragsvorschau öffnen', () => show('preview'));
   previewEdits.className = 'secondary'; previewEdits.hidden = true;
   $('save').parentElement.append(previewEdits);
@@ -291,9 +315,24 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     galleryVisible: () => active === 'files',
     openEmptyPreview() { if (!selectedFile) show('upload'); },
     refreshPreview(feedback) { if (active === 'preview') refreshPreview(feedback); },
-    textAvailable(value) { empty.hidden = value; if (!value) clearPreview(); else if (active === 'preview') refreshPreview(); },
+    textAvailable(value) {
+      empty.hidden = value; repeat.hidden = !value;
+      if (!value) { variantPanel.hidden = true; clearPreview(); }
+      else if (active === 'preview') refreshPreview();
+    },
+    setVariant(candidate) {
+      variantPanel.hidden = !candidate;
+      if (!candidate) { variantTitle.textContent = ''; variantBody.textContent = ''; variantTags.textContent = ''; return; }
+      variantTitle.textContent = candidate.title || '';
+      variantBody.textContent = candidate.body || '';
+      variantTags.textContent = (candidate.hashtags || []).map(tag => '#' + tag).join(' ');
+      variantPanel.hidden = false;
+    },
+    lockVariant(value) {
+      for (const node of [repeat, previewRepeat, adopt, next, discard]) node.disabled = value;
+    },
     selection(file) {
-      selectedFile = file; clearPreview();
+      selectedFile = file; variantPanel.hidden = true; clearPreview();
       const description = file ? describe(file) : null;
       selectedName.textContent = description?.title || 'Noch keine Datei ausgewählt';
       selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
