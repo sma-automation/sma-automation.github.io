@@ -427,6 +427,7 @@ body.wide.post-preview-open #workspacePreviewActions #deviceBrowse {
   background:#fff;color:#3157cd;box-shadow:0 8px 24px #17233b20;
   font-size:13px;font-weight:500;text-align:left;line-height:1.5;
 }
+body.wide.post-preview-open #workspacePreviewActions:not([open]) #deviceBrowse {display:none}
 body.wide.post-preview-open #workspacePreviewActions #deviceBrowse:hover {background:#f3f6ff}
 body.wide.post-preview-open #workspacePreviewHeader {
   display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
