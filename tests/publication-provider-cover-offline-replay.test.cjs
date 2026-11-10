@@ -66,7 +66,7 @@ const tiktokIntent={
  platform:'tiktok',size_bytes:1347227,
  binding:{...binding,platform:'tiktok'},draft:{title:'Synthetisches Demo',caption:'Gespeicherter Testtext ohne Real-Posting.'},
  choices:{visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,
-  brand_content_toggle:false,brand_organic_toggle:false},
+  brand_content_toggle:false,brand_organic_toggle:false,is_aigc:true},
  cover
 };
 function refs(intent){
@@ -93,9 +93,16 @@ test('actual n8n TikTok init node inserts only the reserved cover timestamp',asy
  assert.equal(result.request.body.post_info.video_cover_timestamp_ms,1000);
  assert.equal(result.request.body.post_info.privacy_level,'SELF_ONLY');
  assert.equal(result.request.body.post_info.title,tiktokIntent.draft.caption);
+ assert.equal(result.request.body.post_info.is_aigc,true);
  assert.equal(result.request.body.source_info.source,'FILE_UPLOAD');
  const noCover=await run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,cover:null})});
  assert.equal(noCover.request.body.post_info.video_cover_timestamp_ms,undefined);
+ const notAi=await run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,choices:{...tiktokIntent.choices,is_aigc:false}})});
+ assert.equal(notAi.request.body.post_info.is_aigc,false);
+ for(const invalid of [undefined,null,'true',0]){
+  const choices={...tiktokIntent.choices};if(invalid===undefined)delete choices.is_aigc;else choices.is_aigc=invalid;
+  await assert.rejects(run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,choices})}),/INVALID_CHOICES/);
+ }
  await assert.rejects(run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,cover:{...cover,video_asset_id:id(99)}})}),/COVER_BINDING_INVALID/);
 });
 

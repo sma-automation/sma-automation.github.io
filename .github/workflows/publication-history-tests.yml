@@ -175,6 +175,7 @@ jobs:
           node tests/run-publication-comparison-sql.mjs
           node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
+          node tests/run-publication-tiktok-aigc-sql.mjs
           node tests/run-publication-manual-review-dom.mjs
           node tests/run-original-video-preview-dom.mjs
           node tests/run-publication-text-edits-sql.mjs
