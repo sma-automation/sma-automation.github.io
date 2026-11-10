@@ -85,7 +85,8 @@ test('matching code from a copied, renamed or inactive workflow never proves liv
 });
 
 test('gate refuses existing AIGC modifications instead of silently applying them again',()=>{
- const r=exportAndCheck(target,'already-modified');
+ const changed=JSON.parse(JSON.stringify(target));changed.id='JaidX5YeKl6ZTqjQ';changed.active=true;
+ const r=exportAndCheck(changed,'already-modified');
  assert.notEqual(r.status,0);
  assert.match(r.stderr,/AIGC_ROLLOUT_BLOCKED: INSTALLED_NODE_DRIFT/);
 });
