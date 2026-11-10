@@ -58,3 +58,31 @@ test('CORS preflight, foreign origin, unsupported method and bad JSON',async()=>
 test('database failures do not leak details or produce a checkout URL',async()=>{
  const r=await request(app({dbError:true}));assert.equal(r.status,503);assert.equal(r.data.checkout_url,undefined);
 });
+
+test('checkout rejects fractional cents instead of silently rounding a seller price',async()=>{
+ for(const price of [0.001,1.234,39.999,'10.005','0.001','12.3001','39.900001','1e2','39.90 ','12.','.5',
+                      true,[],{},'NaN',Infinity,1e20]){
+  const r=await request(app({products:[{...product,preis:price}]}));
+  assert.equal(r.status,409,'rejected invalid price '+String(price));
+  assert.equal(r.data.checkout_url,undefined);
+ }
+});
+
+test('checkout preserves exact cents for decimal string and numeric shop prices',async()=>{
+ for(const [price,expected] of [['0.01',0.01],['12.30',12.3],['12.3000',12.3],['0.0000',0],[39.9,39.9],[0,0],[0.1,0.1],[0.29,0.29]]){
+  const r=await request(app({products:[{...product,preis:price}]}),body([{produkt_id:id,menge:3}]));
+  assert.equal(r.status,200,'accepted exact decimal '+String(price));
+  assert.equal(r.data.warenkorb[0].einzelpreis,expected);
+  assert.equal(r.data.warenkorb[0].summe,Math.round(expected*100)*3/100);
+  assert.equal(r.data.gesamtbetrag,Math.round(expected*100)*3/100);
+  assert.equal(r.data.checkout_url,'https://test-store.myshopify.com/cart/58648962433355:3');
+ }
+ const mixed=await request(app({products:[
+  {...product,preis:'19.99'},
+  {...product,sma_produkt_id:id2,preis:'0.01',kauf_url:'https://test-store.myshopify.com/cart/58641727521099:1'},
+ ]}),body([{produkt_id:id,menge:2},{produkt_id:id2,menge:1}]));
+ assert.equal(mixed.status,200);
+ assert.equal(mixed.data.gesamtbetrag,39.99);
+ assert.equal(mixed.data.positionen,2);
+ assert.equal(mixed.data.gesamtmenge,3);
+});
