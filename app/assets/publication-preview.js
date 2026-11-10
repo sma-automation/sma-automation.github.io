@@ -231,7 +231,7 @@ function previewDraftStep(){
   // This only displays a button; recognition starts on an explicit click.
   if(!missingVideoMetadata(selectedAsset).length&&!magicHint(selectedAsset)){
    return {target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',
-    note:loadingVideoDraft?'Magic Effect wird vorbereitet … SMA prüft die Datei und den gespeicherten Beitrag. Danach wird der Button freigegeben.':'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
+    note:magicPreparationError?'Magic Effect ist noch nicht verfügbar. Lade die Dateivorschau erneut.':automaticMode!==null?'Magic Effect arbeitet bereits an deiner Datei …':loadingVideoDraft||busy?'Magic Effect wird vorbereitet … SMA prüft die Datei und den gespeicherten Beitrag. Danach wird der Button freigegeben.':'Magic Effect ist bereit. Du kannst jetzt den Beitragstext erstellen.'};
   }
   return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
  }
