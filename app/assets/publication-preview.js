@@ -848,14 +848,15 @@ async function loadHistoryPreview(){
  }
 }
 async function loadLatest(){const file=selectedAsset;lock(true);try{
- // Media facts may refresh independently; draft readiness must not wait for this read.
- void loadMediaCheck();
+ // Videos can show their preview while the independent media review loads.
+ // Keep the existing photo startup behavior (including automatic recognition).
+ if(file?.media_kind==='video')void loadMediaCheck();else await loadMediaCheck();
  const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
  if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
  showProductContext(data.product_context,file,savedProductSelection(data));
  if(data.status==='empty'){clearDraft();if(!$('productChoiceField').hidden)$('sourcePanel').open=true;status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
  fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
- }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();void loadMagicEffect(true);}}
+ }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();if(file?.media_kind==='video')void loadMagicEffect(true);else await loadMagicEffect(true);}}
 
 function resetMagic(){magicLoadTicket++;automaticInputSignature=null;pendingAutomatic=null;$('magicReplaceNotice').hidden=true;magicState=null;$('magicPanel').hidden=!selectedAsset||!['image','video'].includes(selectedAsset.media_kind);$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
 function magicPhotoHint(file=selectedAsset){
@@ -909,10 +910,10 @@ async function loadMagicEffect(autoStart=false){
   const r=await magicRpc(file);
   if(ticket!==magicLoadTicket||busy||automaticMode!==null||!photoStillSelected(file))return;
   if(!showMagic(r,file))return;
-  // Do not auto-resume a processing video when opening its preview: a long
-  // status-poll loop would keep the Magic controls locked. The explicit
+  // Preserve automatic photo recognition, but do not auto-resume a processing
+  // video when opening its preview: that would lock the Magic controls. The explicit
   // "Erkennungsstand laden" action remains available to the customer.
-  if(autoStart&&file.media_kind==='image'&&r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))await recognizePhoto();
+  if(autoStart&&file.media_kind==='image'&&(r.status==='processing'||(r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
  }catch(e){if(ticket===magicLoadTicket&&!busy&&photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto({withinAutomatic=false}={}){
