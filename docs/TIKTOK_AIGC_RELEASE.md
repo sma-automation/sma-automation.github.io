@@ -18,6 +18,23 @@ Workflow lieferte HTTP 401. Der private JSON-Export konnte über die
 Browser-Automatisierung nicht gelesen werden. Deshalb wurde **keine**
 vollständige Export-Parität nachgewiesen, und PR #199 bleibt gesperrt.
 
+Eine zweite Gefahr ist seit n8n 2.0 die Trennung von **gespeichertem Entwurf**
+und **veröffentlichter Version**. Der Badge „Published“ oder `active=true`
+beweist nicht, dass die Knoten im exportierten JSON exakt die laufende
+Produktionsversion sind. Der lokale Release-Prüfer verlangt deshalb sowohl
+`versionId` (gespeicherte Fassung) als auch `activeVersionId`
+(veröffentlichte Fassung) und muss **beide IDs identisch** vorfinden.
+Fehlt eine ID im Export, ist sie leer, oder liegt ein neuerer Entwurf
+vor, stoppt die Prüfung mit `PUBLISHED_VERSION_UNVERIFIED` beziehungsweise
+`SAVED_DRAFT_DIFFERS_FROM_PUBLISHED`. Das ist bewusst kein automatischer
+Fallback auf eine möglicherweise veraltete Fassung. Auch zwei gleiche IDs
+beweisen ohne frischen authentifizierten Export **nicht** dessen Herkunft.
+
+Offizielle Dokumentation:
+- https://support.n8n.io/article/understanding-workflow-publishing-in-n-8-n-2-0
+- https://docs.n8n.io/source-control-environments/create-environments/
+  (Git-Push liest die gespeicherte und nicht automatisch die veröffentlichte Fassung)
+
 Die Offline-Releaseprüfung `n8n/publishing/check-aigc-rollout.py`
 verlangt nicht nur exakt 47 Nodes mit geprüfter Workflow-ID und
 unverändertem Kantenbestand. Sie kontrolliert ausdrücklich die
