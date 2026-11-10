@@ -23,3 +23,11 @@ Wenn ein frisch verifizierter Google-Drive-Katalog für exakt dieselbe Datei **n
 - Repository-Gesamttests und bestehende SQL-Prüfungen via GitHub Actions.
 
 Keine Anbieteranmeldung, keine Supabase-Migration, kein n8n-Workflow-Update, keine Benutzerdatei hochgeladen, keine Social-Media-Veröffentlichung, kein kostenpflichtiger Vorgang. PR #57, #69 und #185 bleiben getrennt.
+
+## Nachtrag – Erststart ohne Dateien (10.11.2026)
+
+Nach dem Entfernen von „Datei hinzufügen“ aus der Galerie war der Knopf im Vorschaukopf ohne vorhandenes Medium unerreichbar. Für **neue Konten ohne portalgeeignete Dateien** gibt es deshalb nun genau eine dezente leere Platzhalterkachel „Noch keine passende Datei – Vorschau öffnen und Datei vorbereiten“. Sie öffnet die große Vorschau im **Uploadmodus**. Erst dort steht der bestehende Button **„Datei hinzufügen“**, inklusive unverändertem Upload-Handler und Fortschrittsanzeige. Die Galerie selbst erhält **keinen** „Datei hinzufügen“-Button zurück.
+
+Der Uploadmodus zeigt ausdrücklich **keine** erfundenen Videodaten, Portalbeiträge, Dateidetails oder Freigaben. Beim Zurückgehen ist wieder nur die Galerie sichtbar; nach dem tatsächlichen Upload einer geeigneten Datei greift wie zuvor die normale Dateiauswahl. Die Platzhalterkachel erscheint nicht, wenn bereits mindestens eine kompatible Datei vorhanden ist, und bleibt während einer Suchfilterung ausgeblendet.
+
+Regressionen: DOM-Test für Uploadmodus ohne Datei, tatsächlicher Galerie-Renderer mit leerem/ungeeignetem/normalem Bestand, vorhandene Editor- und Versionssperrentests, Smartphone-/Desktop-Layout. Keine Social-Media-Veröffentlichung und keine n8n-Änderung.
