@@ -35,7 +35,7 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  '</div><div class="sma-website-workspace-header" data-website-toolbar hidden><button type="button" data-website-back class="sma-website-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Webseite &amp; Domain</button></div>'+
  '<section id="smaWebsiteView-website" data-website-view="website" aria-labelledby="smaWebsitePreparationTitle" hidden><h2 id="smaWebsitePreparationTitle" tabindex="-1">Webseite einrichten</h2>'+
  '<div data-company-profile-dashboard></div><p class="sma-website-intro">Hinterlege deine bestehende Webseite oder deinen Wunsch für eine neue Seite.</p>'+
- '<form novalidate><fieldset class="sma-website-fields" disabled><legend class="sma-website-sr">Webseite und Domain</legend>'+
+ '<form novalidate><fieldset class="sma-website-fields"><legend class="sma-website-sr">Webseite und Domain</legend>'+
  '<div class="sma-website-options"><label><input type="radio" name="website_mode" value="existing" checked> Ich habe bereits eine Webseite</label>'+
  '<label><input type="radio" name="website_mode" value="new"> Ich benötige eine Webseite</label></div>'+
  '<label class="sma-website-field" data-existing>Vorhandene Webseite<input name="website_url" type="text" inputmode="url" autocomplete="url" placeholder="https://meine-firma.at" maxlength="2048"></label>'+
@@ -89,13 +89,18 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  const mode=()=>root.querySelector('[name="website_mode"]:checked').value;
  const toggle=()=>{ $('[data-existing]').hidden=mode()!=='existing';$('[name="website_url"]').disabled=mode()!=='existing';$('[data-existing-route]').hidden=mode()!=='existing';$('[data-existing-note]').hidden=mode()!=='existing';$('[data-new-route]').hidden=mode()!=='new';$('[data-new-note]').hidden=mode()!=='new';setupRoot.hidden=mode()!=='new'&&setupRoot.dataset.setupHasJob!=='true'; };
  function notice(text,error=false){if(destroyed)return;status.textContent=text;status.hidden=!text;status.classList.toggle('sma-website-error',error);}
- function setBusy(value){busy=value;fields.disabled=value||!loaded;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
+ function setBusy(value,{lockFields=false}={}){busy=value;fields.disabled=value&&lockFields;$('[type="submit"]').disabled=value||!loaded;$('[data-reload]').disabled=value;root.setAttribute('aria-busy',String(value));}
  function rejectOwner(error){if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(error.code)){loaded=false;setupView?.invalidate();wordpressView?.invalidate();domainView?.invalidate(messages[error.code]);for(const input of root.querySelectorAll('input[type="text"],textarea'))input.value='';$('[data-shop-actions]').hidden=true;$('[data-shop-open]').removeAttribute('href');$('[data-shop-preview]').removeAttribute('href');$('[data-catalog-preview]').removeAttribute('href');$('[data-catalog-actions]').hidden=true;}}
- function show(state){
+ function show(state,{preserveDirty=false}={}){
   if(destroyed)return;
   const draft=state.draft||{mode:'existing',website_url:'',desired_domain:''};
-  root.querySelector('[name="website_mode"][value="'+draft.mode+'"]').checked=true;
-  $('[name="website_url"]').value=draft.website_url;$('[name="desired_domain"]').value=draft.desired_domain;toggle();
+  // The customer can begin editing while authentication/read-only loading
+  // runs. A late GET must never erase those unsaved edits.
+  if(!preserveDirty){
+   root.querySelector('[name="website_mode"][value="'+draft.mode+'"]').checked=true;
+   $('[name="website_url"]').value=draft.website_url;$('[name="desired_domain"]').value=draft.desired_domain;
+  }
+  toggle();
   const link=safeShopLink(state.shop_url);$('[data-shop-actions]').hidden=!link;
   $('[data-shop-url]').value=link||'';$('[data-shop-open]').removeAttribute('href');
   const button=createShopButton(link);$('[data-shop-code]').value=button?.html||'';
@@ -105,21 +110,26 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
   if(catalog)$('[data-catalog-preview]').href=catalog.previewUrl;
   if(link)$('[data-shop-open]').href=link;
   $('[data-shop-hint]').textContent=link?'Der Link führt zu deinem vorhandenen öffentlichen SMA-Shop.':'Sobald dein SMA-Shop öffentlich freigeschaltet ist, erscheint hier sein Link.';
-  loaded=true;dirty=false;
+  loaded=true;dirty=preserveDirty;
   let domainReady=false;try{domainReady=!!domainVerificationTarget(state);}catch{}
   $('[data-domain-setup]').hidden=!domainView||domainReady;
-  domainView?.setDraft(state);wordpressView?.setDraft(state);
+  if(preserveDirty){
+   domainView?.invalidate('Speichere zuerst die geänderten Angaben.');
+   wordpressView?.invalidate();
+  }else{
+   domainView?.setDraft(state);wordpressView?.setDraft(state);
+  }
  }
  async function load(){
   if(destroyed||busy)return;
   domainView?.invalidate('Vorbereitung wird geladen …');setBusy(true);notice('Vorbereitung wird geladen …');
-  try{const result=await client.load();if(destroyed)return;show(result);notice('');}
+  try{const result=await client.load();if(destroyed)return;show(result,{preserveDirty:dirty});notice(dirty?'Ungespeicherte Angaben.':'');}
   catch(error){rejectOwner(error);notice(messages[error.code]||'Die Vorbereitung ist gerade nicht erreichbar. Bitte versuche es später erneut.',true);}
-  finally{if(!destroyed){setBusy(false);if(!loaded)fields.disabled=true;}}
+  finally{if(!destroyed)setBusy(false);}
  }
  $('form').addEventListener('input',()=>{dirty=true;wordpressView?.invalidate();domainView?.invalidate('Speichere die geänderten Angaben vor der Domainprüfung.');$('[data-domain-setup]').hidden=!domainView;toggle();notice('Ungespeicherte Angaben.');});
  $('form').addEventListener('submit',async event=>{
-  event.preventDefault();if(busy||destroyed||!loaded)return;domainView?.invalidate('Vorbereitung wird gespeichert …');setBusy(true);notice('Vorbereitung wird gespeichert …');
+  event.preventDefault();if(busy||destroyed||!loaded)return;domainView?.invalidate('Vorbereitung wird gespeichert …');setBusy(true,{lockFields:true});notice('Vorbereitung wird gespeichert …');
   try{
    const result=await client.save({mode:mode(),website_url:mode()==='existing'?$('[name="website_url"]').value:'',desired_domain:$('[name="desired_domain"]').value});
    if(destroyed)return;show(result);notice('Vorbereitung gespeichert.');
