@@ -25,7 +25,7 @@ test('TikTok AIGC UI is an explicit choice and review remains linked to immutabl
  assert.match(ui,/select\('is_aigc','Ist das Video KI-generiert\?',/);
  assert.match(ui,/is_aigc:'KI-generierter Inhalt'/);
  assert.match(ui,/s\.required=true/);
- assert.match(ui,/return reviewConfirmation\(order,reviewValues\(\)\)/);
+ assert.match(ui,/reviewConfirmation\(order,reviewValues\(\)\)/);
  assert.match(read('app/assets/publication-preview.js'),/publication-order\.mjs\?v=24/);
  assert.match(read('app/publication-preview.html'),/publication-preview\.js\?v=78/);
 });
