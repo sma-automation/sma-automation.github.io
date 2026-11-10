@@ -60,7 +60,7 @@ test('Add File remains reachable inside the preview and its details tab, never i
  assert.equal(p.get('workspaceFiles').hidden,true);
  assert.equal(p.get('workspacePreview').hidden,false);
  assert.equal(p.get('deviceBrowse').textContent,'Datei hinzufügen');
- assert.equal(p.get('workspacePreviewActions').parentElement,p.get('workspacePreviewHeader'));
+ assert.equal(p.get('workspacePreviewActions').parentElement,p.get('workspacePreviewNav'));
  assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
  assert.equal(p.get('uploadPanel').parentElement,p.get('workspacePreview'));
  p.get('workspaceDetailTab').click();
@@ -267,4 +267,46 @@ test('a file draft opens its existing text field and returns to the preview with
  assert.equal(p.get('workspacePostCaption').textContent,field.value);assert.equal(p.loads(),0);
  data.draft=null;p.workspace.textAvailable(false);p.workspace.refreshPreview();assert.equal(edit.hidden,true);
  p.workspace.selection(null);assert.equal(p.get('workspacePreviewEdits').hidden,true);
+});
+
+test('professional preview places only publication in the primary action host',()=>{
+ const p=setup({draft:{title:'Gesicherter Titel',body:'Gesicherter Inhalt',hashtags:['Test']}});
+ p.workspace.selection({id:'file',name:'Kunden-Test.mp4',media_kind:'video'});
+ p.workspace.show('preview');
+ const nav=p.get('workspacePreviewNav'),header=p.get('workspacePreviewHeader');
+ const menu=p.get('workspacePreviewActions'),primary=p.get('workspacePreviewPrimary'),tools=p.get('workspaceDraftTools');
+ assert.equal(menu.tag,'details');
+ assert.equal(menu.children[0].tag,'summary');
+ assert.equal(menu.children[0].textContent,'Dateiaktionen');
+ assert.equal(menu.parentElement,nav);
+ assert.equal(p.get('deviceBrowse').parentElement,menu);
+ assert.equal(menu.open,false,'The file button is collapsed by default on saved videos');
+ assert.equal(primary.parentElement,header);
+ assert.equal(primary.attrs['aria-label'],'Nächster Schritt');
+ assert.equal(p.get('workspaceDraftState').parentElement,p.get('workspacePreview'));
+ assert.equal(tools.parentElement,p.get('workspaceDraftState'));
+ assert.equal(p.get('workspacePreviewRepeat').parentElement,tools);
+ assert.equal(p.get('workspacePreviewBack').textContent,'← Zu den Dateien');
+ const page=fs.readFileSync('app/assets/publication-preview.js','utf8');
+ assert.ok(page.includes("host:workspace?$('workspacePreviewPrimary'):$('save').parentElement"),
+  'Existing approval controller must be mounted in the one primary area');
+ const html=fs.readFileSync('app/publication-preview.html','utf8');
+ assert.ok(html.includes('optimizer-workspace.css?v=18'));
+ assert.ok(html.includes('publication-preview.js?v=85'));
+});
+
+test('empty preview exposes upload action and becomes a complete preview after file choice',()=>{
+ const p=setup({draft:{title:'Video',body:'Inhalt'}});
+ p.workspace.openEmptyPreview();
+ assert.equal(p.get('workspacePreviewActions').open,true,'An empty gallery needs visible upload access');
+ assert.equal(p.get('workspacePreviewPrimary').hidden,true);
+ assert.equal(p.get('workspacePreviewTabs').hidden,true);
+ p.workspace.selection({id:'new',name:'Neu.mp4',media_kind:'video'});
+ assert.equal(p.get('workspacePreview').hidden,false);
+ assert.equal(p.get('workspacePreviewActions').open,false,'Added file restores the quiet actions menu');
+ assert.equal(p.get('workspacePreviewPrimary').hidden,false);
+ assert.equal(p.get('workspaceUploadIntro').hidden,true);
+ assert.equal(p.get('workspacePostView').hidden,false);
+ assert.equal(p.get('workspacePreviewTabs').hidden,false);
+ assert.equal(p.get('workspaceDetailView').hidden,true);
 });
