@@ -167,9 +167,10 @@ test('wide gallery asks before discarding edits and then opens the chosen file p
  p.get('source_text').value='Diese noch nicht gespeicherten Angaben sollen nicht einfach überschrieben werden.';
  p.get('previewForm').events.input();
  const tile=p.get('filePickerList').children[1].querySelector('button');
+ const viewCountBeforeSwitch=p.views.length;
  await tile.events.click();
  assert.equal(p.get('fileSwitchNotice').hidden,false);
- assert.notEqual(p.views.at(-1),'preview','the confirmation must precede navigation');
+ assert.equal(p.views.length,viewCountBeforeSwitch,'the confirmation must precede navigation');
  assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+ownFile.name);
  await p.get('confirmFileSwitch').events.click();
  assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+other.name);
