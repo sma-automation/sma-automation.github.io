@@ -77,6 +77,20 @@ function frame([portal, width, height]) {
       result.noPreselection=$('catalogProduct').value==='';
       $('catalogProduct').value=item.product_id;
       result.selectedProduct=(await lookup.validate()).product_id;
+      $('result').hidden=false;
+      controller.setVariant({
+        title:'Eine weitere sachliche Textvariante',
+        body:'Anderer Beschreibungstext zur gleichen Datei. '.repeat(8),
+        hashtags:['SMA','WeitereVersion']
+      });
+      controller.show('source');
+      const variant=box('workspaceVariantPanel');
+      result.variantFits=variant.width>0&&variant.left>=0&&variant.right<=innerWidth&&
+        ['workspaceVariantAdopt','workspaceVariantNext','workspaceVariantDiscard'].every(id=>{
+          const b=box(id);return b.width>0&&b.left>=0&&b.right<=innerWidth;
+        })&&viewport.scrollWidth<=innerWidth;
+      controller.setVariant(null);
+      controller.show('preview');
       if(['YouTube','TikTok'].includes(portal)){
         const base={title:'Titel',body:'Vorher',hashtags:[],product_id:null};
         const mine={...base,body:'X'.repeat(320)},saved={...base,body:'Andere Fassung',hashtags:['Gespeichert']};
@@ -113,6 +127,7 @@ try {
     assert.ok(report.correctionFits && report.draftActionFits && report.fits && report.action < height/2 && report.stage <= height*0.51);
     assert.ok(report.magicOfferFits&&report.manualHiddenAfterSave,'One-click Magic and manual fallback fit '+portal+' '+width);
     assert.ok(report.uploadInPreview&&report.uploadProgressInPreview&&report.uploadFits,'Preview upload action must fit '+portal+' at '+width);
+    assert.ok(report.variantFits,'Variant comparison and controls must fit '+portal+' at '+width);
     assert.equal(report.beside,width>=660);
     assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
     assert.equal(report.selectedProduct,'fixture-1');
