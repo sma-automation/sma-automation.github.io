@@ -269,6 +269,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     } else if(platform==='tiktok') {
       const allowed=accountChoiceOptions(platform,verified);
       select('visibility','Gewünschte Sichtbarkeit',allowed.visibility);
+      select('is_aigc','Ist das Video KI-generiert?', [['true','Ja, KI-generiert'],['false','Nein']]);
       for(const [key,label] of [['disable_comment','Kommentare erlauben'],['disable_duet','Duette erlauben'],['disable_stitch','Stitch erlauben']]){const input=checkbox(key,label,{forced:allowed.forced[key],invert:true});if(allowed.forced[key])input.setAttribute('aria-description','Vom TikTok-Konto deaktiviert.');}
       const label=make('label');commercial=make('input');commercial.type='checkbox';commercial.id='order-commercial';label.append(commercial,doc.createTextNode(' Dieser Beitrag bewirbt eine Marke, ein Produkt oder eine Dienstleistung.'));options.append(label);
       checkbox('brand_organic_toggle','Eigene Marke');checkbox('brand_content_toggle','Werbung für Dritte');commercialNotice=make('p');commercialNotice.setAttribute('role','status');options.append(commercialNotice);
@@ -348,7 +349,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     humanControls.hidden=!humanReviewAvailable(r);humanEnabled.checked=false;for(const input of humanFields.values())input.checked=false;
     reviewControls.hidden=r.state!=='prepared';for(const [key,input] of reviewFields){input.checked=false;input.parentElement.hidden=key==='tiktok_music_terms'?context.binding.platform!=='tiktok':key==='tiktok_branded_terms'?context.binding.platform!=='tiktok'||r.choices?.brand_content_toggle!==true:false;}
     details.append(make('p','Datei: '+context.name),make('p','Zielkonto: '+(r.account_check?.display_name||r.target?.name||'Noch nicht zugeordnet')+(r.target?.id?' · '+r.target.id:'')));
-    const decisionLabels={visibility:'Sichtbarkeit',made_for_kids:'Speziell für Kinder',contains_synthetic_media:'Synthetische Inhalte',disable_comment:'Kommentare deaktiviert',disable_duet:'Duette deaktiviert',disable_stitch:'Stitch deaktiviert',brand_content_toggle:'Werbung für Dritte',brand_organic_toggle:'Eigene Marke'};
+    const decisionLabels={visibility:'Sichtbarkeit',made_for_kids:'Speziell für Kinder',contains_synthetic_media:'Synthetische Inhalte',disable_comment:'Kommentare deaktiviert',disable_duet:'Duette deaktiviert',disable_stitch:'Stitch deaktiviert',brand_content_toggle:'Werbung für Dritte',brand_organic_toggle:'Eigene Marke',is_aigc:'KI-generierter Inhalt'};
     const visibilityLabels={private:'Privat',public:'Öffentlich',unlisted:'Nicht gelistet',SELF_ONLY:'Nur ich',PUBLIC_TO_EVERYONE:'Öffentlich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
     const decisions=make('ul');for(const [key,value] of Object.entries(r.choices||{}))if(decisionLabels[key])decisions.append(make('li',decisionLabels[key]+': '+(key==='visibility'?visibilityLabels[value]||value:value?'Ja':'Nein')));details.append(decisions);
     appendPost(r.draft);
