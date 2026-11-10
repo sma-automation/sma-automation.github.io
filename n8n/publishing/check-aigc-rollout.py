@@ -15,6 +15,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 BASELINE = ROOT / "tests/provider-cover-pr57-workflow.json"
+INSTALLED_WORKFLOW_ID = "JaidX5YeKl6ZTqjQ"
+INSTALLED_WORKFLOW_NAME = "SMA – Auftrag – Provider und Cover V1"
 EXPECTED_SQL = HERE.parents[1] / "supabase/sql/publication-tiktok-aigc.sql"
 MIGRATION = HERE.parents[1] / "supabase/migrations/20261110110100_publication_tiktok_aigc_v1.sql"
 NEW_KEYS = "['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle','is_aigc']"
@@ -112,6 +114,14 @@ def legacy_from_candidate(candidate):
 
 
 def verify_installed(installed, original, patcher):
+    # A copied, draft, inactive or unrelated workflow is not the actual
+    # published provider/cover entry; content parity alone cannot establish it.
+    if installed.get("id") != INSTALLED_WORKFLOW_ID:
+        raise GateError("INSTALLED_WORKFLOW_ID_UNVERIFIED")
+    if installed.get("name") != INSTALLED_WORKFLOW_NAME:
+        raise GateError("INSTALLED_WORKFLOW_NAME_CHANGED")
+    if installed.get("active") is not True:
+        raise GateError("INSTALLED_WORKFLOW_INACTIVE")
     # Compare the existing installed copy with what the original, pre-AIGC
     # 47-node copy must look like. Only known n8n export defaults are ignored.
     current_nodes = verify_nodes(installed)
