@@ -1142,6 +1142,7 @@ function assertVariantBaseline(snapshot){
  assertFileContext(snapshot.binding);
  if(!current||current.id!==snapshot.preview_id||current.revision!==snapshot.preview_revision||
     assignmentRevision!==snapshot.binding.assignment_revision||sourceFormKey()!==snapshot.source_key||
+    JSON.stringify([$('productChoice').value,catalogLookup.selected()?.product_id||''])!==snapshot.product_key||
     hasDraftEdits()||hasSourceEdits()||uncertainSave||comparisonBase)throw fileError('ASSIGNMENT_CONFLICT');
 }
 async function generateTextVariant(){
@@ -1153,7 +1154,8 @@ async function generateTextVariant(){
  if(input.source_text.length<30){
   status('Für eine neue Variante fehlen noch gesicherte Inhaltsangaben. Ergänze die Beschreibung unter „Inhalt und Ziel“.',true);return;
  }
- const snapshot={binding:fileContext(),preview_id:current.id,preview_revision:current.revision,source_key:sourceFormKey()};
+ const snapshot={binding:fileContext(),preview_id:current.id,preview_revision:current.revision,source_key:sourceFormKey(),
+  product_key:JSON.stringify([$('productChoice').value,catalogLookup.selected()?.product_id||''])};
  const signature=JSON.stringify([snapshot,input]);
  if(!variantAttempt||variantAttempt.finished||variantAttempt.signature!==signature){
   variantAttempt={id:crypto.randomUUID(),signature,finished:false};
@@ -1182,7 +1184,7 @@ async function generateTextVariant(){
    if(data.status==='processing')data=await waitForResult(data.id);
    assertVariantBaseline(snapshot);
    if(data.status==='failed'){request.finished=true;throw Error(errorText(data));}
-   if(data.status!=='completed'||data.preview?.can_publish!==false)throw Error(messages.PREPARATION_UNAVAILABLE);
+   if(data.status!=='completed'||data.preview?.can_publish!==false||data.id!==request.id)throw Error(messages.PREPARATION_UNAVAILABLE);
    request.preview=data;
   }
   const draft=visibleSavedDrafts(data).find(item=>item.platform===selectedPortal);
