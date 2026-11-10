@@ -287,7 +287,10 @@ function savedProductSelection(data){
 function caption(d,body,tags=d.hashtags){
  const target=draftDestination(current.preview.shop_url,d,current.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
- return [body.trim(),tags.map(x=>'#'+x).join(' '),'🛒 '+target.label+': '+target.url].filter(Boolean).join('\n\n');
+ const invitation=current.preview.language==='en'?'Feel free to visit my shop!':'Schau doch mal in meinem Shop vorbei!';
+ let text=body.trim();
+ if(!text.endsWith('\n\n'+invitation)&&text.length+invitation.length+2<=1200)text+='\n\n'+invitation;
+ return [text,tags.map(x=>'#'+x).join(' '),'🛒 '+target.label+': '+target.url].filter(Boolean).join('\n\n');
 }
 function visibleSavedDrafts(data){
  if(data?.status!=='completed'||data.preview?.can_publish!==false||!Array.isArray(data.preview.drafts))throw Error(errorText(data));

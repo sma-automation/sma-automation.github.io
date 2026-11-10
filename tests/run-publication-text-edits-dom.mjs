@@ -43,7 +43,7 @@ let n=0;
  f.context.render({...initial,preview:{...initial.preview,drafts:[d]}});
  assert.equal(f.$('shopLink').href,url);
  f.input('youtube-body','Eine neue Beschreibung für das Video.');
- assert.equal(f.$('drafts').querySelector('.caption').textContent,'Eine neue Beschreibung für das Video.\n\n#Alt #Hotel\n\n🛒 Zum Produkt: '+url);
+ assert.equal(f.$('drafts').querySelector('.caption').textContent,'Eine neue Beschreibung für das Video.\n\nSchau doch mal in meinem Shop vorbei!\n\n#Alt #Hotel\n\n🛒 Zum Produkt: '+url);
  n++;
 }
 {

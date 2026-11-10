@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {requireInput,modelRequest,makePreview}=require('../n8n/publishing/prepare-preview.cjs');
+const {requireInput,modelRequest,makePreview,shopInvitation}=require('../n8n/publishing/prepare-preview.cjs');
 const input={request_id:'12345678-1234-4123-8123-123456789abc',source_text:'SMA Testprodukt 2 ist ein Testartikel für den Shop-Ablauf.',audience:'SMA Testkunden',goal:'Shop-Ablauf kennenlernen',language:'de',media_kind:'video',platforms:['youtube','instagram','facebook','tiktok']};
 const ctx={caption_history:{version:1,scope:'saved_previews',previous_bodies:[]},ok:true,status:'processing',input,shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde'};
 const draft=p=>({platform:p,title:'SMA Shop kennenlernen',body:'SMA Testprodukt 2 ist ein Testartikel für den Shop-Ablauf.',hashtags:['SMATest','Shop'],review_notes:[]});
@@ -18,7 +18,7 @@ test('model request has strict schema and does not retain API responses',()=>{
 test('four drafts, one verified shop per caption, never publish-ready',()=>{
  const p=makePreview(response(input.platforms.map(draft)),ctx);
  assert.equal(p.can_publish,false);assert.equal(p.checks.media,'not_checked');assert.equal(p.drafts.length,4);
- for(const d of p.drafts){assert.equal(d.caption.split(ctx.shop_url).length-1,1);assert.match(d.caption,/#SMATest #Shop/);}
+ for(const d of p.drafts){assert.equal(d.caption.split(ctx.shop_url).length-1,1);assert.match(d.caption,/#SMATest #Shop/);assert.ok(d.body.endsWith('\n\n'+shopInvitation('de')));assert.equal(d.caption.split(shopInvitation('de')).length-1,1);}
 });
 test('internal factual questions stay outside public captions in both languages',()=>{
  for(const language of ['de','en']) {
@@ -29,6 +29,7 @@ test('internal factual questions stay outside public captions in both languages'
    assert.ok(!d.caption.includes(d.review_notes[0]));
    assert.equal(d.caption.split(ctx.shop_url).length-1,1);
    assert.ok(d.caption.startsWith(d.body+'\n\n'));
+   assert.ok(d.body.endsWith(shopInvitation(language)));
   }
  }
 });
@@ -44,9 +45,10 @@ test('wrong tenant shop and non-canonical shop URLs cannot be appended',()=>{
 test('Unicode is preserved and UTF-8 caption budget enforced',()=>{
  const ds=input.platforms.map(draft);ds[0].body='Äpfel, Größe und Qualität: ein verständlicher Testtext.';ds[0].hashtags=['Qualität'];
  assert.match(makePreview(response(ds),ctx).drafts[0].caption,/#Qualität/);
- ds[0].body='界'.repeat(1200);ds[0].hashtags=['界'.repeat(50),'字'.repeat(50),'語'.repeat(50)];assert.ok(Buffer.byteLength(makePreview(response(ds),ctx).drafts[0].caption)<5000);
+ ds[0].body='界'.repeat(1100);ds[0].hashtags=['界'.repeat(50),'字'.repeat(50),'語'.repeat(50)];assert.ok(Buffer.byteLength(makePreview(response(ds),ctx).drafts[0].caption)<5000);
+ ds[0].body='界'.repeat(1200);assert.throws(()=>makePreview(response(ds),ctx),/CAPTION_TOO_LONG/);
 });
-test('model schema constrains arrays and output lengths before decoding',()=>{const schema=modelRequest(ctx).text.format.schema.properties.drafts;assert.equal(schema.minItems,4);assert.equal(schema.maxItems,4);assert.equal(schema.items.properties.title.maxLength,80);assert.equal(schema.items.properties.body.maxLength,1200);assert.equal(schema.items.properties.hashtags.maxItems,3);assert.equal(schema.items.properties.review_notes.items.maxLength,200);});
+test('model schema constrains arrays and output lengths before decoding',()=>{const schema=modelRequest(ctx).text.format.schema.properties.drafts;assert.equal(schema.minItems,4);assert.equal(schema.maxItems,4);assert.equal(schema.items.properties.title.maxLength,80);assert.equal(schema.items.properties.body.maxLength,1150);assert.equal(schema.items.properties.hashtags.maxItems,3);assert.equal(schema.items.properties.review_notes.items.maxLength,200);});
 test('diagnostic step passes only allowlisted categories, never raw error data',()=>{const fs=require('node:fs'),vm=require('node:vm');const source=fs.readFileSync('n8n/publishing/failure-code.js','utf8');const run=raw=>vm.runInNewContext('(function(){'+source+'})()',{ $:()=>({first:()=>({json:{id:'job',lease_id:'lease'}})}),$input:{first:()=>({json:raw})} })[0].json;assert.equal(run({error:'MODEL_INVALID_TEXT [line 1]'}).p_error,'MODEL_INVALID_TEXT');assert.equal(run({error:{message:'Bearer private-session-token and raw response'}}).p_error,'UNCLASSIFIED');assert.equal(run({error:{message:'private text',statusCode:429}}).p_error,'HTTP_429');assert.deepEqual(Object.keys(run({error:'secret'})).sort(),['p_error','p_id','p_lease']);});
 
 test('only server history enters model context; history is never a fact source',()=>{
@@ -70,10 +72,39 @@ test('cosmetic and near-identical wording is rejected, independently of title an
   assert.throws(()=>makePreview(response(ds),c),/CAPTION_TOO_SIMILAR/);
  }
  const ds=input.platforms.map(draft);ds[0].body='Der Shop-Ablauf lässt sich anhand des Artikels SMA Testprodukt 2 kennenlernen.';
- assert.equal(makePreview(response(ds),c).drafts[0].body,ds[0].body);
+ assert.equal(makePreview(response(ds),c).drafts[0].body,ds[0].body+'\n\n'+shopInvitation('de'));
+});
+test('shop invitation is included once in new captions and old customer history cannot suppress true deduplication',()=>{
+ for(const language of ['de','en']){
+  const ds=input.platforms.map(draft);
+  const c={...ctx,input:{...input,language}};
+  const first=makePreview(response(ds),c);
+  for(const d of first.drafts){
+   assert.equal(d.body.split(shopInvitation(language)).length-1,1);
+   assert.match(d.caption,language==='de'?/Schau doch mal in meinem Shop vorbei!/u:/Feel free to visit my shop!/u);
+   assert.ok(d.caption.endsWith(ctx.shop_url),'the owner-derived SMA shop remains the final link');
+   assert.equal(d.caption.split(ctx.shop_url).length-1,1);
+  }
+  const old={platform:'youtube',body:ds[0].body+'\n\n'+shopInvitation(language)};
+  const hist={...c,caption_history:{version:1,scope:'saved_previews',previous_bodies:[old]}};
+  assert.throws(()=>makePreview(response(ds),hist),/CAPTION_TOO_SIMILAR/);
+ }
 });
 test('history comparison is portal scoped and does not leak into preview output',()=>{
  const c={...ctx,caption_history:{version:1,scope:'saved_previews',previous_bodies:[{platform:'tiktok',body:'Ein völlig anderer bereits gespeicherter Text.'}]}};
  const p=makePreview(response(input.platforms.map(draft)),c);
  assert.equal(p.can_publish,false);assert.ok(!JSON.stringify(p).includes('völlig anderer'));
+});
+
+test('both staged n8n code nodes use the exact validated customer-CTA formatter',()=>{
+ const fs=require('node:fs');
+ const source=fs.readFileSync('n8n/publishing/prepare-preview.cjs','utf8').split('\nmodule.exports = ')[0].trimEnd();
+ const workflow=JSON.parse(fs.readFileSync('n8n/publishing/preview-workflow.json','utf8'));
+ for(const name of ['Textauftrag vorbereiten','Text und Shop-Link prüfen']){
+  const nodes=workflow.nodes.filter(n=>n.name===name);
+  assert.equal(nodes.length,1);
+  assert.ok(nodes[0].parameters.jsCode.startsWith(source),
+   'The staged production copy must not use the old caption or model schema: '+name);
+  assert.match(nodes[0].parameters.jsCode,/Schau doch mal in meinem Shop vorbei!/u);
+ }
 });

@@ -35,6 +35,14 @@ function captionSimilar(a,b) {
   return 2*[...left].filter(w=>right.has(w)).length/(left.size+right.size)>=0.9;
 }
 
+function shopInvitation(language) {
+  return language === 'en' ? 'Feel free to visit my shop!' : 'Schau doch mal in meinem Shop vorbei!';
+}
+function addShopInvitation(body,language) {
+  const line=shopInvitation(language);
+  return body.endsWith('\n\n'+line) ? body : body+'\n\n'+line;
+}
+
 function modelRequest(context) {
   const input = requireInput(context.input);
   if (context.ok !== true || context.status !== 'processing') throw Error('CONTEXT_NOT_READY');
@@ -53,15 +61,15 @@ YouTube: klarer sachlicher Such-Titel, danach zwei bis vier natürliche Sätze, 
 Instagram: prägnanter anschaulicher Einstieg und ein bis drei kurze Sätze in gut lesbaren Absätzen. Beschreibe das belegte Motiv oder die Handlung, ohne künstlichen Werbedruck.
 Facebook: zwei bis vier natürliche, zusammenhängende Sätze mit verständlichem Kontext. Konkreten Nutzen nur nennen, wenn die Quelle ihn tatsächlich belegt.
 TikTok: ein bis zwei kurze Sätze mit einem zum sichtbaren Inhalt passenden Einstieg. Keine Schritt-für-Schritt-Analyse und keine erfundenen Trends.
-Titel höchstens 80 Zeichen, body höchstens 1200 Zeichen. Keine pauschalen Superlative, Reichweitengarantien, erfundenen Trends oder künstliches Engagement-Bait.
-Hashtags separat, maximal 3 sachlich passende Begriffe ohne #. Keine Links, Domainnamen, @Mentions, Shop-Platzhalter oder Hashtags in title/body. Den Shop-Link fügt SMA nachträglich aus geprüften Kundendaten hinzu. Keine Aussage 'Link im Profil'. Keine Werbung-/KI-Kennzeichnung erfinden: deren Bestätigung erfolgt gesondert.
+Titel höchstens 80 Zeichen, body höchstens 1150 Zeichen, damit Platz für die automatisch ergänzte Shop-Einladung bleibt. Keine pauschalen Superlative, Reichweitengarantien, erfundenen Trends oder künstliches Engagement-Bait.
+Hashtags separat, maximal 3 sachlich passende Begriffe ohne #. Keine Links, Domainnamen, @Mentions, Shop-Platzhalter oder Hashtags in title/body. Den Shop-Link und eine persönliche Shop-Einladung ergänzt SMA nachträglich aus geprüften Kundendaten. Erzeuge keine eigene Shop-Aufforderung und keine Aussage 'Link im Profil'. Keine Werbung-/KI-Kennzeichnung erfinden: deren Bestätigung erfolgt gesondert.
 review_notes enthält nur konkrete, nötige Inhaltsprüfungen (maximal 5 Hinweise mit jeweils höchstens 200 Zeichen), keine internen technischen Erklärungen. Nenne eine Lücke nur, wenn sie die Aussage im Entwurf betrifft oder für die gewünschte Aussage noch geklärt werden muss. Keine pauschalen Hinweise auf fehlende Marken, Zertifikate oder Nachweise, wenn der Entwurf dazu nichts behauptet. Echte Widersprüche bleiben als konkrete Frage hier sichtbar. Diese internen Hinweise dürfen nicht in title oder body wiederholt werden. Nenne keine Shop-Link-, Profil-Link-, Formatierungs- oder Veröffentlichungsaufgaben in review_notes; diese Liste dient nur fehlenden inhaltlichen Angaben. Der Shop-Link wird garantiert automatisch ergänzt.
 Abschlussprüfung: Übernimm die Unsicherheiten aus source_text NICHT als Standardliste in review_notes. Prüfe jeden Hinweis gegen deinen fertigen Entwurf. Beispiel: Die Quelle beschreibt Zitronen in einer blauen Schale, das Material der Schale ist unbekannt. Ein Beitrag über die Zitronen und die blaue Schale benötigt keinen Materialhinweis: review_notes ist []. Ebenso benötigt ein Beitrag über sichtbares Anbringen, Abnehmen und Einpacken eines unbenannten Gegenstands keine pauschalen Hinweise zu Marke, Mechanik, Stabilität oder Zertifizierung, solange er dazu keine Aussage macht. Bleibt keine konkrete inhaltliche Klärung für den Entwurf übrig, gib review_notes: [] aus.`,
     input: JSON.stringify({ source_text: input.source_text, audience: input.audience, goal: input.goal, language: input.language, media_kind: input.media_kind, platforms: input.platforms, previous_bodies }),
     text: { format: { type: 'json_schema', name: 'sma_publication_preview_v1', strict: true, schema: {
       type: 'object', additionalProperties: false, required: ['drafts'], properties: { drafts: { type: 'array', minItems: input.platforms.length, maxItems: input.platforms.length, items: {
         type: 'object', additionalProperties: false, required: ['platform','title','body','hashtags','review_notes'], properties: {
-          platform: {type:'string',enum:input.platforms}, title:{type:'string',minLength:1,maxLength:80}, body:{type:'string',minLength:10,maxLength:1200},
+          platform: {type:'string',enum:input.platforms}, title:{type:'string',minLength:1,maxLength:80}, body:{type:'string',minLength:10,maxLength:1150},
           hashtags:{type:'array',maxItems:3,items:{type:'string',minLength:1,maxLength:50}}, review_notes:{type:'array',maxItems:5,items:{type:'string',minLength:1,maxLength:200}}
         }
       } } }
@@ -95,8 +103,14 @@ function makePreview(response, context) {
     if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).sort().join() !== 'body,hashtags,platform,review_notes,title' || !input.platforms.includes(d.platform) || seen.has(d.platform)) throw Error('MODEL_INVALID_PLATFORM');
     seen.add(d.platform);
     const title = noLink(safeText(d.title, 80));
-    const body = noLink(safeText(d.body, 1200, 10));
-    if(previous_bodies.some(old=>old.platform===d.platform && captionSimilar(old.body,body))) throw Error('CAPTION_TOO_SIMILAR');
+    const contentBody = noLink(safeText(d.body, 1200, 10));
+    // The model writes factual content only. Every visible post receives the
+    // same owner-specific shop invitation; the URL is strictly server-owned.
+    if(previous_bodies.some(old=>old.platform===d.platform && captionSimilar(
+      old.body.replace(/\n\n(?:Schau doch mal in meinem Shop vorbei!|Feel free to visit my shop!)$/u,''),contentBody
+    ))) throw Error('CAPTION_TOO_SIMILAR');
+    const body=addShopInvitation(contentBody,input.language);
+    if(body.length>1200)throw Error('CAPTION_TOO_LONG');
     if (!Array.isArray(d.hashtags) || d.hashtags.length > 3 || !Array.isArray(d.review_notes) || d.review_notes.length > 5) throw Error('MODEL_INVALID');
     const hashtags = d.hashtags.map(t => safeText(t, 50).normalize('NFC'));
     if (hashtags.some(t => !/^[\p{L}\p{N}_]+$/u.test(t)) || new Set(hashtags.map(t=>t.toLocaleLowerCase('de'))).size !== hashtags.length) throw Error('MODEL_INVALID_HASHTAGS');
@@ -110,4 +124,4 @@ function makePreview(response, context) {
   return {version:1,stage:'text_preview',can_publish:false,language:input.language,media_kind:input.media_kind,shop_url:shop,drafts:input.platforms.map(p=>drafts.find(d=>d.platform===p)),checks:{shop_assignment:'verified',text_structure:'verified',media:'not_checked',facts:'needs_review',disclosures:'not_checked',platform_account:'not_checked',affiliate_attribution:'not_checked',profile_link:'not_checked'}};
 }
 
-module.exports = { requireInput, modelRequest, makePreview };
+module.exports = { requireInput, modelRequest, makePreview, shopInvitation, addShopInvitation };
