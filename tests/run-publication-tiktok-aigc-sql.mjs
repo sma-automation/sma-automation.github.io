@@ -72,7 +72,34 @@ try {
   eq((await asCustomer({...base,choices:{...baseChoices,is_aigc}})).code,'FILE_UNAVAILABLE');
  }
  eq((await asCustomer({...base,platform:'youtube',choices:{visibility:'private',made_for_kids:false,contains_synthetic_media:false,is_aigc:false}})).code,'INVALID_CHOICES');
- eq((await db.query('select count(*)::int n from sma_private.publication_orders_v1')).rows[0].n,1);
+ // A realistic isolated preview and file demonstrate that both true and false
+ // are saved as bound, immutable choices (not just accepted by the shape gate).
+ await db.query("insert into sma_private.publication_files_v1(id,customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,width_px,height_px,duration_ms) values($1,91,$2,'synthetic_aigc_video','Synthetic.mp4','video','video/mp4','version:1',now(),1000,720,1280,10000)",[id(1),uid]);
+ const caption='Ein synthetischer Testclip mit einer bewegten blauen Fläche.\n\n#Demo';
+ const draft=t=>({platform:t,title:'SMA Testtitel',body:'Ein synthetischer Testclip mit einer bewegten blauen Fläche.',caption,hashtags:[],review_notes:[]});
+ await db.query("insert into sma_private.publication_previews_v1(id,user_id,customer_id,input,shop_url,status,preview) values($1,$2,91,$3,$4,'completed',$5)",[
+  id(2),uid,{platforms:['youtube','tiktok'],media_kind:'video',language:'de'},
+  'https://sma-automation.com/app/shop.html?shop=aigc-test',
+  {can_publish:false,drafts:[draft('youtube'),draft('tiktok')]}
+ ]);
+ for(const platform of ['youtube','tiktok']){
+  await db.query("insert into sma_private.publication_assignments_v1(asset_id,platform,preview_id,preview_revision,asset_revision,draft) values($1,$2,$3,1,'version:1',$4)",[id(1),platform,id(2),draft(platform)]);
+ }
+ const trueInput={...base,id:id(23),choices:{...baseChoices,is_aigc:true}};
+ const falseInput={...base,id:id(24),choices:{...baseChoices,is_aigc:false}};
+ for(const [input,value] of [[trueInput,true],[falseInput,false]]){
+  const created=await asCustomer(input);
+  eq(created.state,'preparing');
+  eq(created.choices.is_aigc,value);
+  eq(created.can_upload,false);
+  eq(created.can_publish,false);
+  eq((await asCustomer(input)).id,input.id);
+ }
+ eq((await asCustomer({...trueInput,choices:falseInput.choices})).code,'REQUEST_CONFLICT');
+ const choicesRows=(await db.query("select id,choices,sma_private.publication_provider_fingerprint_v1(j) fp from sma_private.publication_orders_v1 j where id in ($1,$2) order by id",[id(23),id(24)])).rows;
+ eq(choicesRows.map(j=>j.choices.is_aigc),[true,false]);
+ assert.notEqual(choicesRows[0].fp,choicesRows[1].fp);checks++;
+ eq((await db.query('select count(*)::int n from sma_private.publication_orders_v1')).rows[0].n,3);
  eq((await db.query('select count(*)::int n from sma_private.publication_journal_v1')).rows[0].n,0);
  eq((await db.query('select count(*)::int n from sma_private.publication_provider_permissions_v1')).rows[0].n,0);
  eq((await db.query('select count(*)::int n from sma_private.publication_provider_attempts_v1')).rows[0].n,0);
