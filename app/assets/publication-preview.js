@@ -18,6 +18,7 @@ const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:
 const messages={CAPTION_TOO_LONG:'Der gesamte Beitrag mit Link ist zu lang. Bitte kürze den Text oder die Hashtags.',CAPTION_TOO_SIMILAR:'Dieser Text ähnelt einem bereits gespeicherten Text zu stark. Bitte ergänze passende Angaben und erstelle einen neuen Entwurf.',AUTH_REQUIRED:'Bitte melde dich erneut im SMA-Dashboard an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Konto konnte nicht eindeutig zugeordnet werden.',PUBLIC_SHOP_REQUIRED:'Für dein Konto muss zuerst ein öffentlicher SMA-Shop eingerichtet sein.',RATE_LIMITED:'Bitte warte kurz. Zum Schutz vor Mehrfachanfragen gilt mindestens 30 Sekunden Abstand und höchstens 20 Vorschauen pro Stunde.',PREPARATION_RUNNING:'Eine Vorschau wird bereits erstellt. Lade in Kürze die letzte Vorschau.',REVISION_CONFLICT:'Die Vorschau wurde zwischenzeitlich geändert. Lade die letzte Vorschau, bevor du erneut speicherst.',ACCOUNT_CHANGED:'Die Shop-Zuordnung hat sich geändert. Bitte erstelle eine neue Vorschau.',INVALID_EDIT:'Bitte prüfe Titel und Text: keine zusätzlichen Links, Hashtags, @-Angaben oder „Link im Profil“. Titel maximal 80, Text 10–1200 Zeichen.',YOUTUBE_REQUIRES_VIDEO:'Für YouTube bitte Video auswählen.',PREPARATION_TIMEOUT:'Die Erstellung hat zu lange gedauert. Bitte starte eine neue Vorschau.',PREPARATION_FAILED:'Die Texte konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Vorschau.',PREPARATION_UNAVAILABLE:'Die Vorschau ist gerade nicht erreichbar. Bitte versuche es erneut.',INVALID_INPUT:'Bitte prüfe deine Angaben und wähle mindestens ein Portal.'};
 messages.PRODUCT_LINK_UNAVAILABLE='Der verlinkte Artikel ist in deinem öffentlichen Shop nicht mehr eindeutig verfügbar. Wähle einen anderen Artikel oder die Shop-Startseite und speichere den Entwurf.';
 let current=null,busy=false,attempt=null,assets=[],selectedAsset=null,assignmentRevision=0;
+let variantCandidate=null,variantAttempt=null;
 let pendingLink,refreshDraftLink,choosingLinkFor,uncertainSave=null;
 const tabDrafts=tabDraftStore(window);
 let startupDraft=null,tabRecord=null,comparisonBase=null;
@@ -46,6 +47,7 @@ if(selectedPortal){
 
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
+ onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
  getPreview:()=>{
   const draft=current?.preview?.drafts.find(d=>d.platform===selectedPortal);
   const rawTags=$(selectedPortal+'-hashtags')?.value||'';
@@ -68,7 +70,7 @@ if(workspace){
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
- if(workspace){$('workspaceDraftAction').disabled=value;$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;}
+ if(workspace){$('workspaceDraftAction').disabled=value;$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -299,6 +301,7 @@ function visibleSavedDrafts(data){
 }
 function render(data){
  if(signedOut)throw Error(messages.AUTH_REQUIRED);
+ discardTextVariant();
  const visibleDrafts=visibleSavedDrafts(data);
  const target=draftDestination(data.preview.shop_url,visibleDrafts.length===1?visibleDrafts[0]:null,data.preview.language);
  if(!target)throw Error('Die Shop-Adresse ist ungültig.');
@@ -383,7 +386,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';fillInput(null);}
+function clearDraft(){discardTextVariant();closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';fillInput(null);}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
@@ -1129,6 +1132,92 @@ async function generatePreview({withinAutomatic=false}={}){
   render(data);sourceBaseline=sourceFormKey();request.finished=true;workspace?.show('text');status('Die Textvorschau ist gespeichert. Prüfe jetzt die Inhalte und passe sie bei Bedarf an.');
   return true;
  }catch(e){if(!signedOut)status(e.message,true);return false;}finally{lock(false);syncMedia();}
+}
+// Repeated text variants are prepared from the same file and source, not from
+// another Magic scan. The existing assignment remains unchanged until adoption.
+function discardTextVariant(){
+ variantCandidate=null;variantAttempt=null;workspace?.setVariant?.(null);
+}
+function assertVariantBaseline(snapshot){
+ assertFileContext(snapshot.binding);
+ if(!current||current.id!==snapshot.preview_id||current.revision!==snapshot.preview_revision||
+    assignmentRevision!==snapshot.binding.assignment_revision||sourceFormKey()!==snapshot.source_key||
+    hasDraftEdits()||hasSourceEdits()||uncertainSave||comparisonBase)throw fileError('ASSIGNMENT_CONFLICT');
+}
+async function generateTextVariant(){
+ if(busy||signedOut||!workspace||!selectedAsset||!current)return;
+ if(hasDraftEdits()||hasSourceEdits()||uncertainSave||comparisonBase){
+  status('Speichere oder verwerfe zuerst deine Änderungen. Deine bisherige Fassung bleibt unverändert.',true);return;
+ }
+ const input=sourceInput();
+ if(input.source_text.length<30){
+  status('Für eine neue Variante fehlen noch gesicherte Inhaltsangaben. Ergänze die Beschreibung unter „Inhalt und Ziel“.',true);return;
+ }
+ const snapshot={binding:fileContext(),preview_id:current.id,preview_revision:current.revision,source_key:sourceFormKey()};
+ const signature=JSON.stringify([snapshot,input]);
+ if(!variantAttempt||variantAttempt.finished||variantAttempt.signature!==signature){
+  variantAttempt={id:crypto.randomUUID(),signature,finished:false};
+ }
+ const request=variantAttempt;
+ lock(true);status('Neue Textvariante wird erstellt. Der gespeicherte Beitrag bleibt erhalten …');
+ try{
+  await ensureFreshFile(snapshot.binding);assertVariantBaseline(snapshot);
+  const product=await getDraftProduct(snapshot.binding);assertVariantBaseline(snapshot);
+  if(product?.state==='ambiguous')throw Error(askForProduct());
+  const draftInput=attachProduct(input,product);
+  let data=request.preview;
+  if(!data){
+   const auth=await session();assertVariantBaseline(snapshot);
+   try{
+    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
+     body:JSON.stringify({...draftInput,request_id:request.id}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(110000)});
+    if(!response.ok)throw Error('NETWORK');
+    data=await response.json();
+   }catch{
+    assertVariantBaseline(snapshot);
+    status('Die Rückmeldung dauert länger. SMA prüft den Erstellungsstatus …');
+    data=await waitForResult(request.id);
+   }
+   if(!data?.ok){request.finished=true;throw Error(errorText(data));}
+   if(data.status==='processing')data=await waitForResult(data.id);
+   assertVariantBaseline(snapshot);
+   if(data.status==='failed'){request.finished=true;throw Error(errorText(data));}
+   if(data.status!=='completed'||data.preview?.can_publish!==false)throw Error(messages.PREPARATION_UNAVAILABLE);
+   request.preview=data;
+  }
+  const draft=visibleSavedDrafts(data).find(item=>item.platform===selectedPortal);
+  assertVariantBaseline(snapshot);
+  if(!draft)throw Error(messages.PREPARATION_UNAVAILABLE);
+  if(data.id===current.id)throw Error(messages.PREPARATION_UNAVAILABLE);
+  variantCandidate={data,snapshot};
+  request.finished=true;
+  workspace.setVariant?.(draft);
+  workspace.show('source');
+  status('Neue Textvariante bereit. Prüfe sie und wähle „Variante übernehmen“ oder „Weitere Variante erstellen“. Die gespeicherte Fassung ist unverändert.');
+ }catch(error){if(!signedOut)status(error.message,true);}
+ finally{lock(false);syncMedia();}
+}
+async function acceptTextVariant(){
+ if(busy||signedOut||!variantCandidate||!selectedAsset||!current)return;
+ const {data,snapshot}=variantCandidate;
+ if(hasDraftEdits()||hasSourceEdits()){
+  status('Bitte speichere oder verwerfe zuerst deine aktuellen Änderungen. Die neue Variante bleibt zur Auswahl stehen.',true);return;
+ }
+ lock(true);status('Die gewählte Variante wird für genau diese Datei und dieses Portal gespeichert …');
+ try{
+  assertVariantBaseline(snapshot);
+  await ensureFreshFile(snapshot.binding);assertVariantBaseline(snapshot);
+  const updated=await withFreshFile(snapshot.binding,()=>fileRpc('assign',{
+   ...snapshot.binding,preview_id:data.id,preview_revision:data.revision}));
+  assertVariantBaseline(snapshot);
+  if(updated.id!==data.id||updated.revision!==data.revision||updated.assignment_revision<=snapshot.binding.assignment_revision)
+   throw fileError('ASSIGNMENT_CONFLICT');
+  render(updated);sourceBaseline=sourceFormKey();
+  fileChanged();
+  workspace.show('preview');
+  status('Textvariante übernommen und gespeichert. Frühere Fassungen bleiben im Dateiverlauf. Noch keine Veröffentlichungsfreigabe.');
+ }catch(error){if(!signedOut)status(error.message,true);}
+ finally{lock(false);syncMedia();}
 }
 $('previewForm').addEventListener('submit',event=>{event.preventDefault();return generatePreview();});
 
