@@ -44,3 +44,7 @@ Vier neue Prüfungen decken den ausschließlich lesenden Ablauf, getrennte Prüf
 Abschlussexport `e296ab03-0be2-4df0-9cc9-b18820f5e3a8`: genau 12 Nodes, Parameter, Code, Credential-Referenzen und Verbindungen gegen den Generator abgeglichen. `active:false`, leere `pinData`, keine Speicherung erfolgreicher, fehlgeschlagener oder manueller Ausführungsdaten und kein Fortschrittsspeichern; Laufzeitlimit 150 Sekunden, nur gleicher Eigentümer, MCP aus. Die flüchtige Ausführungsanzeige wurde danach geleert. Die UI importiert Nodes zusätzlich und übernimmt Einstellungen nicht zuverlässig; bei Reproduktion nur in einer leeren Testfläche importieren und die gespeicherten Einstellungen erneut prüfen.
 
 Primärquellen, am 03.11.2026 geprüft: [n8n HTTP-Batching](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/#batching), [Unterworkflow je Item](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.executeworkflow/).
+
+## Fortsetzung: gespeicherte Texte inhaltlich vergleichen
+
+Der anschließende [Inhaltsabgleich für beide gespeicherten Kanaltexte](CONTENT_COMPARISON.md) ist abgeschlossen: TikTok eine, YouTube zwei Rückfragen gegen die vorhandenen Video-Beobachtungen. Titel und Captions sind prüfsummengleich geblieben. Die Rückfragen ergänzen den vorhandenen Auftrags-Mediencheck, ohne bisherige Sperren aufzuheben. Außerdem sind [inaktive Upload-Anfragebeschreibungen und Provider-Ergebnisauswertung](PROVIDER_RESULTS.md) vorbereitet. Aktueller Teststand: 301 Node-Tests; weiterhin kein Upload oder Posting.

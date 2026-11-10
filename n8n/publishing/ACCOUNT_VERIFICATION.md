@@ -139,3 +139,7 @@ Die frühere Browserstörung war in dieser Fortsetzung ausreichend behoben, um b
 ## Fortsetzung: gebundene Medienbestätigungen
 
 Die neue Auftragsänderung ist in [PUBLICATION_ORDERS.md](PUBLICATION_ORDERS.md#medienbestätigungen-und-tiktok-hinweise--3-november-2026) dokumentiert. Sie ergänzt ausdrückliche Erklärungen zu Inhalt, Medienrechten und Musik sowie TikTok-Musik-/Werbehinweise. Automatische Medienblocker einschließlich Sightengine bleiben bestehen. Die vier Portalgalerien aus PR #52 sowie Schrift und CSS bleiben unverändert. Es wurden weder ein Tarifwechsel noch eine Social-Media-Veröffentlichung freigegeben.
+
+## Fortsetzung: Inhaltsabgleich und Provider-Ergebnisvorbereitung
+
+Der [gespeicherte Portaltextabgleich](CONTENT_COMPARISON.md) wurde für beide echten YouTube-/TikTok-Zuordnungen ausgeführt. Er ergänzt die offenen Medienhinweise, ersetzt aber keinen frischen Kontonachweis oder eine Medien-/Rechtefreigabe. Die [vorbereitete Provider-Auswertung](PROVIDER_RESULTS.md) unterscheidet Transfer, Verarbeitung, private Ergebnisse und öffentliche Verfügbarkeit. Sie ist noch nicht mit einem aktiven Uploadweg verbunden. Meta bleibt außen vor; kein Tarifwechsel, Upload oder Posting.
