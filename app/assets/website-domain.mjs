@@ -1,5 +1,5 @@
 import {mountWebsiteSetup} from './website-setup.mjs?v=2';
-import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=1';
+import {createWebsiteDraftClient,safeShopLink} from './website-domain-model.mjs?v=2';
 import {createShopButton} from './shop-button.mjs?v=1';
 import {createShopCatalog} from './shop-catalog-model.mjs?v=1';
 import {mountWordpressConnection} from './wordpress-connection.mjs?v=2';
@@ -17,6 +17,7 @@ const messages={
  INVALID_MODE:'Wähle aus, ob du bereits eine Webseite hast.',
  REVISION_CONFLICT:'Der gespeicherte Stand wurde inzwischen geändert. Lade ihn neu, bevor du weiter speicherst.',
  REQUEST_CONFLICT:'Dieser Speicherversuch passt nicht mehr zum Entwurf. Lade den gespeicherten Stand neu.',
+ REQUEST_TIMEOUT:'Die SMA-Verbindung antwortet nicht. Der Vorgang ist gestoppt. Klicke auf „Gespeicherten Stand laden“, bevor du erneut speicherst.',
  BUSY:'Bitte warte, bis der aktuelle Vorgang abgeschlossen ist.'
 };
 
@@ -52,6 +53,8 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  const placeholder=page.querySelector('.package-module-slot');
  if(placeholder)placeholder.replaceWith(root);else page.append(root);
  const $=s=>root.querySelector(s),fields=$('fieldset'),status=$('.sma-website-status');
+ // Keep progress/errors beside the save button, not below all other modules.
+ $('form').after(status);
  page.classList.add('sma-website-managed');
  let activeView='overview',lastView='website';
  const viewNames=['website','shop','domain','connection'];
