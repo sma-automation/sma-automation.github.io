@@ -1032,6 +1032,19 @@ async function runMagicAction(mode,replace=false){
   if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
    $('source_text').value=product.visual;
   }else{
+   // A completed analysis belongs to the file bytes, not the social portal.
+   // Read its authenticated cached result before issuing any new n8n analysis.
+   // This also covers a quick click made before the background status read ends.
+   if(file.media_kind==='video'&&magicState?.status!=='completed'){
+    try{
+     const previous=await magicRpc(file);assertFileContext(context);
+     showMagic(previous,file);
+    }catch(error){
+     if(signedOut||!photoStillSelected(file))throw error;
+     // A failed status read grants no permission. The ordinary guarded
+     // analysis path below decides whether this file may be processed.
+    }
+   }
    if(magicState?.status!=='completed')await recognizePhoto({withinAutomatic:true});
    if(signedOut||!photoStillSelected(file))return;
    if(magicState?.status!=='completed')throw Error($('magicStatus').textContent||'Die Erkennung ist noch nicht abgeschlossen. Bitte versuche es erneut.');
