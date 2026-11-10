@@ -73,8 +73,8 @@ test('checkout preserves exact cents for decimal string and numeric shop prices'
   const r=await request(app({products:[{...product,preis:price}]}),body([{produkt_id:id,menge:3}]));
   assert.equal(r.status,200,'accepted exact decimal '+String(price));
   assert.equal(r.data.warenkorb[0].einzelpreis,expected);
-  assert.equal(r.data.warenkorb[0].summe,expected*3);
-  assert.equal(r.data.gesamtbetrag,expected*3);
+  assert.equal(r.data.warenkorb[0].summe,Math.round(expected*100)*3/100);
+  assert.equal(r.data.gesamtbetrag,Math.round(expected*100)*3/100);
   assert.equal(r.data.checkout_url,'https://test-store.myshopify.com/cart/58648962433355:3');
  }
  const mixed=await request(app({products:[
