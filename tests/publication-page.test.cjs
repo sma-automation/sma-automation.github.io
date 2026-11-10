@@ -10,15 +10,15 @@ function savedTextReceipt(previous,input){
  const draft={...previous.preview.drafts[0],title:input.title,body:input.body,hashtags:input.hashtags};
  return {...previous,revision:previous.revision+1,assignment_revision:input.assignment_revision+1,preview:{...previous.preview,drafts:[draft]}};
 }
-async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let authChange,orderOptions,workspaceOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
+async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let stagedVariant=null;const variantHistory=[];let authChange,orderOptions,workspaceOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:ownerId}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
  client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name,onGallery,opts)=>{workspaceOptions=opts;workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
- return {orderOptions,workspaceOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name,onGallery,opts)=>{workspaceOptions=opts;workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},setVariant(d){stagedVariant=d;variantHistory.push(d);},lockVariant(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
+ return {orderOptions,workspaceOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,variant:()=>stagedVariant,variantHistory,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
 test('saved edits retain server revision, sign-out hides content',async()=>{const p=await boot({latest:result,saveResponse:{...result,revision:2}});const body=p.get('drafts').children[0].querySelector('textarea');body.value='Ein korrigierter sachlicher Testtext.';await p.save();const call=p.calls.find(c=>c.p_action==='save');assert.equal(call.p_id,'own-id');assert.equal(call.p_input.revision,1);assert.equal(call.p_input.drafts[0].body,body.value);assert.ok(!('caption' in call.p_input.drafts[0]));p.signOut();assert.equal(p.get('result').hidden,true);assert.equal(p.get('inputFields').disabled,true);});
@@ -322,6 +322,90 @@ test('preview Magic keeps user text until explicit replacement consent and offer
  await missing.workspaceOptions.onDraftAction('source_text');
  assert.equal(missing.get('sourcePanel').open,true);
  assert.equal(missing.calls.some(c=>c.url),false);
+});
+
+test('repeat-text button generates distinct candidates without touching existing video, assignment or provider',async()=>{
+ const source='Im zehnsekündigen Testclip sieht man ein farbiges Testbild mit der Aufschrift SMA TESTCLIP.';
+ const boundFile={...supportedVideo,verified_at:new Date().toISOString(),width_px:720,height_px:1280,
+  assignments:[{platform:'youtube',revision:4,status:'assigned'}]};
+ const saved={...result,assignment_revision:4,input:{source_text:source,language:'de',media_kind:'video',platforms:['youtube']}};
+ let candidates=0,adoptions=0,uuid=0;
+ const candidate=(id,index)=>({...saved,id,revision:1,assignment_revision:undefined,
+  preview:{...saved.preview,drafts:[{...saved.preview.drafts[0],title:'Andere Variante '+index,
+   body:'Neue sachliche Beschreibung der farbigen Testgrafik Nummer '+index+', ohne erfundene Produktangaben.',
+   hashtags:['SMATest','Version'+index],review_notes:[]}]}});
+ const accepted=[];
+ const p=await boot({portal:'youtube',wide:true,asset:boundFile.id,formTracksDom:true,
+  newUuid:()=>`12345678-1234-4123-8123-${String(++uuid).padStart(12,'0')}`,
+  filesRpc:async a=>{
+   if(a.p_action==='list')return {ok:true,files:[boundFile]};
+   if(a.p_action==='get')return saved;
+   if(a.p_action==='product')return {ok:true,product_context:null};
+   if(a.p_action==='assign'){adoptions++;accepted.push(a.p_input);
+    const updated=candidate(a.p_input.preview_id,2);return {...updated,assignment_revision:5};
+   }
+   return {ok:true,status:'empty'};
+  },fetchResponse:async (url,options)=>{
+   assert.match(url,/sma-publication-preview-v1$/,'a new candidate must only use the caption endpoint');
+   const body=JSON.parse(options.body);
+   assert.equal(body.source_text,source);
+   assert.deepEqual(body.platforms,['youtube']);
+   return candidate(body.request_id,++candidates);
+  }});
+ const oldTitle=p.get('drafts').children[0].querySelector('input').value;
+ await p.workspaceOptions.onNewVariant();
+ assert.equal(candidates,1);
+ assert.equal(adoptions,0,'generation cannot overwrite the saved assignment');
+ assert.equal(p.get('drafts').children[0].querySelector('input').value,oldTitle);
+ assert.equal(p.variant().title,'Andere Variante 1');
+ await p.workspaceOptions.onNewVariant();
+ assert.equal(candidates,2);
+ assert.equal(p.variant().title,'Andere Variante 2');
+ assert.equal(adoptions,0);
+ assert.notEqual(p.calls.filter(c=>c.url)[0].options.body,p.calls.filter(c=>c.url)[1].options.body,
+  'repeat must use a fresh request ID');
+ assert.equal(p.calls.some(c=>c.url?.includes('magic-effect-v1')),false,'never scan the same video again');
+ assert.equal(p.calls.some(c=>c.name==='sma_publication_order_v1'),false,'never make a publication order');
+ await p.workspaceOptions.onAcceptVariant();
+ assert.equal(adoptions,1);
+ assert.equal(accepted[0].asset_id,boundFile.id);
+ assert.equal(accepted[0].asset_revision,boundFile.revision);
+ assert.equal(accepted[0].platform,'youtube');
+ assert.equal(accepted[0].assignment_revision,4,'adoption is a compare-and-swap');
+ assert.equal(accepted[0].preview_id,p.calls.filter(c=>c.url)[1].options.body&&JSON.parse(p.calls.filter(c=>c.url)[1].options.body).request_id);
+ assert.equal(p.get('drafts').children[0].querySelector('input').value,'Andere Variante 2');
+ assert.equal(p.variant(),null);
+ assert.equal(p.get('saveStatus').textContent,'Dieser Datei und diesem Portal zugeordnet');
+});
+
+test('uncommitted edits prevent repeat and adopting a staged text cannot replace newer input',async()=>{
+ const source='Eine sachlich gesicherte Beschreibung des SMA-Testvideos mit Farbbalken und einer Aufschrift.';
+ const file={...supportedVideo,verified_at:new Date().toISOString(),assignments:[{platform:'youtube',revision:3,status:'assigned'}]};
+ const saved={...result,assignment_revision:3,input:{source_text:source,language:'de',media_kind:'video',platforms:['youtube']}};
+ let creates=0,assigns=0;
+ const p=await boot({portal:'youtube',wide:true,asset:file.id,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:a.p_action==='get'?saved:a.p_action==='assign'?(assigns++,saved):{ok:true,product_context:null},
+  fetchResponse:async (url,options)=>{creates++;const body=JSON.parse(options.body);return {...saved,id:body.request_id,
+   preview:{...saved.preview,drafts:[{...saved.preview.drafts[0],title:'Neue Variante',body:'Ein ganz anderer sachlich passender Beitragstext.'}]}};}}
+ );
+ const card=p.get('drafts').children[0];const title=card.querySelector('input');
+ title.value='Noch nicht gespeicherte eigene Fassung';
+ await p.workspaceOptions.onNewVariant();
+ assert.equal(creates,0);
+ assert.equal(assigns,0);
+ assert.equal(title.value,'Noch nicht gespeicherte eigene Fassung');
+ title.value=title.defaultValue;
+ await p.workspaceOptions.onNewVariant();assert.equal(creates,1);
+ assert.equal(p.variant().title,'Neue Variante');
+ p.get('source_text').value='Eine nachträgliche eigene Inhaltsänderung, die nicht einfach verworfen werden darf.';
+ p.get('previewForm').events.input();
+ await p.workspaceOptions.onAcceptVariant();
+ assert.equal(assigns,0);
+ assert.equal(p.get('source_text').value,'Eine nachträgliche eigene Inhaltsänderung, die nicht einfach verworfen werden darf.');
+ assert.equal(p.variant().title,'Neue Variante');
+ p.workspaceOptions.onDiscardVariant();
+ assert.equal(p.variant(),null);
+ assert.equal(assigns,0);
 });
 
 test('cached video recognition survives reopen without provider call and respects existing customer edits',async()=>{
