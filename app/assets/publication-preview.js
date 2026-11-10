@@ -493,6 +493,20 @@ function renderFilePicker(){
   if(!workspace)row.append(info);
   $('filePickerList').append(row);if(workspace?.galleryVisible()||$('filePicker').open)pickerThumbnails.observe(visual,file);else visual.textContent=file.media_kind==='video'?'▶':'▧';
  }
+ // If a new customer has no media compatible with this portal, the empty
+ // gallery must still lead into the large preview, where Add File now lives.
+ // No upload, provider request, or file mutation occurs from this placeholder.
+ if(workspace&&!assets.some(fileFitsPortal)&&filePickerPage===0&&!query){
+  const row=document.createElement('li');row.className='workspace-first-upload';
+  const open=document.createElement('button');open.type='button';open.className='workspace-first-upload-action';
+  open.setAttribute('aria-label','Leere Dateivorschau für den ersten Upload öffnen');
+  open.disabled=busy;
+  const title=document.createElement('strong');title.textContent='Noch keine passende Datei';
+  const hint=document.createElement('small');hint.textContent='Vorschau öffnen und Datei vorbereiten';
+  open.append(title,hint);
+  open.addEventListener('click',()=>workspace.openEmptyPreview());
+  row.append(open);$('filePickerList').append(row);
+ }
  $('filePickerPages').hidden=count<=1;$('filePageCount').textContent='Seite '+(filePickerPage+1)+' von '+count;
  $('filePrevious').disabled=busy||filePickerPage===0;$('fileNext').disabled=busy||filePickerPage>=count-1;
 }
