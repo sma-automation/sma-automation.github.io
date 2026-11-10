@@ -247,13 +247,19 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('save').parentElement.append(repeat);
   const variantPanel = make('section', 'workspaceVariantPanel');
   variantPanel.setAttribute('aria-label', 'Neue Textvariante zur Auswahl');
+  variantPanel.setAttribute('role', 'region');
   variantPanel.hidden = true;
-  const variantHeading = make('h3', 'workspaceVariantHeading', 'Neue Textvariante');
+  const variantHeading = make('h3', 'workspaceVariantHeading', 'Neue Textvariante – Vorschlag zur Auswahl');
+  variantHeading.tabIndex = -1;
   const variantTitle = make('strong', 'workspaceVariantTitle');
   const variantBody = make('p', 'workspaceVariantBody');
   const variantTags = make('p', 'workspaceVariantTags');
   const variantNotice = make('p', 'workspaceVariantNotice',
-    'Dein gespeicherter Beitrag bleibt unverändert, bis du diese Variante übernimmst.');
+    'Der gespeicherte Text bleibt erhalten. Neue Varianten frühestens alle 30 Sekunden, höchstens 20 pro Stunde.');
+  const variantStatus = make('p', 'workspaceVariantStatus');
+  variantStatus.setAttribute('role', 'status');
+  variantStatus.setAttribute('aria-live', 'polite');
+  variantStatus.hidden = true;
   const variantActions = make('div', 'workspaceVariantActions');
   const adopt = button('workspaceVariantAdopt', 'Variante übernehmen', () => options.onAcceptVariant?.());
   const next = button('workspaceVariantNext', 'Weitere Variante erstellen', () => options.onNewVariant?.());
@@ -261,12 +267,14 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const discard = button('workspaceVariantDiscard', 'Verwerfen', () => options.onDiscardVariant?.());
   discard.className = 'secondary';
   variantActions.append(adopt, next, discard);
-  variantPanel.append(variantHeading, variantTitle, variantBody, variantTags, variantNotice, variantActions);
-  $('result').append(variantPanel);
+  variantPanel.append(variantHeading, variantTitle, variantBody, variantTags, variantNotice, variantActions, variantStatus);
+  // Make the alternative immediately discoverable before the long saved draft
+  // and its detail fields. No new preview data or write endpoint.
+
   const previewEdits = button('workspacePreviewEdits', 'Beitragsvorschau öffnen', () => show('preview'));
   previewEdits.className = 'secondary'; previewEdits.hidden = true;
   $('save').parentElement.append(previewEdits);
-  text.append(textHeader, empty, $('result'));
+  text.append(textHeader, variantPanel, empty, $('result'));
   editor.append($('magicActionsText'), $('catalogLookup'), $('sourcePanel'), text);
   $('assetPanel').hidden = true;
   $('resultFileActions').hidden = true;
@@ -322,11 +330,25 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     },
     setVariant(candidate) {
       variantPanel.hidden = !candidate;
-      if (!candidate) { variantTitle.textContent = ''; variantBody.textContent = ''; variantTags.textContent = ''; return; }
+      if (!candidate) {
+        variantTitle.textContent = ''; variantBody.textContent = ''; variantTags.textContent = '';
+        variantStatus.textContent = ''; variantStatus.hidden = true;
+        return;
+      }
       variantTitle.textContent = candidate.title || '';
       variantBody.textContent = candidate.body || '';
       variantTags.textContent = (candidate.hashtags || []).map(tag => '#' + tag).join(' ');
       variantPanel.hidden = false;
+    },
+    revealVariant() {
+      if (variantPanel.hidden) return;
+      variantPanel.scrollIntoView?.({block:'start'});
+      variantHeading.focus?.({preventScroll:true});
+    },
+    setVariantFeedback(message, error=false) {
+      variantStatus.textContent = message || '';
+      variantStatus.hidden = !message;
+      variantStatus.dataset.error = String(error);
     },
     lockVariant(value) {
       for (const node of [repeat, previewRepeat, adopt, next, discard]) node.disabled = value;

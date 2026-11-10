@@ -15,6 +15,7 @@ function setup(previewData={},callbacks={}){
   querySelectorAll(tag){if(tag.startsWith(':scope'))return this.children.filter(n=>n.className==='checks'||n.className==='note'||n.className==='notice');return this.children.flatMap(n=>[...(n.tag===tag?[n]:[]),...n.querySelectorAll(tag)])}
   querySelector(sel){return sel==='.file-picker-body'?pickerBody:null}
   focus(){this.focused=true}
+  scrollIntoView(options){this.scrolledIntoView=true;this.scrollOptions=options}
   replaceChildren(...nodes){for(const child of this.children)child.parentElement=null;this.children=[];this.append(...nodes)}
   pause(){this.paused=true}
  }
@@ -133,6 +134,17 @@ test('new text variant can be reviewed, repeated and adopted without replacing c
  assert.equal(requests,1);
  p.workspace.setVariant({title:'Andere Überschrift',body:'Eine andere, sachlich passende Beschreibung.',hashtags:['Neu']});
  assert.equal(p.get('workspaceVariantPanel').hidden,false);
+ assert.equal(p.get('workspaceVariantPanel').parentElement,p.get('workspaceText'),
+  'candidate is above the saved editor rather than below the long caption');
+ const textChildren=p.get('workspaceText').children;
+ assert.ok(textChildren.indexOf(p.get('workspaceVariantPanel'))<textChildren.indexOf(p.get('result')));
+ p.workspace.show('source');p.workspace.revealVariant();
+ assert.equal(p.get('workspaceVariantPanel').scrolledIntoView,true,'new choice is brought into view');
+ assert.equal(p.get('workspaceVariantHeading').focused,true,'keyboard focus announces the candidate');
+ p.workspace.setVariantFeedback('Bitte 30 Sekunden warten, bevor du eine weitere Variante erstellst.',true);
+ assert.equal(p.get('workspaceVariantStatus').hidden,false);
+ assert.equal(p.get('workspaceVariantStatus').dataset.error,'true');
+ assert.match(p.get('workspaceVariantStatus').textContent,/30 Sekunden/);
  assert.equal(p.get('workspaceVariantTitle').textContent,'Andere Überschrift');
  assert.equal(p.get('workspaceVariantBody').textContent,'Eine andere, sachlich passende Beschreibung.');
  assert.equal(p.get('workspaceVariantTags').textContent,'#Neu');
@@ -145,6 +157,8 @@ test('new text variant can be reviewed, repeated and adopted without replacing c
  p.workspace.lockVariant(false);
  p.workspace.selection(null);
  assert.equal(p.get('workspaceVariantPanel').hidden,true);
+ p.workspace.setVariant(null);
+ assert.equal(p.get('workspaceVariantStatus').hidden,true);
  p.workspace.textAvailable(false);
  assert.equal(p.get('workspaceRepeat').hidden,true);
 });
