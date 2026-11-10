@@ -18,6 +18,14 @@ begin
      or position(old_allowed in definition)=0 or position(old_required in definition)=0
      or position(old_portal in definition)=0 or position('is_aigc' in definition)<>0
      then raise exception 'TIKTOK_AIGC_ORDER_BASELINE_CHANGED';end if;
+  -- An older unfinished TikTok order lacks the new bound declaration.
+  -- Refuse a partial rollout rather than reviving it with a guessed value.
+  if exists(
+    select 1 from sma_private.publication_orders_v1 j
+    where j.binding->>'platform'='tiktok'
+      and j.state<>'cancelled'
+      and jsonb_typeof(j.choices->'is_aigc') is distinct from 'boolean'
+  ) then raise exception 'TIKTOK_AIGC_LEGACY_ACTIVE_ORDER';end if;
   definition:=replace(definition,old_allowed,new_allowed);
   definition:=replace(definition,old_required,new_required);
   execute replace(definition,old_portal,new_portal);
