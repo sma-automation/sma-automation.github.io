@@ -58,6 +58,14 @@ on:
       - supabase/sql/publication-cover-history.sql
       - supabase/migrations/*_publication_cover_history_v1.sql
       - n8n/publishing/*provider-cover*
+      - n8n/publishing/*provider-*
+      - n8n/publishing/*comparison*
+      - n8n/publishing/*content-comparison*
+      - supabase/sql/publication-comparison-queue.sql
+      - supabase/sql/publication-content-comparison.sql
+      - supabase/sql/publication-provider-journal.sql
+      - tests/*provider-*
+      - tests/*comparison*
       - tests/*provider-cover*
       - tests/sql-runtime/provider-cover-pr57-journal.sql
       - supabase/sql/publication-preview-cover-plan.sql
@@ -164,6 +172,8 @@ jobs:
       - name: Test histories, editor drafts and regressions
         run: |
           node --test tests/*.test.cjs
+          node tests/run-publication-comparison-sql.mjs
+          node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
           node tests/run-publication-manual-review-dom.mjs
           node tests/run-original-video-preview-dom.mjs
