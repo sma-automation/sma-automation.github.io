@@ -553,7 +553,11 @@ test('optimizer falls back to media and date for unknown generated filenames',as
  const row=p.get('filePickerList').children[0];
  assert.match(row.querySelector('strong').textContent,/^Video vom/);
  assert.doesNotMatch(row.querySelector('button')['aria-label'],/c6428ddf/);
- assert.match(row.querySelector('details').querySelector('strong').textContent,/Dateiname: SMA-Export/);
+ assert.equal(row.querySelector('details'),undefined,'Dateidetails no longer appears under the gallery title');
+ await row.querySelector('button').click();
+ assert.match(p.get('selectedFileName').textContent,/Dateiname: SMA-Export/);
+ assert.equal(p.get('fileDetails').hidden,false,'file details remain available in the opened preview');
+ assert.equal(p.views.at(-1),'preview');
 });
 
 const historyOrderId='a77a0000-0000-4000-8000-000000000010';

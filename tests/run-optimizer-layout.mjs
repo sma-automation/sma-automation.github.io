@@ -44,6 +44,9 @@ function frame([portal, width, height]) {
     const result = {
       portal, width:innerWidth, action:box('preparePublicationOrder').bottom+scrollY,
       stage:media.height, fits:viewport.scrollWidth<=innerWidth,
+      uploadInPreview:$('deviceBrowse').parentElement?.id==='workspacePreviewActions',
+      uploadProgressInPreview:$('uploadPanel').parentElement?.id==='workspacePreview',
+      uploadFits:box('deviceBrowse').width>0&&box('deviceBrowse').right<=innerWidth,
       beside:body.left>=media.right-1, page:viewport.scrollHeight
     };
     previewData.draftStep={target:'save',label:'Entwurf speichern',note:'Die Vorschau zeigt deine ungespeicherten Änderungen.'};
@@ -103,6 +106,7 @@ try {
     assert.ok(report, portal+' '+width);
     console.log(report);
     assert.ok(report.correctionFits && report.draftActionFits && report.fits && report.action < height/2 && report.stage <= height*0.51);
+    assert.ok(report.uploadInPreview&&report.uploadProgressInPreview&&report.uploadFits,'Preview upload action must fit '+portal+' at '+width);
     assert.equal(report.beside,width>=660);
     assert.ok(report.withdrawnVisible&&report.lookupVisible&&report.noPreselection);
     assert.equal(report.selectedProduct,'fixture-1');

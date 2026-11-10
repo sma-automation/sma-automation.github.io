@@ -16,3 +16,29 @@ export async function refreshMediaCatalog({getSession,owner,signal,request=fetch
  const data=await response.json();await check();
  if(!response.ok||data?.ok!==true)throw Error(['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING','FOLDER_UNAVAILABLE'].includes(data?.code)?data.code:'FILE_SYNC_UNAVAILABLE');
 }
+
+/**
+ * A Drive metadata update can bump its version without changing video bytes.
+ * Only a newly verified owner-scoped catalog row of the SAME file may replace
+ * the local revision when the caller has no drafts, edits or active order.
+ * This never authorizes media analysis, a provider upload or publication.
+ */
+export function canAdoptVerifiedVideoRevision(previous,next,platform,now=Date.now()){
+ const pattern=/^sha256:([a-f0-9]{64}):[0-9]{1,30}$/;
+ const oldHash=pattern.exec(previous?.revision||''),newHash=pattern.exec(next?.revision||'');
+ const fresh=Date.parse(next?.verified_at);
+ return !!previous&&!!next&&typeof previous.id==='string'&&previous.id===next.id&&
+  previous.media_kind==='video'&&next.media_kind==='video'&&
+  previous.mime_type==='video/mp4'&&next.mime_type===previous.mime_type&&
+  previous.name===next.name&&
+  Number.isSafeInteger(previous.size_bytes)&&previous.size_bytes>0&&
+  next.size_bytes===previous.size_bytes&&
+  !!oldHash&&!!newHash&&oldHash[1]===newHash[1]&&previous.revision!==next.revision&&
+  ['youtube','tiktok','instagram','facebook'].includes(platform)&&
+  !previous.assignments?.some(a=>a.platform===platform)&&
+  Array.isArray(next.assignments)&&!next.assignments.some(a=>a.platform===platform)&&
+  Number.isSafeInteger(next.duration_ms)&&next.duration_ms>0&&
+  Number.isSafeInteger(next.width_px)&&next.width_px>0&&
+  Number.isSafeInteger(next.height_px)&&next.height_px>0&&
+  Number.isFinite(fresh)&&Number.isFinite(now)&&now>=fresh&&now-fresh<14*60*1000;
+}

@@ -1,7 +1,7 @@
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
-import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
+import {missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=2';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
@@ -10,7 +10,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=17';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=18';
 import {installOrderReview} from './publication-order.mjs?v=23';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
@@ -488,7 +488,10 @@ function renderFilePicker(){
    const version=document.createElement('small');version.textContent=description.version;
    caption.append(title,version);row.append(caption);
   }
-  row.append(info);$('filePickerList').append(row);if(workspace?.galleryVisible()||$('filePicker').open)pickerThumbnails.observe(visual,file);else visual.textContent=file.media_kind==='video'?'▶':'▧';
+  // Wide gallery: the opened preview already has a dedicated Dateidetails tab.
+  // Retain legacy picker details only outside the optimizer workspace.
+  if(!workspace)row.append(info);
+  $('filePickerList').append(row);if(workspace?.galleryVisible()||$('filePicker').open)pickerThumbnails.observe(visual,file);else visual.textContent=file.media_kind==='video'?'▶':'▧';
  }
  $('filePickerPages').hidden=count<=1;$('filePageCount').textContent='Seite '+(filePickerPage+1)+' von '+count;
  $('filePrevious').disabled=busy||filePickerPage===0;$('fileNext').disabled=busy||filePickerPage>=count-1;
@@ -952,14 +955,40 @@ async function refreshFiles(){
  if(busy)return;if(hasDraftEdits()||hasSourceEdits()){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
  lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
 }
+// A metadata-only Drive version bump should not strand a brand-new, empty
+// portal preparation. Never transfer a saved draft, edits, review or approval.
+async function recoverMetadataOnlyVideoRevision(context){
+ const old=selectedAsset;
+ if(signedOut||!old||old.id!==context.asset_id||old.revision!==context.asset_revision||
+    selectedPortal!==context.platform||assignmentRevision!==0||current||attempt||tabRecord||
+    pendingLink!==undefined||hasDraftEdits()||hasSourceEdits()||$('source_text').value.trim())return false;
+ const catalog=await optimizerCatalog();
+ if(signedOut||selectedAsset!==old||!Array.isArray(catalog.files))return false;
+ const fresh=catalog.files.find(file=>file.id===context.asset_id);
+ if(!canAdoptVerifiedVideoRevision(old,fresh,selectedPortal))return false;
+ if((await session()).user.id!==previewOwnerId||signedOut||selectedAsset!==old)return false;
+ assets=catalog.files;selectedAsset=fresh;assignmentRevision=0;
+ clearDraft();renderSelectedFile();renderFilePicker();
+ resetMediaCheck('Die aktualisierte Dateiversion ist geladen. Die Medienprüfung bleibt offen.');
+ fileChanged();
+ return true;
+}
 async function refreshVideoMetadata(){
  if(busy||signedOut||!selectedAsset)return;
  const context=fileContext();lock(true);$('videoMetadataStatus').textContent='Dateiangaben werden im Kundenordner geprüft …';
  try{
   await ensureFreshFile(context,true);assertFileContext(context);renderVideoMetadata();syncMagicButton();
   status(missingVideoMetadata(selectedAsset).length?'Google Drive hat die fehlenden Dateiangaben noch nicht bereitgestellt. Bitte später erneut aktualisieren. Deine Eingaben bleiben erhalten.':'Dateiangaben aktualisiert. Deine Eingaben bleiben erhalten.');
- }catch(e){if(!signedOut){status(e.message,true);$('videoMetadataStatus').textContent=e.message;}}
- finally{lock(false);}
+ }catch(e){
+  if(signedOut)return;
+  let adopted=false;
+  if(e.code==='FILE_CHANGED')try{adopted=await recoverMetadataOnlyVideoRevision(context);}catch{adopted=false;}
+  if(adopted){
+   $('videoMetadataStatus').textContent='';
+   status('Dateiangaben vollständig. SMA hat die neue Drive-Version desselben geprüften Videos übernommen. Erstelle jetzt den Beitragstext.');
+  }else{status(e.message,true);$('videoMetadataStatus').textContent=e.message;}
+ }
+ finally{lock(false);syncMedia();}
 }
 $('refreshVideoMetadata').addEventListener('click',refreshVideoMetadata);
 $('refreshFiles').addEventListener('click',()=>retryHistoryPreview&&!signedOut?loadHistoryPreview():refreshFiles());

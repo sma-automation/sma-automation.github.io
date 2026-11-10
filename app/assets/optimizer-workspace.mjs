@@ -48,7 +48,9 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const galleryHeader = make('div', 'workspaceGalleryHeader');
   const galleryActions = make('div', 'workspaceGalleryActions');
   $('deviceBrowse').textContent = 'Datei hinzufügen';
-  galleryActions.append($('deviceBrowse'), $('refreshFiles'));
+  // The gallery shows only existing files and refresh. Adding a new file
+  // belongs to the expanded preview, not under every thumbnail.
+  galleryActions.append($('refreshFiles'));
   galleryHeader.append(make('h2', null, 'Deine Dateien'), galleryActions);
   const pickerBody = $('filePicker').querySelector('.file-picker-body');
   files.append(galleryHeader, pickerBody);
@@ -86,14 +88,18 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const headingRow = make('div', 'workspacePreviewHeader');
   const headingText = make('div');
   headingText.append(previewHeading, previewName);
-  headingRow.append(headingText);
+  const previewActions = make('div', 'workspacePreviewActions');
+  previewActions.append($('deviceBrowse'));
+  headingRow.append(headingText, previewActions);
   const draftState = make('div', 'workspaceDraftState');
   const draftNotice = make('p', 'workspaceDraftNotice');
   draftNotice.setAttribute('role', 'status');
   const draftAction = button('workspaceDraftAction', '', () => options.onDraftAction?.(draftAction.dataset.target));
   draftAction.className = 'secondary'; draftAction.hidden = true;
   draftState.append(draftNotice, draftAction);
-  preview.append(previewNav, headingRow, draftState, previewTabs, postView, detailView);
+  // Keep the existing device-upload handler, progress and retry controls
+  // together in the expanded preview. No new endpoint or upload behavior.
+  preview.append(previewNav, headingRow, $('uploadPanel'), draftState, previewTabs, postView, detailView);
   const post = make('article', 'workspacePost');
   post.setAttribute('aria-label', 'Darstellung des Beitrags');
   post.dataset.portal = portalName.toLowerCase();
@@ -234,7 +240,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('exampleFiles').hidden = true;
   const statusRow = make('div', 'workspaceStatus');
   statusRow.append($('portalStatus'));
-  main.append(toolbar, $('uploadPanel'), statusRow, $('magicReplaceNotice'), files, source, preview);
+  main.append(toolbar, statusRow, $('magicReplaceNotice'), files, source, preview);
 
   function show(key) {
     if (key === 'text') key = 'source';
