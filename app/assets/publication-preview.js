@@ -481,6 +481,11 @@ function renderSelectedFile(refreshCover=false){
  $('noSelectedFile').hidden=!!selectedAsset;$('fileDetails').hidden=!selectedAsset;$('fileDetails').open=false;
  $('assetPreview').hidden=!selectedAsset;$('assetPreviewKind').textContent=selectedAsset?.media_kind==='video'?'Video':'Bild';
  $('assetStatus').textContent=selectedAsset?'':'„Dateien durchsuchen“ öffnet dein Gerät. Bereits hochgeladene Dateien findest du unter „Kundenordner öffnen“.';
+ // Notify only the same-origin embedded dashboard of the selected, owned
+ // file identity. The parent can retain this file across portal tabs; every
+ // receiving portal repeats its normal authenticated file/revision checks.
+ if(workspace&&window.parent!==window)window.top.postMessage(
+  {type:'sma-publication-selected-file',assetId:selectedAsset?.id||null},location.origin);
  void loadAssetPreview({refresh:refreshCover});
 }
 function renderFilePicker(){
