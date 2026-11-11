@@ -21,6 +21,22 @@ test('back and forward restore the same editor frame instead of discarding edits
  p.history.forward();assert.equal(p.view().optimizerPage.hidden,false);assert.equal(p.view().optimizerFrames.children[0],frame);assert.equal(frame.unsaved,'customer draft');
  p.closeOptimizer();p.openOptimizer('instagram',p.trigger);assert.equal(p.view().optimizerFrames.children.length,1);
 });
+test('underlined portal tabs keep selected file and separate drafts for all destinations',()=>{
+ const p=setup();p.select('own-video');p.openOptimizer('instagram',p.trigger);
+ const nav=p.view().optimizerHeader.children.find(x=>x.id==='smaPortalQuickTabs');
+ assert.ok(nav);assert.deepEqual(nav.children.map(x=>x.dataset.portal),['youtube','tiktok','instagram','facebook']);
+ assert.equal(nav.children[2].attrs?.['aria-pressed']??nav.children[2]['aria-pressed'],'true');
+ const instagram=p.view().optimizerFrames.children[0];instagram.unsaved='Own unpublished text';
+ nav.children[0].events.click();
+ assert.equal(p.history.state.portal,'youtube');
+ assert.equal(p.history.state.assetId,'own-video');
+ assert.equal(p.view().optimizerFrames.children.length,2);
+ assert.equal(instagram.unsaved,'Own unpublished text');
+ const youtubeFrame=p.view().optimizerFrames.children[1];
+ assert.equal(new URL(youtubeFrame.src).searchParams.get('asset'),'own-video');
+ assert.equal(nav.children[0]['aria-pressed'],'true');
+ p.clearOptimizer();
+});
 test('different portals retain separate editor frames and logout clears all of them',()=>{
  const p=setup();p.openOptimizer('instagram',p.trigger);p.closeOptimizer();p.openOptimizer('youtube',p.trigger);let frames=p.view().optimizerFrames.children;assert.equal(frames.length,2);assert.equal(frames[0].hidden,true);assert.equal(frames[1].hidden,false);
  p.clearOptimizer();assert.equal(p.view().optimizerFrames.children.length,0);assert.equal(p.history.state,null);assert.equal(p.view().optimizerPage.hidden,true);
