@@ -60,3 +60,12 @@ vorhandenen Datei-Kapitelreiter. Sie führt **keine zusätzlichen
 Netzwerkaufrufe** aus und wird beim Dashboard-Abmelden vollständig
 abgebaut. Der bestehende Shop, die History und alle Kundenrechte
 bleiben unverändert.
+
+## Klick-Rückmeldung ohne vorgetäuschten Seitenwechsel
+
+Ein Klick auf die mobile Schnellleiste markiert **nicht** mehr vorschnell
+den gewählten Eintrag, solange die ursprüngliche Dashboard-Navigation
+die tatsächlich sichtbare Seite noch nicht gewechselt hat. Ein
+erfolgreicher Event-Handler allein ist kein Beweis für den Wechsel.
+Die blaue Markierung folgt ausschließlich der echten Seiten- und
+Reiterauswahl. Ein zusätzlicher DOM-Test kontrolliert diesen Fall.
