@@ -50,7 +50,7 @@ async function authenticatedStream({fetchImpl,url,tokenProvider,maxBytes,categor
  try{
   res=await fetchImpl(url,{
    method:'GET',headers:{authorization:'Bearer '+token,accept:'application/octet-stream',
-    'accept-encoding':'identity'},
+    'accept-encoding':'identity',...(category==='STORAGE'?{apikey:token}:{})},
    redirect:'error',cache:'no-store',signal:AbortSignal.timeout(timeoutMs)
   });
  }catch{throw Error(category+'_NETWORK_FAILED');}
