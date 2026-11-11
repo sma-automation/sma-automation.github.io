@@ -21,16 +21,16 @@ test('section list finds main dashboard areas without reading external services'
  assert.deepEqual(quickFindMatches('FRUHLING',sectionCatalog,files).files.map(f=>f.id),['b']);
  assert.equal(quickFindMatches('x',sectionCatalog,files).files.length,0);
 });
-async function fixture(){
+async function fixture({areas=['overview','files','publishing']}={}){
  const {parseHTML}=await parser;
  const {document:doc,window}=parseHTML('<html><head></head><body><header class="topbar"><div class="topbar-title">Dashboard</div><div class="topbar-actions"><span id="profile">Profil</span><button id="logout">Abmelden</button></div></header><main><div id="page-overview"></div><div id="page-publishing"></div></main></body></html>');
  window.HTMLElement.prototype.focus=function(){};
  const calls=[];
  const module=await imported;
  const view=module.mountDashboardQuickFind({
-  doc,getAreas:()=>module.sectionCatalog.filter(s=>['overview','files','publishing'].includes(s.key)),
+  doc,getAreas:()=>module.sectionCatalog.filter(s=>areas.includes(s.key)),
   getFiles:()=>files,
-  onNavigate:key=>{calls.push('section:'+key);return true;},
+  onNavigate:(key,query)=>{calls.push('section:'+key+(query===undefined?'':':'+query));return true;},
   onOpenFile:id=>{calls.push('file:'+id);return true;}
  });
  return {doc,window,view,calls,get:id=>doc.getElementById(id)};
@@ -55,6 +55,23 @@ test('global search opens in same dashboard and finds a file via typed filename'
  f.view.destroy();
  assert.equal(f.get('smaQuickFindDialog'),null);
  assert.equal(f.get('smaGlobalQuickFind'),null);
+});
+test('order searches use existing sections rather than loading account data into global results',async()=>{
+ const f=await fixture({areas:['overview','history','shop']});f.view.show();
+ const input=f.get('smaQuickFindInput');input.value='1001';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ const names=[...f.get('smaQuickFindResults').querySelectorAll('button')].map(x=>x.textContent);
+ assert(names.some(x=>x.includes('In Aufträgen suchen')));
+ assert(names.some(x=>x.includes('In Bestellungen suchen')));
+ const history=[...f.get('smaQuickFindResults').querySelectorAll('button')].find(x=>x.textContent.includes('In Aufträgen suchen'));
+ history.click();await tick();
+ assert.deepEqual(f.calls,['section:history-search:1001']);
+ assert.equal(f.get('smaQuickFindDialog').hidden,true);
+ f.view.show();input.value='1001';input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ const orders=[...f.get('smaQuickFindResults').querySelectorAll('button')].find(x=>x.textContent.includes('In Bestellungen suchen'));
+ orders.click();await tick();
+ assert.deepEqual(f.calls,['section:history-search:1001','section:shop-search:1001']);
+ f.view.destroy();
 });
 test('quick search does not expose files that are absent from the caller’s own catalog',async()=>{
  const f=await fixture();
@@ -86,7 +103,11 @@ test('dashboard integration routes through existing sidebar and preserves sessio
  assert.match(src,/dashboardChapters\?\.controllers\.get\('publishing'\)\?\.select\('files'\)/);
  assert.match(src,/return fileView\.openFile\(id\)===true/);
  assert.match(src,/dashboardQuickFind\?\.destroy\(\)/);
- assert.match(src,/const nav=findAreaNavigation\(key\)/);
+ assert.match(src,/const nav=findAreaNavigation\(target\)/);
+ assert.match(src,/key==='history-search'/);
+ assert.match(src,/key==='shop-search'/);
+ assert.match(src,/getElementById\('smaHistorySearch'\)/);
+ assert.match(src,/getElementById\('smaOrderSearch'\)/);
 });
 test('finder has no network, browser storage, posting or own access control bypass',()=>{
  const src=readFileSync('app/assets/dashboard-quick-find.mjs','utf8');
