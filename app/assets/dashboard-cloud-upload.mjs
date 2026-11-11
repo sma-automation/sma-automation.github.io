@@ -46,7 +46,7 @@ function publishingNavigationItem(doc){
  )];
  const matches=nodes.filter(el=>{
   if(el.closest('header,[role="banner"],[id^="page-"],main'))return false;
-  const text=(el.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();
+  const text=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
   const route=[el.dataset?.page,el.dataset?.target,el.getAttribute('href'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
   return text==='veröffentlichung'||text==='publishing'||route.includes('publishing');
  });
@@ -65,15 +65,15 @@ function styleAccountTabs(header){
  for(const category of ['profile','package','language','logout']){
   const match=candidates.find(el=>{
    if(el.closest('#smaDashboardCloudUpload')||tabs.some(t=>t.contains(el)))return false;
-   const text=(el.textContent||'').replace(/\\s+/g,' ').trim();
+   const text=(el.textContent||'').replace(/\s+/g,' ').trim();
    const hint=[el.id,typeof el.className==='string'?el.className:'',el.getAttribute('aria-label'),
     el.getAttribute('title'),el.getAttribute('name'),el.getAttribute('data-language')].join(' ');
    if(category==='profile')return /profil|profile|benutzername|username|user-name|account-name|kundenname/i.test(hint)||
-      /^Profil(?:name)?(?:\\s*:.*)?$/i.test(text);
+      /^Profil(?:name)?(?:\s*:.*)?$/i.test(text);
    if(category==='package')return /paket|tarif|subscription|plan/i.test(hint+' '+text);
    if(category==='language')return /sprache|language|locale|lang(?:uage)?[-_]?switch/i.test(hint)||
       /^(DE|EN|Deutsch|English)$/i.test(text)||el.tagName==='SELECT'&&/Deutsch|English|DE|EN/.test(text);
-   return /abmelden|logout|sign\\s*out/i.test(hint+' '+text);
+   return /abmelden|logout|sign\s*out/i.test(hint+' '+text);
   });
   if(match){match.classList.add('sma-dashboard-account-tab');match.dataset.smaAccountTab=category;tabs.push(match);}
  }
