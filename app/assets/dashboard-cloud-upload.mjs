@@ -40,28 +40,31 @@ function svgCloud(doc){
 
 // Find the real existing "Veröffentlichung" navigation item without
 // changing the sidebar, its menu structure, its logo or any click handlers.
+// Place the upload in the black sidebar ABOVE the heading "ARBEITSBEREICH".
+ // The screenshot shows this space BELOW the unchanged SMA logo, not inside
+ // the Arbeitsbereich menu between Übersicht and Veröffentlichung.
 function publishingNavigationItem(doc){
- // The upload must NEVER use a navigation element from the white workspace.
- // Earlier generic "nav" discovery could choose a content menu and put the
- // cloud above the page heading instead of in the black sidebar.
  const roots=[...doc.querySelectorAll('aside,.sidebar,#sidebar,[data-sidebar]')]
   .filter(root=>!root.closest('main,[id^="page-"],[role="main"],header,[role="banner"]'));
- for(const sidebar of roots){
-  const item=[...sidebar.querySelectorAll('a,button,[role="button"]')].find(el=>{
-   const text=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-   const route=[el.dataset?.page,el.dataset?.target,el.dataset?.section,
-    el.getAttribute('href'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
-   return text==='veröffentlichung'||text==='publishing'||
-    text.endsWith(' veröffentlichung')||/\bpublishing\b/.test(route);
-  });
-  if(!item)continue;
-  // If the actual sidebar uses list rows, insert another row at the same
-  // level rather than placing a stray button directly inside a <ul>.
-  const anchor=item.closest('li,.sidebar-item,.nav-item,.menu-item,.sidebar-link,.nav-link,.menu-link')||item;
-  if(sidebar.contains(anchor))return anchor;
-  return item;
+ for(const root of roots){
+  const navigation=[...root.querySelectorAll('a,button,[role="button"]')];
+  if(!navigation.some(el=>{
+   const label=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+   const route=[el.dataset?.page,el.dataset?.target,el.getAttribute('href')].filter(Boolean).join(' ').toLowerCase();
+   return label==='veröffentlichung'||label.endsWith(' veröffentlichung')||/\bpublishing\b/.test(route);
+  }))continue;
+  const headings=[...root.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,small,strong,div,label')]
+   .filter(el=>(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase()==='arbeitsbereich');
+  if(!headings.length)continue;
+  let anchor=headings.at(-1);
+  // A heading may be nested in the sidebar's <nav>. Move up to the first
+  // child of the sidebar so Upload is OUTSIDE the workspace navigation.
+  while(anchor.parentElement&&anchor.parentElement!==root)anchor=anchor.parentElement;
+  if(anchor.parentElement===root)return anchor;
  }
- return null; // Fail closed if the authenticated sidebar is not present.
+ // If the section boundary is not identifiable, do not place the button
+ // in an arbitrary navigation location. No other dashboard area is touched.
+ return null;
 }
 
 // Keep the four original header controls and their events. Give them the
@@ -113,7 +116,7 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
  button.append(svgCloud(doc));
  const buttonLabel=doc.createElement('span');buttonLabel.className='sma-cloud-upload-label';
  button.append(buttonLabel);
- // Exactly as requested: upload on the LEFT, immediately ABOVE Publishing.
+ // Upload below the original logo but OUTSIDE / above ARBEITSBEREICH.
  // The existing portal chooser and upload workflow are otherwise unchanged.
  button.classList.add('sma-cloud-sidebar-upload');
  const listHost=publishing.parentElement?.matches('ul,ol')?doc.createElement('li'):null;
