@@ -25,7 +25,7 @@ export async function boundedPrivateDownload(stream,maxBytes,expectedBytes){
    requireValue(part instanceof Uint8Array&&part.byteLength>0,'INVALID_DOWNLOAD_CHUNK');
    size+=part.byteLength;
    requireValue(size<=expectedBytes&&size<=maxBytes,'DOWNLOAD_TOO_LARGE');
-   parts.push(Buffer.from(part.buffer,part.byteOffset,part.byteLength));
+   parts.push(Buffer.from(part)); // detach from potentially reused transport buffer
   }
  }catch(e){
   if(typeof stream.destroy==='function')stream.destroy();
