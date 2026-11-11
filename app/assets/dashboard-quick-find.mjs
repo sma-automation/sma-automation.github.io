@@ -17,6 +17,14 @@ export const sectionCatalog=Object.freeze([
  {key:'seller',label:'Verkäufer',hint:'Verkauf Beratung'},
  {key:'assistant',label:'Assistent',hint:'24/7 Assistent'}
 ]);
+export function canSearchHistory(value){
+ const q=typeof value==='string'?value.trim():'';
+ return q.length>=2&&q.length<=80&&new TextEncoder().encode(q).length<=240;
+}
+export function canSearchOrders(value){
+ const q=typeof value==='string'?value.trim():'';
+ return q.length>=2&&q.length<=60&&/^[\p{L}\p{N} #./-]*$/u.test(q);
+}
 export function quickFindMatches(query,areas,files){
  const q=normalize(query);
  const nav=Array.isArray(areas)?areas:[];
@@ -25,7 +33,7 @@ export function quickFindMatches(query,areas,files){
   files:q.length>=2?filterDashboardFiles(files||[],q).slice(0,10):[]
  };
 }
-export function mountDashboardQuickFind({doc,getAreas,getFiles,onNavigate,onOpenFile}){
+export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',onNavigate,onOpenFile}){
  if(!doc||[getAreas,getFiles,onNavigate,onOpenFile].some(fn=>typeof fn!=='function')||
    doc.getElementById('smaGlobalQuickFind'))return null;
  const header=[...doc.querySelectorAll('header,[role="banner"],.topbar,.top-bar')]
@@ -66,22 +74,44 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,onNavigate,onOpen
  const results=create('div');results.id='smaQuickFindResults';
  panel.append(head,input,status,results);overlay.append(panel);doc.body.append(overlay);
  let disposed=false;
- function hide(){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();button.focus();}
- function item(title,subtitle,handler){
+ function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)button.focus();}
+ function item(title,subtitle,handler,restoreFocus=true){
   const el=create('button');el.type='button';el.className='sma-qf-item';
   el.append(create('strong',title),create('small',subtitle));el.addEventListener('click',async()=>{
    if(disposed)return;
-   try{if(await handler()===true)hide();else status.textContent='Bereich derzeit nicht verfügbar.';}
+   try{if(await handler()===true)hide(restoreFocus);else status.textContent='Bereich derzeit nicht verfügbar.';}
    catch{status.textContent='Der Bereich konnte nicht geöffnet werden.';}
   });results.append(el);
  }
  function render(){
   if(disposed||overlay.hidden)return;
   results.replaceChildren();
-  const found=quickFindMatches(input.value,getAreas(),getFiles());
+  const query=input.value.trim(),areas=getAreas();
+  const found=quickFindMatches(query,areas,getFiles());
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key));
   for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
-  status.textContent=results.children.length?results.children.length+' Treffer':'Keine Treffer. Versuche einen kürzeren Begriff.';
+  // Deep-search actions are NOT matches; keep them out of the hit count.
+  let deepActions=0;
+  if(Array.isArray(areas)){
+   if(canSearchHistory(query)&&areas.some(a=>a.key==='history')){
+    item('In Aufträgen suchen','Eigene Veröffentlichungsaufträge durchsuchen',()=>onNavigate('history-search',query),false);
+    deepActions++;
+   }
+   if(canSearchOrders(query)&&areas.some(a=>a.key==='shop')){
+    item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false);
+    deepActions++;
+   }
+  }
+  const directHits=found.areas.length+found.files.length;
+  const fileStatus=getFileStatus();
+  const prefix=directHits===1?'1 direkter Treffer':directHits>1?directHits+' direkte Treffer':'';
+  if(fileStatus==='loading')
+   status.textContent=(prefix?prefix+' · ':'')+'Kundendateien werden geladen …';
+  else if(fileStatus==='error')
+   status.textContent=(prefix?prefix+' · ':'')+'Dateiliste nicht erreichbar. Bitte unter „Dateien“ aktualisieren.';
+  else
+   status.textContent=prefix||(deepActions?'Keine direkten Treffer. Suche in Aufträgen oder Bestellungen.':'Keine Treffer. Versuche einen kürzeren Begriff.');
+  status.setAttribute('aria-busy',fileStatus==='loading'?'true':'false');
  }
  function show(){if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value='';render();input.focus();}
  const keydown=e=>{

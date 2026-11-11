@@ -57,3 +57,59 @@ History und Bestellungen, bessere Statusanzeigen für laufende Aktionen
 und kurze, mobile Hauptseiten. Die Navigation soll dabei die vorhandenen
 Kapitelreiter mit feinem Unterstrich beibehalten; keine zusätzlichen
 langen Tabellen oder doppelten Beschreibungen.
+
+
+## Ergänzung: Auftrags- und Bestellsuche direkt erreichen (11.11.2026)
+
+Ab zwei eingegebenen Zeichen bietet die globale Suche zusätzlich
+**„In Aufträgen suchen“** und **„In Bestellungen suchen“** an,
+sofern die entsprechende Dashboard-Seite für das Konto vorhanden ist.
+Diese beiden Aktionen übernehmen den Suchtext in die jeweils bestehende
+Suche, öffnen den passenden Reiter und zeigen das zugehörige Eingabefeld.
+
+- History nutzt ausschließlich den bereits installierten,
+  kundenbezogenen `sma_publication_history_find_v1`-RPC.
+- Shop nutzt ausschließlich die vorhandenen Bestellnummernfilter
+  mit dem bereits bestehenden `user_id`- und RLS-Schutz.
+- Ungültige Shop-Suchzeichen werden nicht ungeprüft weitergereicht;
+  stattdessen wird nur das Suchfeld geöffnet.
+- Ist eine eingebettete Shop-Seite noch nicht geladen, bleibt die
+  globale Suche mit einem Hinweis offen. Es entstehen keine weiteren
+  Berechtigungen, Datenkopien, Zahlungen oder Veröffentlichungen.
+
+Die Suchtreffer für Aufträge und Bestellungen werden **nicht** im
+globalen Dialog gespeichert, sondern ausschließlich innerhalb der
+bestehenden, geschützten Fachansichten abgerufen.
+
+### Präzise Übernahme zulässiger Suchbegriffe
+
+Die zwei Direktaktionen erscheinen nur, wenn die jeweilige Zielsuche
+den Begriff tatsächlich akzeptiert. Für die Bestellsuche gelten
+höchstens 60 Zeichen sowie Buchstaben, Zahlen, Leerzeichen, #, Punkt,
+Bindestrich und Schrägstrich. Für die History gelten 2–80 Zeichen
+und maximal 240 UTF-8-Bytes. So entstehen keine scheinbar
+funktionierenden Trefferaktionen, die am Ziel nur ein leeres
+Suchfeld öffnen. Die bereits bestehenden Datenzugriffsregeln
+werden nicht geändert.
+
+## Ergänzung: Dateisuche während des Ladevorgangs
+
+Wenn die Kundendateiliste beim Öffnen der globalen Suche noch lädt,
+erscheint der sichtbare und für Screenreader zugängliche Hinweis
+**„Kundendateien werden geladen …“**, statt vorschnell „Keine Treffer“
+zu behaupten. Nach Abschluss des bereits vorhandenen Dateikatalog-Abrufs
+aktualisiert sich das offene Suchfenster automatisch, ohne erneute Eingabe.
+Bei einem Fehler zeigt es **„Dateiliste nicht erreichbar“** und
+verweist auf die bestehende Aktualisierungsaktion unter „Dateien“.
+
+Die Änderung führt **keinen weiteren Netzwerkaufruf** aus und verändert
+keine Ordner, Dateien, Berechtigungen oder Provider-Aktionen.
+Ein eigener DOM-Test deckt Laden, Treffer nach Nachladen und Fehlermeldung ab.
+
+## Präzise Trefferzahlen
+
+Die beiden Aktionen für eine weiterführende Suche in History oder Shop
+sind Suchwege und **keine tatsächlichen Treffer**. Sie werden nicht mehr
+als Kundendateien oder Dashboard-Bereiche gezählt. Gibt es nur diese
+Suchwege, erklärt der Status **„Keine direkten Treffer“** statt
+irreführend „2 Treffer“ anzuzeigen. Ein DOM-Test deckt diesen Fall ab.
