@@ -16,7 +16,7 @@ import {runPrivateGalleryEvidenceWorker} from './gallery-private-evidence-worker
 const JOB=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const DRIVE=/^[A-Za-z0-9_-]{10,100}$/;
 const OBJECT=/^render\/[a-f0-9]{64}\/[a-f0-9]{64}[.]aac$/;
-const ONE_MIB=1024*1024,MAX_VIDEO=24000000,MAX_AUDIO=1500000;
+const MAX_VIDEO=24000000,MAX_AUDIO=1500000;
 const SNAPSHOT_SQL='select sma_private.gallery_worker_snapshot_v1($1::uuid) as snapshot';
 function requireSafe(ok,code){if(!ok)throw Error(code);}
 function asSecret(token){
@@ -90,7 +90,7 @@ export function createGalleryPrivateServerTransport({
   requireSafe(DRIVE.test(fileId),'DRIVE_ID_INVALID');
   safeSize(maxBytes,MAX_VIDEO);
   return authenticatedStream({
-   fetchImpl,category:'DRIVE',maxBytes,timeoutMs,get tokenProvider(){return getDriveAccessToken;},
+   fetchImpl,category:'DRIVE',maxBytes,timeoutMs,tokenProvider:getDriveAccessToken,
    url:'https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)
     +'?alt=media&supportsAllDrives=true'
   });
