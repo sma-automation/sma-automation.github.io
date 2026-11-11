@@ -10,7 +10,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=23';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=24';
 import {installOrderReview} from './publication-order.mjs?v=23';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
