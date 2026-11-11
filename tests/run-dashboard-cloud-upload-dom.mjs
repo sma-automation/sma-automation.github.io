@@ -124,8 +124,8 @@ await test('dashboard integration routes through existing optimization, never ne
  assert.match(source,/dashboardCloudUpload\?\.destroy\(\)/);
  const module=await readFile(new URL('../app/assets/dashboard-cloud-upload.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(module,/supabase\.rpc|fetch\(|\.upload\(|provider|approval_token|credit_pack/i);
- assert.match(module,/publishing.before\\(button\\)/);
- assert.match(module,/styleAccountTabs\\(header\\)/);
+ assert.match(module,/publishing\.before\(button\)/);
+ assert.match(module,/styleAccountTabs\(header\)/);
  assert.match(module,/onPortal\(item\.dataset\.portal,button\)/);
 });
 
