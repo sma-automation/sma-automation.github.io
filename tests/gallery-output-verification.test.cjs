@@ -66,7 +66,7 @@ test('the actual matching file needs an audible audio track before it is technic
  const {spawnSync}=require('node:child_process');
  const hasFfmpeg=spawnSync('ffmpeg',['-version'],{encoding:'utf8'}).status===0 &&
   spawnSync('ffprobe',['-version'],{encoding:'utf8'}).status===0;
- if(!hasFfmpeg){t.skip('FFmpeg/FFprobe absent in test environment');return;}
+ if(!hasFfmpeg){assert.notEqual(process.env.SMA_REQUIRE_FFMPEG,'1','CI must provide FFmpeg/FFprobe for the real audio decoder test');t.skip('FFmpeg/FFprobe absent in local test environment');return;}
  const {mkdtempSync,writeFileSync,rmSync}=require('node:fs');
  const {join}=require('node:path'),{tmpdir}=require('node:os');
  const dir=mkdtempSync(join(tmpdir(),'sma-gallery-output-'));
