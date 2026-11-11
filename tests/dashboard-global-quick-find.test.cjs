@@ -21,19 +21,20 @@ test('section list finds main dashboard areas without reading external services'
  assert.deepEqual(quickFindMatches('FRUHLING',sectionCatalog,files).files.map(f=>f.id),['b']);
  assert.equal(quickFindMatches('x',sectionCatalog,files).files.length,0);
 });
-async function fixture({areas=['overview','files','publishing']}={}){
+async function fixture({areas=['overview','files','publishing'],fileState='ready'}={}){
  const {parseHTML}=await parser;
  const {document:doc,window}=parseHTML('<html><head></head><body><header class="topbar"><div class="topbar-title">Dashboard</div><div class="topbar-actions"><span id="profile">Profil</span><button id="logout">Abmelden</button></div></header><main><div id="page-overview"></div><div id="page-publishing"></div></main></body></html>');
  window.HTMLElement.prototype.focus=function(){};
- const calls=[];
+ const calls=[];let fileStatus=fileState,fileList=files;
  const module=await imported;
  const view=module.mountDashboardQuickFind({
   doc,getAreas:()=>module.sectionCatalog.filter(s=>areas.includes(s.key)),
-  getFiles:()=>files,
+  getFiles:()=>fileList,
+  getFileStatus:()=>fileStatus,
   onNavigate:(key,query)=>{calls.push('section:'+key+(query===undefined?'':':'+query));return true;},
   onOpenFile:id=>{calls.push('file:'+id);return true;}
  });
- return {doc,window,view,calls,get:id=>doc.getElementById(id)};
+ return {doc,window,view,calls,get:id=>doc.getElementById(id),setFileStatus:s=>{fileStatus=s;},setFiles:f=>{fileList=f;}};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
 test('global search opens in same dashboard and finds a file via typed filename',async()=>{
@@ -92,6 +93,24 @@ test('deep-search shortcuts never accept a query rejected by the destination',as
  assert(!names.some(x=>x.includes('In Bestellungen suchen')));
  f.view.destroy();
 });
+test('global search explains file loading, refreshes when catalog arrives, and reports failures',async()=>{
+ const f=await fixture({fileState:'loading'});f.setFiles([]);
+ f.view.show();
+ const input=f.get('smaQuickFindInput');input.value='Neue-Datei.mp4';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ const status=f.get('smaQuickFindPanel').querySelector('[role="status"]');
+ assert.match(status.textContent,/Kundendateien werden geladen/);
+ assert.equal(status.getAttribute('aria-busy'),'true');
+ assert.equal(f.get('smaQuickFindResults').querySelectorAll('button').length,0);
+ f.setFiles([{id:'new',name:'Neue-Datei.mp4',media_kind:'video'}]);f.setFileStatus('ready');
+ f.view.refresh();
+ assert.equal(status.getAttribute('aria-busy'),'false');
+ assert.equal(f.get('smaQuickFindResults').querySelectorAll('button').length,1);
+ assert.match(status.textContent,/1 Treffer/);
+ f.setFiles([]);f.setFileStatus('error');f.view.refresh();
+ assert.match(status.textContent,/Dateiliste nicht erreichbar/);
+ f.view.destroy();
+});
 test('quick search does not expose files that are absent from the caller’s own catalog',async()=>{
  const f=await fixture();
  f.view.show();
@@ -129,6 +148,8 @@ test('dashboard integration routes through existing sidebar and preserves sessio
  assert.match(src,/getElementById\('smaOrderSearch'\)/);
  assert.match(src,/canSearchHistory\(query\)/);
  assert.match(src,/canSearchOrders\(query\)/);
+ assert.match(src,/getCatalogState\(\)/);
+ assert.match(src,/dashboardQuickFind\?\.refresh\(\)/);
 });
 test('finder has no network, browser storage, posting or own access control bypass',()=>{
  const src=readFileSync('app/assets/dashboard-quick-find.mjs','utf8');
