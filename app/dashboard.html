@@ -17,6 +17,7 @@ import {mountPublicationHistory} from './assets/publication-history-dashboard.mj
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
+import {mountDashboardQuickFind,sectionCatalog} from './assets/dashboard-quick-find.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -26,7 +27,7 @@ const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
 let optimizerTrigger=null,selectedFileId=null,returningFromPreview=null;
-let fileView=null,fileFindShortcut=null,musicLibraryDashboard=null;
+let fileView=null,fileFindShortcut=null,dashboardQuickFind=null,musicLibraryDashboard=null;
 let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardCloudUpload=null,dashboardOwnerId=null;
 function showPublishing(){
  returningFromPreview=null;
@@ -89,7 +90,7 @@ function attachOptimizerPage(doc,page){
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
   dashboardCloudUpload?.destroy();dashboardCloudUpload=null;
-  fileFindShortcut?.remove();fileFindShortcut=null;
+  fileFindShortcut?.remove();fileFindShortcut=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;
   musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;
   publicationHistory?.destroy();publicationHistory=null;
   customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;
@@ -273,6 +274,39 @@ frame.addEventListener('load',()=>{
     });
     cloudButton.after(find);fileFindShortcut=find;
   }
+  // Search visible dashboard areas and the already loaded own-file catalog.
+  // The existing sidebar owns page selection; never create a second route.
+  function findAreaNavigation(key){
+    const target=key==='files'?'publishing':key;
+    const area=sectionCatalog.find(x=>x.key===target);
+    const matches=[...doc.querySelectorAll('aside a,aside button,.sidebar a,.sidebar button,nav a,nav button,[data-page],[data-target]')];
+    return matches.find(el=>{
+      if(el.hidden||el.closest('[hidden],[id^="page-"]')||['smaFindFiles','smaDashboardCloudUpload','smaGlobalQuickFind'].includes(el.id))return false;
+      const routes=[el.dataset?.page,el.dataset?.target,el.dataset?.section,el.getAttribute('href')].filter(Boolean);
+      if(routes.some(x=>x===target||x==='#'+target||x==='#page-'+target))return true;
+      const label=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      return label===area?.label.toLowerCase()||target==='history'&&label==='history'||
+       target==='music'&&label==='musikbibliothek';
+    })||null;
+  }
+  dashboardQuickFind=ownerId&&fileView?mountDashboardQuickFind({
+    doc,
+    getAreas:()=>sectionCatalog.filter(a=>doc.getElementById('page-'+(a.key==='files'?'publishing':a.key))&&findAreaNavigation(a.key)),
+    getFiles:()=>fileView?.getFiles()||[],
+    onNavigate:key=>{
+      if(signedOut||dashboardOwnerId!==ownerId)return false;
+      const nav=findAreaNavigation(key);if(!nav)return false;
+      nav.click();
+      if(key==='files'){dashboardChapters?.controllers.get('publishing')?.select('files');fileView?.focusSearch();}
+      return true;
+    },
+    onOpenFile:id=>{
+      if(signedOut||dashboardOwnerId!==ownerId||!fileView?.getFiles().some(f=>f.id===id))return false;
+      const nav=findAreaNavigation('publishing');if(!nav)return false;
+      nav.click();dashboardChapters?.controllers.get('publishing')?.select('files');
+      return fileView.openFile(id)===true;
+    }
+  }):null;
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
 });
@@ -309,7 +343,19 @@ function attachFileList(doc,page){
  }catch(e){say(e.message);}finally{loading=false;refresh.disabled=false;}}
  refresh.addEventListener('click',()=>load(true));
  for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))button.addEventListener('click',()=>load(Date.now()-lastSync>60000));
- load(false);return {load,focusSearch(){if(!disposed)finder.focus();},clear(){disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
+ load(false);return {load,
+    getFiles(){return disposed||signedOut||owner!==dashboardOwnerId?[]:files.slice();},
+    openFile(id){
+      if(disposed||signedOut||owner!==dashboardOwnerId)return false;
+      const item=files.find(f=>f.id===id);if(!item)return false;
+      selectedFileId=id;
+      const assigned=(item.assignments||[]).find(a=>a.status==='assigned'&&portalNames[a.platform]);
+      const portal=assigned?.platform||'youtube';
+      const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);
+      if(!trigger)return false;
+      openOptimizer(portal,trigger);return true;
+    },
+    focusSearch(){if(!disposed)finder.focus();},clear(){disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
 }
 let pending;
 let signedOut=false;
@@ -334,7 +380,7 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -349,7 +395,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 
