@@ -40,20 +40,31 @@ function svgCloud(doc){
 
 // Find the real existing "Veröffentlichung" navigation item without
 // changing the sidebar, its menu structure, its logo or any click handlers.
+// Place the upload in the black sidebar ABOVE the heading "ARBEITSBEREICH".
+ // The screenshot shows this space BELOW the unchanged SMA logo, not inside
+ // the Arbeitsbereich menu between Übersicht and Veröffentlichung.
 function publishingNavigationItem(doc){
- const nodes=[...doc.querySelectorAll(
-  'aside a,aside button,aside [role="button"],.sidebar a,.sidebar button,.sidebar [role="button"],#sidebar a,#sidebar button,#sidebar [role="button"],nav a,nav button'
- )];
- const matches=nodes.filter(el=>{
-  if(el.closest('header,[role="banner"],[id^="page-"],main'))return false;
-  const text=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-  const route=[el.dataset?.page,el.dataset?.target,el.getAttribute('href'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
-  return text==='veröffentlichung'||text==='publishing'||route.includes('publishing');
- });
- const item=matches[0];
- if(!item)return null;
- // Move only the cloud button. Leave the native menu element in place.
- return item.closest('.sidebar-item,.nav-item,.menu-item,.sidebar-link,.nav-link,.menu-link')||item;
+ const roots=[...doc.querySelectorAll('aside,.sidebar,#sidebar,[data-sidebar]')]
+  .filter(root=>!root.closest('main,[id^="page-"],[role="main"],header,[role="banner"]'));
+ for(const root of roots){
+  const navigation=[...root.querySelectorAll('a,button,[role="button"]')];
+  if(!navigation.some(el=>{
+   const label=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+   const route=[el.dataset?.page,el.dataset?.target,el.getAttribute('href')].filter(Boolean).join(' ').toLowerCase();
+   return label==='veröffentlichung'||label.endsWith(' veröffentlichung')||/\bpublishing\b/.test(route);
+  }))continue;
+  const headings=[...root.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,small,strong,div,label')]
+   .filter(el=>(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase()==='arbeitsbereich');
+  if(!headings.length)continue;
+  let anchor=headings.at(-1);
+  // A heading may be nested in the sidebar's <nav>. Move up to the first
+  // child of the sidebar so Upload is OUTSIDE the workspace navigation.
+  while(anchor.parentElement&&anchor.parentElement!==root)anchor=anchor.parentElement;
+  if(anchor.parentElement===root)return anchor;
+ }
+ // If the section boundary is not identifiable, do not place the button
+ // in an arbitrary navigation location. No other dashboard area is touched.
+ return null;
 }
 
 // Keep the four original header controls and their events. Give them the
@@ -105,10 +116,14 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
  button.append(svgCloud(doc));
  const buttonLabel=doc.createElement('span');buttonLabel.className='sma-cloud-upload-label';
  button.append(buttonLabel);
- // Exactly as requested: upload on the LEFT, immediately ABOVE Publishing.
+ // Upload below the original logo but OUTSIDE / above ARBEITSBEREICH.
  // The existing portal chooser and upload workflow are otherwise unchanged.
  button.classList.add('sma-cloud-sidebar-upload');
- publishing.before(button);
+ const listHost=publishing.parentElement?.matches('ul,ol')?doc.createElement('li'):null;
+ if(listHost){
+  listHost.className='sma-cloud-sidebar-host';
+  listHost.append(button);publishing.before(listHost);
+ }else publishing.before(button);
  const overlay=doc.createElement('div');overlay.id='smaDashboardCloudDialog';overlay.className='sma-dashboard-cloud-overlay';overlay.hidden=true;
  const panel=doc.createElement('section');panel.className='sma-dashboard-cloud-panel';panel.setAttribute('role','dialog');
  panel.setAttribute('aria-modal','true');panel.setAttribute('aria-labelledby','smaCloudHeading');panel.setAttribute('aria-describedby','smaCloudInstructions');
@@ -191,6 +206,6 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
   button.removeEventListener('click',clickButton);
   closeButton.removeEventListener('click',clickClose);
   overlay.removeEventListener('click',clickOverlay);
-  restoreAccountTabs();overlay.remove();button.remove();link.remove();
+  restoreAccountTabs();overlay.remove();button.remove();listHost?.remove();link.remove();
  }};
 }

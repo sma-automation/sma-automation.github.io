@@ -9,7 +9,8 @@ function fixture({lang='de',withLanguage=true,fail=false}={}){
  const html=`<html lang="${lang}"><head></head><body>
  <header class="topbar"><div class="topbar-title">SMA Dashboard</div>
  <div class="topbar-actions"><span id="profileName">Profilname</span><button id="smaPackage">SMA Paket</button>${withLanguage?'<select id="languageSwitcher" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select>':''}<button id="signOut">Abmelden</button></div></header>
- <aside><button id="navigatePublishing">Veröffentlichung</button></aside>
+ <nav class="workspace-navigation"><button id="fakePublishingNav">Veröffentlichung</button></nav>
+ <aside class="sidebar"><div id="originalSmaLogo">SMA Wabenlogo</div><nav id="workspaceNav"><div id="workspaceHeading">ARBEITSBEREICH</div><button id="navigatePublishing">Veröffentlichung</button></nav></aside>
  <main><section id="page-overview"></section><section id="page-publishing" hidden>
  <div class="platform-card"><button>Optimieren</button></div><section id="smaOptimizationPage" hidden></section></section></main>
  </body></html>`;
@@ -27,19 +28,55 @@ function fixture({lang='de',withLanguage=true,fail=false}={}){
  return {doc,window,controller,clicked,sidebar,$:selector=>doc.querySelector(selector)};
 }
 
-await test('upload cloud is directly ABOVE the original Publishing link on the left',()=>{
+await test('upload cloud is ABOVE ARBEITSBEREICH, below the unchanged SMA logo',()=>{
  const f=fixture();
  const button=f.$('#smaDashboardCloudUpload'),language=f.$('#languageSwitcher');
- assert.ok(button);assert.equal(button.nextElementSibling,f.sidebar);
- assert.equal(button.parentElement,f.sidebar.parentElement);
+ assert.ok(button);assert.equal(f.$('#originalSmaLogo').nextElementSibling,button);
+ assert.equal(button.nextElementSibling,f.$('#workspaceNav'));
+ assert.equal(button.parentElement,f.$('aside.sidebar'));
+ assert.equal(button.closest('#workspaceNav'),null);
  assert.equal(f.$('.topbar #smaDashboardCloudUpload'),null);
  assert.equal(language.parentElement.className,'topbar-actions');
  assert.equal(button.classList.contains('sma-cloud-sidebar-upload'),true);
+ assert.equal(button.closest('aside.sidebar'),f.$('aside.sidebar'),'Cloud must live inside dark sidebar');
+ assert.equal(f.$('#fakePublishingNav').previousElementSibling,null,
+  'The white workspace navigation must not receive the Upload button');
  assert.equal(button.querySelector('svg')?.getAttribute('viewBox'),'0 0 24 24');
  assert.equal(button.getAttribute('aria-haspopup'),'dialog');
  assert.equal(f.$('#smaDashboardCloudDialog').hidden,true);
  assert.equal(f.$('link[href="/cloud-upload.css"]')?.rel,'stylesheet');
  f.controller.destroy();
+});
+
+await test('nested sidebar menu keeps Upload outside the Arbeitsbereich navigation',()=>{
+ const {document:doc}=parseHTML('<html><head></head><body>'+
+  '<header class="topbar"><select aria-label="Sprache"><option>DE</option></select></header>'+
+  '<main><nav><button>Veröffentlichung</button></nav></main>'+
+  '<aside class="sidebar"><div id="originalSmaLogo">SMA</div><nav id="workspaceNav"><h3 id="workspaceHeading">Arbeitsbereich</h3><ul class="menu">'+
+  '<li><a href="#overview">Übersicht</a></li>'+
+  '<li id="publishingRow"><a data-page="publishing">Veröffentlichung</a></li>'+
+  '</ul></nav></aside></body></html>');
+ const widget=mountDashboardCloudUpload({doc,stylesheetUrl:'/cloud-upload.css',onPortal:()=>true});
+ assert.ok(widget);
+ assert.equal(doc.querySelector('li.sma-cloud-sidebar-host'),null);
+ assert.equal(widget.button.previousElementSibling,doc.getElementById('originalSmaLogo'));
+ assert.equal(widget.button.nextElementSibling,doc.getElementById('workspaceNav'));
+ assert.equal(widget.button.parentElement.tagName,'ASIDE');
+ assert.equal(doc.querySelector('main #smaDashboardCloudUpload'),null);
+ widget.destroy();
+ assert.equal(doc.querySelector('.sma-cloud-sidebar-host'),null);
+ assert.equal(doc.getElementById('publishingRow').parentElement.tagName,'UL');
+ assert.equal(doc.getElementById('workspaceNav').previousElementSibling.id,'originalSmaLogo');
+});
+await test('no black sidebar means no misplaced upload in the white workspace',()=>{
+ const {document:doc}=parseHTML('<html><head></head><body>'+
+  '<header><button>DE</button></header><nav><button>Veröffentlichung</button></nav>'+
+  '<main><button>Veröffentlichung</button></main></body></html>');
+ const widget=mountDashboardCloudUpload({doc,stylesheetUrl:'/cloud-upload.css',onPortal:()=>true});
+ assert.equal(widget,null);
+ assert.equal(doc.getElementById('smaDashboardCloudUpload'),null);
+ assert.equal(doc.getElementById('smaDashboardCloudDialog'),null);
+ assert.equal(doc.querySelector('link[href="/cloud-upload.css"]'),null);
 });
 
 await test('profile, package, language and sign-out appear as flat tabs without new controls',()=>{
@@ -105,7 +142,7 @@ await test('header without language remains usable; repeated mount and teardown 
  const button=f.$('#smaDashboardCloudUpload');
  assert.ok(button);
  assert.equal(button.parentElement.tagName,'ASIDE');
- assert.equal(button.nextElementSibling,f.sidebar);
+ assert.equal(button.nextElementSibling,f.$('#workspaceNav'));
  assert.equal(f.$('#profileName').classList.contains('sma-dashboard-account-tab'),true);
  assert.equal(f.$('#signOut').classList.contains('sma-dashboard-account-tab'),true);
  assert.equal(mountDashboardCloudUpload({doc:f.doc,onPortal:()=>true,stylesheetUrl:'/cloud-upload.css'}),null);
