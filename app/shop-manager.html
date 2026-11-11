@@ -144,6 +144,12 @@ body.gallery-open{overflow:hidden}
 .order-item .item-title{font-size:16px;margin-bottom:3px}
 .order-item .amount{font-size:18px;margin-top:0}
 .order-item .badges{margin-top:5px;gap:5px}
+.sma-order-filters{display:flex;flex-wrap:wrap;align-items:end;gap:10px 12px;margin:12px 0}
+.sma-order-filters label{display:flex;flex:1 1 160px;min-width:160px;flex-direction:column;gap:5px;font-weight:600;font-size:13px}
+.sma-order-filters input,.sma-order-filters select{width:100%;min-height:42px;border:1px solid #9caec7;border-radius:9px;padding:9px 12px;font:inherit;color:var(--text);background:#fff}
+.sma-order-filters :is(input,select,button):focus-visible{outline:2px solid #4065d8;outline-offset:2px}
+.sma-order-filters #smaOrderClear{min-height:42px;margin:0}
+@media(max-width:650px){.sma-order-filters label{flex:1 1 100%;min-width:0}.sma-order-filters #smaOrderClear{width:100%}}
 @media(max-width:650px){.shop-sections button{flex:1}.order-item{display:flex;gap:10px}.order-item .amount{font-size:16px}.order-item .badge{font-size:10px}}
 .product-actions input[type="url"]{max-width:100%;min-width:0;width:13rem;font:inherit}
 </style>
@@ -179,6 +185,27 @@ body.gallery-open{overflow:hidden}
 
       <section id="bestellungen" class="section card" hidden>
         <h2>Bestellungen</h2>
+        <div class="sma-order-filters" role="search" aria-label="Bestellungen finden">
+          <label for="smaOrderSearch">Bestellnummer
+            <input id="smaOrderSearch" type="search" autocomplete="off" placeholder="z. B. #1001" maxlength="60">
+          </label>
+          <label for="smaOrderMarket">Marktplatz
+            <select id="smaOrderMarket">
+              <option value="all">Alle Marktplätze</option>
+              <option value="shopify">Shopify</option>
+              <option value="digistore24">Digistore24</option>
+            </select>
+          </label>
+          <label for="smaOrderTestMode">Teststatus
+            <select id="smaOrderTestMode">
+              <option value="all">Alle Bestellungen</option>
+              <option value="test">Testbestellungen</option>
+              <option value="untagged">Nicht als Test markiert</option>
+              <option value="unknown">Teststatus ungeklärt</option>
+            </select>
+          </label>
+          <button id="smaOrderClear" type="button" class="btn">Zurücksetzen</button>
+        </div>
         <p id="bestellStatus" class="item-meta" role="status" aria-live="polite">Bestellungen werden automatisch aktualisiert.</p>
         <div id="bestellListe" class="list"></div>
         <nav id="bestellPagination" class="pagination" aria-label="Bestellseiten"></nav>
@@ -217,6 +244,7 @@ body.gallery-open{overflow:hidden}
 
 <script type="module">
 import {publicProductUrl} from './assets/shop-catalog-model.mjs?v=2';
+import {normalizeShopOrderFilters,applyShopOrderFilters,orderFiltersActive} from './assets/shop-order-search.mjs?v=1';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Dieser Publishable Key darf im Browser verwendet werden. Niemals einen Secret-/Service-Role-Key einfügen.
@@ -283,6 +311,8 @@ let orderRefreshEnabled=false;
 let orderPageLoading=false;
 let orderRequestedPage=1;
 let orderSignature=null;
+let orderSearchTimer=null;
+let orderFilters=normalizeShopOrderFilters();
 const paginationState={
   products:{page:1,total:0,request:0},
   orders:{page:1,total:0,request:0}
@@ -449,7 +479,7 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('online',resumeShopRefresh);
 window.addEventListener('focus',resumeShopRefresh);
 window.addEventListener('pagehide',()=>{
-  stockPageSuspended=true;clearTimeout(stockRefreshTimer);stopOrderRefresh();
+  stockPageSuspended=true;clearTimeout(stockRefreshTimer);clearTimeout(orderSearchTimer);stopOrderRefresh();
 });
 window.addEventListener('pageshow',()=>{stockPageSuspended=false;resumeShopRefresh();});
 
@@ -853,7 +883,7 @@ function deutscherBestellstatus(wert,art){
 function renderOrders(orders){
   const list=document.getElementById('bestellListe');
   list.replaceChildren();
-  if(!orders.length){list.innerHTML='<div class="empty">Noch keine Bestellungen vorhanden.</div>';return;}
+  if(!orders.length){list.innerHTML='<div class="empty">'+(orderFiltersActive(orderFilters)?'Keine Bestellungen für diese Suche gefunden.':'Noch keine Bestellungen vorhanden.')+'</div>';return;}
   for(const order of orders){
     const item=document.createElement('article');item.className='item order-item';
     const body=document.createElement('div');
@@ -981,15 +1011,17 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
   const timeout=setTimeout(()=>controller.abort(),10000);
   const isCurrent=()=>request===state.request&&userId===currentUserId&&!stockPageSuspended;
   orderPageLoading=true;orderRefreshEnabled=true;orderRequestedPage=page;
+  const appliedFilters=orderFilters;
   if(!background){
     orderSignature=null;
     showLoading('bestellListe','Bestellungen werden geladen …');
     setOrderStatus('Bestellungen werden geladen …');
   }
   try{
-    const {data,error,count}=await supabase.from('sma_bestellungen')
-      .select(BESTELL_FELDER,{count:'exact'})
-      .eq('user_id',userId)
+    const requestQuery=applyShopOrderFilters(
+      supabase.from('sma_bestellungen').select(BESTELL_FELDER,{count:'exact'}).eq('user_id',userId),
+      appliedFilters);
+    const {data,error,count}=await requestQuery
       .order('erstellt_am',{ascending:false}).order('id',{ascending:false})
       .range(from,from+ORDER_PAGE_SIZE-1).abortSignal(controller.signal);
     if(!isCurrent())return;
@@ -1002,7 +1034,7 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
     if(signature!==orderSignature){renderOrders(rows);orderSignature=signature;}
     document.getElementById('bestellCount').textContent=total;
     if(paginationChanged)renderPagination('bestellPagination',state,'Bestellungen',loadOrdersPage,ORDER_PAGE_SIZE);
-    orderRefreshFailures=0;setOrderStatus();
+    orderRefreshFailures=0;setOrderStatus(orderFiltersActive(appliedFilters)?'Gefilterte Bestellungen · automatische Aktualisierung aktiv.':undefined);
   }catch(error){
     if(isCurrent()){
       orderRefreshFailures++;
@@ -1016,6 +1048,33 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
     }
   }
 }
+
+// The live Supabase query searches all accessible order pages on the server,
+// not only the five visible rows. Every filter is still bound to auth.uid().
+const orderSearchInput=document.getElementById('smaOrderSearch');
+const orderMarketInput=document.getElementById('smaOrderMarket');
+const orderModeInput=document.getElementById('smaOrderTestMode');
+function applyOrderSearch(){
+ const next={search:orderSearchInput.value,market:orderMarketInput.value||'all',mode:orderModeInput.value||'all'};
+ try{orderFilters=normalizeShopOrderFilters(next);}
+ catch{
+  setOrderStatus('Bitte nur Buchstaben, Zahlen, Leerzeichen, #, Punkt, Bindestrich oder / verwenden.');
+  return;
+ }
+ orderSignature=null;
+ if(currentUserId)void loadOrdersPage(1);
+}
+orderSearchInput.addEventListener('input',()=>{
+ clearTimeout(orderSearchTimer);
+ orderSearchTimer=setTimeout(applyOrderSearch,300);
+});
+for(const field of [orderMarketInput,orderModeInput])field.addEventListener('change',()=>{
+ clearTimeout(orderSearchTimer);applyOrderSearch();
+});
+document.getElementById('smaOrderClear').addEventListener('click',()=>{
+ clearTimeout(orderSearchTimer);orderSearchInput.value='';orderMarketInput.value='all';orderModeInput.value='all';
+ applyOrderSearch();orderSearchInput.focus();
+});
 
 function selectShopSection(section){
   const orders=section==='orders';
