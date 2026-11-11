@@ -120,6 +120,30 @@ try{
   assert.equal(await value("select has_function_privilege($1,'sma_private.gallery_worker_snapshot_v1(uuid)','EXECUTE') v",[role]),false);
  }
 
+ // Dormant service identity: no login or credential, inherited snapshot only.
+ const dormantSQL=await readFile('supabase/sql/gallery-worker-dormant-account.sql','utf8');
+ assert.match(dormantSQL,/nologin inherit password null connection limit 1/);
+ assert.match(dormantSQL,/with admin false, inherit true, set false/);
+ assert.doesNotMatch(dormantSQL,/password\\s*'[^']+'/i);
+ await db.exec(dormantSQL);
+ assert.equal(await value("select rolcanlogin v from pg_roles where rolname='sma_gallery_worker_login'"),false);
+ assert.equal(await value("select rolbypassrls v from pg_roles where rolname='sma_gallery_worker_login'"),false);
+ assert.equal(await value("select rolconnlimit v from pg_roles where rolname='sma_gallery_worker_login'"),1);
+ assert.equal(await value("select rolpassword is null v from pg_authid where rolname='sma_gallery_worker_login'"),true);
+ assert.equal(await value("select pg_has_role('sma_gallery_worker_login','sma_gallery_snapshot_reader','USAGE') v"),true);
+ assert.equal(await value("select has_function_privilege('sma_gallery_worker_login','sma_private.gallery_worker_snapshot_v1(uuid)','EXECUTE') v"),true);
+ assert.equal(await value("select has_table_privilege('sma_gallery_worker_login','sma_private.gallery_music_v1','SELECT,INSERT,UPDATE,DELETE') v"),false);
+ assert.equal(await value("select has_table_privilege('sma_gallery_worker_login','sma_private.publication_files_v1','SELECT,INSERT,UPDATE,DELETE') v"),false);
+ assert.equal(await value("select has_table_privilege('sma_gallery_worker_login','storage.objects','SELECT,INSERT,UPDATE,DELETE') v"),false);
+ assert.equal(await value("select admin_option v from pg_auth_members where roleid='sma_gallery_snapshot_reader'::regrole and member='sma_gallery_worker_login'::regrole"),false);
+ assert.equal(await value("select inherit_option v from pg_auth_members where roleid='sma_gallery_snapshot_reader'::regrole and member='sma_gallery_worker_login'::regrole"),true);
+ assert.equal(await value("select set_option v from pg_auth_members where roleid='sma_gallery_snapshot_reader'::regrole and member='sma_gallery_worker_login'::regrole"),false);
+ await db.exec('set role sma_gallery_worker_login');
+ assert.equal((await snapshot()).gallery_job_id,job);
+ await assert.rejects(()=>update('select * from sma_private.gallery_music_v1'),/permission denied/);
+ await assert.rejects(()=>update('select * from storage.objects'),/permission denied/);
+ await db.exec('reset role');
+
  assert.equal(await value('select count(*)::int v from sma_private.gallery_music_v1'),before);
  console.log('Worker snapshot: role isolation, exact source/result receipts, sidecar SHA, metadata integrity and ambiguity gates passed.');
 }catch(e){
