@@ -107,3 +107,53 @@ Referenzen: [Persönlicher Prüfweg](MANUAL_MEDIA_REVIEW.md),
 [Technische Videonachweise](../n8n/publishing/VIDEO_EVIDENCE.md),
 [Providerjournal und Sperren](../n8n/publishing/PROVIDER_RESULTS.md),
 [Provider-Cover-Abnahme](PROVIDER_COVER_ACCEPTANCE.md).
+
+## Nachtrag: geprüfte Instagram-Vorprüfung nach PR #211
+
+**11.11.2026, nach der technischen Testclip-Abnahme.** Der oben beschriebene
+Instagram-Befund von **5 bestandenen Checks** war der ursprüngliche,
+noch unbereinigte Zustand. Er ist durch
+[PR #211](https://github.com/sma-automation/sma-automation.github.io/pull/211)
+und die produktiv bestätigte Migration
+`publication_instagram_verified_video_precheck_v1`
+(Supabase-History-Version `20261111002239`) auf folgenden Stand gebracht worden:
+
+- Instagram-Reel des unveränderten, an vier Portale gebundenen Testclips:
+  **7 bestandene Teilchecks, 0 fehlgeschlagene, weiterhin `needs_review`**.
+- `VIDEO_CODEC=pass`: aus derselben gültigen, kunden-/dateiversions- und
+  SHA-256-gebundenen Binärquelle `h264` ermittelt.
+- `VIDEO_FRAMERATE=pass`: **24 fps** und Bildabstände innerhalb der
+  bestehenden **23–60-fps-Vorprüfgrenzen**. Dieser Check entsteht nicht aus
+  MIME, Drive-Vorschaudaten oder Dateinamensheuristik.
+- Ohne gültigen technischen Nachweis, bei veralteter Revision oder
+  falscher Datei entstehen weiter `VIDEO_CODEC_PENDING` und
+  `VIDEO_FRAMERATE_PENDING`. Die produktive **rein lesende**
+  Stale-Revision-Probe bestätigt beide Pending-Checks und `can_publish=false`.
+- Ungeeignete nachgewiesene Werte (z. B. VP9 für diesen Instagram-Reel-Weg,
+  unzulässige Frameintervalle) führen in den isolierten SQL-Regressionstests zu
+  `fail`; **HEVC** wird neben H.264 als möglicher Videocodec erkannt.
+- `INSTAGRAM_AUDIO_BITRATE_PENDING`,
+  `INSTAGRAM_SIZE_RULE_PENDING`, die vollständige visuelle Inhaltsprüfung,
+  die semantische Prüfung und die persönliche Veröffentlichungsfreigabe
+  bleiben **unverändert offen**. Aus dem stummen Clip wird kein Audioprofil-Pass
+  konstruiert.
+- YouTube **4**, TikTok **8**, Facebook **2** bestandene Checks –
+  keine Veränderungen dieser Portale. Die Vier-Portale-Ausgabe bleibt
+  `can_publish=false` und `needs_review`.
+
+**Regression und Betrieb:** Die GitHub-Actions-Prüfung
+[Publication history checks](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42930506386)
+ist einschließlich **775/775 Node-Tests** und des neu eingebundenen
+isolierten Video-/SQL-Regressionstests erfolgreich. Die ältere
+`publication-media-profiles.sql` bleibt absichtlich unverändert,
+weil eine historische Exportprobe-Migration deren Hash überwacht.
+Die neue eigenständige Migration hat den ursprünglichen Live-Funktionshash
+geprüft und die bestehende FFmpeg-Export-Provenienz erhalten.
+Nach dem Einspielen waren Browser-Direktrechte auf die private Vorprüffunktion
+weiterhin **gesperrt**; der Service-Leseweg blieb freigegeben.
+
+**Unveränderte Sicherheitsgrenze:** Zehn vorhandene Veröffentlichungsaufträge,
+**0** endgültige Kundenfreigaben, **0** Betreiber-Uploadfreigaben,
+**0** Provider-Versuche und **0** Provider-Ereignisse. Es wurde kein
+Auftrag vorbereitet oder verändert, keine Prüfung als Kundenbestätigung
+ausgegeben, keine Plattform angebunden und kein Beitrag veröffentlicht.
