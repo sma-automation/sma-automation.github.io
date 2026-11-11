@@ -179,9 +179,25 @@ jobs:
           npm ci --prefix tests/media-runtime --ignore-scripts
       - name: Ensure FFmpeg and FFprobe for the saved-video sound check
         run: |
+          # Hosted runners may not include either binary, and Ubuntu apt
+          # mirrors can be unreachable. Use pinned, npm-hosted test binaries
+          # instead of an unbounded apt retry; never skip media decoding.
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ffmpeg
+            tools_dir="$RUNNER_TEMP/sma-ci-media-tools"
+            bin_dir="$RUNNER_TEMP/sma-ci-media-bin"
+            mkdir -p "$tools_dir" "$bin_dir"
+            npm install --prefix "$tools_dir" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
+              @ffmpeg-installer/ffmpeg@1.1.0 @ffprobe-installer/ffprobe@2.1.2
+            ffmpeg_path="$(node -p "require('$tools_dir/node_modules/@ffmpeg-installer/ffmpeg').path")"
+            ffprobe_path="$(node -p "require('$tools_dir/node_modules/@ffprobe-installer/ffprobe').path")"
+            # npm's ignore-scripts can skip binary executable-bit setup.
+            # The packages are pinned and downloaded only for CI fixtures.
+            chmod u+x "$ffmpeg_path" "$ffprobe_path"
+            test -x "$ffmpeg_path" && test -x "$ffprobe_path"
+            ln -s "$ffmpeg_path" "$bin_dir/ffmpeg"
+            ln -s "$ffprobe_path" "$bin_dir/ffprobe"
+            echo "$bin_dir" >> "$GITHUB_PATH"
+            export PATH="$bin_dir:$PATH"
           fi
           ffmpeg -version | head -1
           ffprobe -version | head -1
