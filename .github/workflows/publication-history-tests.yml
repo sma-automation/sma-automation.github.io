@@ -23,6 +23,11 @@ on:
       - n8n/publishing/prepare-preview.cjs
       - n8n/publishing/preview-workflow.json
       - supabase/sql/publication-shop-invitation.sql
+      - supabase/sql/publication-media-profiles.sql
+      - supabase/migrations/*_publication_instagram_verified_video_precheck_v1.sql
+      - tests/publication-video-magic.sql
+      - tests/publication-media-profiles.sql
+      - tests/run-publication-video-sql.mjs
       - tests/run-publication-shop-invitation-sql.mjs
       - app/publication-preview.html
       - tests/*publication-text-edits*
@@ -173,6 +178,7 @@ jobs:
         run: |
           node --test tests/*.test.cjs
           node tests/run-publication-comparison-sql.mjs
+          node tests/run-publication-video-sql.mjs
           node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
           node tests/run-publication-manual-review-dom.mjs
