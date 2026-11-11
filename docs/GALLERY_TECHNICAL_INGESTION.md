@@ -7,10 +7,14 @@ Video- und Audio-Daten. Die bestehende Medienvorprüfung erkennt bislang nur Mag
 Editor-Export-Evidenz. Diese Ergänzung führt einen **dritten, eigenen Evidenztyp** ein, ohne
 Magic-Effect-Ergebnisse oder Exporte zu fälschen.
 
-Der neue SQL-Entwurf liegt unter `supabase/sql/publication-gallery-technical.sql`.
-Er ist **nicht** als produktive Migration ausgeführt, es gibt noch **keinen**
-verbundenen produktiven Service-Worker, der die Registrierung ausführt.
-Weder die Kundenoberfläche noch Veröffentlichungen oder Credits werden geändert.
+Die ursprüngliche SQL-Vorlage liegt unter `supabase/sql/publication-gallery-technical.sql`.
+Die **Datenbankregistrierung ist inzwischen installiert**: Supabase-Migration
+`20261111151051_gallery_technical_evidence_service_only_v1`. Die Live-Prüfung
+vom 11.11.2026 bestätigt `publication_gallery_technical_register_v1(jsonb)` mit
+`EXECUTE` nur für `service_role` (nicht `anon` oder `authenticated`) sowie **0**
+registrierte Galerie-Nachweise. Es gibt weiterhin **keinen aktiv verbundenen
+privaten Worker**, der nach unabhängigem Byte-Check einen Nachweis registriert.
+Die Kundenoberfläche, Veröffentlichungen und Credits bleiben unverändert.
 
 ## Vertrauensgrenze (unbedingt vor produktiver Aktivierung)
 
@@ -53,15 +57,15 @@ Dateien, Rollen, Nutzern und Hashes. Getestet werden insbesondere falsche Prüfs
 Datei-/Quellrevisionen, fehlende Tonfreigabe, andere Abtastraten, wiederholte Aufrufe,
 fehlende Rechte und unveränderte Priorität von Magic Effect.
 
-Vor einem echten Rollout:
-- GitHub-CI vollständig bestehen lassen.
-- Mit der Supabase-CLI eine neue Migration aus der SQL-Vorlage erzeugen, **nicht** eine
-  bestehende Produktionsmigration überschreiben. Die CLI ist in der derzeitigen
-  isolierten Umgebung nicht installiert; deshalb wird kein erfundener Migrationsname verwendet.
-- Schema- und Sicherheitsprüfung, Tests gegen den exakten SQL-Baseline-Hash und den
-  vorhandenen Kunden-/Medienprüfweg in einer isolierten Umgebung wiederholen.
-- Privaten Worker erst anbinden, nachdem die unabhängige Drive-Byteprüfung und
-  erneute Datenbankbindung dort nachgewiesen sind.
-- Vor jeder Live-Migration und Worker-Aktivierung ausdrückliche Betreiberfreigabe einholen.
+Vor Aktivierung des privaten Workers:
+- **Die Galerie-Registrierung nicht erneut installieren.** Die historische SQL-Vorlage
+  dient dem Review und isolierten Tests; die produktive Migration ist bereits erfasst.
+- GitHub-CI und die isolierten Sicherheitsregressionen vollständig bestehen lassen.
+- Live-Berechtigungen (`service_role` exklusiv, kein Browser-EXECUTE), RLS und den
+  tatsächlichen Registrierungszähler erneut rein lesend prüfen.
+- Privaten Server, bewusst freigegebene Dienstidentität, Google-Drive-/AAC-Lesezugriff,
+  tatsächliche Byteprüfung und erneute Datenbankbindung getrennt abnehmen.
+- Erst mit ausdrücklicher Betreiberfreigabe den privaten Worker aktivieren und
+  einen echten technischen Nachweis für die exakte Ergebnisrevision registrieren.
 
-**Diese Änderung enthält bewusst weder eine Live-Migration noch einen n8n-Deployment-Auftrag.**
+**Diese Dokumentationskorrektur installiert nichts, startet keinen Worker und führt keine Registrierung aus.**
