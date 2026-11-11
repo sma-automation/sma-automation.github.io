@@ -92,6 +92,8 @@ on:
       - app/assets/gallery-music*
       - tests/*gallery-music*
       - supabase/sql/gallery-music*.sql
+      - supabase/sql/publication-gallery-technical.sql
+      - tests/run-publication-gallery-technical-sql.mjs
       - supabase/migrations/*_gallery_music_receipt_v1.sql
       - supabase/migrations/*_gallery_automatic_music_v1.sql
       - app/assets/music-catalog.mjs
@@ -208,6 +210,7 @@ jobs:
           node --test tests/*.test.cjs
           node tests/run-publication-comparison-sql.mjs
           node tests/run-publication-video-sql.mjs
+          node tests/run-publication-gallery-technical-sql.mjs
           node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
           node tests/run-publication-manual-review-dom.mjs
