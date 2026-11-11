@@ -25,7 +25,7 @@ test('prepared private YouTube shows all four independent gates without granting
  assert.equal(result.length,4);
  assert.match(result[0],/aktuell/);
  assert.match(result[1],/Medien- und Inhaltsprüfungen.*offen/);
- assert.match(result[2],/Rechtebestätigung.*erforderlich/);
+ assert.match(result[2],/rechtebestätigung.*erforderlich/);
  assert.match(result[3],/Privat bedeutet trotzdem YouTube-Upload/);
  assert.match(result[3],/separate SMA-Betreiberfreigabe/);
  assert.equal(result.some(x=>/Upload freigegeben|can_publish:true|bereits hochgeladen/.test(x)),false);
