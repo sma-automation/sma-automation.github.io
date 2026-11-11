@@ -83,6 +83,11 @@ on:
       - n8n/publishing/*gallery-soundtrack*
       - n8n/publishing/gallery-private-evidence-worker.mjs
       - n8n/publishing/gallery-private-transport-adapters.mjs
+      - n8n/publishing/gallery-private-server-transport.mjs
+      - n8n/publishing/gallery-private-google-refresh.mjs
+      - n8n/publishing/gallery-private-server-runner.mjs
+      - n8n/private-gallery-runtime/**
+      - tests/gallery-private-server-transport.test.cjs
       - tests/gallery-private-transport-adapters.test.cjs
       - tests/gallery-private-evidence-worker.test.cjs
       - n8n/publishing/prepare-gallery-audio.py
@@ -98,8 +103,6 @@ on:
       - supabase/sql/gallery-music*.sql
       - supabase/sql/publication-gallery-technical.sql
       - tests/run-publication-gallery-technical-sql.mjs
-      - supabase/sql/gallery-worker-private-snapshot.sql
-      - tests/run-gallery-worker-snapshot-sql.mjs
       - supabase/sql/gallery-worker-private-snapshot.sql
       - tests/run-gallery-worker-snapshot-sql.mjs
       - supabase/migrations/*_gallery_music_receipt_v1.sql
@@ -187,6 +190,7 @@ jobs:
           npm ci --prefix tests/sql-runtime --ignore-scripts
           npm ci --prefix tests/dom-runtime --ignore-scripts
           npm ci --prefix tests/media-runtime --ignore-scripts
+          npm ci --prefix n8n/private-gallery-runtime --ignore-scripts
       - name: Ensure FFmpeg and FFprobe for the saved-video sound check
         run: |
           # Hosted runners may not include either binary, and Ubuntu apt
@@ -219,7 +223,6 @@ jobs:
           node tests/run-publication-comparison-sql.mjs
           node tests/run-publication-video-sql.mjs
           node tests/run-publication-gallery-technical-sql.mjs
-          node tests/run-gallery-worker-snapshot-sql.mjs
           node tests/run-gallery-worker-snapshot-sql.mjs
           node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
