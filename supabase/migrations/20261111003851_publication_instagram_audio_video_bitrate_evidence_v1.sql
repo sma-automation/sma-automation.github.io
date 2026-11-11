@@ -82,7 +82,7 @@ begin
   -- Read the reported video stream bitrate only from the same previously
   -- validated, owner-/revision-/SHA-bound full-decoding technical evidence.
   -- This is NOT a proof of VBR peak rate or Instagram provider acceptance.
-  if technical is not null and technical->'video_bit_rate_bps' is not null then
+  if technical is not null and jsonb_typeof(technical->'video_bit_rate_bps')='number' then
    checks:=checks||jsonb_build_array(jsonb_build_object(
     'code','INSTAGRAM_VIDEO_BITRATE_PRECHECK',
     'status',case when (technical->>'video_bit_rate_bps')::numeric<=25000000 then 'pass' else 'fail' end,
