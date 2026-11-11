@@ -99,5 +99,45 @@ try{
  assert.equal(await value('select count(*)::int v from net.sent'),sentBefore);
  assert.equal(await value("select background_attempts v from sma_private.gallery_music_v1 where source_id=$1",[third]),0);
  assert.equal(await value("select state v from sma_private.gallery_music_v1 where source_id=$1",[third]),'pending');
+ // Apply the exact new production function to the isolated fixture.
+ // The deployed-version hash guard runs only against the actual live database.
+ const migration=await readFile('supabase/migrations/20261111123000_gallery_music_no_track_backoff_v1.sql','utf8');
+ const fnStart=migration.indexOf('CREATE OR REPLACE FUNCTION sma_private.gallery_music_request_v1(');
+ assert.ok(fnStart>0 && migration.includes('GALLERY_NO_TRACK_SOURCE_CHANGED'));
+ const noTrackFn=migration.slice(fnStart);
+ assert.ok(noTrackFn.includes("next_attempt=now()+interval '15 minutes'"));
+ await db.exec(noTrackFn);
+ // The customer is still allowed to use the Gallery, but no licensed track
+ // is currently listed. No upload, lease, failure counter or credit changes.
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
+ // Earlier synthetic test jobs may still be pending. Isolate this exact
+ // unlisted-track job; this only changes disposable in-memory fixture rows.
+ await db.query("update sma_private.gallery_music_v1 set next_attempt=now()+interval '3 hours' where source_id<>$1 and state='pending'",[third]);
+ const beforeUploads=await value('select count(*)::int v from sma_private.publication_uploads_v1');
+ const beforeUnlocks=await value('select count(*)::int v from sma_private.music_track_unlocks_v1');
+ const noTrack=await value("select public.sma_gallery_music_v1('claim','{}') v");
+ assert.equal(noTrack.state,'no_track');assert.equal(noTrack.ok,true);
+ const etaSeconds=await value('select extract(epoch from next_attempt-now()) v from sma_private.gallery_music_v1 where source_id=$1',[third]);
+ assert.ok(Number(etaSeconds)>850&&Number(etaSeconds)<=901,'No-track poll must defer by fifteen minutes; remaining seconds: '+String(etaSeconds));
+ const waiting=await value("select public.sma_gallery_music_v1('claim','{}') v");
+ assert.equal(waiting.state,'waiting');
+ assert.ok(waiting.retry_ms>0&&waiting.retry_ms<=900000);
+ assert.equal(await value("select state v from sma_private.gallery_music_v1 where source_id=$1",[third]),'pending');
+ assert.equal(await value("select failures v from sma_private.gallery_music_v1 where source_id=$1",[third]),0);
+ assert.equal(await value("select lease is null v from sma_private.gallery_music_v1 where source_id=$1",[third]),true);
+ assert.equal(await value('select count(*)::int v from sma_private.publication_uploads_v1'),beforeUploads);
+ assert.equal(await value('select count(*)::int v from sma_private.music_track_unlocks_v1'),beforeUnlocks);
+ // The clock can advance; the existing pending job is then picked up with
+ // its original file/revision and original customer. This is NOT an upload.
+ await db.query("update sma_private.music_catalog_v1 set listed=true where sha256=$1",[sha]);
+ assert.equal((await value("select public.sma_gallery_music_v1('claim','{}') v")).state,'waiting');
+ await db.query("update sma_private.gallery_music_v1 set next_attempt=now()-interval '1 second' where source_id=$1",[third]);
+ const resumed=await value("select public.sma_gallery_music_v1('claim','{}') v");
+ assert.equal(resumed.state,'claimed');
+ assert.equal(resumed.file.id,third);
+ assert.equal(resumed.track.sha256,sha);
+ assert.equal(await value('select count(*)::int v from sma_private.publication_uploads_v1'),beforeUploads);
+ assert.equal(await value('select count(*)::int v from sma_private.music_track_unlocks_v1'),beforeUnlocks);
+ console.log('Gallery no-track backoff: 15-minute deferral, no repeated claim, no side effects and eventual resume passed.');
  console.log('Background dispatch, package rights, ticket replay, cross-renderer retries, quota, fallback and unlisted-track gate passed.');
 }finally{await db.close();}
