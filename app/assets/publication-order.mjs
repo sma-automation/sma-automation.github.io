@@ -32,6 +32,8 @@ function preparationWindow(order){
 }
 function preparationEnded(order) {
   const window=preparationWindow(order);
+  // A prepared order without a valid server-issued expiry is never approvable.
+  if(order?.state==='prepared')return window?.status!=='active'||!(Date.parse(window.expires_at)>Date.now());
   return window!=null&&(window.status!=='active'||!(Date.parse(window.expires_at)>Date.now()));
 }
 function pendingTarget(order){
@@ -40,6 +42,33 @@ function pendingTarget(order){
     order.approval_token===null&&order.approval_window==null&&
     ['active','expired'].includes(order.preparation_window?.status)&&Number.isFinite(Date.parse(order.preparation_window.expires_at));
 }
+/**
+ * Read-only guidance. A private YouTube test is still a real upload and
+ * requires separate operator authorization. Never grants upload permissions.
+ */
+export function privateYouTubeTestSteps(order,now=Date.now()) {
+  if(order?.state!=='prepared'||order.binding?.platform!=='youtube'||order.choices?.visibility!=='private')return null;
+  const expiry=Date.parse(order.approval_window?.expires_at);
+  const current=order.approval_window?.status==='active'&&Number.isFinite(expiry)&&expiry>now&&
+    !!order.target?.id&&order.account_check?.target_id===order.target.id;
+  const media=order.media_check;
+  const bound=media?.asset_id===order.binding.asset_id&&media?.asset_revision===order.binding.asset_revision;
+  const open=!bound||!Array.isArray(media.checks)||!media.checks.length||
+    media.checks.some(x=>x.status!=='pass'&&x.code!=='PUBLICATION_APPROVAL_PENDING');
+  const fileNote=order.check_error==='FILE_CHANGED'
+    ?'Datei geändert: Dateiliste aktualisieren und Vorbereitung erneut prüfen.'
+    :order.check_error?orderError(order.check_error)
+    :open?'Medien- und Inhaltsprüfungen sind für diesen Dateistand noch offen.'
+    :'Medienprüfungen dokumentiert; persönliche Rechteprüfung bleibt erforderlich.';
+  return [
+    current?'Zielkonto und Freigabefrist für diesen Auftrag aktuell.'
+      :'Zielkontoprüfung oder Freigabefrist nicht mehr gültig: Vorbereitung neu starten.',
+    fileNote,
+    'Persönliche Inhalts-, Medien- und Musikrechtebestätigung ist noch erforderlich.',
+    'Privat bedeutet trotzdem YouTube-Upload: Eine separate SMA-Betreiberfreigabe ist erforderlich.'
+  ];
+}
+
 export function humanReviewAvailable(order) {
   return order?.state==='prepared'&&!preparationEnded(order)&&!order.check_error&&['youtube','tiktok'].includes(order.binding?.platform)&&
     order.human_review_option?.policy_version===humanReviewPolicy&&/^[a-f0-9]{64}$/.test(order.human_review_option?.source_fingerprint||'');
@@ -352,6 +381,14 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     const visibilityLabels={private:'Privat',public:'Öffentlich',unlisted:'Nicht gelistet',SELF_ONLY:'Nur ich',PUBLIC_TO_EVERYONE:'Öffentlich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
     const decisions=make('ul');for(const [key,value] of Object.entries(r.choices||{}))if(decisionLabels[key])decisions.append(make('li',decisionLabels[key]+': '+(key==='visibility'?visibilityLabels[value]||value:value?'Ja':'Nein')));details.append(decisions);
     appendPost(r.draft);
+    const privateTestSteps=privateYouTubeTestSteps(r);
+    if(privateTestSteps){
+      const testStatus=make('section');testStatus.className='order-private-youtube-checklist';
+      testStatus.append(make('h3','Privater YouTube-Test · noch kein Upload'));
+      const checklist=make('ul');
+      for(const message of privateTestSteps)checklist.append(make('li',message));
+      testStatus.append(checklist);details.append(testStatus);
+    }
     const media=r.media_check;
     if(media?.human_review?.method==='customer_attestation')details.append(make('p','Persönliche Inhaltsprüfung für diesen Stand dokumentiert. Die automatische Video-Sicherheitsprüfung wurde dadurch nicht durchgeführt.'));
     if(media?.asset_id===context.binding.asset_id&&media?.asset_revision===context.binding.asset_revision&&Array.isArray(media.checks)){
