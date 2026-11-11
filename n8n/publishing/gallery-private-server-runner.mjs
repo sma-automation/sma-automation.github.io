@@ -9,6 +9,7 @@ import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {runGalleryPrivateServerReadOnly} from './gallery-private-server-transport.mjs';
 import {createGoogleDriveRefreshProvider} from './gallery-private-google-refresh.mjs';
+import {checkGalleryPgTarget} from './gallery-private-server-readiness.mjs';
 
 const requirePg=createRequire(new URL('../private-gallery-runtime/package.json',import.meta.url));
 const DB_ROLE_PREFLIGHT=String.raw`
@@ -66,6 +67,7 @@ export async function runPrivateGalleryCLI({argv=process.argv.slice(2),environme
  assert(!['sslmode','sslcert','sslkey','sslrootcert'].some(k=>dbUrl.searchParams.has(k)),
   'PRIVATE_PG_SSL_PARAMETERS_NOT_ALLOWED');
  const supabaseUrl=secret('SMA_GALLERY_SUPABASE_URL',environment);
+ assert(checkGalleryPgTarget(connectionString,supabaseUrl),'PRIVATE_PG_TARGET_OR_IDENTITY_INVALID');
  const storageKey=secret('SMA_GALLERY_STORAGE_SERVICE_KEY',environment);
  const directToken=environment.SMA_GALLERY_GOOGLE_ACCESS_TOKEN;
  let getDriveAccessToken;

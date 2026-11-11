@@ -86,6 +86,8 @@ on:
       - n8n/publishing/gallery-private-server-transport.mjs
       - n8n/publishing/gallery-private-google-refresh.mjs
       - n8n/publishing/gallery-private-server-runner.mjs
+      - n8n/publishing/gallery-private-server-readiness.mjs
+      - tests/gallery-private-server-readiness.test.cjs
       - n8n/private-gallery-runtime/**
       - tests/gallery-private-server-transport.test.cjs
       - tests/gallery-private-transport-adapters.test.cjs
