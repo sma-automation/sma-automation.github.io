@@ -3,11 +3,14 @@ const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const [mobile,dom]=[import('../app/assets/dashboard-mobile-nav.mjs'),
  import('./dom-runtime/node_modules/linkedom/esm/index.js')];
-async function fixture({existing=false,visible=['overview','files','history','shop','search']}={}){
+async function fixture({existing=false,initialPage=null,visible=['overview','files','history','shop','search']}={}){
  const {parseHTML}=await dom;
  const {document:doc}=parseHTML('<html><head></head><body><header>Dashboard</header>'+
   (existing?'<nav class="mobile-nav">Bestehende Leiste</nav>':'')+
-  '<main><div id="content">Kundeninhalt</div></main></body></html>');
+  '<main><div id="content">Kundeninhalt</div>'+
+  ['overview','publishing','history','shop'].map(key=>'<section id="page-'+key+'"'+(key===initialPage?' class="active"':'')+'></section>').join('')+
+  '<button id="sma-publishing-tab-files" role="tab" aria-selected="false">Dateien</button>'+
+  '</main></body></html>');
  const calls=[],{mountDashboardMobileNav}=await mobile;
  const view=mountDashboardMobileNav({doc,
   available:key=>visible.includes(key),
@@ -29,6 +32,29 @@ test('only existing customer areas appear as compact mobile shortcuts',async()=>
  f.view.destroy();assert.equal(f.doc.getElementById('smaMobileQuickNav'),null);
  assert.equal(f.doc.getElementById('smaMobileQuickNavCss'),null);
  assert.equal(f.doc.body.classList.contains('sma-mobile-quick-mounted'),false);
+});
+const tick=()=>new Promise(r=>setImmediate(r));
+test('mobile quick bar follows the actual dashboard page after sidebar or global search navigation',async()=>{
+ const f=await fixture({initialPage:'overview'});
+ assert.equal(f.get('overview').getAttribute('aria-current'),'page');
+ f.doc.getElementById('page-overview').classList.remove('active');
+ f.doc.getElementById('page-history').classList.add('active');
+ await tick();
+ assert.equal(f.get('history').getAttribute('aria-current'),'page');
+ assert.equal(f.get('overview').getAttribute('aria-current'),null);
+ f.doc.getElementById('page-history').classList.remove('active');
+ f.doc.getElementById('page-publishing').classList.add('active');
+ f.doc.getElementById('sma-publishing-tab-files').setAttribute('aria-selected','true');
+ await tick();
+ assert.equal(f.get('files').getAttribute('aria-current'),'page');
+ f.doc.getElementById('sma-publishing-tab-files').setAttribute('aria-selected','false');
+ await tick();
+ assert.equal(f.get('files').getAttribute('aria-current'),null,'Portale should not highlight Dateien');
+ f.doc.getElementById('page-publishing').classList.remove('active');
+ f.doc.getElementById('page-shop').classList.add('active');
+ await tick();
+ assert.equal(f.get('shop').getAttribute('aria-current'),'page');
+ f.view.destroy();
 });
 test('unavailable package pages are never displayed as active navigation items',async()=>{
  const f=await fixture({visible:['overview','files','search']});
@@ -53,4 +79,7 @@ test('mobile navigation reuses authenticated dashboard routes, no new endpoints 
  assert.match(html,/dashboardMobileNav\?\.destroy\(\)/);
  assert.doesNotMatch(module,/\bfetch\(|XMLHttpRequest|\.rpc\(|location\.assign|window\.open|localStorage|sessionStorage/);
  assert.match(module,/nav\.mobile-nav,\[data-mobile-navigation\]/);
+ assert.match(module,/MutationObserver/);
+ assert.match(module,/attributeFilter:\['class','hidden'\]/);
+ assert.match(module,/observer\?\.disconnect\(\)/);
 });
