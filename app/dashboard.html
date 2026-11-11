@@ -15,7 +15,7 @@ import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=24';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
-import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=1';
+import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=2';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -239,7 +239,7 @@ frame.addEventListener('load',()=>{
   // The real per-portal optimizer still owns file uploads, text edits and
   // account/permission/publishing checks. Do not create a second upload API.
   dashboardCloudUpload=ownerId?mountDashboardCloudUpload({
-    doc,stylesheetUrl:new URL('./assets/dashboard-cloud-upload.css?v=1',location.href).href,
+    doc,stylesheetUrl:new URL('./assets/dashboard-cloud-upload.css?v=2',location.href).href,
     onPortal:(portal,trigger)=>{
       if(signedOut||dashboardOwnerId!==ownerId||!optimizerPage||!Object.hasOwn(portalNames,portal))return false;
       const candidates=[...doc.querySelectorAll('button,a,[role="button"]')].filter(el=>!page.contains(el));
