@@ -11,6 +11,38 @@ import {runGalleryPrivateServerReadOnly} from './gallery-private-server-transpor
 import {createGoogleDriveRefreshProvider} from './gallery-private-google-refresh.mjs';
 
 const requirePg=createRequire(new URL('../private-gallery-runtime/package.json',import.meta.url));
+const DB_ROLE_PREFLIGHT=String.raw`
+select
+ session_user=current_user as same_login_role,
+ r.rolcanlogin as can_login,
+ r.rolsuper as superuser,
+ r.rolbypassrls as bypass_rls,
+ r.rolcreaterole as create_role,
+ r.rolcreatedb as create_db,
+ case when to_regrole('sma_gallery_snapshot_reader') is null
+  then false else pg_has_role(current_user,'sma_gallery_snapshot_reader','USAGE') end
+  as inherited_reader,
+ has_function_privilege(current_user,
+  'sma_private.gallery_worker_snapshot_v1(uuid)','EXECUTE') as can_read_snapshot,
+ has_table_privilege(current_user,'sma_private.gallery_music_v1',
+  'SELECT,INSERT,UPDATE,DELETE') as may_touch_gallery_jobs,
+ has_table_privilege(current_user,'sma_private.publication_files_v1',
+  'SELECT,INSERT,UPDATE,DELETE') as may_touch_media_catalog,
+ has_table_privilege(current_user,'storage.objects',
+  'SELECT,INSERT,UPDATE,DELETE') as may_touch_storage_catalog,
+ current_setting('default_transaction_read_only')='on' as session_read_only
+from pg_roles r where r.rolname=current_user
+\`;
+export function assertGalleryDbRolePreflight(row){
+ const ok=row&&row.same_login_role===true&&row.can_login===true
+  &&row.superuser===false&&row.bypass_rls===false
+  &&row.create_role===false&&row.create_db===false
+  &&row.inherited_reader===true&&row.can_read_snapshot===true
+  &&row.may_touch_gallery_jobs===false&&row.may_touch_media_catalog===false
+  &&row.may_touch_storage_catalog===false&&row.session_read_only===true;
+ if(!ok)throw Error('PRIVATE_GALLERY_DB_ROLE_UNSAFE');
+ return true;
+}
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 const env=process.env;
@@ -59,6 +91,9 @@ export async function runPrivateGalleryCLI({argv=process.argv.slice(2),environme
   // Each statement sees current committed data, including the late recheck;
   // unlike REPEATABLE READ, this doesn't hide revision changes during FFmpeg.
   await db.query('SET default_transaction_read_only = on');
+  const access=await db.query(DB_ROLE_PREFLIGHT);
+  assert(Array.isArray(access?.rows)&&access.rows.length===1,'PRIVATE_GALLERY_DB_ROLE_UNSAFE');
+  assertGalleryDbRolePreflight(access.rows[0]);
   const result=await runGalleryPrivateServerReadOnly({
    galleryJobId:argv[0],db,supabaseUrl,
    getDriveAccessToken,getStorageAccessToken:async()=>storageKey
