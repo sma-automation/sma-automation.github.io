@@ -65,3 +65,27 @@ Ein GitHub-Merge aktualisiert **nicht** von selbst die Supabase-Edge-Funktion.
 Bei einer getrennt kontrollierten Bereitstellung ist ausschließlich
 `sma-shop-checkout-test` mit weiterhin `verify_jwt=true` zu aktualisieren.
 Die produktive Funktion `sma-shop-checkout` darf nicht dabei ersetzt werden.
+
+## Tatsächlich bereitgestellt (11.11.2026)
+
+- PR [#247](https://github.com/sma-automation/sma-automation.github.io/pull/247)
+  wurde nach erfolgreichen GitHub-Actions-Läufen für Dashboard und Publishing
+  zusammengeführt. Merge-Commit: `9b29913c4e9e651ec4c53840c1259ffeb287cc62`.
+- GitHub Pages hat genau diesen Commit erfolgreich bereitgestellt.
+- Die **bestehende** Supabase Edge Function `sma-shop-checkout-test` wurde
+  kontrolliert von Version **2 auf 3** aktualisiert. Status `ACTIVE`,
+  `verify_jwt=true` unverändert.
+- Unmittelbar danach wurden `index.ts` und `handler.ts` aus der
+  ausgelieferten Edge-Version zurückgelesen und **bytegenau** mit
+  `website-v1` verglichen: beide identisch.
+- Die öffentliche Funktion `sma-shop-checkout` ist **weiter Version 6**,
+  `ACTIVE`, unverändert. Keine Shopify-Payment-Einstellung geändert.
+- Der anschließend wiederholte rein lesende SMA-Startcheck meldete
+  weiterhin **10 Bestellungen (6 offizielle Tests), 0 Operatorfreigaben,
+  0 Provider-Versuche, 0 neue technische Galerie-Nachweise**.
+  Freigabe/Publikation bleiben gesperrt.
+
+**Abnahmegrenze:** CI-Prüfungen und Code-Rückleseabgleich sind vollständig.
+Ein neuer, mit echter SMA-Kundensitzung ausgeführter Browser-/Edge-End-to-End-
+Lauf wurde dabei nicht durchgeführt; er ist **nicht** als bestanden zu führen.
+Ebenso bleibt der aktuelle Shopify-Payments-Testmodus unabhängig zu prüfen.
