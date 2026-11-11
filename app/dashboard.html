@@ -329,6 +329,7 @@ frame.addEventListener('load',()=>{
         dashboardChapters?.controllers.get('publishing')?.select('files');
         fileView?.focusSearch();
       }
+      if(key==='history')doc.getElementById('sma-history-tab-orders')?.click();
       return true;
     },
     onSearch:()=>{
