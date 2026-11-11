@@ -28,6 +28,11 @@ try {
  assert.ok(start>0 && rollout.includes('PRECHECK_SOURCE_CHANGED'),'Production deployment must keep a source-hash guard');
  assert.ok(rollout.includes("sma_private.publication_export_technical_v1(f)"),'Production export provenance must survive');
  await db.exec(rollout.slice(start)); // Skip only the environment-specific deployed-version guard.
+ const bitrateRollout=await readFile(new URL('../supabase/migrations/20261111003851_publication_instagram_audio_video_bitrate_evidence_v1.sql',import.meta.url),'utf8');
+ const bitrateStart=bitrateRollout.indexOf('CREATE OR REPLACE FUNCTION sma_private.publication_media_precheck_v1(');
+ assert.ok(bitrateStart>0 && bitrateRollout.includes('INSTAGRAM_AUDIO_VIDEO_RATE_SOURCE_CHANGED'),'Bitrate migration must verify the exact live baseline');
+ assert.ok(bitrateRollout.includes("publication_export_technical_v1(f)"),'Export-specific provenance remains in the deployed function');
+ await db.exec(bitrateRollout.slice(bitrateStart)); // In-memory fixture bypasses only the production hash guard.
  console.log((await db.query('select version() as version')).rows[0].version);
  for(const file of ['publication-video-magic','publication-media-profiles']) {
   const sql=await readFile(new URL('./'+file+'.sql',import.meta.url),'utf8');let result;
