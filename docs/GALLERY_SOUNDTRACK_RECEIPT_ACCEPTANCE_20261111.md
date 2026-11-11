@@ -77,3 +77,44 @@ MP4-Endprodukts und ersetzt dessen weiterhin ausstehende Abnahme nicht.
 
 An der produktiven Galerie, den Credits, der Datenbank, dem
 Dashboard und den Provider-Berechtigungen ändert dieser Nachtrag nichts.
+
+
+## Nachtrag: gespeicherte Ergebnis-MP4 ist jetzt abrufbar (11.11.2026)
+
+Die früher dokumentierte Google-Drive-Zugriffssperre wurde durch die
+**dateispezifische Betrachterfreigabe** behoben. Die tatsächlichen Bytes des
+gespeicherten privaten Galerie-Ergebnisses konnten unabhängig von der
+Rekonstruktion abgerufen und offline überprüft werden:
+
+- **2.125.747 Bytes** und **SHA-256 aa4f169c20be5b1a1f5a1916d93bb516745f190f5523ddf69a1e8b5f91747074** stimmen exakt mit dem Galerie-Receipt überein.
+- Die **240 H.264-Videopakete** stimmen mit der stummen Quelldatei überein; der vollständige Dateidecoder meldet keinen Fehler.
+- Die **gespeicherte Ergebnisdatei** enthält AAC-LC Stereo mit **44,1 kHz**, zehn Sekunden und messbarem Ton (Mittel **−26,3 dBFS**, Spitze **−13,3 dBFS**). Die **Musik-Quelldatei** hat dagegen 48 kHz.
+- Der Offline-Validator erkennt seit PR #222 44,1 und 48 kHz an; Videos mit stummer Tonspur bleiben gesperrt.
+- Der Datenbank-Leseabgleich bestätigt den Galerie-Auftrag als abgeschlossen, null Fehler und eine verfügbare SHA-gebundene Ergebnisrevision.
+
+Die **Portal-Medienprüfung** verfügt für diese Ergebnisrevision weiterhin über
+**keinen registrierten technischen Analysebeleg**: Die vorhandene Abfrage
+publication_video_technical_v1 liefert null, die Instagram-Vorprüfung bleibt
+needs_review und can_publish=false. Das ist keine Abweichung der MP4, sondern
+eine noch fehlende vertrauenswürdige Übernahme des Offline-Nachweises.
+
+### Nur lokale Vorstufe für eine spätere autorisierte Übernahme
+
+Das Werkzeug n8n/publishing/gallery-technical-candidate.mjs nimmt Quelldatei,
+AAC-Quelldatei, tatsächlich gespeicherte MP4 und einen **privat bereitgestellten**
+Datenbank-Receipt entgegen. Es prüft vor Erstellung eines Kandidaten den
+Original-SHA, Ergebnis-SHA und Bytezahl, die zugehörige Dateirevision,
+unveränderte Videopakete, Audioprofil, vollständige Dekodierung sowie
+den nicht stummen Ton. Das Ergebnis enthält die technische
+sma-video-technical-v1-Struktur und die Dateirevision.
+
+**Wichtig:** Der Receipt ist operator-supplied. Dieses lokale Werkzeug ruft
+keine Datenbank ab, authentifiziert die Herkunft des Receipts nicht und
+**registriert keine Evidenz**. Es darf weder eine Magic-Effect-Analyse noch
+einen Editor-Export vortäuschen. Erst ein gesonderter vertrauenswürdiger
+Dienst darf Datenbankrevision, Google-Drive-Bytes und Eigentümer-/Rollenrecht
+vor dem Speichern erneut unabhängig prüfen. Das Werkzeug vergibt **keine**
+Medien-/Inhaltsfreigabe, keine Freigabe durch Kunden oder Provider,
+keine Credits und keine Veröffentlichungsrechte.
+
+Alle privaten Medien bleiben außerhalb des öffentlichen Repositorys.
