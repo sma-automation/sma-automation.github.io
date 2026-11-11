@@ -177,7 +177,17 @@ jobs:
           npm ci --prefix tests/sql-runtime --ignore-scripts
           npm ci --prefix tests/dom-runtime --ignore-scripts
           npm ci --prefix tests/media-runtime --ignore-scripts
+      - name: Ensure FFmpeg and FFprobe for the saved-video sound check
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
       - name: Test histories, editor drafts and regressions
+        env:
+          SMA_REQUIRE_FFMPEG: '1'
         run: |
           node --test tests/*.test.cjs
           node tests/run-publication-comparison-sql.mjs
