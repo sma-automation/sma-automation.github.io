@@ -76,6 +76,8 @@ test('the actual matching file needs an audible audio track before it is technic
   const {verifyActualGalleryFile}=await modulePromise;
   const accepted=verifyActualGalleryFile(input,output);
   assert.equal(accepted.audio_aac_lc_stereo_48000,true);
+  assert.equal(accepted.audio_aac_lc_stereo_supported_rate,true);
+  assert.equal(accepted.audio_sample_rate_hz,48000);
   assert.equal(accepted.unchanged_video_packets,true);
   assert.equal(accepted.full_decode_passed,true);
   assert.equal(accepted.soundtrack_non_silent,true);
@@ -90,11 +92,53 @@ test('the actual matching file needs an audible audio track before it is technic
   writeFileSync(muted,silenced.bytes);
   const blocked=verifyActualGalleryFile(input,muted);
   assert.equal(blocked.audio_aac_lc_stereo_48000,true);
+  assert.equal(blocked.audio_aac_lc_stereo_supported_rate,true);
   assert.equal(blocked.unchanged_video_packets,true);
   assert.equal(blocked.full_decode_passed,true);
   assert.equal(blocked.soundtrack_non_silent,false);
   assert.equal(blocked.valid,false);
   assert.equal(blocked.status,'technical_checks_incomplete');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('44.1kHz AAC output passes receipt-local checks but unsupported rates stay blocked',async t=>{
+ const {spawnSync}=require('node:child_process');
+ const hasFfmpeg=spawnSync('ffmpeg',['-version'],{encoding:'utf8'}).status===0 &&
+  spawnSync('ffprobe',['-version'],{encoding:'utf8'}).status===0;
+ if(!hasFfmpeg){assert.notEqual(process.env.SMA_REQUIRE_FFMPEG,'1','CI must provide FFmpeg/FFprobe');t.skip('FFmpeg/FFprobe absent in local test environment');return;}
+ const {mkdtempSync,writeFileSync,rmSync}=require('node:fs');
+ const {join}=require('node:path'),{tmpdir}=require('node:os');
+ const {verifyActualGalleryFile}=await modulePromise;
+ const dir=mkdtempSync(join(tmpdir(),'sma-gallery-rates-'));
+ try{
+  const source=join(dir,'original.mp4'),base=join(dir,'music48.mp4');
+  writeFileSync(source,original);writeFileSync(base,rendered);
+  const transcode=(rate,destination)=>{
+   // Only remux video packets; synthetic audio is re-encoded for the rate test.
+   const p=spawnSync('ffmpeg',['-nostdin','-hide_banner','-v','error','-i',base,
+    '-map','0:v:0','-map','0:a:0','-c:v','copy','-c:a','aac','-ar',String(rate),
+    '-ac','2','-b:a','128k','-y',destination],{encoding:'utf8',timeout:90000});
+   assert.equal(p.status,0,p.stderr);
+  };
+  const at44100=join(dir,'music44.mp4');
+  transcode(44100,at44100);
+  const valid=verifyActualGalleryFile(source,at44100);
+  assert.equal(valid.audio_sample_rate_hz,44100);
+  assert.equal(valid.audio_aac_lc_stereo_supported_rate,true);
+  assert.equal(valid.audio_aac_lc_stereo_48000,false);
+  assert.equal(valid.unchanged_video_packets,true);
+  assert.equal(valid.full_decode_passed,true);
+  assert.equal(valid.soundtrack_non_silent,true);
+  assert.equal(valid.status,'technical_checks_pass');
+  assert.equal(valid.valid,true);
+  const at32000=join(dir,'music32.mp4');
+  transcode(32000,at32000);
+  const unsupported=verifyActualGalleryFile(source,at32000);
+  assert.equal(unsupported.audio_sample_rate_hz,32000);
+  assert.equal(unsupported.audio_aac_lc_stereo_supported_rate,false);
+  assert.equal(unsupported.audio_aac_lc_stereo_48000,false);
+  assert.equal(unsupported.valid,false);
+  assert.equal(unsupported.status,'technical_checks_incomplete');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
