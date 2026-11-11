@@ -73,6 +73,25 @@ test('order searches use existing sections rather than loading account data into
  assert.deepEqual(f.calls,['section:history-search:1001','section:shop-search:1001']);
  f.view.destroy();
 });
+test('deep-search shortcuts never accept a query rejected by the destination',async()=>{
+ const {canSearchHistory,canSearchOrders}=await imported;
+ assert.equal(canSearchOrders('#1001'),true);
+ assert.equal(canSearchOrders('Bestellung @Kunde'),false);
+ assert.equal(canSearchOrders('A'.repeat(61)),false);
+ assert.equal(canSearchHistory('🚀'),true);
+ assert.equal(canSearchHistory('🚀'.repeat(61)),false,'History has a 240-byte UTF-8 limit');
+ const f=await fixture({areas:['history','shop']});f.view.show();
+ const input=f.get('smaQuickFindInput');input.value='abc@def';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ let names=[...f.get('smaQuickFindResults').querySelectorAll('button')].map(el=>el.textContent);
+ assert(names.some(x=>x.includes('In Aufträgen suchen')));
+ assert(!names.some(x=>x.includes('In Bestellungen suchen')));
+ input.value='🚀'.repeat(61);input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ names=[...f.get('smaQuickFindResults').querySelectorAll('button')].map(el=>el.textContent);
+ assert(!names.some(x=>x.includes('In Aufträgen suchen')));
+ assert(!names.some(x=>x.includes('In Bestellungen suchen')));
+ f.view.destroy();
+});
 test('quick search does not expose files that are absent from the caller’s own catalog',async()=>{
  const f=await fixture();
  f.view.show();
@@ -108,6 +127,8 @@ test('dashboard integration routes through existing sidebar and preserves sessio
  assert.match(src,/key==='shop-search'/);
  assert.match(src,/getElementById\('smaHistorySearch'\)/);
  assert.match(src,/getElementById\('smaOrderSearch'\)/);
+ assert.match(src,/canSearchHistory\(query\)/);
+ assert.match(src,/canSearchOrders\(query\)/);
 });
 test('finder has no network, browser storage, posting or own access control bypass',()=>{
  const src=readFileSync('app/assets/dashboard-quick-find.mjs','utf8');
