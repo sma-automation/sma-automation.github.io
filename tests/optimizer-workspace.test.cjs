@@ -296,7 +296,7 @@ test('professional preview places only publication in the primary action host',(
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
  assert.ok(html.includes('optimizer-workspace.css?v=20'));
- assert.ok(html.includes('publication-preview.js?v=88'));
+ assert.ok(html.includes('publication-preview.js?v=89'));
 });
 
 test('empty preview exposes upload action and becomes a complete preview after file choice',()=>{
