@@ -66,21 +66,29 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,onNavigate,onOpen
  const results=create('div');results.id='smaQuickFindResults';
  panel.append(head,input,status,results);overlay.append(panel);doc.body.append(overlay);
  let disposed=false;
- function hide(){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();button.focus();}
- function item(title,subtitle,handler){
+ function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)button.focus();}
+ function item(title,subtitle,handler,restoreFocus=true){
   const el=create('button');el.type='button';el.className='sma-qf-item';
   el.append(create('strong',title),create('small',subtitle));el.addEventListener('click',async()=>{
    if(disposed)return;
-   try{if(await handler()===true)hide();else status.textContent='Bereich derzeit nicht verfügbar.';}
+   try{if(await handler()===true)hide(restoreFocus);else status.textContent='Bereich derzeit nicht verfügbar.';}
    catch{status.textContent='Der Bereich konnte nicht geöffnet werden.';}
   });results.append(el);
  }
  function render(){
   if(disposed||overlay.hidden)return;
   results.replaceChildren();
-  const found=quickFindMatches(input.value,getAreas(),getFiles());
+  const query=input.value.trim(),areas=getAreas();
+  const found=quickFindMatches(query,areas,getFiles());
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key));
   for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
+  // Only delegate to EXISTING owner-bound searches; never load orders here.
+  if(query.length>=2&&query.length<=80&&Array.isArray(areas)){
+   if(areas.some(a=>a.key==='history'))
+    item('In Aufträgen suchen','Eigene Veröffentlichungsaufträge durchsuchen',()=>onNavigate('history-search',query),false);
+   if(areas.some(a=>a.key==='shop'))
+    item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false);
+  }
   status.textContent=results.children.length?results.children.length+' Treffer':'Keine Treffer. Versuche einen kürzeren Begriff.';
  }
  function show(){if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value='';render();input.focus();}
