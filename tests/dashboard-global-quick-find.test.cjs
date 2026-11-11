@@ -106,7 +106,7 @@ test('global search explains file loading, refreshes when catalog arrives, and r
  f.view.refresh();
  assert.equal(status.getAttribute('aria-busy'),'false');
  assert.equal(f.get('smaQuickFindResults').querySelectorAll('button').length,1);
- assert.match(status.textContent,/1 Treffer/);
+ assert.match(status.textContent,/1 direkter Treffer/);
  f.setFiles([]);f.setFileStatus('error');f.view.refresh();
  assert.match(status.textContent,/Dateiliste nicht erreichbar/);
  f.view.destroy();
