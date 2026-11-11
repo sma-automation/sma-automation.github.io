@@ -22,7 +22,7 @@ try {
  // PGlite's fixture does not include editor exports. Provide only an
  // isolated, null export-evidence helper; the Magic-Effect path tested below
  // still uses real validated, owner-/revision-/SHA-bound rows.
- await db.exec("create function sma_private.publication_export_technical_v1(f sma_private.publication_files_v1) returns jsonb language sql stable security invoker set search_path='' as $ select null::jsonb $;");
+ await db.exec("create function sma_private.publication_export_technical_v1(f sma_private.publication_files_v1) returns jsonb language sql stable security invoker set search_path='' as $stub$ select null::jsonb $stub$;");
  const rollout=await readFile(new URL('../supabase/migrations/20261111010814_publication_instagram_verified_video_precheck_v1.sql',import.meta.url),'utf8');
  const start=rollout.indexOf('CREATE OR REPLACE FUNCTION sma_private.publication_media_precheck_v1(');
  assert.ok(start>0 && rollout.includes('PRECHECK_SOURCE_CHANGED'),'Production deployment must keep a source-hash guard');
