@@ -5,8 +5,9 @@ import {mountPublicationTextHistory} from './publication-text-history-dashboard.
 import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
+import {readHistoryFind} from './publication-history-find.mjs?v=1';
 
-export function mountPublicationHistory({doc,request,requestOrderPage,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
+export function mountPublicationHistory({doc,request,requestOrderPage,requestFind,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
  if(!slot||!expectedOwnerId)return {destroy(){}};
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -20,7 +21,18 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  refresh.type='button';message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
  previous.type=more.type='button';previous.setAttribute('aria-label','Vorherige Aufträge');more.setAttribute('aria-label','Weitere Aufträge');nav.setAttribute('aria-label','Auftragsseiten');nav.hidden=true;nav.append(previous,more);
- toolbar.append(refresh);slot.replaceChildren(toolbar,message,list,nav);
+ const findInput=requestFind?create('input'):null,findResults=requestFind?create('ol',null,'sma-history-find-results'):null;
+ const findStatus=requestFind?create('p',null,'sma-history-find-status'):null;
+ let findTimer=null,findSerial=0;
+ if(findInput){
+  findInput.id='smaHistorySearch';findInput.type='search';findInput.autocomplete='off';findInput.maxLength=80;
+  findInput.placeholder='Auftrag, Titel oder Portal suchen …';
+  findInput.setAttribute('aria-label','Alle eigenen Veröffentlichungsaufträge suchen');
+  findStatus.setAttribute('role','status');findStatus.setAttribute('aria-live','polite');
+  findResults.hidden=true;findStatus.hidden=true;toolbar.append(findInput);
+ }
+ toolbar.prepend(refresh);
+ slot.replaceChildren(toolbar,message,...(findInput?[findStatus,findResults]:[]),list,nav);
  const cards=[...page.querySelectorAll('.grid > .card')].slice(0,3);
  const metrics=[['Aufträge','Orders','orders'],['Davon öffentlich bestätigt','Publicly confirmed','public_confirmed'],['Portale in den Aufträgen','Platforms in orders','platforms']];
  cards.forEach((card,i)=>{translated(card.querySelector('.card-title'),metrics[i][0],metrics[i][1]);card.querySelector('.big-value')?.setAttribute('data-history-metric',metrics[i][2]);});
@@ -121,7 +133,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
  }
- function invalidateOwner(){invalidOwner=true;clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
+ function invalidateOwner(){invalidOwner=true;findSerial++;clearTimeout(findTimer);if(findInput)findInput.disabled=true;findResults?.replaceChildren();clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
  const current=g=>g===generation&&active();
  const format=value=>new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(value));
  function render(result=lastResult){
@@ -189,6 +201,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
   const start=(pagesBeforeBatch+pageNumber)*pageSize;
   message.textContent=entries.length?(start+1)+'–'+(pagesBeforeBatch*pageSize+Math.min((pageNumber+1)*pageSize,entries.length))+' von '+summary.orders+' Aufträgen · Seite '+(pagesBeforeBatch+pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';
   nav.hidden=!entries.length;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
+  syncSearchMode();
  }
  async function load(append=false,requestedPage=null){
   if(!active()||busy||append&&!cursor)return;
@@ -249,5 +262,5 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  if(orderId&&!page.classList.contains('active'))doc.querySelector('button[data-page="history"]')?.click();
  load();
- return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {destroy(){disposed=true;findSerial++;clearTimeout(findTimer);findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }
