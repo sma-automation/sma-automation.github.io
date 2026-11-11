@@ -17,7 +17,7 @@ import {mountPublicationHistory} from './assets/publication-history-dashboard.mj
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
-import {mountDashboardQuickFind,sectionCatalog} from './assets/dashboard-quick-find.mjs?v=2';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=3';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -316,7 +316,7 @@ frame.addEventListener('load',()=>{
       if(key==='history-search'){
         doc.getElementById('sma-history-tab-orders')?.click();
         const field=doc.getElementById('smaHistorySearch');
-        if(typeof query==='string'&&query.length>=2&&query.length<=80&&new TextEncoder().encode(query).length<=240){
+        if(canSearchHistory(query)){
           field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
         }
         field.focus();
@@ -324,7 +324,7 @@ frame.addEventListener('load',()=>{
       if(key==='shop-search'){
         dashboardChapters?.controllers.get('shop')?.select('orders');
         const field=doc.getElementById('smaShopFrame').contentDocument.getElementById('smaOrderSearch');
-        if(typeof query==='string'&&query.length>=2&&query.length<=60&&/^[\p{L}\p{N} #./-]*$/u.test(query)){
+        if(canSearchOrders(query)){
           field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
         }
         field.focus();
