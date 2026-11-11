@@ -157,3 +157,52 @@ weiterhin **gesperrt**; der Service-Leseweg blieb freigegeben.
 **0** Provider-Versuche und **0** Provider-Ereignisse. Es wurde kein
 Auftrag vorbereitet oder verändert, keine Prüfung als Kundenbestätigung
 ausgegeben, keine Plattform angebunden und kein Beitrag veröffentlicht.
+
+## Nachtrag: Instagram-Videodatenrate und Tonspur nach PR #213
+
+**Live geprüft am 11.11.2026.** Der dokumentierte Instagram-Stand von sieben
+bestandenen Teilprüfungen aus PR #211 wurde mit
+[PR #213](https://github.com/sma-automation/sma-automation.github.io/pull/213)
+um einen *separaten technischen Videodatenraten-Check* ergänzt. Eingespielt
+mit der zusätzlichen, strikt hashgeschützten Supabase-Migration
+`publication_instagram_audio_video_bitrate_evidence_v1`
+(History-Version `20261111004706`).
+
+Die tatsächliche SHA-gebundene technische Dateiquelle liefert für den
+unveränderten 10-Sekunden-Testclip:
+
+- **`INSTAGRAM_VIDEO_BITRATE_PRECHECK=pass`**: 1,56 Mbit/s technisch
+  erfasste Stream-Datenrate, unter der SMA-Vorgrenze von 25 Mbit/s.
+  **VBR-Spitzenwerte, Container-Details und Providerannahme werden damit
+  ausdrücklich nicht bestätigt.** Fehlende Datenraten werden als
+  `INSTAGRAM_VIDEO_BITRATE_PENDING` behandelt, nicht als Pass.
+  Ein nachweislich zu hoher Wert wird im isolierten Regressionstest als
+  `fail` gewertet.
+- **`INSTAGRAM_AUDIO_BITRATE_PENDING=pending`**: Die technische Analyse
+  belegt *keine Audiospur*. Die Kundenansicht erhält daher die präzise
+  Meldung „Die technisch geprüfte Datei hat keine Tonspur“. Die
+  Audiovorgaben (AAC/Abtastrate/Kanäle/Bitrate) werden **nicht** pauschal
+  als bestanden oder endgültig als unzulässig erklärt.
+- Instagram insgesamt: **8 bestandene Teilprüfungen, 0 fehlgeschlagene**;
+  der Status bleibt `needs_review`, `can_publish=false`.
+- Die produktive rein lesende Negativprobe mit einer simulierten veralteten
+  Dateirevision liefert weiterhin Pending für Codec, Bildrate und
+  Videodatenrate und `can_publish=false`.
+- Alle anderen Portale, die ungeklärte IG-Größengrenze, die
+  vollständige visuelle/semantische Inhaltsprüfung, persönliche
+  Kundeneinwilligung, Operator-Uploadfreigabe und Meta-Anbindung
+  bleiben unverändert.
+
+**Prüfnachweis:** Der GitHub-CI-Lauf
+[Publication history checks](https://github.com/sma-automation/sma-automation.github.io/actions/runs/42933752878)
+besteht einschließlich **775/775 automatisierter Tests**, isolierten
+PostgreSQL-Regressionstests für gültige/fehlende/überhöhte Streamraten
+und der historischen Exportprobe. Die frühere SQL-Basis und ihre
+Hashschutzprüfungen wurden nicht überschrieben.
+
+**Unveränderte Sicherheitsgrenze:** 10 vorhandene Aufträge
+(9 storniert, 1 ohne Freigabe vorbereitet), 0 finale Freigaben,
+0 Providerberechtigungen, 0 Providerversuche, 0 Providerereignisse.
+Das Video ist weiterhin ausschließlich privates Testmaterial;
+es erfolgte keine Freigabe, kein Video-Upload, keine Veröffentlichung
+und keine kostenpflichtige Änderung.
