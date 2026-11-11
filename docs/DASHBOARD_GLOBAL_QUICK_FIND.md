@@ -57,3 +57,26 @@ History und Bestellungen, bessere Statusanzeigen für laufende Aktionen
 und kurze, mobile Hauptseiten. Die Navigation soll dabei die vorhandenen
 Kapitelreiter mit feinem Unterstrich beibehalten; keine zusätzlichen
 langen Tabellen oder doppelten Beschreibungen.
+
+
+## Ergänzung: Auftrags- und Bestellsuche direkt erreichen (11.11.2026)
+
+Ab zwei eingegebenen Zeichen bietet die globale Suche zusätzlich
+**„In Aufträgen suchen“** und **„In Bestellungen suchen“** an,
+sofern die entsprechende Dashboard-Seite für das Konto vorhanden ist.
+Diese beiden Aktionen übernehmen den Suchtext in die jeweils bestehende
+Suche, öffnen den passenden Reiter und zeigen das zugehörige Eingabefeld.
+
+- History nutzt ausschließlich den bereits installierten,
+  kundenbezogenen `sma_publication_history_find_v1`-RPC.
+- Shop nutzt ausschließlich die vorhandenen Bestellnummernfilter
+  mit dem bereits bestehenden `user_id`- und RLS-Schutz.
+- Ungültige Shop-Suchzeichen werden nicht ungeprüft weitergereicht;
+  stattdessen wird nur das Suchfeld geöffnet.
+- Ist eine eingebettete Shop-Seite noch nicht geladen, bleibt die
+  globale Suche mit einem Hinweis offen. Es entstehen keine weiteren
+  Berechtigungen, Datenkopien, Zahlungen oder Veröffentlichungen.
+
+Die Suchtreffer für Aufträge und Bestellungen werden **nicht** im
+globalen Dialog gespeichert, sondern ausschließlich innerhalb der
+bestehenden, geschützten Fachansichten abgerufen.
