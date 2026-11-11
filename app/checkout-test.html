@@ -62,7 +62,7 @@ async function run(){
   for(const item of data.warenkorb){const line=document.createElement('div');line.className='result-line';const label=document.createElement('span');label.textContent=item.menge+' × '+item.name;const amount=document.createElement('strong');amount.textContent=money(item.summe,data.waehrung);line.append(label,amount);$('resultLines').append(line);}
   $('resultTotal').textContent='SMA-Warenwert: '+money(data.gesamtbetrag,data.waehrung);
   $('resultNote').textContent=data.haendler_freigegeben?'Die Händlerzuordnung ist freigegeben. Der Test verändert die öffentliche Kasse nicht.':'Die Händlerfreigabe für öffentliche Käufe bleibt gesperrt.';
-  $('result').hidden=false;status(data.message,'ok');
+  $('result').hidden=false;status(data.message,data.haendler_freigegeben===true?'ok':'');
  }catch(error){status(error.message,'error');}finally{setBusy(false);}
 }
 $('check').addEventListener('click',run);$('reload').addEventListener('click',load);
