@@ -43,10 +43,9 @@ export function mountDashboardMobileNav({doc,available,onNavigate,onSearch}){
    let ok=false;
    try{ok=item.key==='search'?onSearch()===true:onNavigate(item.key)===true;}catch{return;}
    if(!ok)return;
-   if(item.key!=='search'){
-    for(const el of nav.querySelectorAll('button'))el.removeAttribute('aria-current');
-    button.setAttribute('aria-current','page');
-   }
+   // Mark only the page the original dashboard actually shows.
+   // A successful click handler is not proof of a completed page change.
+   if(item.key!=='search')syncActive();
   };
   button.addEventListener('click',click);
   cleanups.push(()=>button.removeEventListener('click',click));
