@@ -104,7 +104,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   }
   const directHits=found.areas.length+found.files.length;
   const fileStatus=getFileStatus();
-  const prefix=directHits?directHits+' direkte Treffer':'';
+  const prefix=directHits===1?'1 direkter Treffer':directHits>1?directHits+' direkte Treffer':'';
   if(fileStatus==='loading')
    status.textContent=(prefix?prefix+' · ':'')+'Kundendateien werden geladen …';
   else if(fileStatus==='error')
