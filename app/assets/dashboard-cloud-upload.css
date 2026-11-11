@@ -1,0 +1,56 @@
+/* One cloud button in the authenticated dashboard header. The existing
+   publication optimizer continues to own the actual upload and routing. */
+#smaDashboardCloudUpload.sma-dashboard-cloud-upload{
+ display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;
+ min-width:48px;min-height:46px;margin:0 0 0 9px;padding:9px 13px;
+ border:1px solid #8fa9f1;border-radius:12px;background:#eaf0ff;color:#254fc4;
+ font:600 13px/1.3 Inter,ui-sans-serif,system-ui,Arial,sans-serif;cursor:pointer;
+ vertical-align:middle;box-shadow:0 1px 4px #233e7e16;
+}
+#smaDashboardCloudUpload.sma-dashboard-cloud-upload:hover{background:#dbe6ff;border-color:#476edf;color:#1a439f}
+#smaDashboardCloudUpload[aria-expanded="true"]{background:#4065d8;color:#fff;border-color:#4065d8}
+#smaDashboardCloudUpload.sma-dashboard-cloud-upload:focus-visible,
+.sma-dashboard-cloud-panel :is(button):focus-visible{outline:3px solid #769aff;outline-offset:3px}
+#smaDashboardCloudUpload svg{display:block;width:25px;height:25px;flex:0 0 auto}
+#smaDashboardCloudDialog.sma-dashboard-cloud-overlay[hidden]{display:none!important}
+#smaDashboardCloudDialog.sma-dashboard-cloud-overlay{
+ position:fixed;inset:0;z-index:2147483000;display:flex;align-items:flex-start;justify-content:center;
+ padding:max(24px,8vh) 16px 20px;background:rgba(18,26,48,.55);overflow-y:auto;
+}
+#smaDashboardCloudDialog .sma-dashboard-cloud-panel{
+ width:min(500px,100%);max-height:calc(100dvh - 44px);overflow-y:auto;
+ background:#fff;color:#192640;border:1px solid #d9e0f0;border-radius:17px;
+ padding:22px;box-shadow:0 24px 70px #17233b55;text-align:left;
+ font:400 14px/1.55 Inter,ui-sans-serif,system-ui,Arial,sans-serif;
+}
+.sma-cloud-panel-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}
+#smaDashboardCloudDialog h2{margin:0;color:#17233b;font:700 21px/1.35 Inter,ui-sans-serif,system-ui,Arial,sans-serif}
+#smaDashboardCloudDialog .sma-cloud-close{display:grid;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;margin:0;padding:0;border:1px solid #dde4f2;border-radius:9px;color:#4b5e7c;background:#f7f9fd;font-size:25px;line-height:1;cursor:pointer}
+#smaCloudInstructions{margin:7px 0 17px;color:#53627b;line-height:1.6}
+.sma-cloud-portal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+#smaDashboardCloudDialog .sma-cloud-portal{
+ min-width:0;display:grid;grid-template-columns:36px minmax(0,1fr);
+ grid-template-rows:auto auto;align-items:center;gap:1px 9px;
+ padding:13px 12px;margin:0;background:#f8faff;border:1px solid #dce5f6;
+ border-radius:12px;color:#1a2d50;cursor:pointer;text-align:left;
+ font-family:inherit;font-size:14px;line-height:1.45;
+}
+#smaDashboardCloudDialog .sma-cloud-portal:hover{background:#edf3ff;border-color:#6c91ea}
+.sma-cloud-portal-mark{grid-row:1 / 3;display:grid;place-items:center;border-radius:9px;min-width:34px;min-height:34px;background:#dfe9ff;color:#3157cd;font-weight:800}
+.sma-cloud-portal strong{display:block;font-size:14px;overflow-wrap:anywhere}
+.sma-cloud-portal small{color:#60708b;font-size:11px;line-height:1.5}
+#smaDashboardCloudDialog .sma-cloud-no-post{margin:16px 0 0;color:#52637f;font-size:12px}
+#smaDashboardCloudDialog .sma-cloud-error{margin:10px 0 0;color:#a02323;font-size:12px}
+@media(max-width:720px){
+ #smaDashboardCloudUpload.sma-dashboard-cloud-upload{padding:8px 10px;min-width:44px;min-height:44px}
+ #smaDashboardCloudUpload .sma-cloud-upload-label{display:none}
+ #smaDashboardCloudDialog.sma-dashboard-cloud-overlay{padding:16px 10px}
+ #smaDashboardCloudDialog .sma-dashboard-cloud-panel{padding:18px}
+ #smaDashboardCloudDialog h2{font-size:19px}
+}
+@media(max-width:390px){
+ .sma-cloud-portal-grid{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+ #smaDashboardCloudUpload,*:focus-visible{scroll-behavior:auto}
+}
