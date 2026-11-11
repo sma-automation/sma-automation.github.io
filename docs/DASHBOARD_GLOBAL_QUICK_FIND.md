@@ -80,3 +80,14 @@ Suche, öffnen den passenden Reiter und zeigen das zugehörige Eingabefeld.
 Die Suchtreffer für Aufträge und Bestellungen werden **nicht** im
 globalen Dialog gespeichert, sondern ausschließlich innerhalb der
 bestehenden, geschützten Fachansichten abgerufen.
+
+### Präzise Übernahme zulässiger Suchbegriffe
+
+Die zwei Direktaktionen erscheinen nur, wenn die jeweilige Zielsuche
+den Begriff tatsächlich akzeptiert. Für die Bestellsuche gelten
+höchstens 60 Zeichen sowie Buchstaben, Zahlen, Leerzeichen, #, Punkt,
+Bindestrich und Schrägstrich. Für die History gelten 2–80 Zeichen
+und maximal 240 UTF-8-Bytes. So entstehen keine scheinbar
+funktionierenden Trefferaktionen, die am Ziel nur ein leeres
+Suchfeld öffnen. Die bereits bestehenden Datenzugriffsregeln
+werden nicht geändert.
