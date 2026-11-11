@@ -62,7 +62,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
    facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
    draftStep,invalidHashtags,draftStatus:draftStep?.note||(draft?'Gespeicherter Entwurf':'')};
  },
- onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
+ onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(view==='files')scheduleGallerySync();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
 }):null;
 if(workspace){
  window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(event.data.view))workspace.show(event.data.view);});
@@ -495,7 +495,7 @@ function renderFilePicker(){
  const pageSize=workspace?4:10;
  const count=Math.max(1,Math.ceil(visible.length/pageSize));filePickerPage=Math.min(filePickerPage,count-1);
  $('filePickerList').replaceChildren();
- $('filePickerCount').textContent=!assets.length?'Noch keine Dateien geladen. Klicke auf „Dateien aktualisieren“.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
+ $('filePickerCount').textContent=!assets.length?(workspace?'Noch keine Dateien vorhanden.':'Noch keine Dateien geladen. Klicke auf „Dateien aktualisieren“.'):!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
  for(const file of visible.slice(filePickerPage*pageSize,(filePickerPage+1)*pageSize)){
   const description=describeFile(file);
   const row=document.createElement('li');row.className='file-picker-row';
@@ -876,7 +876,7 @@ async function loadLatest(){
   const result=data.status==='processing'?await waitForResult(data.id):data;
   if(result.status==='failed')throw Error(errorText(result));
   render(result);
-  status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
+  status(workspace?'':selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(e){
   magicPreparationError=e.message||'Die gespeicherten Angaben konnten nicht geladen werden.';
   if(selectedAsset)clearDraft();
@@ -1071,6 +1071,15 @@ $('magicText').addEventListener('click',()=>runMagicAction('text'));
 $('confirmMagicReplace').addEventListener('click',()=>pendingAutomatic?runMagicAction(pendingAutomatic,true):undefined);
 $('cancelMagicReplace').addEventListener('click',()=>{pendingAutomatic=null;$('magicReplaceNotice').hidden=true;});
 
+// A tab change can refresh the customer folder automatically. The throttle
+// prevents n8n rate limits and unsaved drafts are never overwritten by sync.
+let lastAutomaticGallerySync=0, gallerySyncInFlight=false;
+function scheduleGallerySync(){
+ if(!workspace||signedOut||busy||gallerySyncInFlight||uploadController||
+    hasDraftEdits()||hasSourceEdits()||Date.now()-lastAutomaticGallerySync<120000)return;
+ lastAutomaticGallerySync=Date.now();gallerySyncInFlight=true;
+ void refreshFiles().finally(()=>{gallerySyncInFlight=false;});
+}
 async function refreshFiles(){
  if(busy)return;if(hasDraftEdits()||hasSourceEdits()){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
  lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
@@ -1185,7 +1194,7 @@ $('loadLatest').addEventListener('click',async()=>{
    fillInput(saved.input);
   }
   render(saved);workspace?.show('text');
-  status(selectedAsset?'Gespeicherter Portalbeitrag geladen.':'Gespeicherte Textvorlage geladen.');
+  status(workspace?'':selectedAsset?'Gespeicherter Portalbeitrag geladen.':'Gespeicherte Textvorlage geladen.');
  }catch(error){if(!signedOut)status(error.message,true);}
  finally{lock(false);syncMedia();}
 });
