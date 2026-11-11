@@ -22,6 +22,12 @@ on:
       - app/assets/publication-preview.js
       - app/assets/dashboard-cloud-upload.*
       - tests/run-dashboard-cloud-upload-dom.mjs
+      - app/assets/dashboard-structure-v2.*
+      - app/assets/optimizer-workspace.*
+      - tests/run-dashboard-structure-v2-dom.mjs
+      - tests/optimization-navigation.test.cjs
+      - tests/optimizer-workspace.test.cjs
+      - app/dashboard.html
       - n8n/publishing/prepare-preview.cjs
       - n8n/publishing/preview-workflow.json
       - supabase/sql/publication-shop-invitation.sql
@@ -194,6 +200,7 @@ jobs:
           node tests/run-publication-history-months-sql.mjs
           node tests/run-publication-history-dom.mjs
           node tests/run-dashboard-cloud-upload-dom.mjs
+          node tests/run-dashboard-structure-v2-dom.mjs
           node tests/run-publication-text-history-sql.mjs
           node tests/run-publication-text-history-hashtags-sql.mjs
           node tests/run-publication-assignment-history-sql.mjs
