@@ -46,6 +46,58 @@ test('alternate renderer receipt remains unverified even if two inputs have vali
  assert.equal(r.can_publish,false);
 });
 
+test('audio-level decoder accepts actual music and rejects silent/unmeasurable AAC tracks',async()=>{
+ const {parseSoundtrackVolume}=await modulePromise;
+ const music=parseSoundtrackVolume('[Parsed_volumedetect] n_samples: 480000\\n[Parsed_volumedetect] mean_volume: -26.2 dB\\n[Parsed_volumedetect] max_volume: -12.8 dB');
+ assert.equal(music.non_silent,true);
+ assert.equal(music.mean_dbfs,-26.2);
+ assert.equal(music.peak_dbfs,-12.8);
+ for(const log of [
+  '[Parsed_volumedetect] mean_volume: -inf dB\\n[Parsed_volumedetect] max_volume: -inf dB',
+  '[Parsed_volumedetect] mean_volume: -90.0 dB\\n[Parsed_volumedetect] max_volume: -80.0 dB',
+  'no usable audio measurements'
+ ]){
+  const res=parseSoundtrackVolume(log);
+  assert.equal(res.non_silent,false);
+ }
+});
+
+test('the actual matching file needs an audible audio track before it is technically accepted',async t=>{
+ const {spawnSync}=require('node:child_process');
+ const hasFfmpeg=spawnSync('ffmpeg',['-version'],{encoding:'utf8'}).status===0 &&
+  spawnSync('ffprobe',['-version'],{encoding:'utf8'}).status===0;
+ if(!hasFfmpeg){t.skip('FFmpeg/FFprobe absent in test environment');return;}
+ const {mkdtempSync,writeFileSync,rmSync}=require('node:fs');
+ const {join}=require('node:path'),{tmpdir}=require('node:os');
+ const dir=mkdtempSync(join(tmpdir(),'sma-gallery-output-'));
+ try{
+  const input=join(dir,'original.mp4'),output=join(dir,'mixed.mp4'),silent=join(dir,'silent.aac'),muted=join(dir,'muted.mp4');
+  writeFileSync(input,original);writeFileSync(output,rendered);
+  const {verifyActualGalleryFile}=await modulePromise;
+  const accepted=verifyActualGalleryFile(input,output);
+  assert.equal(accepted.audio_aac_lc_stereo_48000,true);
+  assert.equal(accepted.unchanged_video_packets,true);
+  assert.equal(accepted.full_decode_passed,true);
+  assert.equal(accepted.soundtrack_non_silent,true);
+  assert.equal(accepted.valid,true);
+  assert.ok(Number.isFinite(accepted.soundtrack_peak_dbfs));
+  const generated=spawnSync('ffmpeg',['-hide_banner','-v','error','-f','lavfi','-i','anullsrc=r=48000:cl=stereo',
+   '-t','3','-c:a','aac','-b:a','128k','-f','adts',silent],{encoding:'utf8'});
+  assert.equal(generated.status,0,generated.stderr);
+  const silentAudio=fs.readFileSync(silent);
+  const silenced=soundtrackMP4(original,silentAudio);
+  assert.equal(silenced.state,'rendered');
+  writeFileSync(muted,silenced.bytes);
+  const blocked=verifyActualGalleryFile(input,muted);
+  assert.equal(blocked.audio_aac_lc_stereo_48000,true);
+  assert.equal(blocked.unchanged_video_packets,true);
+  assert.equal(blocked.full_decode_passed,true);
+  assert.equal(blocked.soundtrack_non_silent,false);
+  assert.equal(blocked.valid,false);
+  assert.equal(blocked.status,'technical_checks_incomplete');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
 test('malformed inputs and mismatched formats are rejected without writes or publishing',async()=>{
  const {reconcileGalleryBytes:verify}=await modulePromise;
  const input={original,aac,expectedSha:fixture.expected,expectedSize:rendered.length};
