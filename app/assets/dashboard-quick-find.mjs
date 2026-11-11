@@ -90,21 +90,27 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   const found=quickFindMatches(query,areas,getFiles());
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key));
   for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
-  // Only delegate to EXISTING owner-bound searches; never load orders here.
+  // Deep-search actions are NOT matches; keep them out of the hit count.
+  let deepActions=0;
   if(Array.isArray(areas)){
-   if(canSearchHistory(query)&&areas.some(a=>a.key==='history'))
+   if(canSearchHistory(query)&&areas.some(a=>a.key==='history')){
     item('In Aufträgen suchen','Eigene Veröffentlichungsaufträge durchsuchen',()=>onNavigate('history-search',query),false);
-   if(canSearchOrders(query)&&areas.some(a=>a.key==='shop'))
+    deepActions++;
+   }
+   if(canSearchOrders(query)&&areas.some(a=>a.key==='shop')){
     item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false);
+    deepActions++;
+   }
   }
-  const count=results.children.length, fileStatus=getFileStatus();
-  const prefix=count?count+' Treffer':'';
+  const directHits=found.areas.length+found.files.length;
+  const fileStatus=getFileStatus();
+  const prefix=directHits?directHits+' direkte Treffer':'';
   if(fileStatus==='loading')
    status.textContent=(prefix?prefix+' · ':'')+'Kundendateien werden geladen …';
   else if(fileStatus==='error')
    status.textContent=(prefix?prefix+' · ':'')+'Dateiliste nicht erreichbar. Bitte unter „Dateien“ aktualisieren.';
   else
-   status.textContent=prefix||'Keine Treffer. Versuche einen kürzeren Begriff.';
+   status.textContent=prefix||(deepActions?'Keine direkten Treffer. Suche in Aufträgen oder Bestellungen.':'Keine Treffer. Versuche einen kürzeren Begriff.');
   status.setAttribute('aria-busy',fileStatus==='loading'?'true':'false');
  }
  function show(){if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value='';render();input.focus();}
