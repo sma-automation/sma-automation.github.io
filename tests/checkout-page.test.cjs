@@ -32,3 +32,17 @@ test('concurrent clicks invoke once, and an unexpected payment URL is never show
  const first=p.run();await p.run();assert.equal(p.calls.length,1);assert.equal(p.qty.disabled,true);
  finish({data:{...result,checkout_url:'https://evil.invalid'}});await first;assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/nicht bestätigt/);assert.equal(p.qty.disabled,false);
 });
+
+
+test('green success is reserved for merchant-approved dry-run results',async()=>{
+ const inactive=await boot();
+ await inactive.run();
+ assert.equal(inactive.get('result').hidden,false);
+ assert.equal(inactive.get('status').className.trim(),'status');
+ assert.match(inactive.get('resultNote').textContent,/gesperrt/);
+ const active=await boot({invoke:async()=>({data:{...result,haendler_freigegeben:true}})});
+ await active.run();
+ assert.equal(active.get('result').hidden,false);
+ assert.equal(active.get('status').className.trim(),'status ok');
+ assert.match(active.get('resultNote').textContent,/freigegeben/);
+});
