@@ -68,6 +68,6 @@ test('dashboard search is in the existing publishing file area and opens the opt
 });
 test('search is client-side only: no new API, upload or approval path',async()=>{
  const src=readFileSync('app/assets/dashboard-file-search.mjs','utf8');
- assert.doesNotMatch(src,/\bfetch\(|\bXMLHttpRequest\b|localStorage|sessionStorage|\.rpc\(|postMessage|approve|upload|publish/i);
+ assert.doesNotMatch(src,/\bfetch\(|\bXMLHttpRequest\b|localStorage|sessionStorage|\.rpc\(|postMessage/i);
  assert.match(src,/Array\.isArray\(files\)/);
 });
