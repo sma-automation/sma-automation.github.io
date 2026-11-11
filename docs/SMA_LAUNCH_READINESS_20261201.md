@@ -32,8 +32,9 @@ einen erfolgreich veröffentlichten Beitrag.**
 **Galerie-Registrierung (zusätzliche Live-Prüfung am 11.11.2026):**
 Die private Registrierungsfunktion ist über die bereits erfasste Migration
 `20261111151051_gallery_technical_evidence_service_only_v1` in Supabase
-installiert und ausschließlich für `service_role` ausführbar. Die zwei
-privaten Galerie-Leserollen sind `NOLOGIN` ohne Passwort; der Server-Worker
+installiert und ausschließlich für `service_role` ausführbar. Die private
+Snapshot-Leserolle und die vorbereitete Worker-Identität sind `NOLOGIN`
+ohne Passwort; der Server-Worker
 ist noch nicht aktiviert. **0** technische Galerie-Einträge bedeuten:
 kein abgenommenes Registrierungs-E2E. Die SQL-Vorlage **nicht erneut**
 installieren; die nächste Abnahme betrifft den unabhängigen privaten Worker.
