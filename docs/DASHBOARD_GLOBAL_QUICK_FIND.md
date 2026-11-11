@@ -91,3 +91,17 @@ und maximal 240 UTF-8-Bytes. So entstehen keine scheinbar
 funktionierenden Trefferaktionen, die am Ziel nur ein leeres
 Suchfeld öffnen. Die bereits bestehenden Datenzugriffsregeln
 werden nicht geändert.
+
+## Ergänzung: Dateisuche während des Ladevorgangs
+
+Wenn die Kundendateiliste beim Öffnen der globalen Suche noch lädt,
+erscheint der sichtbare und für Screenreader zugängliche Hinweis
+**„Kundendateien werden geladen …“**, statt vorschnell „Keine Treffer“
+zu behaupten. Nach Abschluss des bereits vorhandenen Dateikatalog-Abrufs
+aktualisiert sich das offene Suchfenster automatisch, ohne erneute Eingabe.
+Bei einem Fehler zeigt es **„Dateiliste nicht erreichbar“** und
+verweist auf die bestehende Aktualisierungsaktion unter „Dateien“.
+
+Die Änderung führt **keinen weiteren Netzwerkaufruf** aus und verändert
+keine Ordner, Dateien, Berechtigungen oder Provider-Aktionen.
+Ein eigener DOM-Test deckt Laden, Treffer nach Nachladen und Fehlermeldung ab.
