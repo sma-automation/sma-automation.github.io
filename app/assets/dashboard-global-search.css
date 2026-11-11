@@ -21,7 +21,7 @@
 .sma-search-close{border:1px solid #c5cedd;background:#fff;border-radius:9px;
   min-width:38px;height:38px;color:#2c3c58;font-size:23px;line-height:1;cursor:pointer}
 #smaSearchQuery{width:100%;box-sizing:border-box;border:2px solid #778eb9;border-radius:10px;
-  padding:13px 14px;min-height:47px;background:#fff;color:#111e32;font:500 16px/1.3 inherit}
+  padding:13px 14px;min-height:47px;background:#fff;color:#111e32;font:500 16px/1.3 Arial,sans-serif}
 #smaSearchQuery:focus-visible,.sma-search-hit:focus-visible{outline:3px solid #93afff;outline-offset:2px}
 .sma-search-status{font-size:13px;line-height:1.5;color:#50627f;margin:10px 0 17px}
 .sma-search-group{font-size:13px;text-transform:uppercase;font-weight:750;letter-spacing:.035em;
