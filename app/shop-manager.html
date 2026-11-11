@@ -152,6 +152,8 @@ body.gallery-open{overflow:hidden}
 @media(max-width:650px){.sma-order-filters label{flex:1 1 100%;min-width:0}.sma-order-filters #smaOrderClear{width:100%}}
 @media(max-width:650px){.shop-sections button{flex:1}.order-item{display:flex;gap:10px}.order-item .amount{font-size:16px}.order-item .badge{font-size:10px}}
 .product-actions input[type="url"]{max-width:100%;min-width:0;width:13rem;font:inherit}
+#smaShopDemoPaymentNote{margin:8px 0 2px;font:400 12px/1.5 Inter,Arial,sans-serif;color:var(--muted);overflow-wrap:anywhere}
+#smaShopDemoPaymentNote[hidden]{display:none!important}
 </style>
 <style>.main{margin-left:0;width:100%}.content{padding:0}.section{margin-top:16px}.app{display:block}.card{box-shadow:none}body{background:#f4f6f9}</style></head>
 <body>
@@ -176,6 +178,7 @@ body.gallery-open{overflow:hidden}
         <button type="button" id="showProducts" aria-controls="shop" aria-pressed="true">Produkte</button>
         <button type="button" id="showOrders" aria-controls="bestellungen" aria-pressed="false">Bestellungen</button>
       </div>
+      <p id="smaShopDemoPaymentNote" role="note" hidden></p>
       <section id="shop" class="section card">
         <h2>Shop &amp; Produkte</h2>
         <p id="checkoutTestLink" class="hidden" style="margin:0 0 16px"><a class="btn" href="checkout-test.html" target="_top">Checkout V2 testen</a></p>
@@ -245,6 +248,7 @@ body.gallery-open{overflow:hidden}
 <script type="module">
 import {publicProductUrl} from './assets/shop-catalog-model.mjs?v=2';
 import {normalizeShopOrderFilters,applyShopOrderFilters,orderFiltersActive} from './assets/shop-order-search.mjs?v=1';
+import {demoPaymentModeNotice} from './assets/shop-demo-payment-notice.mjs?v=1';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Dieser Publishable Key darf im Browser verwendet werden. Niemals einen Secret-/Service-Role-Key einfügen.
@@ -1105,6 +1109,8 @@ if(sessionError||!session){
       currentUserId=session.user.id;
       currentCustomerId=kunde.kunde_id;
       publicShopSlug=kunde.shop_oeffentlich===true?kunde.shop_slug:null;
+      const demoNote=demoPaymentModeNotice(kunde);
+      if(demoNote){const note=document.getElementById('smaShopDemoPaymentNote');note.textContent=demoNote;note.hidden=false;}
       if(kunde.shop_slug==='sma-testkunde')document.getElementById('checkoutTestLink').classList.remove('hidden');
       // Produkte mit zehn, Bestellungen mit fünf Einträgen je Seite laden.
       await Promise.all([loadProductsPage(1),loadOrdersPage(1)]);
