@@ -28,7 +28,8 @@ try{
  const sql=await readFile('supabase/sql/gallery-worker-private-snapshot.sql','utf8');
  assert.match(sql,/GALLERY_WORKER_SNAPSHOT_ALREADY_EXISTS/);
  assert.match(sql,/security definer set search_path=''/);
- await db.exec(sql);
+ try{ await db.exec(sql); }
+ catch(err){console.error('SNAPSHOT_CREATE_ERROR',JSON.stringify({position:err.position,internalPosition:err.internalPosition,where:err.where,internalQuery:err.internalQuery,query:err.query,detail:err.detail}));throw err;}
  await update("insert into public.sma_kunden values (1,$1,true,true,false)",[customer]);
  await update("insert into sma_private.publication_files_v1 values($1,1,$3,'syntheticSourceDriveId2026',$4,1951847,true,'video','video/mp4'),($2,1,$3,'syntheticResultDriveId2026',$5,2125747,true,'video','video/mp4')",
  [source,result,customer,sourceRev,resultRev]);
@@ -97,6 +98,6 @@ try{
  assert.equal(await value('select count(*)::int v from sma_private.gallery_music_v1'),before);
  console.log('Worker snapshot: role isolation, exact source/result receipts, sidecar SHA, metadata integrity and ambiguity gates passed.');
 }catch(e){
- console.error('GALLERY_WORKER_SNAPSHOT_TEST_FAILED',e.message,e.where||'');
+ console.error('GALLERY_WORKER_SNAPSHOT_TEST_FAILED',e.message,e.where||'',e.position||'',e.internalPosition||'');
  process.exitCode=1;
 }finally{await db.close();}
