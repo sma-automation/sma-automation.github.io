@@ -14,6 +14,7 @@ const requirePg=createRequire(new URL('../private-gallery-runtime/package.json',
 const DB_ROLE_PREFLIGHT=String.raw`
 select
  session_user=current_user as same_login_role,
+ current_user='sma_gallery_worker_login' as designated_identity,
  r.rolcanlogin as can_login,
  r.rolsuper as superuser,
  r.rolbypassrls as bypass_rls,
@@ -34,7 +35,7 @@ select
 from pg_roles r where r.rolname=current_user
 `;
 export function assertGalleryDbRolePreflight(row){
- const ok=row&&row.same_login_role===true&&row.can_login===true
+ const ok=row&&row.same_login_role===true&&row.designated_identity===true&&row.can_login===true
   &&row.superuser===false&&row.bypass_rls===false
   &&row.create_role===false&&row.create_db===false
   &&row.inherited_reader===true&&row.can_read_snapshot===true
