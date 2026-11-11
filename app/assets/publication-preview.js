@@ -876,7 +876,7 @@ async function loadLatest(){
   const result=data.status==='processing'?await waitForResult(data.id):data;
   if(result.status==='failed')throw Error(errorText(result));
   render(result);
-  status(workspace?'':selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
+  status(selectedAsset?'Zugeordneten Beitragstext geladen.':workspace?'':'Gespeicherte Textvorlage geladen.');
  }catch(e){
   magicPreparationError=e.message||'Die gespeicherten Angaben konnten nicht geladen werden.';
   if(selectedAsset)clearDraft();
@@ -1194,7 +1194,7 @@ $('loadLatest').addEventListener('click',async()=>{
    fillInput(saved.input);
   }
   render(saved);workspace?.show('text');
-  status(workspace?'':selectedAsset?'Gespeicherter Portalbeitrag geladen.':'Gespeicherte Textvorlage geladen.');
+  status(selectedAsset?'Gespeicherter Portalbeitrag geladen.':workspace?'':'Gespeicherte Textvorlage geladen.');
  }catch(error){if(!signedOut)status(error.message,true);}
  finally{lock(false);syncMedia();}
 });
