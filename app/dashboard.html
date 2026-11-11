@@ -17,7 +17,7 @@ import {mountPublicationHistory} from './assets/publication-history-dashboard.mj
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=3';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=4';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -304,6 +304,7 @@ frame.addEventListener('load',()=>{
     doc,
     getAreas:()=>sectionCatalog.filter(a=>doc.getElementById('page-'+(a.key==='files'?'publishing':a.key))&&findAreaNavigation(a.key)),
     getFiles:()=>fileView?.getFiles()||[],
+    getFileStatus:()=>fileView?.getCatalogState()||'loading',
     onNavigate:(key,query)=>{
       if(signedOut||dashboardOwnerId!==ownerId)return false;
       const target=key==='history-search'?'history':key==='shop-search'?'shop':key;
@@ -376,7 +377,7 @@ function attachFileList(doc,page){
  const soundtrack=owner?mountGalleryMusic({owner,onComplete:()=>load(false),onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
- let files=[],pageNumber=0,loading=false,lastSync=0;
+ let files=[],pageNumber=0,loading=false,lastSync=0,catalogState='loading';
  const say=text=>message.textContent=text;
  function draw(){thumbnails.reset();list.replaceChildren();pages.replaceChildren();const matches=filterDashboardFiles(files,finder.value,portalFilter.value);selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':'Noch keine Bild- oder Videodateien im zugeordneten Kundenordner.';
   if(!matches.length){if(files.length)selection.textContent='Keine Treffer. Versuche einen kürzeren Namen oder „Alle Portale“.';return;}
@@ -387,14 +388,15 @@ function attachFileList(doc,page){
   if(matches.length>10){const back=doc.createElement('button');back.textContent='Zurück';back.disabled=pageNumber===0;back.addEventListener('click',()=>{pageNumber--;draw();});const next=doc.createElement('button');next.textContent='Weiter';next.disabled=(pageNumber+1)*10>=matches.length;next.addEventListener('click',()=>{pageNumber++;draw();});const count=doc.createElement('span');count.textContent='Seite '+(pageNumber+1)+' von '+Math.ceil(matches.length/10);pages.append(back,count,next);}
  }
  finder.addEventListener('input',()=>{pageNumber=0;draw();});portalFilter.addEventListener('change',()=>{pageNumber=0;draw();});
- async function load(sync=false){if(loading||disposed)return;loading=true;refresh.disabled=true;try{
+ async function load(sync=false){if(loading||disposed)return;loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();try{
   if(sync){say('Kundenordner wird geprüft …');const {data,error}=await supabase.auth.getSession();if(error||!data?.session)throw Error('Bitte melde dich erneut an.');const res=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1',{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});const body=await res.json();if(!res.ok||!body.ok){if(!['FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING'].includes(body.code))throw Error(body.code==='FOLDER_UNAVAILABLE'?'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.':'Die Dateien konnten noch nicht aktualisiert werden. Bitte erneut versuchen.');}else lastSync=Date.now();}
-  const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list'});if(error||!data?.ok)throw Error('Die Dateiliste konnte nicht geladen werden.');if(disposed||signedOut||owner!==dashboardOwnerId)return;files=data.files||[];wakeMusic();if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;draw();say(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.');
- }catch(e){say(e.message);}finally{loading=false;refresh.disabled=false;}}
+  const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list'});if(error||!data?.ok)throw Error('Die Dateiliste konnte nicht geladen werden.');if(disposed||signedOut||owner!==dashboardOwnerId)return;files=data.files||[];catalogState='ready';wakeMusic();if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;draw();say(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.');
+ }catch(e){catalogState='error';say(e.message);}finally{loading=false;refresh.disabled=false;dashboardQuickFind?.refresh();}}
  refresh.addEventListener('click',()=>load(true));
  for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))button.addEventListener('click',()=>load(Date.now()-lastSync>60000));
  load(false);return {load,
     getFiles(){return disposed||signedOut||owner!==dashboardOwnerId?[]:files.slice();},
+    getCatalogState(){return disposed||signedOut||owner!==dashboardOwnerId?'error':catalogState;},
     openFile(id){
       if(disposed||signedOut||owner!==dashboardOwnerId)return false;
       const item=files.find(f=>f.id===id);if(!item)return false;
