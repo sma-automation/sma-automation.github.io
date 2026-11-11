@@ -81,6 +81,8 @@ on:
       - supabase/sql/publication-provider-cover.sql
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - n8n/publishing/*gallery-soundtrack*
+      - n8n/publishing/gallery-private-evidence-worker.mjs
+      - tests/gallery-private-evidence-worker.test.cjs
       - n8n/publishing/prepare-gallery-audio.py
       - n8n/publishing/fixtures/gallery-music-probe.json
       - tests/*gallery-background*
