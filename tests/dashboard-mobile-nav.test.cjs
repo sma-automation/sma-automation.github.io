@@ -37,6 +37,9 @@ const tick=()=>new Promise(r=>setImmediate(r));
 test('mobile quick bar follows the actual dashboard page after sidebar or global search navigation',async()=>{
  const f=await fixture({initialPage:'overview'});
  assert.equal(f.get('overview').getAttribute('aria-current'),'page');
+ f.get('history').click();
+ assert.equal(f.get('overview').getAttribute('aria-current'),'page','Do not preselect History before the dashboard changes page');
+ assert.equal(f.get('history').getAttribute('aria-current'),null,'History becomes active only after the original page transition');
  f.doc.getElementById('page-overview').classList.remove('active');
  f.doc.getElementById('page-history').classList.add('active');
  await tick();
