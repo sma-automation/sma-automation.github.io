@@ -95,6 +95,31 @@ try{
  await update("delete from storage.objects where name=$1",[second]);
  assert.equal((await snapshot()).audio_sha256,audioSha);
 
+ // Operator-only template is tested here, but never applied to Supabase.
+ const roleSQL=await readFile('supabase/sql/gallery-worker-snapshot-reader-role.sql','utf8');
+ assert.match(roleSQL,/nologin inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls/);
+ assert.doesNotMatch(roleSQL,/\bpassword\b\s*'/i);
+ await db.exec(roleSQL);
+ assert.equal(await value("select rolcanlogin v from pg_roles where rolname='sma_gallery_snapshot_reader'"),false);
+ assert.equal(await value("select rolbypassrls v from pg_roles where rolname='sma_gallery_snapshot_reader'"),false);
+ assert.equal(await value("select has_function_privilege('sma_gallery_snapshot_reader','sma_private.gallery_worker_snapshot_v1(uuid)','EXECUTE') v"),true);
+ assert.equal(await value("select has_table_privilege('sma_gallery_snapshot_reader','sma_private.gallery_music_v1','SELECT,INSERT,UPDATE,DELETE') v"),false);
+ assert.equal(await value("select has_table_privilege('sma_gallery_snapshot_reader','sma_private.publication_files_v1','SELECT,INSERT,UPDATE,DELETE') v"),false);
+ assert.equal(await value("select has_table_privilege('sma_gallery_snapshot_reader','storage.objects','SELECT,INSERT,UPDATE,DELETE') v"),false);
+ await db.exec("create role sma_gallery_test_login login inherit nobypassrls;");
+ await db.exec("grant sma_gallery_snapshot_reader to sma_gallery_test_login;");
+ assert.equal(await value("select pg_has_role('sma_gallery_test_login','sma_gallery_snapshot_reader','USAGE') v"),true);
+ await db.exec('set role sma_gallery_test_login');
+ assert.equal((await snapshot()).gallery_job_id,job);
+ await assert.rejects(()=>update('select * from sma_private.gallery_music_v1'),/permission denied/);
+ await assert.rejects(()=>update('select * from sma_private.publication_files_v1'),/permission denied/);
+ await assert.rejects(()=>update('select * from storage.objects'),/permission denied/);
+ await assert.rejects(()=>update("delete from sma_private.gallery_music_v1 where id=$1",[job]),/permission denied/);
+ await db.exec('reset role');
+ for(const role of ['anon','authenticated']){
+  assert.equal(await value("select has_function_privilege($1,'sma_private.gallery_worker_snapshot_v1(uuid)','EXECUTE') v",[role]),false);
+ }
+
  assert.equal(await value('select count(*)::int v from sma_private.gallery_music_v1'),before);
  console.log('Worker snapshot: role isolation, exact source/result receipts, sidecar SHA, metadata integrity and ambiguity gates passed.');
 }catch(e){
