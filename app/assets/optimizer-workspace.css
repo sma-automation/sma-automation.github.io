@@ -575,3 +575,45 @@ body.wide #magicReadiness[data-state="unavailable"]{color:#9d4f36}
   body.wide #magicReadiness::before,
   body.wide #workspaceDraftNotice::before{animation:none!important}
 }
+
+/* SMA Dashboard V2: lean, two-tab workflow – no file-refresh toolbar. */
+body.wide #workspaceGalleryHeader{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ flex-wrap:wrap;margin:0 0 18px;padding:0;
+}
+body.wide #workspaceGalleryHeader h2{
+ margin:0;font-size:18px;line-height:1.35;font-weight:700;white-space:nowrap;
+}
+body.wide #workspaceSearch.sma-v2-inline-search{
+ display:flex;align-items:center;gap:8px;width:min(285px,100%);
+ min-height:42px;margin:0 0 0 auto;padding:0 12px;
+ border:1px solid #d7dfed;border-radius:9px;background:#fff;color:#627590;
+ cursor:text;box-shadow:none;
+}
+body.wide #workspaceSearch.sma-v2-inline-search .sma-v2-search-icon{
+ font-size:22px;line-height:1;color:#8795ad;
+}
+body.wide #workspaceSearch.sma-v2-inline-search #fileSearch{
+ display:block;flex:1 1 auto;width:100%;min-width:80px;min-height:38px;
+ margin:0;padding:7px 0;border:0!important;border-radius:0;background:none;
+ color:#22334c;font-size:13px!important;box-shadow:none!important;
+}
+body.wide #workspaceSearch.sma-v2-inline-search #fileSearch:focus-visible{
+ outline:0!important;border:0!important;
+}
+body.wide #workspaceSearch.sma-v2-inline-search:focus-within{
+ outline:3px solid #9db7f8;outline-offset:2px;border-color:#7293e5;
+}
+body.wide #workspaceGalleryActions[hidden]{display:none!important}
+body.wide #workspaceGalleryActions #refreshFiles{display:none!important}
+body.wide #workspaceFiles #filePickerCount{
+ font-size:12px;color:#8491a4;min-height:0;
+}
+body.wide #optimizerToolbar{margin-bottom:19px}
+body.wide #optimizerToolbar button{font-size:14px}
+@media(max-width:650px){
+ body.wide #workspaceGalleryHeader{gap:9px}
+ body.wide #workspaceGalleryHeader h2{font-size:16px}
+ body.wide #workspaceSearch.sma-v2-inline-search{width:min(190px,58%);min-height:40px}
+ body.wide #workspaceSearch.sma-v2-inline-search #fileSearch{font-size:12px!important}
+}

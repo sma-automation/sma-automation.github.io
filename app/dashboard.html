@@ -16,6 +16,7 @@ import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=24';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=1';
+import {mountDashboardStructureV2} from './assets/dashboard-structure-v2.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -23,10 +24,10 @@ const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
 const frame=document.getElementById('dashboard');
 const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
-let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
+let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,optimizerPortalTabs=null,publishingPage=null;
 let optimizerTrigger=null,selectedFileId=null,returningFromPreview=null;
 let fileView=null,musicLibraryDashboard=null;
-let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardCloudUpload=null,dashboardOwnerId=null;
+let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardCloudUpload=null,dashboardStructure=null,dashboardOwnerId=null;
 function showPublishing(){
  returningFromPreview=null;
  if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
@@ -36,12 +37,13 @@ function showPublishing(){
 function closeOptimizer(){if(history.state?.smaOptimization)history.back();else showPublishing();}
 function openOptimizer(portal,trigger,restoring=false){
  returningFromPreview=null;
- if(!optimizerPage)return;optimizerTrigger=trigger;optimizerHeading.textContent=portalNames[portal]+' optimieren';
+ if(!optimizerPage||!Object.hasOwn(portalNames,portal))return;optimizerTrigger=trigger;optimizerHeading.textContent=portalNames[portal]+' optimieren';
+ for(const item of optimizerPortalTabs?.children||[]){const active=item.dataset.portal===portal;item.setAttribute('aria-pressed',String(active));item.setAttribute('aria-current',String(active));}
  const frameKey=portal+':'+(selectedFileId||'template');
  let preview=[...(optimizerFrames?.children||[])].find(el=>el.dataset.key===frameKey);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','43');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','44');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -81,12 +83,23 @@ window.addEventListener('popstate',event=>{
 function attachOptimizerPage(doc,page){
  publishingPage=page;optimizerPage=doc.createElement('section');optimizerPage.id='smaOptimizationPage';optimizerPage.hidden=true;
  const header=doc.createElement('header');optimizerHeader=header;header.className='sma-optimization-header';const back=doc.createElement('button');back.type='button';back.className='sma-optimization-back';back.setAttribute('aria-label','Zurück zur Veröffentlichung');back.title='Zurück zur Veröffentlichung';const arrow=doc.createElement('span');arrow.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';arrow.setAttribute('aria-hidden','true');const backLabel=doc.createElement('span');backLabel.textContent='Veröffentlichung';back.append(arrow,backLabel);back.addEventListener('click',closeOptimizer);
- optimizerHeading=doc.createElement('h1');optimizerHeading.tabIndex=-1;header.append(back,optimizerHeading);optimizerFrames=doc.createElement('div');optimizerFrames.id='smaOptimizerFrames';optimizerPage.append(header,optimizerFrames);page.append(optimizerPage);
+ optimizerHeading=doc.createElement('h1');optimizerHeading.tabIndex=-1;
+ optimizerPortalTabs=doc.createElement('nav');optimizerPortalTabs.id='smaPortalQuickTabs';optimizerPortalTabs.className='sma-v2-portal-tabs';
+ optimizerPortalTabs.setAttribute('aria-label','Portal für diese Datei auswählen');
+ for(const portal of ['youtube','tiktok','instagram','facebook']){
+  const choice=doc.createElement('button');choice.type='button';choice.className='sma-v2-portal-tab';
+  choice.dataset.portal=portal;choice.textContent=portalNames[portal];
+  choice.setAttribute('aria-pressed','false');
+  choice.addEventListener('click',()=>openOptimizer(portal,optimizerTrigger||choice));
+  optimizerPortalTabs.append(choice);
+ }
+ header.append(back,optimizerHeading,optimizerPortalTabs);optimizerFrames=doc.createElement('div');optimizerFrames.id='smaOptimizerFrames';optimizerPage.append(header,optimizerFrames);page.append(optimizerPage);
  const style=doc.createElement('style');style.textContent=`.sma-publishing-hidden{display:none!important}.sma-optimizing{background:#fff!important}#smaOptimizationPage{border:0;background:transparent;padding:0;margin:0;width:100%;min-width:0}#smaOptimizationPage[hidden],#smaOptimizerFrames iframe[hidden]{display:none!important}.sma-optimization-header{margin-bottom:18px}.sma-optimization-header .sma-optimization-back{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:auto;min-height:48px;border:0;border-radius:9px;background:#4065d8;padding:12px 17px;color:#fff;cursor:pointer;margin-bottom:6px;font:500 14px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;white-space:nowrap}.sma-optimization-back span{display:flex}.sma-optimization-back svg{width:24px;height:24px}.sma-optimization-header .sma-optimization-back:hover{background:#3157cd}.sma-optimization-header .sma-optimization-back:focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}.sma-optimization-header h1{font-size:28px;margin:12px 0 0;line-height:1.25;outline:none}#smaOptimizerFrames{width:100%;min-width:0}#smaOptimizerFrames iframe{display:block;border:0;width:100%;height:300px;min-height:300px}@media(max-width:650px){.sma-optimization-header h1{font-size:23px}}`;doc.head.append(style);
 }
 // Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
+  dashboardStructure?.destroy();dashboardStructure=null;
   dashboardCloudUpload?.destroy();dashboardCloudUpload=null;
   musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;
   publicationHistory?.destroy();publicationHistory=null;
@@ -254,6 +267,12 @@ frame.addEventListener('load',()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=3',location.href).href});
+  // Rearrange existing navigation links and put the current cloud upload
+  // immediately above Publishing. The original SMA logo is never changed.
+  dashboardStructure=mountDashboardStructureV2({
+    doc,cloudButton:dashboardCloudUpload?.button,
+    stylesheetUrl:new URL('./assets/dashboard-structure-v2.css?v=1',location.href).href
+  });
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
 });
@@ -308,13 +327,26 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;dashboardStructure?.destroy();dashboardStructure=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-order-open'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview&&!preview.hidden&&!optimizerPage.hidden){optimizerPage.scrollIntoView({block:'start'});preview.contentWindow.postMessage({type:'sma-publication-order-viewport',height:Math.max(240,Math.min(720,window.innerHeight-140))},window.location.origin);}return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-workspace-view'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview)optimizerWorkspaceView(preview,event.data.view);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-height'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);const height=event.data.height;if(preview&&Number.isFinite(height)&&height>=300&&height<=30000)preview.style.height=Math.ceil(height)+'px';return;}
+  // Same-origin child selection only; the next portal checks ownership,
+  // revision and content permissions independently before accepting the file.
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-selected-file'){
+    const current=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow&&!el.hidden);
+    const id=event.data.assetId;
+    if(current&&!optimizerPage?.hidden&&(id===null||(typeof id==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)))){
+      selectedFileId=id;
+      current.dataset.key=current.dataset.portal+':'+(selectedFileId||'template');
+      if(history.state?.smaOptimization&&history.state.portal===current.dataset.portal)
+        history.replaceState({...history.state,assetId:selectedFileId},'');
+    }
+    return;
+  }
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-file-updated'&&[...(optimizerFrames?.children||[])].some(el=>event.source===el.contentWindow)){fileView?.load(false);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-close'&&[...(optimizerFrames?.children||[])].some(el=>event.source===el.contentWindow)){
     closeOptimizer();return;
@@ -323,7 +355,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardStructure?.destroy();dashboardStructure=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 

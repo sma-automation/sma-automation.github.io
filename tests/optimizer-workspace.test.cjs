@@ -39,13 +39,17 @@ function setup(previewData={},callbacks={}){
  let loads=0;const workspace=ctx.create(doc,'Instagram',()=>loads++,{getPreview:()=>previewData,...callbacks});
  return {workspace,main,form,video,pickerBody,get:id=>byId.get(id),loads:()=>loads};
 }
-test('gallery keeps refresh while existing upload control moves to the opened preview',()=>{
+test('gallery exposes inline search and automatically refreshed files without a visible refresh button',()=>{
  const p=setup();assert.equal(p.get('workspaceFiles').hidden,false);assert.equal(p.get('workspaceSource').hidden,true);
  assert.equal(p.pickerBody.parentElement,p.get('workspaceFiles'));assert.equal(p.get('filePicker').hidden,true);
  assert.deepEqual(p.get('optimizerToolbar').children.map(n=>n.textContent),['Datei','Inhalt und Ziel']);
  assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
  assert.equal(p.get('uploadPanel').parentElement,p.get('workspacePreview'));
  assert.equal(p.get('refreshFiles').parentElement,p.get('workspaceGalleryActions'));
+ assert.equal(p.get('workspaceGalleryActions').hidden,true,'Refresh handler remains mounted but not visible');
+ assert.equal(p.get('workspaceSearch').tag,'label');
+ assert.equal(p.get('fileSearch').parentElement,p.get('workspaceSearch'),'The live file-search input sits by Deine Dateien');
+ assert.equal(p.get('workspaceSearch').parentElement,p.get('workspaceGalleryHeader'));
  assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles'],'gallery shows no upload button');
  assert.equal(p.get('workspacePreview').hidden,true,'upload control is hidden until a gallery file is opened');
  assert.equal(p.get('magicActionsSource').hidden,true);assert.equal(p.get('magicActionsText').hidden,false);
@@ -195,7 +199,7 @@ test('media checks remain accessible and videos pause when leaving the gallery',
 });
 test('legacy folder and text actions use the two existing sections without starting work',()=>{
  const p=setup();p.workspace.show('text');p.workspace.show('folder');
- assert.equal(p.workspace.galleryVisible(),true);assert.equal(p.get('workspaceSearch').open,true);assert.equal(p.loads(),1);
+ assert.equal(p.workspace.galleryVisible(),true);assert.equal(p.get('fileSearch').focused,true);assert.equal(p.loads(),1);
  assert.equal(p.get('workspaceTab-files').attrs['aria-pressed'],'true');
  p.workspace.show('media');p.workspace.show('examples');assert.equal(p.workspace.galleryVisible(),true);
  assert.equal(p.get('exampleFiles').hidden,true);assert.equal(p.loads(),1);
@@ -291,8 +295,8 @@ test('professional preview places only publication in the primary action host',(
  assert.ok(page.includes("host:workspace?$('workspacePreviewPrimary'):$('save').parentElement"),
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
- assert.ok(html.includes('optimizer-workspace.css?v=19'));
- assert.ok(html.includes('publication-preview.js?v=88'));
+ assert.ok(html.includes('optimizer-workspace.css?v=20'));
+ assert.ok(html.includes('publication-preview.js?v=89'));
 });
 
 test('empty preview exposes upload action and becomes a complete preview after file choice',()=>{
