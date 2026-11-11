@@ -96,7 +96,7 @@ export function mountDashboardSearch({
  status.setAttribute('aria-live','polite');
  const matches=doc.createElement('div');matches.className='sma-search-results';
  panel.append(top,input,status,matches);overlay.append(panel);doc.body.append(overlay);
- let destroyed=false,searchText='',files=[],loaded=false,loading=null,ticket=0;
+ let destroyed=false,searchText='',files=[],loaded=false,loading=null,ticket=0,restoringFocus=false;
  const availablePages=PAGES.filter(x=>doc.getElementById('page-'+x.page)).map(x=>x.page);
  function redraw(){
   if(destroyed||overlay.hidden)return;
@@ -163,12 +163,16 @@ export function mountDashboardSearch({
   redraw();input.focus();void fetchFiles();
  }
  function hide(focus=true){
-  overlay.hidden=true;if(focus&&!destroyed)small.focus();
+  overlay.hidden=true;
+  if(focus&&!destroyed){
+   restoringFocus=true;
+   try{small.focus();}finally{restoringFocus=false;}
+  }
  }
  function change(value){searchText=String(value||'').slice(0,160);input.value=searchText;small.value=searchText;redraw();}
  const quickInput=()=>{change(small.value);show();};
  const mainInput=()=>change(input.value);
- const openInput=()=>show();
+ const openInput=()=>{if(!restoringFocus)show();};
  const clickClose=()=>hide();
  const clickOverlay=e=>{if(e.target===overlay)hide();};
  const keydown=e=>{
