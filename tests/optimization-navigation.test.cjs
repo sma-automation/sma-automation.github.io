@@ -63,3 +63,13 @@ test('editing a post from the embedded preview keeps the requested editor and it
  p.optimizerWorkspaceView(frame,'files');assert.equal(p.history.state.view,'files');
  p.closeOptimizer();assert.equal(p.view().optimizerPage.hidden,true);
 });
+
+test('the selected customer file is passed to other portals only through checked same-origin frames',()=>{
+ const dashboard=fs.readFileSync('app/dashboard.html','utf8');
+ const editor=fs.readFileSync('app/assets/publication-preview.js','utf8');
+ assert.ok(dashboard.includes("event.data?.type==='sma-publication-selected-file'"));
+ assert.ok(dashboard.includes("event.source===el.contentWindow&&!el.hidden"));
+ assert.ok(dashboard.includes("current.dataset.key=current.dataset.portal+':'"));
+ assert.ok(dashboard.includes("history.replaceState({...history.state,assetId:selectedFileId}"));
+ assert.ok(editor.includes("type:'sma-publication-selected-file',assetId:selectedAsset?.id||null"));
+});
