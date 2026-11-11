@@ -1,5 +1,6 @@
 // npm ci --prefix tests/sql-runtime --ignore-scripts
 // node tests/run-publication-video-sql.mjs
+import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 const db=new PGlite();
@@ -14,6 +15,19 @@ try {
  for(const file of ['publication-preview','publication-files','publication-media-precheck','publication-content-review','publication-magic-effect','publication-video-technical','publication-video-magic','publication-media-profiles']) {
   try {await db.exec(await readFile(new URL('../supabase/sql/'+file+'.sql',import.meta.url),'utf8'));} catch(e) {console.error(file,e.position,e.internalPosition,e.internalQuery);throw e;}
  }
+ // Exercise the exact new migration function, not an altered 2026-11-01
+ // historical SQL baseline. The old export-probe migration verifies the
+ // original function hash and is covered by run-export-probe-sql.mjs.
+ //
+ // PGlite's fixture does not include editor exports. Provide only an
+ // isolated, null export-evidence helper; the Magic-Effect path tested below
+ // still uses real validated, owner-/revision-/SHA-bound rows.
+ await db.exec("create function sma_private.publication_export_technical_v1(f sma_private.publication_files_v1) returns jsonb language sql stable security invoker set search_path='' as $ select null::jsonb $;");
+ const rollout=await readFile(new URL('../supabase/migrations/20261111010814_publication_instagram_verified_video_precheck_v1.sql',import.meta.url),'utf8');
+ const start=rollout.indexOf('CREATE OR REPLACE FUNCTION sma_private.publication_media_precheck_v1(');
+ assert.ok(start>0 && rollout.includes('PRECHECK_SOURCE_CHANGED'),'Production deployment must keep a source-hash guard');
+ assert.ok(rollout.includes("sma_private.publication_export_technical_v1(f)"),'Production export provenance must survive');
+ await db.exec(rollout.slice(start)); // Skip only the environment-specific deployed-version guard.
  console.log((await db.query('select version() as version')).rows[0].version);
  for(const file of ['publication-video-magic','publication-media-profiles']) {
   const sql=await readFile(new URL('./'+file+'.sql',import.meta.url),'utf8');let result;
