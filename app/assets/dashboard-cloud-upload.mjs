@@ -41,19 +41,27 @@ function svgCloud(doc){
 // Find the real existing "Veröffentlichung" navigation item without
 // changing the sidebar, its menu structure, its logo or any click handlers.
 function publishingNavigationItem(doc){
- const nodes=[...doc.querySelectorAll(
-  'aside a,aside button,aside [role="button"],.sidebar a,.sidebar button,.sidebar [role="button"],#sidebar a,#sidebar button,#sidebar [role="button"],nav a,nav button'
- )];
- const matches=nodes.filter(el=>{
-  if(el.closest('header,[role="banner"],[id^="page-"],main'))return false;
-  const text=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-  const route=[el.dataset?.page,el.dataset?.target,el.getAttribute('href'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
-  return text==='veröffentlichung'||text==='publishing'||route.includes('publishing');
- });
- const item=matches[0];
- if(!item)return null;
- // Move only the cloud button. Leave the native menu element in place.
- return item.closest('.sidebar-item,.nav-item,.menu-item,.sidebar-link,.nav-link,.menu-link')||item;
+ // The upload must NEVER use a navigation element from the white workspace.
+ // Earlier generic "nav" discovery could choose a content menu and put the
+ // cloud above the page heading instead of in the black sidebar.
+ const roots=[...doc.querySelectorAll('aside,.sidebar,#sidebar,[data-sidebar]')]
+  .filter(root=>!root.closest('main,[id^="page-"],[role="main"],header,[role="banner"]'));
+ for(const sidebar of roots){
+  const item=[...sidebar.querySelectorAll('a,button,[role="button"]')].find(el=>{
+   const text=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+   const route=[el.dataset?.page,el.dataset?.target,el.dataset?.section,
+    el.getAttribute('href'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
+   return text==='veröffentlichung'||text==='publishing'||
+    text.endsWith(' veröffentlichung')||/\bpublishing\b/.test(route);
+  });
+  if(!item)continue;
+  // If the actual sidebar uses list rows, insert another row at the same
+  // level rather than placing a stray button directly inside a <ul>.
+  const anchor=item.closest('li,.sidebar-item,.nav-item,.menu-item,.sidebar-link,.nav-link,.menu-link')||item;
+  if(sidebar.contains(anchor))return anchor;
+  return item;
+ }
+ return null; // Fail closed if the authenticated sidebar is not present.
 }
 
 // Keep the four original header controls and their events. Give them the
@@ -108,7 +116,11 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
  // Exactly as requested: upload on the LEFT, immediately ABOVE Publishing.
  // The existing portal chooser and upload workflow are otherwise unchanged.
  button.classList.add('sma-cloud-sidebar-upload');
- publishing.before(button);
+ const listHost=publishing.parentElement?.matches('ul,ol')?doc.createElement('li'):null;
+ if(listHost){
+  listHost.className='sma-cloud-sidebar-host';
+  listHost.append(button);publishing.before(listHost);
+ }else publishing.before(button);
  const overlay=doc.createElement('div');overlay.id='smaDashboardCloudDialog';overlay.className='sma-dashboard-cloud-overlay';overlay.hidden=true;
  const panel=doc.createElement('section');panel.className='sma-dashboard-cloud-panel';panel.setAttribute('role','dialog');
  panel.setAttribute('aria-modal','true');panel.setAttribute('aria-labelledby','smaCloudHeading');panel.setAttribute('aria-describedby','smaCloudInstructions');
@@ -191,6 +203,6 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
   button.removeEventListener('click',clickButton);
   closeButton.removeEventListener('click',clickClose);
   overlay.removeEventListener('click',clickOverlay);
-  restoreAccountTabs();overlay.remove();button.remove();link.remove();
+  restoreAccountTabs();overlay.remove();button.remove();listHost?.remove();link.remove();
  }};
 }
