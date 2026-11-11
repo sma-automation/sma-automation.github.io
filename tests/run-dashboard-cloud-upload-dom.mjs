@@ -8,7 +8,7 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 function fixture({lang='de',withLanguage=true,fail=false}={}){
  const html=`<html lang="${lang}"><head></head><body>
  <header class="topbar"><div class="topbar-title">SMA Dashboard</div>
- <div class="topbar-actions">${withLanguage?'<select id="languageSwitcher" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select>':''}</div></header>
+ <div class="topbar-actions"><span id="profileName">Profilname</span><button id="smaPackage">SMA Paket</button>${withLanguage?'<select id="languageSwitcher" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select>':''}<button id="signOut">Abmelden</button></div></header>
  <aside><button id="navigatePublishing">Veröffentlichung</button></aside>
  <main><section id="page-overview"></section><section id="page-publishing" hidden>
  <div class="platform-card"><button>Optimieren</button></div><section id="smaOptimizationPage" hidden></section></section></main>
@@ -27,17 +27,33 @@ function fixture({lang='de',withLanguage=true,fail=false}={}){
  return {doc,window,controller,clicked,sidebar,$:selector=>doc.querySelector(selector)};
 }
 
-await test('cloud icon sits directly beside the dashboard language selector, not in Content',()=>{
+await test('upload cloud is directly ABOVE the original Publishing link on the left',()=>{
  const f=fixture();
  const button=f.$('#smaDashboardCloudUpload'),language=f.$('#languageSwitcher');
- assert.ok(button);assert.equal(language.nextElementSibling,button);
- assert.equal(f.$('#page-publishing #smaDashboardCloudUpload'),null);
+ assert.ok(button);assert.equal(button.nextElementSibling,f.sidebar);
+ assert.equal(button.parentElement,f.sidebar.parentElement);
+ assert.equal(f.$('.topbar #smaDashboardCloudUpload'),null);
+ assert.equal(language.parentElement.className,'topbar-actions');
+ assert.equal(button.classList.contains('sma-cloud-sidebar-upload'),true);
  assert.equal(button.querySelector('svg')?.getAttribute('viewBox'),'0 0 24 24');
  assert.equal(button.getAttribute('aria-haspopup'),'dialog');
- assert.equal(button.getAttribute('aria-expanded'),'false');
  assert.equal(f.$('#smaDashboardCloudDialog').hidden,true);
  assert.equal(f.$('link[href="/cloud-upload.css"]')?.rel,'stylesheet');
  f.controller.destroy();
+});
+
+await test('profile, package, language and sign-out appear as flat tabs without new controls',()=>{
+ const f=fixture();
+ const top=f.$('.topbar-actions');
+ const nodes=['profileName','smaPackage','languageSwitcher','signOut'].map(id=>f.$('#'+id));
+ assert.equal(top.children.length,4);
+ assert.deepEqual(nodes.map(n=>n.dataset.smaAccountTab),['profile','package','language','logout']);
+ assert.ok(nodes.every(n=>n.classList.contains('sma-dashboard-account-tab')));
+ const packageButton=nodes[1];let clicks=0;packageButton.addEventListener('click',()=>clicks++);
+ packageButton.click();assert.equal(clicks,1);
+ f.controller.destroy();
+ assert.ok(nodes.every(n=>!n.classList.contains('sma-dashboard-account-tab')));
+ assert.equal(top.children.length,4);
 });
 
 await test('one cloud entry offers all four portals and opens existing Publishing route',()=>{
@@ -88,7 +104,10 @@ await test('header without language remains usable; repeated mount and teardown 
  const f=fixture({withLanguage:false});
  const button=f.$('#smaDashboardCloudUpload');
  assert.ok(button);
- assert.equal(button.parentElement.className,'topbar-actions');
+ assert.equal(button.parentElement.tagName,'ASIDE');
+ assert.equal(button.nextElementSibling,f.sidebar);
+ assert.equal(f.$('#profileName').classList.contains('sma-dashboard-account-tab'),true);
+ assert.equal(f.$('#signOut').classList.contains('sma-dashboard-account-tab'),true);
  assert.equal(mountDashboardCloudUpload({doc:f.doc,onPortal:()=>true,stylesheetUrl:'/cloud-upload.css'}),null);
  assert.equal(f.doc.querySelectorAll('#smaDashboardCloudUpload').length,1);
  f.controller.destroy();
@@ -105,6 +124,8 @@ await test('dashboard integration routes through existing optimization, never ne
  assert.match(source,/dashboardCloudUpload\?\.destroy\(\)/);
  const module=await readFile(new URL('../app/assets/dashboard-cloud-upload.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(module,/supabase\.rpc|fetch\(|\.upload\(|provider|approval_token|credit_pack/i);
+ assert.match(module,/publishing.before\\(button\\)/);
+ assert.match(module,/styleAccountTabs\\(header\\)/);
  assert.match(module,/onPortal\(item\.dataset\.portal,button\)/);
 });
 
