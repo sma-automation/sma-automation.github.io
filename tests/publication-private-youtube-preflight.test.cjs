@@ -80,3 +80,15 @@ test('no authorization or profile credential gets copied into private YouTube ch
  for(const secret of ['DO_NOT_ECHO_CUSTOMER_CHANNEL','DO_NOT_ECHO_CUSTOMER_TITLE','DO_NOT_ECHO_CAPTION'])
   assert(!s.includes(secret));
 });
+
+
+test('expired catalog evidence explains refresh without claiming file bytes changed',async()=>{
+ const {privateYouTubeTestSteps:steps,orderError}=await loaded;
+ const order={...valid(),check_error:'FILE_REFRESH_REQUIRED'};
+ assert.equal(orderError('FILE_REFRESH_REQUIRED'),'Bitte aktualisiere die Dateiliste und versuche es erneut.');
+ const notes=steps(order,now);
+ assert.equal(notes.length,4);
+ assert.match(notes[1],/Bitte aktualisiere die Dateiliste/);
+ assert.doesNotMatch(notes[1],/Die Datei wurde geändert/);
+ assert.match(notes[3],/separate SMA-Betreiberfreigabe/);
+});
