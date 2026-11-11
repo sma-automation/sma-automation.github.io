@@ -111,6 +111,19 @@ test('global search explains file loading, refreshes when catalog arrives, and r
  assert.match(status.textContent,/Dateiliste nicht erreichbar/);
  f.view.destroy();
 });
+test('deep-search shortcuts are not counted as real matching records',async()=>{
+ const f=await fixture({areas:['history','shop']});
+ f.view.show();
+ const input=f.get('smaQuickFindInput');
+ input.value='not-a-file-98765';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ const status=f.get('smaQuickFindPanel').querySelector('[role="status"]');
+ assert.match(status.textContent,/Keine direkten Treffer/);
+ assert.doesNotMatch(status.textContent,/2 Treffer/);
+ const options=[...f.get('smaQuickFindResults').querySelectorAll('button')];
+ assert.equal(options.length,2);
+ f.view.destroy();
+});
 test('quick search does not expose files that are absent from the caller’s own catalog',async()=>{
  const f=await fixture();
  f.view.show();
