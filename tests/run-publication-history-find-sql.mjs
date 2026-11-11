@@ -13,7 +13,7 @@ try{
   "create role anon; create role authenticated; create role service_role;",
   "create schema auth; create schema sma_private;",
   "create function auth.uid() returns uuid language sql stable as $f$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $f$;",
-  "grant usage on schema auth to authenticated;",
+  "grant usage on schema auth to authenticated; grant usage on schema sma_private to authenticated;",
   "grant execute on function auth.uid() to authenticated;",
   "create table public.sma_kunden(id bigint primary key,user_id uuid,aktiv boolean,demo_delta_aktiv boolean,zahlung_bestaetigt boolean);",
   "create table sma_private.publication_orders_v1(id uuid primary key,user_id uuid,customer_id bigint,draft jsonb,binding jsonb,account_check jsonb,state text,created_at timestamptz);",
@@ -27,6 +27,19 @@ try{
  assert.match(sql,/revoke all on function public[.]sma_publication_history_find_v1\(text\) from public,anon,authenticated/);
  assert.doesNotMatch(sql,/\b(insert|update|delete|truncate|call)\s+(into|from|public[.]|sma_private[.])/i);
  await db.exec(sql);
+ const hardened=await readFile('supabase/sql/publication-history-find-invoker-wrapper.sql','utf8');
+ assert.match(hardened,/HISTORY_PUBLIC_FIND_BASELINE_CHANGED/);
+ assert.match(hardened,/56589e587a276622b674913222e2af56/);
+ assert.match(hardened,/security invoker set search_path=''/);
+ assert.match(hardened,/security definer set search_path=''/);
+ // Run exactly the same new private core and public wrapper; skip the
+ // environment-specific installed-hash guard in this isolated fixture.
+ const coreStart=hardened.indexOf('create function sma_private.publication_history_find_core_v1(');
+ assert(coreStart>0);
+ await db.exec(hardened.slice(coreStart));
+ assert.equal((await rows("select prosecdef v from pg_proc where oid='public.sma_publication_history_find_v1(text)'::regprocedure"))[0].v,false);
+ assert.equal((await rows("select prosecdef v from pg_proc where oid='sma_private.publication_history_find_core_v1(text)'::regprocedure"))[0].v,true);
+ assert.equal((await rows("select has_function_privilege('authenticated','sma_private.publication_history_find_core_v1(text)','EXECUTE') v"))[0].v,true);
  await db.query('insert into public.sma_kunden values (4,$1,true,true,false),(5,$2,true,true,false),(6,$1,false,true,false)',[owner,foreign]);
  for(let n=1;n<=25;n++){
   await db.query("insert into sma_private.publication_orders_v1 values($1,$2,4,$3::jsonb,$4::jsonb,$5::jsonb,'prepared',$6::timestamptz)",
