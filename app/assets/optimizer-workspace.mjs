@@ -47,33 +47,21 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
 
   const galleryHeader = make('div', 'workspaceGalleryHeader');
   const galleryActions = make('div', 'workspaceGalleryActions');
-  galleryActions.hidden = true;
   $('deviceBrowse').textContent = 'Datei hinzufügen';
-  // Keep the EXISTING refresh handler in the DOM for retries, but do not
-  // waste a prominent dashboard button on an automatic file reconciliation.
+  // The gallery shows only existing files and refresh. Adding a new file
+  // belongs to the expanded preview, not under every thumbnail.
   galleryActions.append($('refreshFiles'));
-  const oldSearchLabel = doc.querySelector('label[for="fileSearch"]');
-  const search = make('label', 'workspaceSearch');
-  search.className = 'sma-v2-inline-search';
-  search.setAttribute('for','fileSearch');
-  const glass = make('span',null,'⌕');glass.className='sma-v2-search-icon';
-  glass.setAttribute('aria-hidden','true');
-  const input = $('fileSearch');
-  input.setAttribute('type','search');
-  input.setAttribute('aria-label','Dateien suchen');
-  input.setAttribute('placeholder','Dateien suchen …');
-  search.append(glass,input);
-  galleryHeader.append(make('h2', null, 'Deine Dateien'), search, galleryActions);
+  galleryHeader.append(make('h2', null, 'Deine Dateien'), galleryActions);
   const pickerBody = $('filePicker').querySelector('.file-picker-body');
   files.append(galleryHeader, pickerBody);
   $('filePicker').hidden = true;
   $('filePickerHelp').hidden = true;
   $('pickerRefresh').parentElement.hidden = true;
   $('chooseGeneralTemplate').parentElement.hidden = true;
-  // The old "Datei suchen" disclosure is gone. The same real input remains
-  // connected to the existing search/filter and original customer file list.
-  if(oldSearchLabel&&oldSearchLabel!==search)oldSearchLabel.hidden=true;
-  pickerBody.prepend($('fileSwitchNotice'));
+  // Retain search and the legacy picker entry point without another toolbar tab.
+  const search = make('details', 'workspaceSearch');
+  search.append(make('summary', null, 'Datei suchen'), doc.querySelector('label[for="fileSearch"]'), $('fileSearch'));
+  pickerBody.prepend(search, $('fileSwitchNotice'));
   // Clicking a gallery tile opens the post preview directly; no extra action button.
 
   const previewBack = button('workspacePreviewBack', '← Zu den Dateien', () => {
@@ -307,7 +295,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const firstUpload = key === 'upload';
     if (firstUpload) key = 'preview';
     if (key === 'text') key = 'source';
-    if (key === 'folder') { key = 'files'; input.focus(); }
+    if (key === 'folder') { key = 'files'; search.open = true; }
     if (!Object.hasOwn(panels, key)) return;
     if (key === 'preview' && !selectedFile && !firstUpload) return;
     const changed = active !== key;
