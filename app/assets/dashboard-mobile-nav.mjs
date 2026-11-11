@@ -43,17 +43,40 @@ export function mountDashboardMobileNav({doc,available,onNavigate,onSearch}){
    let ok=false;
    try{ok=item.key==='search'?onSearch()===true:onNavigate(item.key)===true;}catch{return;}
    if(!ok)return;
-   if(item.key!=='search'){
-    for(const el of nav.querySelectorAll('button'))el.removeAttribute('aria-current');
-    button.setAttribute('aria-current','page');
-   }
+   // Mark only the page the original dashboard actually shows.
+   // A successful click handler is not proof of a completed page change.
+   if(item.key!=='search')syncActive();
   };
   button.addEventListener('click',click);
   cleanups.push(()=>button.removeEventListener('click',click));
   nav.append(button);
  }
  doc.body.append(nav);doc.body.classList.add('sma-mobile-quick-mounted');
+ // The active page is owned by the original dashboard, not by this quick bar.
+ // Watch only existing page/chapters, and keep buttons correct after sidebar,
+ // global search, browser history or account-dependent navigation.
+ function syncActive(){
+  const active=[...doc.querySelectorAll('[id^="page-"].active')].find(el=>el.id?.startsWith('page-'));
+  const page=active?.id.slice(5);
+  const filesTab=doc.getElementById('sma-publishing-tab-files');
+  const current=page==='overview'?'overview':page==='history'?'history':page==='shop'?'shop':
+   page==='publishing'&&filesTab?.getAttribute('aria-selected')==='true'?'files':null;
+  for(const button of nav.querySelectorAll('button[data-sma-mobile-target]')){
+   if(button.dataset.smaMobileTarget===current)button.setAttribute('aria-current','page');
+   else button.removeAttribute('aria-current');
+  }
+ }
+ const Observer=doc.defaultView?.MutationObserver;
+ const observer=typeof Observer==='function'?new Observer(syncActive):null;
+ if(observer){
+  for(const page of doc.querySelectorAll('[id^="page-"]'))
+   observer.observe(page,{attributes:true,attributeFilter:['class','hidden']});
+  const fileTab=doc.getElementById('sma-publishing-tab-files');
+  if(fileTab)observer.observe(fileTab,{attributes:true,attributeFilter:['aria-selected']});
+ }
+ syncActive();
  return {nav,destroy(){
+  observer?.disconnect();
   cleanups.forEach(fn=>fn());
   nav.remove();style.remove();
   doc.body.classList.remove('sma-mobile-quick-mounted');
