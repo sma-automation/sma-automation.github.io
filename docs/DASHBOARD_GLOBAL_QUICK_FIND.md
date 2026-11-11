@@ -105,3 +105,11 @@ verweist auf die bestehende Aktualisierungsaktion unter „Dateien“.
 Die Änderung führt **keinen weiteren Netzwerkaufruf** aus und verändert
 keine Ordner, Dateien, Berechtigungen oder Provider-Aktionen.
 Ein eigener DOM-Test deckt Laden, Treffer nach Nachladen und Fehlermeldung ab.
+
+## Präzise Trefferzahlen
+
+Die beiden Aktionen für eine weiterführende Suche in History oder Shop
+sind Suchwege und **keine tatsächlichen Treffer**. Sie werden nicht mehr
+als Kundendateien oder Dashboard-Bereiche gezählt. Gibt es nur diese
+Suchwege, erklärt der Status **„Keine direkten Treffer“** statt
+irreführend „2 Treffer“ anzuzeigen. Ein DOM-Test deckt diesen Fall ab.
