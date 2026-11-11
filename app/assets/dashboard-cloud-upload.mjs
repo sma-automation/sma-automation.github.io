@@ -38,13 +38,57 @@ function svgCloud(doc){
  return svg;
 }
 
-// Consumers can pass an explicit toolbar in a synthetic DOM test. In the
-// live dashboard this sits immediately after the language selector.
+// Find the real existing "Veröffentlichung" navigation item without
+// changing the sidebar, its menu structure, its logo or any click handlers.
+function publishingNavigationItem(doc){
+ const nodes=[...doc.querySelectorAll(
+  'aside a,aside button,aside [role="button"],.sidebar a,.sidebar button,.sidebar [role="button"],#sidebar a,#sidebar button,#sidebar [role="button"],nav a,nav button'
+ )];
+ const matches=nodes.filter(el=>{
+  if(el.closest('header,[role="banner"],[id^="page-"],main'))return false;
+  const text=(el.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();
+  const route=[el.dataset?.page,el.dataset?.target,el.getAttribute('href'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
+  return text==='veröffentlichung'||text==='publishing'||route.includes('publishing');
+ });
+ const item=matches[0];
+ if(!item)return null;
+ // Move only the cloud button. Leave the native menu element in place.
+ return item.closest('.sidebar-item,.nav-item,.menu-item,.sidebar-link,.nav-link,.menu-link')||item;
+}
+
+// Keep the four original header controls and their events. Give them the
+// SAME flat, underlined tab appearance as "Portale / Dateien" (no pill buttons).
+function styleAccountTabs(header){
+ header.classList.add('sma-account-tabs-header');
+ const candidates=[...header.querySelectorAll('button,a,select,[role="button"],[role="combobox"],span,strong,[data-user-name],[data-profile-name]')];
+ const tabs=[];
+ for(const category of ['profile','package','language','logout']){
+  const match=candidates.find(el=>{
+   if(el.closest('#smaDashboardCloudUpload')||tabs.some(t=>t.contains(el)))return false;
+   const text=(el.textContent||'').replace(/\\s+/g,' ').trim();
+   const hint=[el.id,typeof el.className==='string'?el.className:'',el.getAttribute('aria-label'),
+    el.getAttribute('title'),el.getAttribute('name'),el.getAttribute('data-language')].join(' ');
+   if(category==='profile')return /profil|profile|benutzername|username|user-name|account-name|kundenname/i.test(hint)||
+      /^Profil(?:name)?(?:\\s*:.*)?$/i.test(text);
+   if(category==='package')return /paket|tarif|subscription|plan/i.test(hint+' '+text);
+   if(category==='language')return /sprache|language|locale|lang(?:uage)?[-_]?switch/i.test(hint)||
+      /^(DE|EN|Deutsch|English)$/i.test(text)||el.tagName==='SELECT'&&/Deutsch|English|DE|EN/.test(text);
+   return /abmelden|logout|sign\\s*out/i.test(hint+' '+text);
+  });
+  if(match){match.classList.add('sma-dashboard-account-tab');match.dataset.smaAccountTab=category;tabs.push(match);}
+ }
+ return ()=>{for(const el of tabs){el.classList.remove('sma-dashboard-account-tab');delete el.dataset.smaAccountTab;}header.classList.remove('sma-account-tabs-header');};
+}
+
+// This is only a visual/position change. No upload endpoint is added.
 export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
  if(!doc||typeof onPortal!=='function')return null;
  const header=globalHeader(doc);
  if(!header||doc.getElementById('smaDashboardCloudUpload'))return null;
+ const publishing=publishingNavigationItem(doc);
+ if(!publishing)return null; // Never put the requested sidebar upload at the wrong location.
  const lang=languageControl(header);
+ const restoreAccountTabs=styleAccountTabs(header);
  const docBody=doc.body;
  if(!docBody)return null;
  const link=doc.createElement('link');link.rel='stylesheet';link.href=stylesheetUrl;
@@ -61,9 +105,10 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
  button.append(svgCloud(doc));
  const buttonLabel=doc.createElement('span');buttonLabel.className='sma-cloud-upload-label';
  button.append(buttonLabel);
- // Keep the new action near, not inside, the language control.
- if(lang){const anchor=lang.closest('.language-switcher,.lang-switcher,.language-selector,.language-switch,[data-language-control]')||lang;anchor.after(button);}
- else{const actions=header.querySelector('.topbar-actions,.header-actions,.topbar-right,.header-right')||header;actions.append(button);}
+ // Exactly as requested: upload on the LEFT, immediately ABOVE Publishing.
+ // The existing portal chooser and upload workflow are otherwise unchanged.
+ button.classList.add('sma-cloud-sidebar-upload');
+ publishing.before(button);
  const overlay=doc.createElement('div');overlay.id='smaDashboardCloudDialog';overlay.className='sma-dashboard-cloud-overlay';overlay.hidden=true;
  const panel=doc.createElement('section');panel.className='sma-dashboard-cloud-panel';panel.setAttribute('role','dialog');
  panel.setAttribute('aria-modal','true');panel.setAttribute('aria-labelledby','smaCloudHeading');panel.setAttribute('aria-describedby','smaCloudInstructions');
@@ -146,6 +191,6 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
   button.removeEventListener('click',clickButton);
   closeButton.removeEventListener('click',clickClose);
   overlay.removeEventListener('click',clickOverlay);
-  overlay.remove();button.remove();link.remove();
+  restoreAccountTabs();overlay.remove();button.remove();link.remove();
  }};
 }
