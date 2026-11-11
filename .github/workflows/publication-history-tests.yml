@@ -104,6 +104,7 @@ on:
       - supabase/sql/publication-gallery-technical.sql
       - tests/run-publication-gallery-technical-sql.mjs
       - supabase/sql/gallery-worker-private-snapshot.sql
+      - supabase/sql/gallery-worker-dormant-account.sql
       - tests/run-gallery-worker-snapshot-sql.mjs
       - supabase/migrations/*_gallery_music_receipt_v1.sql
       - supabase/migrations/*_gallery_automatic_music_v1.sql
