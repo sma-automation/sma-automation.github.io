@@ -1,6 +1,6 @@
 # SMA – YouTube-Test: abgelaufener Dateinachweis statt behaupteter Dateiveränderung
 
-Stand: 11.11.2026, nur lesende Prüfung des tatsächlichen Auftrags. Kein Upload.
+Stand: 11.11.2026, technische Korrektur installiert und verifiziert. Kein Upload.
 
 ## Konkret ermittelter Fehler
 
@@ -40,8 +40,19 @@ verhindert das Einspielen.
 - Das vorhandene Dashboard kennt bereits die Meldung
   „Bitte aktualisiere die Dateiliste und versuche es erneut.“
 
-**Die SQL-Vorlage ist zunächst nur ein GitHub-Entwurf.** Ohne gesonderte
-Freigabe wird sie nicht in die produktive Datenbank eingespielt.
+**Produktivstatus (11.11.2026): Korrektur installiert.** Die geprüfte SQL wurde
+über die Supabase-Migration `20261111211712_publication_assignment_stale_file_reason_20261111`
+im Projekt `sma-automation` angewandt und unter
+`supabase/migrations/20261111211712_publication_assignment_stale_file_reason_20261111.sql`
+nachvollziehbar im Repository gesichert.
+
+Die nachträgliche SQL-Prüfung bestätigt: `FILE_REFRESH_REQUIRED` und
+`FILE_CHANGED` sind getrennt vorhanden; die Funktion bleibt
+`SECURITY INVOKER`, ausschließlich `service_role` hat `EXECUTE`,
+`can_publish=false` bleibt unverändert. Der Aufruf mit einer bewusst
+nicht existierenden Test-Kunden-ID gab `ACCESS_INACTIVE` zurück.
+Eine echte aktuelle Drive-Dateiverifikation oder YouTube-Freigabe
+ist damit **nicht** erfolgt. Der gespeicherte Auftrag bleibt gesperrt.
 
 ## Nächster echter Bedienweg, ohne neue Browser-Tabs
 
