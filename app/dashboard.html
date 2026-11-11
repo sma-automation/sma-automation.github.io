@@ -13,7 +13,7 @@ import {mountWebsitePreparation} from './assets/website-domain.mjs?v=18';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
-import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=24';
+import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=25';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
@@ -98,13 +98,23 @@ frame.addEventListener('load',()=>{
   websitePreparation?.destroy();websitePreparation=null;
   const websitePage=doc?.getElementById('page-website'),ownerId=dashboardOwnerId;
   if(doc&&ownerId)publicationHistory=mountPublicationHistory({doc,expectedOwnerId:ownerId,ownerWindow:window,
-    stylesheetUrl:new URL('./assets/publication-history.css?v=9',location.href).href,
+    stylesheetUrl:new URL('./assets/publication-history.css?v=10',location.href).href,
     getOwnerId:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session?.user?.id||null;},
     watchOwner:callback=>supabase.auth.onAuthStateChange((_event,session)=>callback(session?.user?.id||null)).data.subscription,
     requestOrderPage:async(id,page)=>{
       const {data,error}=await supabase.auth.getSession();
       if(error||data.session?.user.id!==ownerId)throw Error('AUTH_REQUIRED');
       const response=await supabase.rpc('sma_publication_history_order_page_v1',{p_order_id:id,p_page:page})
+        .abortSignal(AbortSignal.timeout(15000));
+      if(response.error)throw Error('UNAVAILABLE');
+      return response.data;
+    },
+    requestFind:async term=>{
+      const q=typeof term==='string'?term.trim():'';
+      if(q.length<2||q.length>80)throw Error('INVALID_INPUT');
+      const {data,error}=await supabase.auth.getSession();
+      if(error||!data?.session||data.session.user.id!==ownerId)throw Error('AUTH_REQUIRED');
+      const response=await supabase.rpc('sma_publication_history_find_v1',{p_query:q})
         .abortSignal(AbortSignal.timeout(15000));
       if(response.error)throw Error('UNAVAILABLE');
       return response.data;

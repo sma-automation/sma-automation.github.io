@@ -6,7 +6,7 @@ const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImme
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',cover:{status:'not_recorded',updated_at:null},...extra});
 const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:3,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
-function fixture({active=true,hash='',requestOrderPage,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors,requestAnalyses}={}){
+function fixture({active=true,hash='',requestOrderPage,requestFind,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors,requestAnalyses}={}){
  const {document:doc,window}=parseHTML('<html><head></head><body><section id="page-history" class="'+(active?'active':'')+'"><div class="grid">'+Array.from({length:3},()=>'<div class="card"><div class="card-title">Old metric</div><div class="big-value">–</div><div class="muted">Old detail</div></div>').join('')+'</div><div class="card"><div class="card-title">Aktivitätsverlauf</div><p>Old intro</p><div id="historyActivitySlot" class="empty-state"></div></div><div class="card"><div class="card-title">Monatsarchiv</div><p>Old archive</p><div id="historyMonthSlot" style="display:flex"></div></div></section></body></html>');
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
  const route={hash,pathname:'/app/dashboard.html',search:''};
@@ -15,7 +15,7 @@ function fixture({active=true,hash='',requestOrderPage,request=()=>result(),getO
  const historyNav=doc.createElement('button');historyNav.dataset.page='history';
  historyNav.addEventListener('click',()=>doc.getElementById('page-history').classList.add('active'));
  doc.body.prepend(historyNav);
- const view=mountPublicationHistory({doc,requestOrderPage,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
+ const view=mountPublicationHistory({doc,requestOrderPage,requestFind,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
  const page=doc.getElementById('page-history');
  return {doc,window,page,view,calls,$:s=>page.querySelector(s),owner(id,notify=true){owner=id;if(notify)callback(id);},focus(){window.dispatchEvent(new window.Event('focus'));},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));},get unsubscribed(){return unsubscribed;}};
 }
@@ -396,4 +396,48 @@ await test('unfinished order links to its saved preparation until the server dea
   assert.deepEqual(f.calls,[{}]);
  }finally{f.view.destroy();mock.timers.reset();}
 });
+await test('History searches the full owner archive and opens the saved order without a new tab',async()=>{
+ const selected=entry(3,{title:'Hotel-Türgriff Demo'});
+ const found={ok:true,version:1,entries:[{id:selected.id,title:selected.title,platform:'youtube',status:'blocked',created_at:selected.created_at}],has_more:false,can_upload:false,can_publish:false};
+ const terms=[],lookups=[];
+ mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+ const f=fixture({
+  requestFind:async term=>{terms.push(term);return found;},
+  requestOrderPage:async(id,page)=>{lookups.push([id,page]);return result([selected],null,{order_page:1});}
+ });
+ try{
+  await tick();
+  const input=f.$('#smaHistorySearch');assert(input);
+  input.value='Hotel';input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+  assert.equal(f.$('.sma-history-list').hidden,true);
+  mock.timers.tick(351);await tick();await tick();
+  assert.deepEqual(terms,['Hotel']);
+  const buttons=[...f.$('.sma-history-find-results').querySelectorAll('button')];
+  assert.equal(buttons.length,1);
+  assert.match(buttons[0].textContent,/Hotel-Türgriff Demo/);
+  buttons[0].click();await tick();await tick();
+  assert.deepEqual(lookups,[[selected.id,null]]);
+  assert.equal(input.value,'');
+  assert.equal(f.$('.sma-history-list').hidden,false);
+  assert.match(f.$('.sma-history-list').textContent,/Hotel-Türgriff Demo/);
+  assert.equal(f.doc.querySelectorAll('a[target="_blank"]').length,0);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+await test('History search rejects late results after losing the current owner',async()=>{
+ const pending=deferred(),calls=[];
+ mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+ const f=fixture({requestFind:term=>{calls.push(term);return pending.promise;}});
+ try{
+  await tick();const input=f.$('#smaHistorySearch');input.value='Hotel';
+  input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+  mock.timers.tick(351);await tick();
+  assert.deepEqual(calls,['Hotel']);
+  f.owner('other');pending.resolve({ok:true,version:1,entries:[{id:entry().id,title:'INTERNAL_OTHER_ORDER',platform:'youtube',status:'prepared',created_at:entry().created_at}],has_more:false,can_upload:false,can_publish:false});
+  await tick();await tick();
+  assert.equal(f.$('.sma-history-find-results').children.length,0);
+  assert.equal(input.disabled,true);
+  assert.doesNotMatch(f.page.textContent,/INTERNAL_OTHER_ORDER/);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+
 console.log(`${passed} history DOM scenarios passed.`);

@@ -169,6 +169,11 @@ on:
       - supabase/migrations/*_publication_text_history_v1.sql
       - tests/*publication-text-history*
       - supabase/sql/publication-history.sql
+      - supabase/sql/publication-history-find.sql
+      - supabase/sql/publication-history-find-invoker-wrapper.sql
+      - tests/run-publication-history-find-sql.mjs
+      - app/assets/publication-history-find.mjs
+      - tests/publication-history-find.test.cjs
       - supabase/sql/publication-history-months.sql
       - supabase/migrations/*_publication_history_v1.sql
       - supabase/migrations/*_publication_history_months_v1.sql
@@ -239,6 +244,7 @@ jobs:
           node tests/run-publication-draft-product-links-sql.mjs
           node tests/run-publication-text-edits-dom.mjs
           node tests/run-publication-history-sql.mjs
+          node tests/run-publication-history-find-sql.mjs
           node tests/run-publication-history-months-sql.mjs
           node tests/run-publication-history-dom.mjs
           node tests/run-dashboard-cloud-upload-dom.mjs
