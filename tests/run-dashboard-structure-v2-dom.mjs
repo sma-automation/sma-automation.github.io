@@ -10,7 +10,7 @@ const names=[
 ];
 function fixture(){
  const html='<html lang="de"><head></head><body><aside class="sidebar"><div class="logo" id="realSmaLogo"><svg><polygon points="0,0 8,0 12,8 8,15 0,15"/></svg>S = M = A</div><nav id="mainNav">'
- +names.map(([id,name])=>'<button data-page="'+id+'><span aria-hidden="true">◈</span> '+name+'</button>').join('')
+ +names.map(([id,name])=>'<button data-page="'+id+'"><span aria-hidden="true">◈</span> '+name+'</button>').join('')
  +'</nav></aside><header class="topbar"><div class="topbar-actions"><button id="profile">Profil</button><button id="package">SMA Paket</button><select id="lang" aria-label="Sprache"><option>DE</option></select><button id="logout">Abmelden</button><button id="smaDashboardCloudUpload">Upload</button></div></header><main><section id="page-publishing"></section></main></body></html>';
  const {document:doc}=parseHTML(html);
  const nav=doc.querySelector('#mainNav'),original=[...nav.children],cloud=doc.querySelector('#smaDashboardCloudUpload'),clicked=[];
