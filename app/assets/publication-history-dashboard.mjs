@@ -203,6 +203,61 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   nav.hidden=!entries.length;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
   syncSearchMode();
  }
+ function syncSearchMode(){
+  if(!findInput)return;
+  const q=findInput.value.trim(),searching=q.length>=2;
+  list.hidden=searching;message.hidden=searching;
+  if(searching)nav.hidden=true;
+  findResults.hidden=!searching;
+  findStatus.hidden=!searching&&q.length===0;
+ }
+ async function performHistorySearch(serial,term){
+  if(!active()||serial!==findSerial)return;
+  try{
+   const before=await getOwnerId();
+   if(serial!==findSerial||!active())return;
+   if(before!==expectedOwnerId){invalidateOwner();return;}
+   const response=await requestFind(term);
+   if(serial!==findSerial||!active())return;
+   const after=await getOwnerId();
+   if(serial!==findSerial||!active())return;
+   if(after!==expectedOwnerId){invalidateOwner();return;}
+   const found=readHistoryFind(response);findResults.replaceChildren();
+   for(const entry of found.entries){
+    const row=create('li'),button=create('button'),heading=create('strong',entry.title||'Gespeicherter Beitrag');
+    const caption=create('small',historyPlatforms[entry.platform]+' · '+historyStatuses[entry.status][0]+' · '+format(entry.created_at));
+    button.type='button';button.className='sma-history-find-open';button.append(heading,caption);
+    button.setAttribute('aria-label','Auftrag in History öffnen: '+(entry.title||'Gespeicherter Beitrag'));
+    button.addEventListener('click',()=>{
+     if(!active()||!requestOrderPage)return;
+     findSerial++;clearTimeout(findTimer);
+     findInput.value='';findResults.replaceChildren();findStatus.textContent='';
+     orderId=entry.id;focusOnReturn=true;selection=undefined;clear();load();
+    });
+    row.append(button);findResults.append(row);
+   }
+   findStatus.textContent=found.entries.length
+    ?found.entries.length+' Treffer im gesamten Auftragsverlauf'+(found.has_more?' · weitere Treffer möglich: Suche genauer.':'.')
+    :'Keine passenden Aufträge. Versuche einen anderen Suchbegriff.';
+  }catch{
+   if(serial!==findSerial||!active())return;
+   findResults.replaceChildren();findStatus.textContent='Die Auftragssuche ist gerade nicht verfügbar. Bitte erneut suchen.';
+  }
+ }
+ function onFindInput(){
+  if(!findInput||disposed)return;
+  findSerial++;clearTimeout(findTimer);
+  const term=findInput.value.trim();findResults.replaceChildren();
+  if(term.length<2){
+   findStatus.textContent=term?'Mindestens zwei Zeichen eingeben.':'';
+   if(lastResult)render(lastResult);else syncSearchMode();
+   return;
+  }
+  findStatus.textContent='Alle eigenen Aufträge werden durchsucht …';
+  syncSearchMode();const serial=findSerial;
+  findTimer=setTimeout(()=>{void performHistorySearch(serial,term);},350);
+ }
+ findInput?.addEventListener('input',onFindInput);
  async function load(append=false,requestedPage=null){
   if(!active()||busy||append&&!cursor)return;
   if(!append&&requestedPage===null)clear();
