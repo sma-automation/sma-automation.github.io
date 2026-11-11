@@ -274,6 +274,39 @@ frame.addEventListener('load',()=>{
     });
     cloudButton.after(find);fileFindShortcut=find;
   }
+  // Search visible dashboard areas and the already loaded own-file catalog.
+  // The existing sidebar owns page selection; never create a second route.
+  function findAreaNavigation(key){
+    const target=key==='files'?'publishing':key;
+    const area=sectionCatalog.find(x=>x.key===target);
+    const matches=[...doc.querySelectorAll('aside a,aside button,.sidebar a,.sidebar button,nav a,nav button,[data-page],[data-target]')];
+    return matches.find(el=>{
+      if(el.hidden||el.closest('[hidden],[id^="page-"]')||['smaFindFiles','smaDashboardCloudUpload','smaGlobalQuickFind'].includes(el.id))return false;
+      const routes=[el.dataset?.page,el.dataset?.target,el.dataset?.section,el.getAttribute('href')].filter(Boolean);
+      if(routes.some(x=>x===target||x==='#'+target||x==='#page-'+target))return true;
+      const label=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      return label===area?.label.toLowerCase()||target==='history'&&label==='history'||
+       target==='music'&&label==='musikbibliothek';
+    })||null;
+  }
+  dashboardQuickFind=ownerId&&fileView?mountDashboardQuickFind({
+    doc,
+    getAreas:()=>sectionCatalog.filter(a=>doc.getElementById('page-'+(a.key==='files'?'publishing':a.key))&&findAreaNavigation(a.key)),
+    getFiles:()=>fileView?.getFiles()||[],
+    onNavigate:key=>{
+      if(signedOut||dashboardOwnerId!==ownerId)return false;
+      const nav=findAreaNavigation(key);if(!nav)return false;
+      nav.click();
+      if(key==='files'){dashboardChapters?.controllers.get('publishing')?.select('files');fileView?.focusSearch();}
+      return true;
+    },
+    onOpenFile:id=>{
+      if(signedOut||dashboardOwnerId!==ownerId||!fileView?.getFiles().some(f=>f.id===id))return false;
+      const nav=findAreaNavigation('publishing');if(!nav)return false;
+      nav.click();dashboardChapters?.controllers.get('publishing')?.select('files');
+      return fileView.openFile(id)===true;
+    }
+  }):null;
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
 });
