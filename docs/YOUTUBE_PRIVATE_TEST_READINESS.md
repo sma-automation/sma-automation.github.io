@@ -7,10 +7,17 @@ ein strengerer Freigabeschutz. Kein Upload, keine Kundenbestätigung.**
 
 Der vorhandene vorbereitete private YouTube-Testauftrag hat weiterhin
 `approved_at = null` und `visibility = private`. Die bereits gespeicherte
-Kontoabfrage lief am **7. November 2026** ab. Die serverseitige
-Freigabeansicht meldet `approval_window.status = expired`
-und zusätzlich `check_error = FILE_CHANGED`.
-Damit ist keine belastbare Freigabe für einen Testupload vorhanden.
+Kontoabfrage lief am **7. November 2026** ab. Die serverseitige Freigabeansicht meldet weiterhin
+`approval_window.status = expired`. Der **historische** zusätzliche
+Fehler `FILE_CHANGED` war für die abgelaufene Katalogprüfung zu ungenau:
+Die am 11.11.2026 installierte Migration
+`20261111211712_publication_assignment_stale_file_reason_20261111`
+unterscheidet seitdem `FILE_REFRESH_REQUIRED` (abgelaufener Dateinachweis)
+von `FILE_CHANGED` (ungleiche gespeicherte Dateirevision).
+Der erneute, rein lesende [YouTube-Abnahmecheck](YOUTUBE_PRIVATE_RELEASE_PREFLIGHT_20261111.md)
+belegt eine passende gespeicherte Revision, aber keinen aktuellen
+Google-Drive-Nachweis und keine neue Kontoprüfung. Damit ist weiterhin
+keine belastbare Freigabe für einen Testupload vorhanden.
 
 Ein Privatvideo ist bei YouTube **trotzdem ein echter Upload**.
 Eine Kundenbestätigung, eine unabhängige Betreiber-Testfreigabe
