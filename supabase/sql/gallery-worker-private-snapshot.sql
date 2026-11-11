@@ -67,8 +67,37 @@ begin
    and o.name like 'render/'||j.track_sha||'/%'
    and o.name ~ ('^render/'||j.track_sha||'/[a-f0-9]{64}[.]aac$');
  if audio_count<>1 or audio_name is null
-    or audio_mime not in ('audio/aac','audio/vnd.dlna.adts')
-    or audio_size_text !~ '^[1-9][0-9]{0,6}$'
+    or audio_mime is null or audio_mime not in ('audio/aac','audio/vnd.dlna.adts')
+    or audio_size_text is null or audio_size_text !~ '^[1-9][0-9]{0,6}
+    or audio_size_text::bigint>1500000 then return null; end if;
+ audio_sha:=split_part(split_part(audio_name,'/',3),'.',1);
+ if audio_sha !~ '^[a-f0-9]{64}$' then return null; end if;
+
+ return jsonb_build_object(
+  'gallery_job_id',j.id,'state','completed',
+  'customer_id',j.customer_id,'user_id',j.user_id,'customer_active',true,
+  'source_key',j.source_key,'expected_sha',j.expected_sha,
+  'expected_size',j.expected_size,'track_sha',j.track_sha,
+  'audio_sha256',audio_sha,'audio_object_name',audio_name,
+  'audio_size_bytes',audio_size_text::bigint,
+  'source',jsonb_build_object(
+   'asset_id',s.id,'drive_file_id',s.drive_file_id,'revision',s.revision,
+   'size_bytes',s.size_bytes,'available',true,'media_kind','video',
+   'mime_type','video/mp4'),
+  'result',jsonb_build_object(
+   'asset_id',r.id,'drive_file_id',r.drive_file_id,'revision',r.revision,
+   'size_bytes',r.size_bytes,'available',true,'media_kind','video',
+   'mime_type','video/mp4')
+ );
+end;
+$function$;
+
+-- A private-schema, service-only read; browsers cannot request account lists.
+revoke all on function sma_private.gallery_worker_snapshot_v1(uuid)
+ from public,anon,authenticated,service_role;
+grant execute on function sma_private.gallery_worker_snapshot_v1(uuid)
+ to service_role;
+
     or audio_size_text::bigint>1500000 then return null; end if;
  audio_sha:=split_part(split_part(audio_name,'/',3),'.',1);
  if audio_sha !~ '^[a-f0-9]{64}$' then return null; end if;
