@@ -58,8 +58,8 @@ function packetHashes(path){
 // Prove that the *actual receipt-matched* output has a meaningful PCM signal.
 // A quiet/unmeasurable file remains unverified; this is not a platform approval.
 export function parseSoundtrackVolume(log){
- const mean=[...String(log).matchAll(/mean_volume:\\s*(-?(?:\\d+(?:\\.\\d+)?|inf))\\s*dB/gi)].at(-1)?.[1];
- const peak=[...String(log).matchAll(/max_volume:\\s*(-?(?:\\d+(?:\\.\\d+)?|inf))\\s*dB/gi)].at(-1)?.[1];
+ const mean=[...String(log).matchAll(/mean_volume:\s*(-?(?:\d+(?:\.\d+)?|inf))\s*dB/gi)].at(-1)?.[1];
+ const peak=[...String(log).matchAll(/max_volume:\s*(-?(?:\d+(?:\.\d+)?|inf))\s*dB/gi)].at(-1)?.[1];
  const meanDb=mean===undefined?null:Number(mean);
  const peakDb=peak===undefined?null:Number(peak);
  const measurable=Number.isFinite(meanDb)&&Number.isFinite(peakDb);
