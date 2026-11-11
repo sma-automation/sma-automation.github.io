@@ -44,8 +44,8 @@ test('shop UI includes accessible order search above the five-item page list',()
  assert.match(section,/id="smaOrderClear"/);
  assert.match(section,/role="search"/);
  assert.match(html,/const ORDER_PAGE_SIZE = 5/);
- assert.match(html,/\\.eq\\('user_id',userId\\)/);
+ assert(html.includes(".eq('user_id',userId)"));
  assert.match(html,/requestQuery/);
- assert.match(html,/applyShopOrderFilters\\(/);
+ assert(html.includes('applyShopOrderFilters('));
  assert.doesNotMatch(section,/type="submit"/);
 });
