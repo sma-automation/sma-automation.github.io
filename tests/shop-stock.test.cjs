@@ -6,7 +6,8 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '../app/shop-manager.html'), 'utf8');
 const moduleCode = html.split('<script type="module">')[1].split('</script>')[0];
-const source = moduleCode.replace(/^import .*;$/gm, '').split('if(window.self===window.top)')[0];
+const orderFilterSource = fs.readFileSync(path.join(__dirname, '../app/assets/shop-order-search.mjs'), 'utf8').replace(/^export /gm, '');
+const source = orderFilterSource+'\n'+moduleCode.replace(/^import .*;$/gm, '').split('if(window.self===window.top)')[0];
 
 class Element {
   constructor(tag='div') {
@@ -34,6 +35,8 @@ function harness(extraGlobals={}){
     const builder={
       select(columns){query.columns=columns;return this;},
       eq(column,value){query.filters.push([column,value]);return this;},
+      ilike(column,value){query.filters.push([column,'ilike',value]);return this;},
+      is(column,value){query.filters.push([column,'is',value]);return this;},
       in(column,value){query.filters.push([column,value]);return this;},
       order(){return this;},range(){return this;},
       abortSignal(signal){query.signal=signal;return this;},

@@ -6,7 +6,8 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '../app/shop-manager.html'), 'utf8');
 const moduleCode = html.split('<script type="module">')[1].split('</script>')[0];
-const source = moduleCode.replace(/^import .*;$/gm, '').split('if(window.self===window.top)')[0];
+const orderFilterSource = fs.readFileSync(path.join(__dirname, '../app/assets/shop-order-search.mjs'), 'utf8').replace(/^export /gm, '');
+const source = orderFilterSource+'\n'+moduleCode.replace(/^import .*;$/gm, '').split('if(window.self===window.top)')[0];
 
 class Element {
   constructor(tag='div') {
@@ -19,6 +20,7 @@ class Element {
   setAttribute(name,value){this[name]=value;}
   addEventListener(name,fn){this.events[name]=fn;}
   querySelector(){return null;}
+  focus(){this.focused=true;}
 }
 function harness(){
   const nodes=new Map(),timers=new Map(),queries=[],docEvents={},winEvents={};
@@ -32,6 +34,8 @@ function harness(){
     const builder={
       select(columns,options){query.columns=columns;query.options=options;return this;},
       eq(column,value){query.filters.push([column,value]);return this;},
+      ilike(column,value){query.filters.push([column,'ilike',value]);return this;},
+      is(column,value){query.filters.push([column,'is',value]);return this;},
       in(column,value){query.filters.push([column,value]);return this;},
       order(column,options){(query.orderBy??=[]).push([column,options]);return this;},range(from,to){query.range=[from,to];return this;},
       abortSignal(signal){query.signal=signal;return this;},
@@ -175,4 +179,66 @@ test('shop section switches preserve loaded orders and unsaved product inputs',a
  const row=list(h).children[0],queries=h.queries.length,input=new Element('input');input.value='4';h.document.getElementById('shop').append(input);
  h.nodes.get('showOrders').events.click();assert.equal(h.nodes.get('shop').hidden,true);assert.equal(h.nodes.get('bestellungen').hidden,false);assert.equal(h.nodes.get('showOrders')['aria-pressed'],'true');
  h.nodes.get('showProducts').events.click();assert.equal(h.nodes.get('shop').hidden,false);assert.equal(h.nodes.get('bestellungen').hidden,true);assert.equal(input.value,'4');assert.equal(list(h).children[0],row);assert.equal(h.api.state().page,2);assert.equal(h.queries.length,queries);
+});
+
+test('order-number search runs on the server across pages and keeps owner scoping',async()=>{
+  const h=harness();h.api.init();h.respond(()=>response([order()],21));
+  await h.api.loadOrdersPage(2);
+  assert.deepEqual(h.queries.at(-1).range,[5,9]);
+  const query=h.nodes.get('smaOrderSearch');query.value='#1002';query.events.input();
+  const delayed=[...h.timers.values()].find(x=>x.delay===300);
+  assert(delayed,'Search must debounce instead of querying each keypress');
+  await delayed.fn();await flush();
+  const q=h.queries.at(-1);
+  assert.deepEqual(q.range,[0,4],'New search must reset order pagination');
+  assert(q.filters.some(f=>f[0]==='user_id'&&f[1]==='owner'));
+  assert(q.filters.some(f=>f[0]==='bestellnummer'&&f[1]==='ilike'&&f[2]==='%#1002%'));
+  assert.equal(h.api.state().requested,1);
+  assert.equal(h.nodes.get('smaOrderSearch').value,'#1002');
+});
+
+test('market and test state are independent server filters; null is not treated as paid/live',async()=>{
+  const h=harness();h.api.init();h.respond(()=>response([order()],10));
+  await h.api.loadOrdersPage();
+  const market=h.nodes.get('smaOrderMarket'),mode=h.nodes.get('smaOrderTestMode');
+  market.value='shopify';market.events.change();await flush();
+  mode.value='test';mode.events.change();await flush();
+  let q=h.queries.at(-1);
+  assert(q.filters.some(f=>f[0]==='markt'&&f[1]==='shopify'));
+  assert(q.filters.some(f=>f[0]==='ist_testbestellung'&&f[1]===true));
+  mode.value='untagged';mode.events.change();await flush();
+  q=h.queries.at(-1);
+  assert(q.filters.some(f=>f[0]==='ist_testbestellung'&&f[1]===false));
+  mode.value='unknown';mode.events.change();await flush();
+  q=h.queries.at(-1);
+  assert(q.filters.some(f=>f[0]==='ist_testbestellung'&&f[1]==='is'&&f[2]===null));
+  assert(q.filters.some(f=>f[0]==='user_id'&&f[1]==='owner'));
+});
+
+test('invalid order-number query does not leak into a broad server search',async()=>{
+  const h=harness();h.api.init();h.respond(()=>response([order()]));
+  await h.api.loadOrdersPage();
+  const before=h.queries.length,term=h.nodes.get('smaOrderSearch');
+  term.value='ab%';term.events.input();
+  const t=[...h.timers.values()].find(x=>x.delay===300);
+  assert(t);await t.fn();await flush();
+  assert.equal(h.queries.length,before);
+  assert.match(status(h),/nur Buchstaben/);
+  assert.equal(h.api.state().page,1);
+});
+
+test('resetting order search restores all accessible results without creating orders',async()=>{
+  const h=harness();h.api.init();h.respond(()=>response([order()],10));
+  await h.api.loadOrdersPage();
+  const q=h.nodes.get('smaOrderSearch');q.value='#1001';q.events.input();
+  await [...h.timers.values()].find(x=>x.delay===300).fn();await flush();
+  h.nodes.get('smaOrderMarket').value='shopify';h.nodes.get('smaOrderMarket').events.change();await flush();
+  h.nodes.get('smaOrderTestMode').value='test';h.nodes.get('smaOrderTestMode').events.change();await flush();
+  h.nodes.get('smaOrderClear').events.click();await flush();
+  assert.equal(q.value,'');
+  assert.equal(h.nodes.get('smaOrderMarket').value,'all');
+  assert.equal(h.nodes.get('smaOrderTestMode').value,'all');
+  assert.equal(q.focused,true);
+  assert.deepEqual(h.queries.at(-1).filters,[['user_id','owner']]);
+  assert(h.queries.every(q=>q.operation==='select'));
 });
