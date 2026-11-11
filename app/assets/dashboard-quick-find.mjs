@@ -17,6 +17,14 @@ export const sectionCatalog=Object.freeze([
  {key:'seller',label:'Verkäufer',hint:'Verkauf Beratung'},
  {key:'assistant',label:'Assistent',hint:'24/7 Assistent'}
 ]);
+export function canSearchHistory(value){
+ const q=typeof value==='string'?value.trim():'';
+ return q.length>=2&&q.length<=80&&new TextEncoder().encode(q).length<=240;
+}
+export function canSearchOrders(value){
+ const q=typeof value==='string'?value.trim():'';
+ return q.length>=2&&q.length<=60&&/^[\p{L}\p{N} #./-]*$/u.test(q);
+}
 export function quickFindMatches(query,areas,files){
  const q=normalize(query);
  const nav=Array.isArray(areas)?areas:[];
@@ -83,10 +91,10 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,onNavigate,onOpen
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key));
   for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
   // Only delegate to EXISTING owner-bound searches; never load orders here.
-  if(query.length>=2&&query.length<=80&&Array.isArray(areas)){
-   if(areas.some(a=>a.key==='history'))
+  if(Array.isArray(areas)){
+   if(canSearchHistory(query)&&areas.some(a=>a.key==='history'))
     item('In Aufträgen suchen','Eigene Veröffentlichungsaufträge durchsuchen',()=>onNavigate('history-search',query),false);
-   if(areas.some(a=>a.key==='shop'))
+   if(canSearchOrders(query)&&areas.some(a=>a.key==='shop'))
     item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false);
   }
   status.textContent=results.children.length?results.children.length+' Treffer':'Keine Treffer. Versuche einen kürzeren Begriff.';
