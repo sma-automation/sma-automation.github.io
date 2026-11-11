@@ -52,11 +52,33 @@ do $$declare r jsonb;l uuid;res jsonb;f sma_private.publication_files_v1%rowtype
  assert q->'checks' @> '[{"code":"BINARY_INSPECTION","status":"pass"},{"code":"VIDEO_FRAMERATE","status":"pass"},{"code":"VIDEO_CODEC","status":"pass"}]';
  assert q->'checks' @> '[{"code":"CONTENT_REVIEW_PENDING","status":"pending"},{"code":"PUBLICATION_APPROVAL_PENDING","status":"pending"}]';
  assert q->'can_publish'='false' and q->>'status'='needs_review';
+ -- Instagram must use exactly the same owner-/SHA-bound technical evidence.
+ -- Independent audio, size, content and approval checks remain pending.
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"BINARY_INSPECTION","status":"pass"},{"code":"VIDEO_FRAMERATE","status":"pass"},{"code":"VIDEO_CODEC","status":"pass"}]','Verified H.264 and 25 fps must not be shown as unknown for Instagram';
+ assert not q->'checks' @> '[{"code":"VIDEO_FRAMERATE_PENDING"}]';
+ assert not q->'checks' @> '[{"code":"VIDEO_CODEC_PENDING"}]';
+ assert q->'checks' @> '[{"code":"INSTAGRAM_SIZE_RULE_PENDING","status":"pending"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"},{"code":"CONTENT_REVIEW_PENDING","status":"pending"},{"code":"SEMANTIC_REVIEW_PENDING","status":"pending"},{"code":"PUBLICATION_APPROVAL_PENDING","status":"pending"}]';
+ assert q->'can_publish'='false' and q->>'status'='needs_review';
  update sma_private.publication_magic_results_v1 set result=jsonb_set(result,'{evidence,technical,max_frame_interval_us}','80000') where asset_id=f.id;
  q:=sma_private.publication_media_precheck_v1(f,'tiktok');
  assert q->'checks' @> '[{"code":"VIDEO_FRAMERATE","status":"fail"}]' and q->>'status'='needs_changes','Variable timing outside the allowed range cannot inherit an average-rate pass';
- update sma_private.publication_magic_results_v1 set result=jsonb_set(result,'{evidence,technical,frame_rate_den}','0') where asset_id=f.id;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"VIDEO_FRAMERATE","status":"fail"},{"code":"VIDEO_CODEC","status":"pass"}]' and q->>'status'='needs_changes','Instagram cannot pass a validated out-of-range frame interval';
+ -- A real, but unsupported codec is a failure for Instagram, unlike TikTok.
+ update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,video_codec}','"vp9"') where asset_id=f.id;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"VIDEO_FRAMERATE","status":"pass"},{"code":"VIDEO_CODEC","status":"fail"}]' and q->>'status'='needs_changes','VP9 is not approved as an Instagram-Reel codec';
+ q:=sma_private.publication_media_precheck_v1(f,'tiktok');
+ assert q->'checks' @> '[{"code":"VIDEO_CODEC","status":"pass"}]','TikTok accepted codec list must be unchanged';
+ update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,video_codec}','"hevc"') where asset_id=f.id;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"VIDEO_CODEC","status":"pass"}]','HEVC must remain accepted for Instagram';
+ update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,frame_rate_den}','0') where asset_id=f.id;
  assert sma_private.publication_video_technical_v1(f) is null;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"VIDEO_FRAMERATE_PENDING","status":"pending"},{"code":"VIDEO_CODEC_PENDING","status":"pending"}]','Invalid or missing evidence must fail closed';
+ assert q->'can_publish'='false';
  update sma_private.publication_magic_results_v1 set result=res where asset_id=f.id;
  f.revision:='sha256:'||repeat('a',64)||':2';assert sma_private.publication_video_technical_v1(f) is null;
  f.revision:='sha256:'||repeat('a',64)||':1';f.user_id:='fa550000-0000-4000-8000-000000000092';assert sma_private.publication_video_technical_v1(f) is null;
