@@ -334,6 +334,19 @@ window.addEventListener('message',event=>{
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-order-open'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview&&!preview.hidden&&!optimizerPage.hidden){optimizerPage.scrollIntoView({block:'start'});preview.contentWindow.postMessage({type:'sma-publication-order-viewport',height:Math.max(240,Math.min(720,window.innerHeight-140))},window.location.origin);}return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-workspace-view'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview)optimizerWorkspaceView(preview,event.data.view);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-height'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);const height=event.data.height;if(preview&&Number.isFinite(height)&&height>=300&&height<=30000)preview.style.height=Math.ceil(height)+'px';return;}
+  // Same-origin child selection only; the next portal checks ownership,
+  // revision and content permissions independently before accepting the file.
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-selected-file'){
+    const current=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow&&!el.hidden);
+    const id=event.data.assetId;
+    if(current&&!optimizerPage?.hidden&&(id===null||(typeof id==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)))){
+      selectedFileId=id;
+      current.dataset.key=current.dataset.portal+':'+(selectedFileId||'template');
+      if(history.state?.smaOptimization&&history.state.portal===current.dataset.portal)
+        history.replaceState({...history.state,assetId:selectedFileId},'');
+    }
+    return;
+  }
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-file-updated'&&[...(optimizerFrames?.children||[])].some(el=>event.source===el.contentWindow)){fileView?.load(false);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-close'&&[...(optimizerFrames?.children||[])].some(el=>event.source===el.contentWindow)){
     closeOptimizer();return;
