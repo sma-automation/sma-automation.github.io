@@ -32,7 +32,7 @@ select
   'SELECT,INSERT,UPDATE,DELETE') as may_touch_storage_catalog,
  current_setting('default_transaction_read_only')='on' as session_read_only
 from pg_roles r where r.rolname=current_user
-\`;
+`;
 export function assertGalleryDbRolePreflight(row){
  const ok=row&&row.same_login_role===true&&row.can_login===true
   &&row.superuser===false&&row.bypass_rls===false
