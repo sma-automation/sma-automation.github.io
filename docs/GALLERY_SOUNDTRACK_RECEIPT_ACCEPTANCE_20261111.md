@@ -50,3 +50,30 @@ Das Werkzeug benötigt weder Netzwerkanmeldung noch Datenbank-Schreibrechte. CI-
 Es wurde keine Datei veröffentlicht, kein Provider gestartet, kein Auftrag freigegeben, kein Kundenkonto geändert und kein Musikguthaben abgebucht. Es gab keine neue n8n-Bereitstellung und keine Migration.
 
 **Noch offen vor der Instagram-Abnahme:** die tatsächliche gespeicherte Musikfassung berechtigt abrufen, auf Hash, Ton, Videobild und Wiedergabe prüfen und erst dann technische Evidenz für genau deren eigene Dateirevision hinterlegen. Keine Vererbung der alten stummen Quelldatei-Evidenz; visuelle Sicherheit, Rechte, Meta, persönliche Freigabe und Betreiber-Uploadfreigabe bleiben separat offen.
+
+## Nachtrag: technische Tonsignalprüfung
+
+Beim Abgleich einer **tatsächlich bereitgestellten und per SHA-256 bestätigten**
+Ausgabe muss der Offline-Prüfer zusätzlich feststellen, ob die AAC-Tonspur
+nicht nur formal vorhanden ist, sondern beim Dekodieren auch einen
+messbaren Tonpegel hat. Dies verhindert einen falsch positiven Erfolg,
+wenn ein MP4 eine technisch gültige, jedoch vollständig stumme AAC-Spur
+enthält.
+
+`verify-gallery-output.mjs` analysiert deshalb den decodierten Audiostream
+mit `ffmpeg volumedetect`, protokolliert Mittel- und Spitzenpegel
+in dBFS und gibt nur dann `technical_checks_pass` zurück, wenn
+ein verlässliches Signal (Mittel über −80 dBFS und Spitze über −65 dBFS)
+vorliegt. Extrem leises oder nicht messbares Material bleibt
+`technical_checks_incomplete` und wird nicht automatisch verworfen
+oder veröffentlicht. Die Schwellen sind eine interne Vorsichtsgrenze,
+keine Instagram-Zertifizierung oder musikalische Qualitätsbewertung.
+
+Die vom Nutzer im Chat vorgelegte **AAC-Quelldatei** wurde lokal
+mit FFmpeg überprüft: Mittelpegel **−26,2 dBFS**, Spitzenpegel
+**−12,8 dBFS**. Diese Messung beweist, dass das Musikmaster hörbare
+Tonsignale enthält; sie gilt **nicht** als Messung des gespeicherten
+MP4-Endprodukts und ersetzt dessen weiterhin ausstehende Abnahme nicht.
+
+An der produktiven Galerie, den Credits, der Datenbank, dem
+Dashboard und den Provider-Berechtigungen ändert dieser Nachtrag nichts.
