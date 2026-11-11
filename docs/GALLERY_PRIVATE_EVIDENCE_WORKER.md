@@ -4,9 +4,11 @@
 
 Der verifizierte Galerie-Musikclip soll auch ohne Magic-Effect-Lauf einen
 **separaten technischen Nachweis** bekommen können. PR #223 liefert einen
-rein lokalen Byte-/Audio-Prüfer. PR #224 enthält die **noch unveröffentlichte**
-private SQL-Evidenzregistrierung. Dieser Entwurf ergänzt die **verifizierende
-Worker-Kernlogik**, aber startet keinen produktiven Job.
+rein lokalen Byte-/Audio-Prüfer. Die von PR #224 vorbereitete private
+SQL-Evidenzregistrierung wurde inzwischen mit der Supabase-Migration
+`20261111151051_gallery_technical_evidence_service_only_v1` installiert.
+Die **verifizierende Worker-Kernlogik** startet weiterhin keinen produktiven
+Job; am 11.11.2026 waren **0** technische Galerie-Nachweise registriert.
 
 Der Worker-Kern liegt in:
 `n8n/publishing/gallery-private-evidence-worker.mjs`
@@ -69,12 +71,13 @@ Der Snapshot muss `gallery_job_id`, `state=completed`, `customer_id`,
 `mime_type=video/mp4`. Die Quelle/Ergebnisrevision muss zum gespeicherten
 SHA-256 und der abgeschlossenen Galerie-Receipt-Kette passen.
 
-**Produktive Adapter existieren in diesem PR ausdrücklich noch nicht.**
-Der aktuelle Dienst darf nicht behaupten, der Worker wäre bereits in Supabase,
-Google Drive oder n8n angeschlossen. Der Service benötigt eigene Zugangsdaten,
-einen ausschließlich internen Aufrufweg und eine abgewogene Ausführungszeit:
-FFmpeg/FFprobe werden serverseitig benötigt und dürfen nicht ohne Eignungsprüfung
-in eine kurzlebige Edge Function übernommen werden.
+**In späteren Commits wurden serverseitige Nur-Lesen-Adapter als Code vorbereitet**
+(`gallery-private-server-transport.mjs`, `gallery-private-server-runner.mjs`).
+Sie sind noch nicht an einen freigegebenen privaten Server angeschlossen und
+registrieren keine Nachweise. Der Dienst darf keine Live-Anbindung an Supabase,
+Google Drive oder n8n behaupten. Er benötigt eigene sicher verwaltete Zugangsdaten,
+einen ausschließlich internen Aufrufweg sowie FFmpeg/FFprobe auf geeignetem Server;
+eine kurzlebige Edge Function ist nicht ungeprüft dafür geeignet.
 
 Ein produktiver Drive-Adapter muss die maximale Bytezahl **bereits während
 der Übertragung** erzwingen, vor dem vollständigen Puffern. Die lokale
@@ -102,5 +105,9 @@ Kundenfilm.
 Die **serverseitige, autorisierte Adapter-Anbindung** für die Private-DB-Abfrage,
 die Google-Drive-Downloads, die private AAC-Sidecar-Lesung und den
 service-role-geschützten Registrierungs-RPC ist ein eigener Freigabeschritt.
-Die noch offene SQL-Vorlage aus PR #224 wird nicht ohne Freigabe in Supabase
-ausgeführt. Keine produktive Aktivierung, kein Dashboard-Eingriff.
+Die SQL-Registrierung wurde **bereits installiert** und darf nicht erneut aus
+`supabase/sql/publication-gallery-technical.sql` ausgeführt werden. Live geprüft:
+`service_role` hat EXECUTE, `anon` und `authenticated` haben kein EXECUTE;
+die private Worker-Dienstidentität ist weiterhin `NOLOGIN` ohne Passwort.
+Keine produktive Worker-Aktivierung, keine technische Registrierung und kein
+Dashboard-Eingriff ohne gesonderte Freigabe.
