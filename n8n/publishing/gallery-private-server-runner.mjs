@@ -11,11 +11,13 @@ import {runGalleryPrivateServerReadOnly} from './gallery-private-server-transpor
 import {createGoogleDriveRefreshProvider} from './gallery-private-google-refresh.mjs';
 
 const requirePg=createRequire(new URL('../private-gallery-runtime/package.json',import.meta.url));
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
 const env=process.env;
 const JOB=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const assert=(yes,reason)=>{if(!yes)throw Error(reason);};
-const secret=name=>{
- const value=env[name];
+const secret=(name,source)=>{
+ const value=source[name];
  assert(typeof value==='string'&&value.length>=8&&value.length<=16384,'MISSING_PRIVATE_'+name);
  return value;
 };
@@ -23,15 +25,15 @@ export async function runPrivateGalleryCLI({argv=process.argv.slice(2),environme
  assert(Array.isArray(argv)&&argv.length===1&&JOB.test(argv[0]),'JOB_UUID_REQUIRED');
  assert(environment.SMA_GALLERY_ALLOW_READONLY==='1','READONLY_OPERATOR_OPT_IN_REQUIRED');
  // Never parse arbitrary URLs from the gallery job or a request payload.
- const connectionString=secret('SMA_GALLERY_PG_URL');
+ const connectionString=secret('SMA_GALLERY_PG_URL',environment);
  let dbUrl;try{dbUrl=new URL(connectionString);}catch{throw Error('PRIVATE_PG_URL_INVALID');}
  assert(['postgres:','postgresql:'].includes(dbUrl.protocol)&&
   Boolean(dbUrl.hostname)&&Boolean(dbUrl.username)&&Boolean(dbUrl.password),
   'PRIVATE_PG_URL_INVALID');
  assert(!['sslmode','sslcert','sslkey','sslrootcert'].some(k=>dbUrl.searchParams.has(k)),
   'PRIVATE_PG_SSL_PARAMETERS_NOT_ALLOWED');
- const supabaseUrl=secret('SMA_GALLERY_SUPABASE_URL');
- const storageKey=secret('SMA_GALLERY_STORAGE_SERVICE_KEY');
+ const supabaseUrl=secret('SMA_GALLERY_SUPABASE_URL',environment);
+ const storageKey=secret('SMA_GALLERY_STORAGE_SERVICE_KEY',environment);
  const directToken=environment.SMA_GALLERY_GOOGLE_ACCESS_TOKEN;
  let getDriveAccessToken;
  if(directToken){
@@ -39,9 +41,9 @@ export async function runPrivateGalleryCLI({argv=process.argv.slice(2),environme
   getDriveAccessToken=async()=>directToken;
  }else{
   getDriveAccessToken=createGoogleDriveRefreshProvider({
-   clientId:secret('SMA_GALLERY_GOOGLE_CLIENT_ID'),
-   clientSecret:secret('SMA_GALLERY_GOOGLE_CLIENT_SECRET'),
-   refreshToken:secret('SMA_GALLERY_GOOGLE_REFRESH_TOKEN')
+   clientId:secret('SMA_GALLERY_GOOGLE_CLIENT_ID',environment),
+   clientSecret:secret('SMA_GALLERY_GOOGLE_CLIENT_SECRET',environment),
+   refreshToken:secret('SMA_GALLERY_GOOGLE_REFRESH_TOKEN',environment)
   });
  }
  const pg=requirePg('pg');
@@ -72,7 +74,7 @@ export async function runPrivateGalleryCLI({argv=process.argv.slice(2),environme
   try{await db.end();}catch{/* avoid logging private connection details */}
  }
 }
-if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
+if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
  runPrivateGalleryCLI().then(x=>{process.stdout.write(JSON.stringify(x)+'\n');})
  .catch(()=>{process.stderr.write('SMA_GALLERY_READONLY_CHECK_FAILED\n');process.exitCode=1;});
 }
