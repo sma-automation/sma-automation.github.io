@@ -76,6 +76,12 @@ und einzelne YouTube-/TikTok-Vorbereitungsschritte. Daraus folgt
 Den SQL-Inhalt in der **berechtigten Supabase SQL-Ansicht** oder
 über eine autorisierte interne, rein lesende Verbindung ausführen:
 
+Für die konkret vorbereiteten YouTube-Aufträge gibt es außerdem
+den separaten [Nur-Lesen-Abnahmecheck](YOUTUBE_PRIVATE_RELEASE_PREFLIGHT_20261111.md)
+mit dem Prüf-SQL `supabase/sql/youtube-private-release-preflight-readonly.sql`.
+Er zeigt fehlende frische Dateinachweise, Freigabefenster und
+Teilprüfungen, **ohne** Auftrag, Zielkonto oder Rechte zu ändern.
+
 ```text
 supabase/sql/launch-readiness-readonly.sql
 ```
