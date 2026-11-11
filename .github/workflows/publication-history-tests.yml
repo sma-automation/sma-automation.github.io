@@ -82,6 +82,8 @@ on:
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - n8n/publishing/*gallery-soundtrack*
       - n8n/publishing/gallery-private-evidence-worker.mjs
+      - n8n/publishing/gallery-private-transport-adapters.mjs
+      - tests/gallery-private-transport-adapters.test.cjs
       - tests/gallery-private-evidence-worker.test.cjs
       - n8n/publishing/prepare-gallery-audio.py
       - n8n/publishing/fixtures/gallery-music-probe.json
@@ -96,6 +98,8 @@ on:
       - supabase/sql/gallery-music*.sql
       - supabase/sql/publication-gallery-technical.sql
       - tests/run-publication-gallery-technical-sql.mjs
+      - supabase/sql/gallery-worker-private-snapshot.sql
+      - tests/run-gallery-worker-snapshot-sql.mjs
       - supabase/sql/gallery-worker-private-snapshot.sql
       - tests/run-gallery-worker-snapshot-sql.mjs
       - supabase/migrations/*_gallery_music_receipt_v1.sql
@@ -215,6 +219,7 @@ jobs:
           node tests/run-publication-comparison-sql.mjs
           node tests/run-publication-video-sql.mjs
           node tests/run-publication-gallery-technical-sql.mjs
+          node tests/run-gallery-worker-snapshot-sql.mjs
           node tests/run-gallery-worker-snapshot-sql.mjs
           node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
