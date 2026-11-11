@@ -9,7 +9,7 @@ begin
    is distinct from 'c6f190b58b62da6ff7cb944cf359a597' then
   raise exception 'PRECHECK_SOURCE_CHANGED';
  end if;
-end
+end;
 $guard$;
 
 CREATE OR REPLACE FUNCTION sma_private.publication_media_precheck_v1(f sma_private.publication_files_v1, p_platform text)
@@ -105,7 +105,7 @@ begin
  checks:=checks||jsonb_build_array(jsonb_build_object('code','PUBLICATION_APPROVAL_PENDING','status','pending','message','Zielkonto, Rechte, Kennzeichnungen und endgültige Freigabe sind noch offen.'));
  state:=case when exists(select 1 from jsonb_array_elements(checks) q where q->>'status'='fail') then 'needs_changes' else 'needs_review' end;
  return jsonb_build_object('rules_version','2026-11-03.1','status',state,'can_publish',false,'profile',label,'scope_notice',scope_notice,'facts_source','drive_metadata','technical',technical,'recommendations',recommendations,'asset_id',f.id,'asset_revision',f.revision,'verified_at',f.verified_at,'facts',jsonb_build_object('mime_type',f.mime_type,'size_bytes',f.size_bytes,'width_px',f.width_px,'height_px',f.height_px,'duration_ms',f.duration_ms),'checks',checks,'content_review',review);
-end $function$;
+end; $function$;
 
 revoke all on function sma_private.publication_media_precheck_v1(sma_private.publication_files_v1,text) from public,anon,authenticated;
 grant execute on function sma_private.publication_media_precheck_v1(sma_private.publication_files_v1,text) to service_role;
