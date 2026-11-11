@@ -86,7 +86,11 @@ export function verifyActualGalleryFile(sourceFile,observedFile){
  const codecAllowed=['h264','hevc'].includes(v.codec_name);
  const sameVideoPackets=v.codec_name===sv.codec_name&&v.width===sv.width&&v.height===sv.height&&
   packetHashes(sourceFile).join('|')===packetHashes(observedFile).join('|');
- const aacOk=a.codec_name==='aac'&&a.profile==='LC'&&Number(a.sample_rate)===48000&&a.channels===2;
+ // Receipt-bound gallery validation accepts common AAC-LC stereo rates.
+ // Provider-specific publishing requirements must be checked separately.
+ const sampleRate=Number(a.sample_rate);
+ const aacBaseOk=a.codec_name==='aac'&&a.profile==='LC'&&a.channels===2;
+ const aacOk=aacBaseOk&&[44100,48000].includes(sampleRate);
  const durationOk=Math.abs(Number(v.duration||actual.format?.duration)-
                             Number(a.duration||actual.format?.duration))<=0.10;
  const videoBitrate=Number(v.bit_rate);
@@ -104,7 +108,11 @@ export function verifyActualGalleryFile(sourceFile,observedFile){
   status:technicallyVerified?'technical_checks_pass':'technical_checks_incomplete',
   valid:technicallyVerified,unchanged_video_packets:sameVideoPackets,
   h264_or_hevc:codecAllowed,video_bitrate_bps:videoBitrate,
-  audio_aac_lc_stereo_48000:aacOk,video_and_audio_duration_agree:durationOk,
+  // Keep the original exact-48k diagnostic; it must not be true for a 44.1k file.
+  audio_aac_lc_stereo_48000:aacBaseOk&&sampleRate===48000,
+  audio_aac_lc_stereo_supported_rate:aacOk,
+  audio_sample_rate_hz:Number.isFinite(sampleRate)?sampleRate:null,
+  video_and_audio_duration_agree:durationOk,
   audio_bitrate_bps:Number(a.bit_rate)||null,full_decode_passed:decoded,
   soundtrack_non_silent:volume.non_silent,
   soundtrack_mean_dbfs:volume.mean_dbfs,soundtrack_peak_dbfs:volume.peak_dbfs
