@@ -83,12 +83,12 @@ await check('section search navigates to existing History/Shop in the same dashb
    .find(x=>x.dataset.page==='history');
  assert(history);
  history.click();await f.tick();
- assert.deepEqual(f.events,[{area:'history',chapter:undefined}]);
+ assert.deepEqual(f.events,[{area:'history',chapter:null}]);
  f.search.show();f.input('Bestellungen');
  const shop=[...f.doc.querySelectorAll('button.sma-search-hit[data-type="area"]')]
   .find(x=>x.dataset.page==='shop');
  assert(shop);shop.click();await f.tick();
- assert.deepEqual(f.events,[{area:'history',chapter:undefined},{area:'shop',chapter:undefined}]);
+ assert.deepEqual(f.events,[{area:'history',chapter:null},{area:'shop',chapter:null}]);
  f.search.destroy();
 });
 await check('global navigation shows direct Dateien chapter, never new navigation buttons',async()=>{
