@@ -16,6 +16,7 @@ import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=24';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
+import {mountDashboardSearch,findDashboardNav} from './assets/dashboard-global-search.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -25,7 +26,7 @@ const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
 let optimizerTrigger=null,selectedFileId=null,returningFromPreview=null;
-let fileView=null,musicLibraryDashboard=null;
+let fileView=null,musicLibraryDashboard=null,dashboardSearch=null;
 let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardCloudUpload=null,dashboardOwnerId=null;
 function showPublishing(){
  returningFromPreview=null;
@@ -87,6 +88,7 @@ function attachOptimizerPage(doc,page){
 // Extend the existing portal cards; no extra shared publishing card.
 frame.addEventListener('load',()=>{
   const doc=frame.contentDocument;
+  dashboardSearch?.destroy();dashboardSearch=null;
   dashboardCloudUpload?.destroy();dashboardCloudUpload=null;
   musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;
   publicationHistory?.destroy();publicationHistory=null;
@@ -254,6 +256,40 @@ frame.addEventListener('load',()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=3',location.href).href});
+  dashboardSearch=ownerId?mountDashboardSearch({
+    doc,expectedOwnerId:ownerId,
+    stylesheetUrl:new URL('./assets/dashboard-global-search.css?v=1',location.href).href,
+    getOwnerId:async()=>{
+      const {data,error}=await supabase.auth.getSession();
+      return signedOut||error?null:data?.session?.user?.id||null;
+    },
+    listFiles:async()=>{
+      const {data:session,error:authError}=await supabase.auth.getSession();
+      if(signedOut||authError||session?.session?.user?.id!==ownerId)throw Error('AUTH_REQUIRED');
+      const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list'});
+      if(error||data?.ok!==true||!Array.isArray(data.files))throw Error('FILE_LIST_UNAVAILABLE');
+      return data.files;
+    },
+    onNavigate:(section,chapter)=>{
+      if(signedOut||dashboardOwnerId!==ownerId)return false;
+      const nav=findDashboardNav(doc,section);
+      if(!nav)return false;
+      if(!optimizerPage?.hidden)clearOptimizer();
+      nav.click();
+      if(chapter)dashboardChapters?.controllers.get(section)?.select(chapter);
+      return true;
+    },
+    onOpenFile:(fileId,portal,trigger)=>{
+      if(signedOut||dashboardOwnerId!==ownerId||!Object.hasOwn(portalNames,portal)||!optimizerPage)return false;
+      const nav=findDashboardNav(doc,'publishing');
+      if(!nav)return false;
+      nav.click();
+      selectedFileId=fileId;
+      fileView?.choose?.(fileId);
+      openOptimizer(portal,trigger);
+      return true;
+    }
+  }):null;
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
 });
@@ -308,7 +344,7 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){signedOut=true;dashboardSearch?.destroy();dashboardSearch=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -323,7 +359,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardSearch?.destroy();dashboardSearch=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
 await load();
 </script></body></html>
 
