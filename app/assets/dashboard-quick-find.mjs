@@ -33,7 +33,7 @@ export function quickFindMatches(query,areas,files){
   files:q.length>=2?filterDashboardFiles(files||[],q).slice(0,10):[]
  };
 }
-export function mountDashboardQuickFind({doc,getAreas,getFiles,onNavigate,onOpenFile}){
+export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',onNavigate,onOpenFile}){
  if(!doc||[getAreas,getFiles,onNavigate,onOpenFile].some(fn=>typeof fn!=='function')||
    doc.getElementById('smaGlobalQuickFind'))return null;
  const header=[...doc.querySelectorAll('header,[role="banner"],.topbar,.top-bar')]
@@ -97,7 +97,15 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,onNavigate,onOpen
    if(canSearchOrders(query)&&areas.some(a=>a.key==='shop'))
     item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false);
   }
-  status.textContent=results.children.length?results.children.length+' Treffer':'Keine Treffer. Versuche einen kürzeren Begriff.';
+  const count=results.children.length, fileStatus=getFileStatus();
+  const prefix=count?count+' Treffer':'';
+  if(fileStatus==='loading')
+   status.textContent=(prefix?prefix+' · ':'')+'Kundendateien werden geladen …';
+  else if(fileStatus==='error')
+   status.textContent=(prefix?prefix+' · ':'')+'Dateiliste nicht erreichbar. Bitte unter „Dateien“ aktualisieren.';
+  else
+   status.textContent=prefix||'Keine Treffer. Versuche einen kürzeren Begriff.';
+  status.setAttribute('aria-busy',fileStatus==='loading'?'true':'false');
  }
  function show(){if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value='';render();input.focus();}
  const keydown=e=>{
