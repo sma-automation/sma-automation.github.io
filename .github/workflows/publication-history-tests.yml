@@ -170,6 +170,7 @@ on:
       - tests/*publication-text-history*
       - supabase/sql/publication-history.sql
       - supabase/sql/publication-history-find.sql
+      - supabase/sql/publication-history-find-invoker-wrapper.sql
       - tests/run-publication-history-find-sql.mjs
       - app/assets/publication-history-find.mjs
       - tests/publication-history-find.test.cjs
