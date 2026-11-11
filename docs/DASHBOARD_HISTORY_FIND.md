@@ -30,8 +30,11 @@ und die bisherige Monats-/Seiten-Navigation bleiben erhalten.
 
 ## Datensicherheit
 
-Die neue `sma_publication_history_find_v1(text)` ist ein
-separater Nur-Lesen-RPC mit `auth.uid()`-Prüfung.
+Die öffentliche `sma_publication_history_find_v1(text)` ist ein
+separater **SECURITY-INVOKER**-RPC. Die benötigte, stark begrenzte
+**SECURITY-DEFINER**-Lesefunktion liegt ausschließlich in
+`sma_private.publication_history_find_core_v1(text)` und prüft
+`auth.uid()` sowie die aktive, passende Kundenberechtigung.
 Die private Auftragsliste wird nur zurückgegeben, wenn
 `publication_orders_v1.user_id`, die zugeordnete Kunden-ID
 und eine aktive/zahlungs- oder demo-berechtigte
@@ -76,3 +79,17 @@ Auftragsseiten und Monatsarchiv unverändert funktionsfähig.
 
 Keine Provider-Uploads, Veröffentlichungen, echten Käufe,
 Credit-Abbuchungen, Paketänderungen oder n8n-Mutationen.
+
+## Sicherheitsnachbesserung
+
+Die anfänglich installierte Suchfunktion löste eine neue Supabase-Warnung
+für öffentliche SECURITY-DEFINER-Funktionen aus. Die separate
+Migrationsvorlage `publication-history-find-invoker-wrapper.sql`
+prüft den exakt installierten Quellhash und ersetzt den öffentlichen
+Einstieg durch einen reinen SECURITY-INVOKER-Wrapper. Die privilegierte
+Funktion wandert in das **nicht exponierte** Schema `sma_private`.
+Der Aufruf hat dieselbe Eigentümer- und Ergebnisprüfung;
+Kundentabellen bleiben unverändert und nicht direkt lesbar.
+
+Die Nachbesserung wird vor dem Merge mit eigenen SQL-Tests und
+Sicherheitsberatern erneut geprüft.
