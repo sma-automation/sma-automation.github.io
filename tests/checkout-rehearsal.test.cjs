@@ -50,3 +50,56 @@ test('CORS preflight, foreign origin, unsupported method and bad JSON',async()=>
  assert.equal((await request(app(),null,{body:'{broken'})).status,400);
  assert.equal((await request(app(),null,{body:'x'.repeat(8193)})).status,413);
 });
+
+
+test('dry-run rejects fractional cents rather than reporting a false successful checkout',async()=>{
+ for(const price of [0.001,1.234,39.999,'10.005','0.001','12.3001','39.900001','1e2','39.90 ','12.','.5',true,[],{},'NaN',Infinity,1e20]){
+  const r=await request(app({products:[{...product,preis:price}]}));
+  assert.equal(r.status,409,'reject fractional or invalid price '+String(price));
+  assert.equal(r.data.checkout_url,null);
+  assert.equal(r.data.zahlung_ausgeloest,false);
+ }
+});
+
+test('dry-run accepts only exact cents and aggregates in integer cents like production',async()=>{
+ for(const [price,total] of [['0.01',0.03],['12.30',36.9],['12.3000',36.9],['0.0000',0],[39.9,119.7],[0.1,0.3],[0.29,0.87]]){
+  const r=await request(app({products:[{...product,preis:price}]}),body([{produkt_id:id,menge:3}]));
+  assert.equal(r.status,200,'valid exact-cent amount '+String(price));
+  assert.equal(r.data.gesamtbetrag,total);
+  assert.equal(r.data.checkout_url,null);
+  assert.equal(r.data.zahlung_ausgeloest,false);
+ }
+ const mixed=await request(app({products:[
+  {...product,preis:'19.99'},
+  {...product,sma_produkt_id:id2,preis:'0.01',kauf_url:'https://test-store.myshopify.com/cart/58641727521099:1'},
+ ]}),body([{produkt_id:id,menge:2},{produkt_id:id2,menge:1}]));
+ assert.equal(mixed.status,200);
+ assert.equal(mixed.data.gesamtbetrag,39.99);
+ assert.equal(mixed.data.positionen,2);
+});
+
+test('dry-run validates positive Shopify variant IDs and stored cart quantities like public checkout',async()=>{
+ for(const url of [
+  'https://test-store.myshopify.com/cart/00000000000000:1',
+  'https://test-store.myshopify.com/cart/58648962433355:0',
+  'https://test-store.myshopify.com/cart/58648962433355:01',
+  'https://test-store.myshopify.com/cart/58648962433355:1?utm_source=bad'
+ ]){
+  const r=await request(app({products:[{...product,kauf_url:url}]}));
+  assert.equal(r.status,409,'reject invalid checkout target '+url);
+  assert.equal(r.data.checkout_url,null);
+ }
+});
+
+test('disabled merchant can inspect preparation but is never announced as publicly enabled',async()=>{
+ const inactive=await request(app());
+ assert.equal(inactive.status,200);
+ assert.equal(inactive.data.haendler_freigegeben,false);
+ assert.match(inactive.data.message,/Händlerfreigabe.*fehlt/);
+ assert.doesNotMatch(inactive.data.message,/Test bestanden/);
+ const active=await request(app({account:{aktiv:true}}));
+ assert.equal(active.status,200);
+ assert.equal(active.data.haendler_freigegeben,true);
+ assert.match(active.data.message,/Test bestanden/);
+ assert.equal(active.data.checkout_url,null);
+});
