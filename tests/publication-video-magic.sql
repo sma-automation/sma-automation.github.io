@@ -59,6 +59,9 @@ do $$declare r jsonb;l uuid;res jsonb;f sma_private.publication_files_v1%rowtype
  assert not q->'checks' @> '[{"code":"VIDEO_FRAMERATE_PENDING"}]';
  assert not q->'checks' @> '[{"code":"VIDEO_CODEC_PENDING"}]';
  assert q->'checks' @> '[{"code":"INSTAGRAM_SIZE_RULE_PENDING","status":"pending"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"},{"code":"CONTENT_REVIEW_PENDING","status":"pending"},{"code":"SEMANTIC_REVIEW_PENDING","status":"pending"},{"code":"PUBLICATION_APPROVAL_PENDING","status":"pending"}]';
+ assert q->'checks' @> '[{"code":"INSTAGRAM_VIDEO_BITRATE_PRECHECK","status":"pass"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"}]' and q->>'status'='needs_review','Verified video stream bitrate is a preflight pass, not an audio or publishing approval';
+ assert (select x->>'message' from jsonb_array_elements(q->'checks') x where x->>'code'='INSTAGRAM_AUDIO_BITRATE_PENDING') like '%keine Tonspur%','Stummes Video must be identified explicitly';
+ assert (select x->>'message' from jsonb_array_elements(q->'checks') x where x->>'code'='INSTAGRAM_VIDEO_BITRATE_PRECHECK') like '%VBR-Spitzenrate%','Average stream rate is not full acceptance';
  assert q->'can_publish'='false' and q->>'status'='needs_review';
  update sma_private.publication_magic_results_v1 set result=jsonb_set(result,'{evidence,technical,max_frame_interval_us}','80000') where asset_id=f.id;
  q:=sma_private.publication_media_precheck_v1(f,'tiktok');
@@ -74,10 +77,23 @@ do $$declare r jsonb;l uuid;res jsonb;f sma_private.publication_files_v1%rowtype
  update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,video_codec}','"hevc"') where asset_id=f.id;
  q:=sma_private.publication_media_precheck_v1(f,'instagram');
  assert q->'checks' @> '[{"code":"VIDEO_CODEC","status":"pass"}]','HEVC must remain accepted for Instagram';
+ -- Above-range stream bitrate is a real preflight failure; missing bitrate stays pending.
+ update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,video_bit_rate_bps}','30000000') where asset_id=f.id;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"INSTAGRAM_VIDEO_BITRATE_PRECHECK","status":"fail"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"}]' and q->>'status'='needs_changes';
+ assert q->'can_publish'='false';
+ update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,video_bit_rate_bps}','null'::jsonb) where asset_id=f.id;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"INSTAGRAM_VIDEO_BITRATE_PENDING","status":"pending"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"}]' and q->>'status'='needs_review';
+ assert not q->'checks' @> '[{"code":"INSTAGRAM_VIDEO_BITRATE_PRECHECK"}]';
+ update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,video_bit_rate_bps}','25000000') where asset_id=f.id;
+ q:=sma_private.publication_media_precheck_v1(f,'instagram');
+ assert q->'checks' @> '[{"code":"INSTAGRAM_VIDEO_BITRATE_PRECHECK","status":"pass"}]','25 Mbit/s reported stream limit is inclusive';
  update sma_private.publication_magic_results_v1 set result=jsonb_set(res,'{evidence,technical,frame_rate_den}','0') where asset_id=f.id;
  assert sma_private.publication_video_technical_v1(f) is null;
  q:=sma_private.publication_media_precheck_v1(f,'instagram');
  assert q->'checks' @> '[{"code":"VIDEO_FRAMERATE_PENDING","status":"pending"},{"code":"VIDEO_CODEC_PENDING","status":"pending"}]','Invalid or missing evidence must fail closed';
+ assert q->'checks' @> '[{"code":"INSTAGRAM_VIDEO_BITRATE_PENDING","status":"pending"},{"code":"INSTAGRAM_AUDIO_BITRATE_PENDING","status":"pending"}]','Invalid technical evidence cannot create measured-video passes';
  assert q->'can_publish'='false';
  update sma_private.publication_magic_results_v1 set result=res where asset_id=f.id;
  f.revision:='sha256:'||repeat('a',64)||':2';assert sma_private.publication_video_technical_v1(f) is null;
