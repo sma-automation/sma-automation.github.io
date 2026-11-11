@@ -25,6 +25,7 @@ on:
       - supabase/sql/publication-shop-invitation.sql
       - supabase/sql/publication-media-profiles.sql
       - supabase/migrations/*_publication_instagram_verified_video_precheck_v1.sql
+      - supabase/migrations/*_publication_instagram_audio_video_bitrate_evidence_v1.sql
       - tests/publication-video-magic.sql
       - tests/publication-media-profiles.sql
       - tests/run-publication-video-sql.mjs
