@@ -17,7 +17,7 @@ import {mountPublicationHistory} from './assets/publication-history-dashboard.mj
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
-import {mountDashboardQuickFind,sectionCatalog} from './assets/dashboard-quick-find.mjs?v=1';
+import {mountDashboardQuickFind,sectionCatalog} from './assets/dashboard-quick-find.mjs?v=2';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=1';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -304,11 +304,31 @@ frame.addEventListener('load',()=>{
     doc,
     getAreas:()=>sectionCatalog.filter(a=>doc.getElementById('page-'+(a.key==='files'?'publishing':a.key))&&findAreaNavigation(a.key)),
     getFiles:()=>fileView?.getFiles()||[],
-    onNavigate:key=>{
+    onNavigate:(key,query)=>{
       if(signedOut||dashboardOwnerId!==ownerId)return false;
-      const nav=findAreaNavigation(key);if(!nav)return false;
+      const target=key==='history-search'?'history':key==='shop-search'?'shop':key;
+      const nav=findAreaNavigation(target);if(!nav)return false;
+      // Never dispatch a search into an absent or still-loading page.
+      if(key==='history-search'&&!doc.getElementById('smaHistorySearch'))return false;
+      if(key==='shop-search'&&!doc.getElementById('smaShopFrame')?.contentDocument?.getElementById('smaOrderSearch'))return false;
       nav.click();
       if(key==='files'){dashboardChapters?.controllers.get('publishing')?.select('files');fileView?.focusSearch();}
+      if(key==='history-search'){
+        doc.getElementById('sma-history-tab-orders')?.click();
+        const field=doc.getElementById('smaHistorySearch');
+        if(typeof query==='string'&&query.length>=2&&query.length<=80&&new TextEncoder().encode(query).length<=240){
+          field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
+        }
+        field.focus();
+      }
+      if(key==='shop-search'){
+        dashboardChapters?.controllers.get('shop')?.select('orders');
+        const field=doc.getElementById('smaShopFrame').contentDocument.getElementById('smaOrderSearch');
+        if(typeof query==='string'&&query.length>=2&&query.length<=60&&/^[\p{L}\p{N} #./-]*$/u.test(query)){
+          field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
+        }
+        field.focus();
+      }
       return true;
     },
     onOpenFile:id=>{
