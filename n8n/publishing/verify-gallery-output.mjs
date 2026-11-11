@@ -9,7 +9,7 @@
  */
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import soundtrack from './gallery-soundtrack.cjs';
@@ -54,6 +54,26 @@ function packetHashes(path){
  return output.trim().split('\n');
 }
 
+// A syntactically valid AAC stream can still decode to complete silence.
+// Prove that the *actual receipt-matched* output has a meaningful PCM signal.
+// A quiet/unmeasurable file remains unverified; this is not a platform approval.
+export function parseSoundtrackVolume(log){
+ const mean=[...String(log).matchAll(/mean_volume:\s*(-?(?:\d+(?:\.\d+)?|inf))\s*dB/gi)].at(-1)?.[1];
+ const peak=[...String(log).matchAll(/max_volume:\s*(-?(?:\d+(?:\.\d+)?|inf))\s*dB/gi)].at(-1)?.[1];
+ const meanDb=mean===undefined?null:Number(mean);
+ const peakDb=peak===undefined?null:Number(peak);
+ const measurable=Number.isFinite(meanDb)&&Number.isFinite(peakDb);
+ return {mean_dbfs:measurable?meanDb:null,peak_dbfs:measurable?peakDb:null,
+  non_silent:measurable&&meanDb>-80&&peakDb>-65};
+}
+function actualAudioVolume(path){
+ const probe=spawnSync('ffmpeg',['-nostdin','-hide_banner','-v','info','-i',path,
+  '-map','0:a:0','-af','volumedetect','-f','null','-'],
+  {encoding:'utf8',timeout:90000,maxBuffer:3000000});
+ if(probe.error||probe.status!==0)return {mean_dbfs:null,peak_dbfs:null,non_silent:false};
+ return parseSoundtrackVolume(probe.stderr);
+}
+
 export function verifyActualGalleryFile(sourceFile,observedFile){
  const actual=ffprobe(observedFile),source=ffprobe(sourceFile);
  const streams=actual.streams||[];
@@ -72,18 +92,22 @@ export function verifyActualGalleryFile(sourceFile,observedFile){
  const videoBitrate=Number(v.bit_rate);
  const bitrateOk=Number.isFinite(videoBitrate)&&videoBitrate>0&&videoBitrate<=25000000;
  const valid=codecAllowed&&sameVideoPackets&&aacOk&&durationOk&&bitrateOk;
- let decoded=false;
+ let decoded=false,volume={mean_dbfs:null,peak_dbfs:null,non_silent:false};
  if(valid){
   execFileSync('ffmpeg',['-nostdin','-v','error','-xerror','-i',observedFile,'-f','null','-'],
    {timeout:90000,stdio:['ignore','ignore','pipe']});
   decoded=true;
+  volume=actualAudioVolume(observedFile);
  }
+ const technicallyVerified=valid&&decoded&&volume.non_silent;
  return {
-  status:valid&&decoded?'technical_checks_pass':'technical_checks_incomplete',
-  valid:valid&&decoded,unchanged_video_packets:sameVideoPackets,
+  status:technicallyVerified?'technical_checks_pass':'technical_checks_incomplete',
+  valid:technicallyVerified,unchanged_video_packets:sameVideoPackets,
   h264_or_hevc:codecAllowed,video_bitrate_bps:videoBitrate,
   audio_aac_lc_stereo_48000:aacOk,video_and_audio_duration_agree:durationOk,
-  audio_bitrate_bps:Number(a.bit_rate)||null,full_decode_passed:decoded
+  audio_bitrate_bps:Number(a.bit_rate)||null,full_decode_passed:decoded,
+  soundtrack_non_silent:volume.non_silent,
+  soundtrack_mean_dbfs:volume.mean_dbfs,soundtrack_peak_dbfs:volume.peak_dbfs
  };
 }
 
@@ -97,8 +121,10 @@ async function main(){
  const report=reconcileGalleryBytes({
   original:source,aac:audio,expectedSha:hash,expectedSize:Number(size),observed
  });
- if(observedPath&&report.observed?.receipt_match)
+ if(observedPath&&report.observed?.receipt_match){
   report.technical=verifyActualGalleryFile(sourcePath,observedPath);
+  if(!report.technical.valid)report.status='technical_checks_incomplete';
+ }
  console.log(JSON.stringify(report,null,2));
  if(observedPath&&(!report.observed?.receipt_match||!report.technical?.valid))
   process.exitCode=1;
