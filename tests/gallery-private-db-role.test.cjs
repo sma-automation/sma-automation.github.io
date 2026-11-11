@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const loaded=import('../n8n/publishing/gallery-private-server-runner.mjs');
 const safe=()=>({
- same_login_role:true,can_login:true,superuser:false,bypass_rls:false,
+ same_login_role:true,designated_identity:true,can_login:true,superuser:false,bypass_rls:false,
  create_role:false,create_db:false,inherited_reader:true,
  can_read_snapshot:true,may_touch_gallery_jobs:false,
  may_touch_media_catalog:false,may_touch_storage_catalog:false,
@@ -14,7 +14,7 @@ test('private gallery worker only allows a LOGIN that inherits the narrow reader
  const {assertGalleryDbRolePreflight}=await loaded;
  assert.equal(assertGalleryDbRolePreflight(safe()),true);
  const unsafeVariants=[
-  ['same_login_role',false],['can_login',false],['superuser',true],
+  ['same_login_role',false],['designated_identity',false],['can_login',false],['superuser',true],
   ['bypass_rls',true],['create_role',true],['create_db',true],
   ['inherited_reader',false],['can_read_snapshot',false],
   ['may_touch_gallery_jobs',true],['may_touch_media_catalog',true],
@@ -37,6 +37,7 @@ test('read-only SQL gate is called before the first gallery snapshot',async()=>{
  assert.match(source,/pg_has_role\(current_user,'sma_gallery_snapshot_reader','USAGE'\)/);
  assert.match(source,/r[.]rolbypassrls as bypass_rls/);
  assert.match(source,/r[.]rolcanlogin as can_login/);
+ assert.match(source,/current_user='sma_gallery_worker_login' as designated_identity/);
  assert.match(source,/has_table_privilege\(current_user,'storage[.]objects'/);
  assert.doesNotMatch(source,/SET ROLE service_role|SET ROLE postgres|ALTER ROLE/i);
 });
