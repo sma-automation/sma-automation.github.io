@@ -117,7 +117,7 @@ export function mountDashboardSearch({
     }else{
      button.dataset.fileId=item.id;
      appendText(doc,button,item.label,'strong');
-     const portal=item.portal[0].toUpperCase()+item.portal.slice(1);
+     const portal={youtube:'YouTube',tiktok:'TikTok',instagram:'Instagram',facebook:'Facebook'}[item.portal];
      appendText(doc,button,(item.media_kind==='video'?'Video':'Bild')+' · '+portal+' optimieren','small');
     }
     button.addEventListener('click',async()=>{
