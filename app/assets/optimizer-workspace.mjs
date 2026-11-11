@@ -52,6 +52,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   // Keep the EXISTING refresh handler in the DOM for retries, but do not
   // waste a prominent dashboard button on an automatic file reconciliation.
   galleryActions.append($('refreshFiles'));
+  const oldSearchLabel = doc.querySelector('label[for="fileSearch"]');
   const search = make('label', 'workspaceSearch');
   search.className = 'sma-v2-inline-search';
   search.setAttribute('for','fileSearch');
@@ -71,7 +72,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('chooseGeneralTemplate').parentElement.hidden = true;
   // The old "Datei suchen" disclosure is gone. The same real input remains
   // connected to the existing search/filter and original customer file list.
-  const oldSearchLabel = doc.querySelector('label[for="fileSearch"]');
   if(oldSearchLabel&&oldSearchLabel!==search)oldSearchLabel.hidden=true;
   pickerBody.prepend($('fileSwitchNotice'));
   // Clicking a gallery tile opens the post preview directly; no extra action button.
