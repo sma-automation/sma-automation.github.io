@@ -40,6 +40,19 @@ def patch(source):
  old=nodes['Provideranfrage erstellen']['parameters']['jsCode']
  if old.count('request:providerRequest(i,c.token)')!=1:raise ValueError('PROVIDER_ADAPTER_CHANGED')
  nodes['Provideranfrage erstellen']['parameters']['jsCode']=core('provider-cover.cjs')+'\n'+old.replace('request:providerRequest(i,c.token)','request:withTikTokCover(providerRequest(i,c.token),i)')
+ # Upgrade the pinned legacy adapter in the two nodes that use session URLs.
+ # Keep the original archived export byte-for-byte reproducible.
+ session_code=core('provider-transport.cjs').split('function providerSession(',1)[1].split('function providerHttp(',1)[0]
+ for name in ('Provideranfrage erstellen','Providerantwort auswerten'):
+  node=nodes[name]['parameters']
+  before,tail=node['jsCode'].split('function providerSession(',1)
+  _,after=tail.split('function providerHttp(',1)
+  node['jsCode']=before+'function providerSession('+session_code+'function providerHttp('+after
+ # The task runner exposes helpers on the execution context. Strict-mode
+ # Code nodes have no bound JavaScript receiver.
+ for name in ('Provider-Dateiprüfsumme bestätigen','Provider-Dateirest auswählen'):
+  node=nodes[name]['parameters']
+  node['jsCode']=node['jsCode'].replace('this.helpers.', 'helpers.')
  w.condition('Cover bereits abgeschlossen?',"={{ $json.cover_terminal === true }}",800,-700)
  w.code('Gespeicherten Coverstatus zurückgeben',"const c=$('Providerauftrag lesen').first().json;return [{json:{ok:true,state:'complete',cover_state:c.cover_state,can_upload:false,can_publish:false}}];",1080,-700)
  w.edges['Providerbindung bestätigen']['main'][0]=[]
@@ -54,14 +67,14 @@ def patch(source):
   if download:opts['response']={'response':{'responseFormat':'file','outputPropertyName':'data'}}
   w.node(name,'httpRequest',{'url':"={{ 'https://www.googleapis.com/drive/v3/files/'+$('Providerauftrag lesen').first().json.cover.drive_file_id }}",'authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'queryParameters':{'parameters':([{'name':'alt','value':'media'}] if download else [{'name':'fields','value':'id,mimeType,parents,trashed,version,size,sha256Checksum,md5Checksum,capabilities(canDownload)'}])+[{'name':'supportsAllDrives','value':'true'}]},'options':opts},x,1000,v=4.5,credentials=m.DRIVE,onError='continueErrorOutput')
  w.code('Cover-Metadaten bestätigen',shared+'\n'+ctx+"editorSourceMetadata($json,source,c.folders);return [{json:{ok:true}}];",2160,1000,onError='continueErrorOutput')
- w.code('Coverbytes prüfen',core('provider-cover.cjs')+"\nconst c=$('Providerauftrag lesen').first().json,p=coverPlan(c.cover,c.binding),bytes=await this.helpers.getBinaryDataBuffer(0,'data');coverBytes(bytes,p);return [{json:{size_bytes:bytes.length,sha256:p.asset_revision.split(':')[1]},binary:$input.first().binary}];",2640,1000,onError='continueErrorOutput')
+ w.code('Coverbytes prüfen',core('provider-cover.cjs')+"\nconst c=$('Providerauftrag lesen').first().json,p=coverPlan(c.cover,c.binding),bytes=await helpers.getBinaryDataBuffer(0,'data');coverBytes(bytes,p);return [{json:{size_bytes:bytes.length,sha256:p.asset_revision.split(':')[1]},binary:$input.first().binary}];",2640,1000,onError='continueErrorOutput')
  w.code('Cover-Prüfnachweise verbinden',shared+'\n'+ctx+"editorSourceMetadata($json,source,c.folders);const b=$('Coverbytes prüfen').first().json;return [{json:{target:c.target,account_check:c.account_check,cover_verified:true,cover_sha256:b.sha256,size_bytes:b.size_bytes}}];",3120,1000,onError='continueErrorOutput')
  def rpc(name,body,x,y=1000):
   w.rpc(name,body,x,y);w.nodes[-1]['parameters']['url']=m.BASE+'sma_publication_provider_cover_v1'
  rpc('Coveranfrage reservieren',"={{ {p_action:'cover_begin',p_id:$('Providerauftrag lesen').first().json.id,p_data:$json} }}",3360)
  w.condition('Coveranfrage reserviert?',"={{ $json.ok === true && $json.operation === 'youtube_thumbnail' && !!$json.lease_id }}",3600,1000)
  w.code('Geprüfte Coverdatei übernehmen',"return [{json:$json,binary:$('Coverbytes prüfen').first().binary}];",3840,1000,onError='continueErrorOutput')
- w.code('Coveranfrage erstellen',core('provider-cover.cjs')+"\nconst i=$('Coveranfrage reservieren').first().json,c=$('Providerverbindung bestätigen').first().json,bytes=await this.helpers.getBinaryDataBuffer(0,'data');return [{json:{request:youtubeCoverRequest(i,c.token,bytes)},binary:$input.first().binary}];",4080,1000,onError='continueErrorOutput')
+ w.code('Coveranfrage erstellen',core('provider-cover.cjs')+"\nconst i=$('Coveranfrage reservieren').first().json,c=$('Providerverbindung bestätigen').first().json,bytes=await helpers.getBinaryDataBuffer(0,'data');return [{json:{request:youtubeCoverRequest(i,c.token,bytes)},binary:$input.first().binary}];",4080,1000,onError='continueErrorOutput')
  w.node('YouTube-Cover übertragen','httpRequest',{'method':'={{ $json.request.method }}','url':'={{ $json.request.url }}','sendHeaders':True,'specifyHeaders':'json','jsonHeaders':'={{ $json.request.headers }}','sendBody':True,'contentType':'binaryData','inputDataFieldName':'data','options':{'redirect':{'redirect':{'followRedirects':False}},'timeout':90000,'response':{'response':{'fullResponse':True,'neverError':True,'responseFormat':'text'}}}},4320,1000,v=4.5,onError='continueErrorOutput')
  w.code('Coverantwort auswerten',core('provider-cover.cjs')+'\nreturn [{json:youtubeCoverObservation($json)}];',4560,1000,onError='continueErrorOutput')
  w.code('Unklare Coverantwort',"return [{json:{state:'uncertain',code:'COVER_RESPONSE_UNCERTAIN'}}];",4560,1300)
