@@ -93,11 +93,19 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   }
   for(const view of editViews){editPanel.append(view.card);view.card.hidden=view.key!==editKey;}
  }
+ function selectEditView(key){
+  const view=editViews.find(entry=>entry.key===key);
+  if(!view)return false;
+  editKey=key;
+  if(editPicker){
+   const option=[...editPicker.options].find(item=>item.value===key);
+   if(option&&!option.selected)option.selected=true;
+  }
+  for(const entry of editViews)entry.card.hidden=entry!==view;
+  return true;
+ }
  function changeEditView(){
-  if(!editViews.some(view=>view.key===editPicker.value))return;
-  editKey=editPicker.value;
-  for(const view of editViews)view.card.hidden=view.key!==editKey;
-  if(chapterTabs?.selected==='edits')loadSelectedChapter();
+  if(selectEditView(editPicker.value)&&chapterTabs?.selected==='edits')loadSelectedChapter();
  }
  if(editPanel||analysisCard){
   activityCard.id='historyOrderCard';
@@ -323,5 +331,23 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  if(orderId&&!page.classList.contains('active'))doc.querySelector('button[data-page="history"]')?.click();
  load();
- return {destroy(){disposed=true;findSerial++;clearTimeout(findTimer);findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ function hasSearchView(view){
+  if(disposed||invalidOwner)return false;
+  return view==='orders'||(view==='texts'&&Boolean(textCard));
+ }
+ function openSearchView(view){
+  if(!active()||!hasSearchView(view))return false;
+  if(view==='texts'){
+   selectEditView('texts');
+   return chapterTabs.select('edits',{focus:true});
+  }
+  if(findInput?.value){
+   findInput.value='';
+   onFindInput();
+  }
+  if(chapterTabs)return chapterTabs.select('orders',{focus:true});
+  refresh.focus();
+  return true;
+ }
+ return {hasSearchView,openSearchView,destroy(){disposed=true;findSerial++;clearTimeout(findTimer);findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

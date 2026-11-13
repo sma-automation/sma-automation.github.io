@@ -468,4 +468,37 @@ await test('History search rejects late results after losing the current owner',
  }finally{f.view.destroy();mock.timers.reset();}
 });
 
+await test('search opens saved texts directly and returns to unfiltered order statuses',async()=>{
+ const calls=[];
+ const f=fixture({requestFind:()=>{throw Error('unexpected search');},requestTexts:()=>{calls.push('texts');return texts();},requestEditors:()=>{throw Error('unexpected editor read');}});
+ await tick();
+ assert.equal(f.view.hasSearchView('texts'),true);
+ assert.equal(f.view.openSearchView('texts'),true);await tick();
+ assert.equal(f.$('#sma-history-tab-edits').getAttribute('aria-selected'),'true');
+ assert.equal(f.$('#historyEditType').value,'texts');
+ assert.equal(f.$('#historyTextCard').closest('[hidden]'),null);
+ assert.equal(f.$('#historyTextCard li')!==null,true);
+ assert.deepEqual(calls,['texts']);
+ const field=f.$('#smaHistorySearch');
+ field.value='Alter Filter';field.dispatchEvent(new f.window.Event('input'));
+ assert.equal(f.view.openSearchView('orders'),true);
+ assert.equal(f.$('#sma-history-tab-orders').getAttribute('aria-selected'),'true');
+ assert.equal(field.value,'');
+ assert.equal(f.$('#historyActivitySlot ol.sma-history-list').hidden,false);
+ assert.match(f.$('#historyActivitySlot ol.sma-history-list').textContent,/Blockiert/);
+ f.owner('other');
+ assert.equal(f.view.hasSearchView('texts'),false);
+ assert.equal(f.view.openSearchView('orders'),false);
+ f.view.destroy();
+});
+await test('missing or inactive history views cannot be opened by global search',async()=>{
+ const f=fixture({active:false});
+ assert.equal(f.view.hasSearchView('texts'),false);
+ assert.equal(f.view.openSearchView('texts'),false);
+ assert.equal(f.view.openSearchView('orders'),false);
+ f.page.classList.add('active');await tick();
+ assert.equal(f.view.openSearchView('orders'),true);
+ f.view.destroy();assert.equal(f.view.hasSearchView('orders'),false);
+});
+
 console.log(`${passed} history DOM scenarios passed.`);

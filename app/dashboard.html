@@ -13,11 +13,11 @@ import {mountWebsitePreparation} from './assets/website-domain.mjs?v=19';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
-import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=28';
+import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=29';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=5';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=6';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=2';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -302,22 +302,31 @@ frame.addEventListener('load',()=>{
   }
   dashboardQuickFind=ownerId&&fileView?mountDashboardQuickFind({
     doc,
-    getAreas:()=>sectionCatalog.filter(a=>doc.getElementById('page-'+(a.key==='files'?'publishing':a.key))&&findAreaNavigation(a.key)),
+    getAreas:()=>sectionCatalog.filter(area=>{
+      const page=area.page||(area.key==='files'?'publishing':area.key);
+      return doc.getElementById('page-'+page)&&findAreaNavigation(page)&&
+        (area.key!=='portals'||doc.getElementById('sma-publishing-tab-portals'))&&
+        (!area.historyView||publicationHistory?.hasSearchView?.(area.historyView));
+    }),
     getFiles:()=>fileView?.getFiles()||[],
     getFileStatus:()=>fileView?.getCatalogState()||'loading',
     onNavigate:(key,query)=>{
       if(signedOut||dashboardOwnerId!==ownerId)return false;
-      const target=key==='history-search'?'history':key==='shop-search'?'shop':key;
+      const area=sectionCatalog.find(entry=>entry.key===key);
+      const target=area?.page||(key==='history-search'?'history':key==='shop-search'?'shop':key);
       const nav=findAreaNavigation(target);if(!nav)return false;
+      if(area?.historyView&&!publicationHistory?.hasSearchView?.(area.historyView))return false;
       // Never dispatch a search into an absent or still-loading page.
       if(key==='history-search'&&!doc.getElementById('smaHistorySearch'))return false;
       if(key==='shop-search'&&!doc.getElementById('smaShopFrame')?.contentDocument?.getElementById('smaOrderSearch'))return false;
       nav.click();
-      if(key==='files'){
+      if(area?.historyView)return publicationHistory.openSearchView(area.historyView);
+      if(key==='files'||key==='portals'){
         if(optimizerPage&&!optimizerPage.hidden){
           if(history.state?.smaOptimization)history.pushState(null,'',location.pathname+location.search);
           showPublishing();
         }
+        if(key==='portals')return dashboardChapters?.controllers.get('publishing')?.select('portals',{focus:true})===true;
         if(!dashboardChapters?.controllers.get('publishing')?.select('files'))return false;
         return fileView.focusSearch(query);
       }
