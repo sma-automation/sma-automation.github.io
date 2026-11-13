@@ -136,7 +136,7 @@ def build_api(worker_id,account_id,comparison_delivery_id=None,provider_dispatch
   # Only an already checked order can enter the internal dispatcher. The
   # database still requires the separate operator permit before any upload.
   # A later authenticated get resumes the same journal, never a new attempt.
-  w.condition('Geprüften Providerauftrag fortsetzen?',"={{ $json.ok === true && !!$json.id && $json.state === 'checked' && ['approve','get'].includes($('Dashboard-Anfrage prüfen').first().json.action) }}",3360,200)
+  w.condition('Geprüften Providerauftrag fortsetzen?',"={{ $json.ok === true && !!$json.id && $json.state === 'checked' && ['approve','get'].includes($('Dashboard-Anfrage prüfen').first(0).json.action) }}",3360,200)
   w.code('Provider-Auftragsantwort merken','return $input.all();',3600,0)
   w.code('Providerauftrag auswählen','return [{json:{id:$json.id}}];',3840,0)
   w.node('Providerweg im Hintergrund','executeWorkflow',{'source':'database','workflowId':{'__rl':True,'value':provider_dispatch_id,'mode':'id'},'mode':'once','options':{'waitForSubWorkflow':True}},4080,0,1.3,onError='continueErrorOutput')
