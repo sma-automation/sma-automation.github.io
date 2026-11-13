@@ -40,8 +40,10 @@ Wenn die Dateiversion eines abgelaufenen YouTube- oder TikTok-Auftrags ersetzt
 wurde, führt **Aktuelle Dateiversion öffnen** zum regulären Optimierer für
 dieselbe Datei und dasselbe Portal. Dort liest SMA den aktuellen Kundenkatalog.
 Ist die frühere Textzuordnung veraltet, kann der Kunde einen neuen Beitragstext
-erstellen. Die alte Auftrags-ID und die frühere Freigabe werden dabei nicht
-übernommen.
+erstellen. **Zurück zum Auftrag** öffnet in der History den ursprünglichen
+Eintrag auf der zugehörigen Seite. Die ID im URL-Fragment dient ausschließlich
+diesem Rücklink. Der Optimierer lädt den aktuellen Entwurf unabhängig von
+der abgelaufenen Vorbereitung.
 
 ## Datensicherheit
 
