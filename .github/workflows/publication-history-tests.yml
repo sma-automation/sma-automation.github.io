@@ -84,6 +84,9 @@ on:
       - supabase/sql/publication-preview-cover-plan.sql
       - supabase/migrations/*_publication_preview_cover_plan_v1.sql
       - supabase/sql/publication-provider-cover.sql
+      - supabase/sql/publication-cover-permission-retry.sql
+      - supabase/migrations/*_publication_cover_permission_retry_v1.sql
+      - tests/sql-runtime/provider-cover-permission-retry.mjs
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - n8n/publishing/*gallery-soundtrack*
       - n8n/publishing/gallery-private-evidence-worker.mjs

@@ -383,6 +383,21 @@ await test('checked orders link to their recorded order without dispatching on o
   assert.deepEqual(f.calls,[{}]);
  }finally{f.view.destroy();}
 });
+await test('a private YouTube upload can reopen only its pending cover from history',async()=>{
+ for(const coverStatus of ['pending','complete','permission_required','uncertain']){
+  const row=entry(1,{status:'private_complete',cover:{status:coverStatus,updated_at:'2026-11-06T12:02:00Z'}});
+  const f=fixture({request:()=>result([row])});
+  try{
+   await tick();
+   const link=f.$('ol a');
+   if(coverStatus==='pending'){
+    assert.equal(link.textContent,'Ausstehendes Cover öffnen');
+    assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+row.id+'&view=transfer&resume=1');
+   }else assert.equal(link,null);
+   assert.deepEqual(f.calls,[{}]);
+  }finally{f.view.destroy();}
+ }
+});
 await test('a TikTok account recheck switches to the current post link when its deadline passes',async()=>{
  const now=Date.now();mock.timers.enable({apis:['Date','setTimeout'],now});
  const row=entry(1,{platform:'tiktok',status:'prepared',approval_window:{status:'recheck',expires_at:new Date(now+1000).toISOString()}});
