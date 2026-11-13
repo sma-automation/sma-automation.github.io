@@ -40,6 +40,14 @@ try{
  const statusSql=await readFile('supabase/sql/publication-history-find-status.sql','utf8');
  assert.equal(statusSql,await readFile('supabase/migrations/20261113154829_publication_history_find_status_v1.sql','utf8'));
  await db.exec(statusSql);
+ const accounts=await readFile('supabase/sql/publication-accounts.sql','utf8');
+ await db.exec(accounts.slice(accounts.indexOf('create or replace function sma_private.publication_account_valid_v1'),accounts.indexOf('grant execute on function sma_private.publication_account_valid_v1')));
+ const approval=await readFile('supabase/sql/publication-approval-window.sql','utf8');
+ await db.exec(approval.slice(0,approval.indexOf('do $$')));
+ const windows=await readFile('supabase/sql/publication-history-find-window.sql','utf8');
+ assert.equal(windows,await readFile('supabase/migrations/20261113224643_publication_history_find_window_v1.sql','utf8'));
+ await db.exec(windows);
+ await assert.rejects(()=>db.exec(windows),/HISTORY_FIND_CORE_BASELINE_CHANGED/);
  assert.equal((await rows("select prosecdef v from pg_proc where oid='public.sma_publication_history_find_v1(text)'::regprocedure"))[0].v,false);
  assert.equal((await rows("select prosecdef v from pg_proc where oid='sma_private.publication_history_find_core_v1(text)'::regprocedure"))[0].v,true);
  assert.equal((await rows("select has_function_privilege('authenticated','sma_private.publication_history_find_core_v1(text)','EXECUTE') v"))[0].v,true);
@@ -75,6 +83,7 @@ try{
  assert.equal(all.ok,true);
  assert.equal(all.entries.length,20);
  assert.equal(all.has_more,true);
+ assert(all.entries.every(row=>!Object.hasOwn(row,'window')),'ambiguous legacy account must not expose detail deadlines');
  assert.equal(all.can_publish,false);
  assert.equal(all.can_upload,false);
  assert(all.entries.every(x=>x.id!==id(99)&&x.id!==id(100)));
@@ -115,6 +124,29 @@ try{
   await db.exec('set role authenticated');
   try{assert.equal((await lookup('Fremdkonto')).entries[0].status,expected);assert.equal(saved.status,expected);}
   finally{await db.exec('reset role');}
+ }
+ // The unique customer's searches expose the same effective deadline, including an earlier account expiry.
+ await db.query('delete from sma_private.publication_provider_attempts_v1 where order_id=$1',[id(99)]);
+ for(const [state,age,platform,check,expected] of [
+  ['preparing','1 minute','youtube','none','active'],['preparing','30 minutes','youtube','none','expired'],
+  ['preparing','1 minute','youtube','partial',null],['prepared','1 minute','youtube','partial','recheck'],
+  ['prepared','1 minute','youtube','expired','expired'],['prepared','1 minute','instagram','none','active'],
+  ['prepared','31 minutes','instagram','none','expired'],['cancelled','1 minute','youtube','none',null]
+ ]){
+  await db.exec('begin');
+  try{
+   await db.query(`update sma_private.publication_orders_v1 set state=$2, created_at=now()-$3::interval,
+    binding=jsonb_build_object('platform',$4::text),approved_at=null,target=null,
+    account_check=case $5::text when 'partial' then '{}'::jsonb when 'expired' then jsonb_build_object('expires_at',now()-interval '1 second') end
+    where id=$1`,[id(99),state,age,platform,check]);
+   const stored=(await db.query("select created_at + interval '30 minutes' as deadline, sma_private.publication_approval_window_v1(j) as approval from sma_private.publication_orders_v1 j where id=$1",[id(99)])).rows[0];
+   await db.exec('set local role authenticated');
+   const hit=(await lookup('Fremdkonto')).entries[0];
+   assert.equal(hit.window?.status??null,expected);
+   if(state==='prepared')assert.deepEqual(hit.window,stored.approval);
+   if(state==='preparing'&&expected)assert.equal(Date.parse(hit.window.expires_at),new Date(stored.deadline).getTime());
+   if(expected)assert.deepEqual(Object.keys(hit.window).sort(),['expires_at','status']);
+  }finally{await db.exec('rollback');}
  }
  assert.equal((await rows('select count(*)::int n from sma_private.publication_orders_v1'))[0].n,countBefore);
  console.log('History lookup passed: saved transfer states and receipts, legacy scope, owner isolation, bounded results, literal terms and privileges.');
