@@ -88,13 +88,14 @@ test('generated cover copy stays internal with one upload node and no retry or r
  assert.match(finish.parameters.jsonBody,/p_lease:/);
 });
 
-test('each provider HTTP node passes parseable JSON text to the native headers field',()=>{
+test('each provider HTTP node serializes its headers and preserves the raw response body',()=>{
  const names=['Provider-JSON-Anfrage','Provider-Dateitransfer','Provider-Statusanfrage','YouTube-Cover übertragen'];
  const headers={Authorization:'Bearer synthetic-test-only','Content-Type':'video/mp4','Content-Length':'12'};
  for(const name of names){
   const params=nodes.get(name).parameters;
   assert.equal(params.sendHeaders,true);
   assert.equal(params.specifyHeaders,'json');
+  assert.deepEqual(params.options.response.response,{fullResponse:true,neverError:true,responseFormat:'text',outputPropertyName:'body'});
   const expression=params.jsonHeaders.match(/^=\{\{ (.+) \}\}$/);
   assert.ok(expression,name);
   const value=vm.runInNewContext(expression[1],{$json:{request:{headers}}});
