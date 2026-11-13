@@ -57,6 +57,26 @@ test('global search opens in same dashboard and finds a file via typed filename'
  assert.equal(f.get('smaQuickFindDialog'),null);
  assert.equal(f.get('smaGlobalQuickFind'),null);
 });
+test('all file results use the same query, count every file and keep the dialog compact',async()=>{
+ const f=await fixture({areas:['files','history','shop']});
+ const clips=Array.from({length:24},(_,i)=>({id:'clip-'+i,name:'Küche Mai '+i+'.mp4',media_kind:'video'}));
+ const input=f.get('smaQuickFindInput'),results=f.get('smaQuickFindResults');
+ f.setFiles(clips);f.view.show();input.value='  KÜCHE mai  ';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ const labels=()=>[...results.querySelectorAll('strong')].map(el=>el.textContent);
+ assert.deepEqual(labels().slice(0,10),clips.slice(0,10).map(clip=>clip.name));
+ assert.equal(labels().filter(title=>title.endsWith('.mp4')).length,10);
+ assert.match(f.get('smaQuickFindPanel').querySelector('[role="status"]').textContent,/24 direkte Treffer/);
+ assert.deepEqual(f.calls,[]);
+ const all=[...results.querySelectorAll('button')].find(el=>el.textContent.includes('Alle 24 Dateien anzeigen'));
+ all.click();await tick();
+ assert.deepEqual(f.calls,['section:files:KÜCHE mai']);
+ assert.equal(f.get('smaQuickFindDialog').hidden,true);
+ f.setFiles(clips.slice(0,10));f.view.show();input.value='mai';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ assert(!labels().some(title=>title.startsWith('Alle ')));
+ f.view.destroy();
+});
 test('order searches use existing sections rather than loading account data into global results',async()=>{
  const f=await fixture({areas:['overview','history','shop']});f.view.show();
  const input=f.get('smaQuickFindInput');input.value='1001';

@@ -113,3 +113,11 @@ sind Suchwege und **keine tatsächlichen Treffer**. Sie werden nicht mehr
 als Kundendateien oder Dashboard-Bereiche gezählt. Gibt es nur diese
 Suchwege, erklärt der Status **„Keine direkten Treffer“** statt
 irreführend „2 Treffer“ anzuzeigen. Ein DOM-Test deckt diesen Fall ab.
+
+## Alle passenden Dateien öffnen
+
+Die globale Suche zeigt die ersten zehn passenden Dateien des geladenen Kundenkatalogs.
+Bei mehr als zehn Dateitreffern führt „Alle … Dateien anzeigen“ zur Galerie unter
+Veröffentlichung → Dateien. Die Galerie übernimmt den Suchbegriff, startet auf Seite eins
+und zeigt Ergebnisse aus allen Portalen. Die direkte Trefferzahl zählt auch die Dateien
+auf den weiteren Seiten. Eine einzelne Datei lässt sich weiterhin direkt im Portal öffnen.

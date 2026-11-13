@@ -71,3 +71,52 @@ test('search is client-side only: no new API, upload or approval path',async()=>
  assert.doesNotMatch(src,/\bfetch\(|\bXMLHttpRequest\b|localStorage|sessionStorage|\.rpc\(|postMessage/i);
  assert.match(src,/Array\.isArray\(files\)/);
 });
+
+test('gallery receives the global query, resets the portal and opens the first filtered page',async()=>{
+ const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
+ const {filterDashboardFiles}=await modulePromise;
+ const html=readFileSync('app/dashboard.html','utf8');
+ const source=html.slice(html.indexOf('function attachFileList('),html.indexOf('let pending;'));
+ const {document,window}=parseHTML('<html><head></head><body><main><div id="publishingFilesSlot"></div></main></body></html>');
+ const files=Array.from({length:24},(_,i)=>({id:'clip-'+i,name:'Küche Mai '+i+'.mp4',media_kind:'video',
+  assignments:[{platform:i<12?'youtube':'tiktok',status:'assigned'}]}));
+ files.push({id:'other',name:'Sommer.png',media_kind:'image',assignments:[]});
+ const calls=[];
+ const env={dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
+  portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,
+  createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
+  supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
+ const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);
+ const gallery=attach(document,document.querySelector('main'));
+ const portal=document.querySelector('#smaFilePortalFilter'),finder=document.querySelector('#smaFileSearch');
+ // LinkeDOM exposes select.value as a getter. Emulate the native select setter.
+ Object.defineProperty(portal,'value',{writable:true,value:'all'});
+ await new Promise(resolve=>setImmediate(resolve));
+ const next=()=>[...document.querySelectorAll('.sma-file-pages button')].find(b=>b.textContent==='Weiter');
+ portal.value='youtube';portal.dispatchEvent(new window.Event('change'));next().click();
+ assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 2 von 2/);
+ const routeSource=html.slice(html.indexOf('onNavigate:(key,query)=>')+'onNavigate:'.length,html.indexOf('    onOpenFile:id=>')).trim().replace(/,$/,'');
+ const visits=[];
+ const optimizer={hidden:false};
+ const navigate=require('node:vm').runInNewContext('('+routeSource+')',{
+  signedOut:false,dashboardOwnerId:'owner',ownerId:'owner',fileView:gallery,optimizerPage:optimizer,
+  findAreaNavigation:key=>({click:()=>visits.push(key)}),
+  location:{pathname:'/app/dashboard.html',search:''},
+  history:{state:{smaOptimization:true},pushState:(_state,_title,url)=>visits.push(url)},
+  showPublishing:()=>{optimizer.hidden=true;},
+  dashboardChapters:{controllers:new Map([['publishing',{select:key=>{visits.push(key);return true;}}]])}
+ });
+ assert.equal(navigate('files','KÜCHE mai'),true);
+ assert.deepEqual(visits,['files','/app/dashboard.html','files']);assert.equal(optimizer.hidden,true);
+ assert.equal(finder.value,'KÜCHE mai');assert.equal(portal.value,'all');
+ assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 1 von 3/);
+ assert.equal(document.querySelectorAll('.sma-gallery-select').length,10);
+ next().click();next().click();
+ const names=[...document.querySelectorAll('.sma-gallery-label')].map(el=>el.textContent);
+ assert.deepEqual(names,files.slice(20,24).map(file=>'▶ '+file.name));
+ assert.equal(gallery.focusSearch(),true);
+ assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 3 von 3/);
+ env.dashboardOwnerId='other';assert.equal(gallery.focusSearch('private'),false);
+ assert.equal(finder.value,'KÜCHE mai');assert.deepEqual(calls,[['sma_publication_files_v1','list']]);
+ gallery.clear();
+});

@@ -17,7 +17,7 @@ import {mountPublicationHistory} from './assets/publication-history-dashboard.mj
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=4';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=5';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=2';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -313,7 +313,14 @@ frame.addEventListener('load',()=>{
       if(key==='history-search'&&!doc.getElementById('smaHistorySearch'))return false;
       if(key==='shop-search'&&!doc.getElementById('smaShopFrame')?.contentDocument?.getElementById('smaOrderSearch'))return false;
       nav.click();
-      if(key==='files'){dashboardChapters?.controllers.get('publishing')?.select('files');fileView?.focusSearch();}
+      if(key==='files'){
+        if(optimizerPage&&!optimizerPage.hidden){
+          if(history.state?.smaOptimization)history.pushState(null,'',location.pathname+location.search);
+          showPublishing();
+        }
+        if(!dashboardChapters?.controllers.get('publishing')?.select('files'))return false;
+        return fileView.focusSearch(query);
+      }
       if(key==='history-search'){
         doc.getElementById('sma-history-tab-orders')?.click();
         const field=doc.getElementById('smaHistorySearch');
@@ -407,7 +414,18 @@ function attachFileList(doc,page){
       if(!trigger)return false;
       openOptimizer(portal,trigger);return true;
     },
-    focusSearch(){if(!disposed)finder.focus();},clear(){disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
+    focusSearch(query){
+      if(disposed||signedOut||owner!==dashboardOwnerId)return false;
+      if(typeof query==='string'){
+        finder.value=query;
+        portalFilter.value='all';
+        pageNumber=0;
+        draw();
+      }
+      finder.focus();
+      return true;
+    },
+    clear(){disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
 }
 let pending;
 let signedOut=false;
