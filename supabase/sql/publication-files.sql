@@ -188,9 +188,23 @@ begin
  end loop;
  update sma_private.publication_files_v1 set available=false where customer_id=c.id and user_id=c.user_id;
  for x in select value from jsonb_array_elements(p_files) loop
-  insert into sma_private.publication_files_v1(customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,available,verified_at,width_px,height_px,duration_ms)
+  insert into sma_private.publication_files_v1 as catalog(customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,available,verified_at,width_px,height_px,duration_ms)
   values(c.id,c.user_id,x->>'drive_file_id',x->>'name',x->>'media_kind',x->>'mime_type',x->>'revision',(x->>'modified_at')::timestamptz,(x->>'size_bytes')::bigint,true,now(),(x->>'width_px')::integer,(x->>'height_px')::integer,(x->>'duration_ms')::bigint)
-  on conflict(customer_id,drive_file_id) do update set name=excluded.name,media_kind=excluded.media_kind,mime_type=excluded.mime_type,revision=excluded.revision,modified_at=excluded.modified_at,size_bytes=excluded.size_bytes,available=true,verified_at=now(),width_px=excluded.width_px,height_px=excluded.height_px,duration_ms=excluded.duration_ms;
+  on conflict(customer_id,drive_file_id) do update set name=excluded.name,media_kind=excluded.media_kind,mime_type=excluded.mime_type,revision=excluded.revision,modified_at=excluded.modified_at,size_bytes=excluded.size_bytes,available=true,verified_at=now(),(width_px,height_px,duration_ms) = (
+    select coalesce(excluded.width_px, case when same_source then catalog.width_px end),
+           coalesce(excluded.height_px, case when same_source then catalog.height_px end),
+           coalesce(excluded.duration_ms, case when same_source then catalog.duration_ms end)
+    from (select catalog.user_id = excluded.user_id
+      and catalog.revision = excluded.revision
+      and catalog.revision ~ '^sha256:[0-9a-f]{64}:[0-9]{1,30}$'
+      and catalog.size_bytes = excluded.size_bytes
+      and catalog.mime_type = excluded.mime_type
+      and catalog.media_kind = excluded.media_kind
+      and (catalog.width_px is null or excluded.width_px is null or catalog.width_px = excluded.width_px)
+      and (catalog.height_px is null or excluded.height_px is null or catalog.height_px = excluded.height_px)
+      and (catalog.duration_ms is null or excluded.duration_ms is null or catalog.duration_ms = excluded.duration_ms)
+     as same_source) as identity_check
+   );
  end loop;
  update sma_private.publication_file_sync_v1 set lease_until=null,lease_id=null,finished_at=now() where user_id=c.user_id;
  return jsonb_build_object('ok',true,'count',jsonb_array_length(p_files));
