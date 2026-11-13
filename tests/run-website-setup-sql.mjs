@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
+import {verifyDomainLifecycle} from './sql-runtime/customer-domain-lifecycle.mjs';
 const db=new PGlite();let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
 const uid='ab660000-0000-4000-8000-000000000091',other='ab660000-0000-4000-8000-000000000092';
@@ -51,6 +52,16 @@ try{
  eq((await user('get')).job.phase,'active');eq((await worker('claim',{token})).job,null);
  eq((await db.query('select published is null as private,revision from sma_private.customer_websites_v1 where customer_id=91')).rows[0],{private:true,revision:1});
  eq((await db.query('select public.sma_website_origin_v1($1,$2) as yes',[start.job.hostname,site.site_id])).rows[0].yes,true);
+ await db.exec('begin');
+ try {
+  await verifyDomainLifecycle({
+   db, owner:uid, hostname:start.job.hostname, siteId:site.site_id, profile,
+   repeatSetup:async()=>eq((await user('start')).job.id,start.job.id)
+  });
+  console.log('Customer domain publication lifecycle passed with anonymous SQL reads and the public renderer.');
+ } finally {
+  await db.exec('rollback');
+ }
  // A fixture publication remains local; test address withdrawal for browser reads.
  await db.exec('update sma_private.customer_websites_v1 set published=draft where customer_id=91');
  await db.query("select set_config('request.headers',$1,false)",[JSON.stringify({origin:'https://'+start.job.hostname})]);
