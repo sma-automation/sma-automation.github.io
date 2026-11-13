@@ -4,7 +4,7 @@ import {filterDashboardFiles} from './dashboard-file-search.mjs';
 const normalize=x=>String(x??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('de').trim();
 export const sectionCatalog=Object.freeze([
  {key:'overview',label:'Übersicht',hint:'Dashboard Start'},
- {key:'publishing',label:'Veröffentlichung',hint:'Portale und Beiträge'},
+ {key:'publishing',label:'Veröffentlichung',hint:'Beiträge vorbereiten'},
  {key:'files',label:'Meine Dateien',hint:'Dateien suchen und bearbeiten'},
  {key:'history',label:'History & Aufträge',hint:'Aufträge Bearbeiten Analyse'},
  {key:'social',label:'Social Media',hint:'YouTube TikTok Instagram Facebook'},
@@ -15,7 +15,10 @@ export const sectionCatalog=Object.freeze([
  {key:'settings',label:'Einstellungen',hint:'Kundenkonto Paket'},
  {key:'tutorials',label:'Tutorials',hint:'Hilfe Anleitungen'},
  {key:'seller',label:'Verkäufer',hint:'Verkauf Beratung'},
- {key:'assistant',label:'Assistent',hint:'24/7 Assistent'}
+ {key:'assistant',label:'Assistent',hint:'24/7 Assistent'},
+ {key:'portals',label:'Portale',hint:'Veröffentlichung · Portal auswählen',page:'publishing'},
+ {key:'approval-status',label:'Freigabestatus der Aufträge',hint:'History · Gespeicherte Kundenfreigabe und Auftragsstatus ansehen',page:'history',historyView:'orders'},
+ {key:'saved-texts',label:'Gespeicherte Beitragstexte',hint:'History · Portaltexte und frühere Textvarianten ansehen',page:'history',historyView:'texts'}
 ]);
 export function canSearchHistory(value){
  const q=typeof value==='string'?value.trim():'';
@@ -90,7 +93,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   results.replaceChildren();
   const query=input.value.trim(),areas=getAreas();
   const found=quickFindMatches(query,areas,getFiles());
-  for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key));
+  for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page);
   for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
   if(found.fileCount>found.files.length&&Array.isArray(areas)&&areas.some(a=>a.key==='files')){
    item('Alle '+found.fileCount+' Dateien anzeigen','Gefilterte Galerie öffnen',()=>onNavigate('files',query),false);

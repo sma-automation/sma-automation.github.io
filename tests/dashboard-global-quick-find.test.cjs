@@ -37,6 +37,27 @@ async function fixture({areas=['overview','files','publishing'],fileState='ready
  return {doc,window,view,calls,get:id=>doc.getElementById(id),setFileStatus:s=>{fileStatus=s;},setFiles:f=>{fileList=f;}};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
+test('task names point to their available chapters and never offer hidden history views',async()=>{
+ const {quickFindMatches,sectionCatalog}=await imported;
+ for(const [query,key] of [['Freigabe','approval-status'],['Portaltexte','saved-texts'],['Textvarianten','saved-texts'],['Portale','portals']]){
+  const matches=quickFindMatches(query,sectionCatalog,[]).areas;
+  assert.deepEqual(matches.map(area=>area.key),[key]);
+  const f=await fixture({areas:[key]});
+  f.view.show();
+  const input=f.get('smaQuickFindInput');
+  input.value=query;input.dispatchEvent(new f.window.Event('input'));
+  f.get('smaQuickFindResults').querySelector('button').click();await tick();
+  assert.deepEqual(f.calls,['section:'+key]);
+  assert.equal(f.get('smaQuickFindDialog').hidden,true);
+  f.view.destroy();
+ }
+ const limited=await fixture({areas:['overview']});
+ limited.view.show();
+ const input=limited.get('smaQuickFindInput');
+ input.value='Freigabe';input.dispatchEvent(new limited.window.Event('input'));
+ assert.equal(limited.get('smaQuickFindResults').children.length,0);
+ limited.view.destroy();
+});
 test('global search opens in same dashboard and finds a file via typed filename',async()=>{
  const f=await fixture();
  assert(f.view);

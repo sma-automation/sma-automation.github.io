@@ -100,6 +100,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  const optimizer={hidden:false};
  const navigate=require('node:vm').runInNewContext('('+routeSource+')',{
   signedOut:false,dashboardOwnerId:'owner',ownerId:'owner',fileView:gallery,optimizerPage:optimizer,
+  sectionCatalog:(await import('../app/assets/dashboard-quick-find.mjs')).sectionCatalog,
   findAreaNavigation:key=>({click:()=>visits.push(key)}),
   location:{pathname:'/app/dashboard.html',search:''},
   history:{state:{smaOptimization:true},pushState:(_state,_title,url)=>visits.push(url)},
@@ -116,6 +117,10 @@ test('gallery receives the global query, resets the portal and opens the first f
  assert.deepEqual(names,files.slice(20,24).map(file=>'▶ '+file.name));
  assert.equal(gallery.focusSearch(),true);
  assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 3 von 3/);
+ optimizer.hidden=false;visits.length=0;
+ assert.equal(navigate('portals'),true);
+ assert.deepEqual(visits,['publishing','/app/dashboard.html','portals']);
+ assert.equal(optimizer.hidden,true);
  env.dashboardOwnerId='other';assert.equal(gallery.focusSearch('private'),false);
  assert.equal(finder.value,'KÜCHE mai');assert.deepEqual(calls,[['sma_publication_files_v1','list']]);
  gallery.clear();

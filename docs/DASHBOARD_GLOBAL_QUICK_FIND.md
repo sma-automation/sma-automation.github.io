@@ -121,3 +121,16 @@ Bei mehr als zehn Dateitreffern führt „Alle … Dateien anzeigen“ zur Galer
 Veröffentlichung → Dateien. Die Galerie übernimmt den Suchbegriff, startet auf Seite eins
 und zeigt Ergebnisse aus allen Portalen. Die direkte Trefferzahl zählt auch die Dateien
 auf den weiteren Seiten. Eine einzelne Datei lässt sich weiterhin direkt im Portal öffnen.
+
+## Direkt zu Freigabestatus, Beitragstexten und Portalen
+
+| Suchbegriff | Treffer | Geöffnetes Kapitel |
+| --- | --- | --- |
+| Freigabe | Freigabestatus der Aufträge | History → Aufträge mit dem gespeicherten Status |
+| Portaltexte oder Textvarianten | Gespeicherte Beitragstexte | History → Bearbeiten → Beitragstexte |
+| Portale | Portale | Veröffentlichung → Portale |
+
+Der Klick öffnet die jeweilige Ansicht im angemeldeten Konto. Eine Freigabe wird
+dadurch weder erteilt noch verlängert. Beim Wechsel zu den Aufträgen wird ein
+alter Suchfilter im Auftragsfenster geleert. Das ausgewählte Kapitel „Portale“
+öffnet sich auch dann, wenn zuletzt „Dateien“ oder der Optimierer aktiv war.
