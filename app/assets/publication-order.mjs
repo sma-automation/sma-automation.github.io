@@ -114,6 +114,12 @@ function recordedApproval(row){
     Number.isFinite(Date.parse(row.approved_at));
 }
 
+export function checkedHistoryOrder(row){
+  return row?.state==='checked'&&recordedApproval(row)&&row.can_upload===false&&row.can_publish===false&&
+    row.approval_token===null&&row.approval_review!=null&&!!row.target?.id&&
+    ['youtube','tiktok'].includes(row.target.platform)&&row.target.platform===row.binding?.platform;
+}
+
 function validatedOrder(result,id){
   if(result?.ok!==true||result.id!==id||result.can_upload!==false||result.can_publish!==false||
      !['preparing','prepared','approved','checking','blocked','checked','cancelled'].includes(result.state))throw Error(orderError());
@@ -437,10 +443,12 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     approve.hidden=r.state!=='prepared';
   }
   function resumePrepared(previous){
-    if(previous.approved_at!==null||previous.check_error||preparationEnded(previous)||
-       previous.can_upload!==false||previous.can_publish!==false)return false;
-    if(!pendingTarget(previous)&&(previous.state!=='prepared'||previous.approval_window?.status!=='active'||
-       !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
+    if(previous.check_error||previous.can_upload!==false||previous.can_publish!==false)return false;
+    if(!checkedHistoryOrder(previous)){
+      if(previous.approved_at!==null||preparationEnded(previous))return false;
+      if(!pendingTarget(previous)&&(previous.state!=='prepared'||previous.approval_window?.status!=='active'||
+         !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
+    }
     context=getContext();
     if(!matchesPost(previous.draft))return false;
     showOrder(previous);

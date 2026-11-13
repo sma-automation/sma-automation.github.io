@@ -11,7 +11,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=23';
-import {installOrderReview} from './publication-order.mjs?v=24';
+import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=25';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -711,11 +711,12 @@ async function readHistoryOrder(id,currentPost=false){
      order.approved_at!==null||order.approval_token!==null||order.approval_review!=null||
      (order.state==='prepared'&&order.preparation_window!=null))throw Object.assign(Error(unavailable),{code:'ORDER_UNAVAILABLE'});
  }
- const allowedState=currentPost
+ const transferView=params.get('view')==='transfer';
+ const allowedState=transferView ? params.get('resume')==='1'&&checkedHistoryOrder(order) : currentPost
   ? order?.state==='cancelled'&&order.approved_at===null&&order.approval_token===null&&order.approval_review==null
     &&order.approval_window==null&&order.preparation_window==null&&['youtube','tiktok'].includes(selectedPortal)
   : ['preparing','prepared'].includes(order?.state);
- if(order?.ok!==true||order.id!==id||!allowedState||order.approved_at!=null||
+ if(order?.ok!==true||order.id!==id||!allowedState||(!transferView&&order.approved_at!=null)||
     order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!orderUuid.test(binding.asset_id)||
     !orderUuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Object.assign(Error(unavailable),{code:'ORDER_UNAVAILABLE'});

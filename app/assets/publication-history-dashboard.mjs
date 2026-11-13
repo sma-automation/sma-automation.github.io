@@ -160,7 +160,10 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    const supportsCurrentPost=['youtube','tiktok'].includes(entry.platform);
    const currentPost=entry.status==='cancelled'&&supportsCurrentPost;
    const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
-   if(window||currentPost){
+   if(entry.status==='checked'&&supportsCurrentPost){
+    previewLink=create('a','Geprüften Auftrag öffnen','sma-history-preview-link');
+    previewLink.href=previewUrl+'&view=transfer&resume=1';previewLink.target='_top';
+   }else if(window||currentPost){
     previewLink=create('a',currentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen','sma-history-preview-link');
     previewLink.href=currentPost?previewUrl+'&view=current':previewUrl;previewLink.target='_top';
    }
