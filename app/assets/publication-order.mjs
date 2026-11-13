@@ -109,7 +109,7 @@ function sameAccountTerms(saved,current){
 
 const orderIdPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 function recordedApproval(row){
-  return typeof row.id==='string'&&orderIdPattern.test(row.id)&&['approved','checking','checked','blocked'].includes(row.state)&&
+  return typeof row?.id==='string'&&orderIdPattern.test(row.id)&&['approved','checking','checked','blocked'].includes(row.state)&&
     typeof row.approved_at==='string'&&/^20\d{2}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d\d:\d\d)$/.test(row.approved_at)&&
     Number.isFinite(Date.parse(row.approved_at));
 }
@@ -190,7 +190,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,readTransferStatus,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -322,6 +322,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);
     checkTarget.hidden=!pendingTarget(order)||locked;
     checkTarget.disabled=value||checkTarget.hidden||!!order?.check_error;
+    statusButton.textContent=!recovery&&recordedApproval(order)?'Auftrag prüfen und fortsetzen':'Status erneut laden';
     statusButton.disabled=value;approve.disabled=value||order?.state!=='prepared'||locked||!consent.checked||!reviewReady();
     if(locked){
       consent.checked=false;humanEnabled.checked=false;
@@ -344,6 +345,27 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function appendApprovalReceipt(row){
     const when=new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(row.approved_at));
     details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),historyLink(row.id,'Freigegebenen Auftrag in der History öffnen'));
+  }
+  function appendTransferStatus(row){
+    const message=make('p'),reload=make('button','Übertragungsstand aktualisieren');
+    message.setAttribute('role','status');
+    reload.type='button';reload.className='secondary';
+    details.append(message,reload);
+    async function load(){
+      if(reload.disabled||!dialog.open||order!==row)return;
+      reload.disabled=true;
+      message.textContent='Der gespeicherte Übertragungsstand wird geladen …';
+      try{
+        const text=await readTransferStatus(row.id,row.binding.platform);
+        if(dialog.open&&order===row)message.textContent=text;
+      }catch{
+        if(dialog.open&&order===row)message.textContent='Der Übertragungsstand konnte nicht geladen werden.';
+      }finally{
+        reload.disabled=false;
+      }
+    }
+    reload.addEventListener('click',load);
+    void load();
   }
   function showDuplicate(row,targetId){
     // The journal identifies duplicate approvals by file version, platform and target.
@@ -405,7 +427,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     else if(pendingTarget(r))notice.textContent='Die Einstellungen sind gespeichert. Prüfe das Zielkonto, um diesen Auftrag weiter vorzubereiten.';
     else notice.textContent='Die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
-    if(recordedApproval(r))appendApprovalReceipt(r);
+    if(recordedApproval(r)){
+      if(r.state==='checked'&&readTransferStatus)appendTransferStatus(r);
+      appendApprovalReceipt(r);
+    }
     if(r.state==='cancelled'&&r.approved_at===null&&orderIdPattern.test(r.id)){
       details.append(historyLink(r.id,'Abgebrochenen Auftrag in der History öffnen'));
     }

@@ -11,7 +11,9 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=23';
-import {installOrderReview} from './publication-order.mjs?v=23';
+import {installOrderReview} from './publication-order.mjs?v=24';
+import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
+import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -678,6 +680,16 @@ if(workspace&&orderUuid.test(params.get('order'))){
 }
 const readStoredOrder=id=>storedOrderRequest('get',id);
 const cancelStoredOrder=id=>storedOrderRequest('cancel',id);
+async function readTransferStatus(id,platform){
+ if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
+ const {data,error}=await supabase.rpc('sma_publication_history_order_page_v1',{p_order_id:id})
+  .abortSignal(AbortSignal.timeout(15000));
+ if(error||signedOut||(await session()).user.id!==previewOwnerId)throw Error('HISTORY_UNAVAILABLE');
+ const entry=readPublicationCoverHistory(data).entries.find(row=>row.id===id&&row.platform===platform);
+ if(!entry)throw Error('HISTORY_UNAVAILABLE');
+ if(entry.status==='checked')return 'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.';
+ return historyStatuses[entry.status][0]+'. '+historyStatuses[entry.status][1];
+}
 async function storedOrderRequest(action,id){
  if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
  const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:action,p_input:{id}})
@@ -1602,7 +1614,7 @@ async function saveDraft(){
 }
 $('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
-if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
+if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
  getContext:()=>{
   if(signedOut)throw Error(messages.AUTH_REQUIRED);
   if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');

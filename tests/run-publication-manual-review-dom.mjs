@@ -5,7 +5,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube',post={title:'Synthetic title',caption:'Synthetic caption'},verifySavedDraft=async()=>{},onOutdatedDraft,accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,refresh=async()=>{}}={}){
+function fixture({option=true,platform='youtube',post={title:'Synthetic title',caption:'Synthetic caption'},verifySavedDraft=async()=>{},onOutdatedDraft,accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,readTransferStatus,refresh=async()=>{}}={}){
  const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
@@ -34,7 +34,7 @@ function fixture({option=true,platform='youtube',post={title:'Synthetic title',c
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
  const cancellations=[];
- const view=scope.install(doc,{host:doc.body,portalName:platform,cancelStoredOrder:async id=>{
+ const view=scope.install(doc,{host:doc.body,portalName:platform,readTransferStatus,cancelStoredOrder:async id=>{
   cancellations.push(id);
   return cancelResponse(id,savedPreparation);
  },readStoredOrder:async id=>{
@@ -137,6 +137,27 @@ const timeout=()=>{throw Object.assign(new Error('timed out'),{code:23});};
 const savedId='ab660000-0000-4000-9000-000000000010';
 const authorize=async t=>{await t.open();t.ready();await t.approve.handlers.click();};
 const notice=t=>t.doc.querySelector('[aria-live="polite"]').textContent;
+for(const platform of ['youtube','tiktok']){
+ let readCount=0,finish;
+ const t=fixture({platform,approvalResponse:timeout,storedResponse:(_,row)=>({...row,state:'checked'}),
+  readTransferStatus:async(id,target)=>{
+   eq(id,savedId);eq(target,platform);readCount++;
+   if(readCount===1)return 'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.';
+   if(readCount===2)throw Error('unavailable');
+   return new Promise(resolve=>{finish=resolve;});
+  }});
+ await authorize(t);
+ const reload=[...t.doc.querySelectorAll('button')].find(b=>b.textContent==='Übertragungsstand aktualisieren');
+ assert.match(t.doc.body.textContent,/noch kein Übertragungsversuch gespeichert/);
+ eq(t.status.textContent,'Auftrag prüfen und fortsetzen');
+ await reload.handlers.click();
+ assert.match(t.doc.body.textContent,/Übertragungsstand konnte nicht geladen werden/);
+ assert.doesNotMatch(t.doc.body.textContent,/noch kein Übertragungsversuch gespeichert/);
+ const pending=reload.handlers.click();await reload.handlers.click();eq(readCount,3);
+ t.view.clear();finish('Veraltete Rückmeldung');await pending;
+ assert.doesNotMatch(t.doc.body.textContent,/Veraltete Rückmeldung/);
+ eq(t.requests.map(r=>r.action),['account','prepare','approve']);
+}
 for(const platform of ['youtube','tiktok']){
  for(const approvalResponse of [timeout,()=>({ok:true,json:async()=>{throw Error('Truncated JSON');}}),
   ()=>({ok:true,json:async()=>({ok:true,id:'wrong',state:'approved'})}),
