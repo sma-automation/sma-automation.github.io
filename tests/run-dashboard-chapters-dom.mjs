@@ -10,7 +10,7 @@ const grid=(...cards)=>`<div class="grid">${cards.join('')}</div>`;
 const head=name=>`<div class="page-head"><h1>${name}</h1><p>Introduction</p></div>`;
 const page=(name,body)=>`<section id="page-${name}">${head(name)}${body}</section>`;
 const feature='<div class="interface-list package-feature-list">Existing features</div>';
-function fixture(){
+function fixture(onPreparePost){
  const html=[
   page('overview',grid(...['social-summary','content-summary','account-summary','plan-summary'].map(id=>card(id)))),
   page('publishing',card('portals','<button id="optimize">Optimieren</button>')+head('Dateien')+'<div id="publishingFilesSlot"><input id="file-query"></div><section id="smaOptimizationPage" hidden>Native optimizer</section>'),
@@ -41,7 +41,7 @@ function fixture(){
  }
  replaceShop();
  const original=[...doc.querySelectorAll('[id]')].map(el=>[el,el.parentNode]);
- const view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css',websiteView});
+ const view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css',websiteView,onPreparePost});
  return {doc,window,$,view,calls,input,historyTabs,websiteView,original,frame,shopLoads,replaceShop,get shopDoc(){return shopDoc;},get actions(){return actions;},destroy(){view.destroy();historyTabs.destroy();websiteView.destroy();}};
 }
 await test('all twelve dashboard areas have tabs directly after their original heading',()=>{
@@ -49,6 +49,20 @@ await test('all twelve dashboard areas have tabs directly after their original h
  for(const root of f.doc.querySelectorAll('[data-sma-chapters]')){const nav=root.querySelector('.sma-chapters');assert.equal(nav.previousElementSibling.tagName,'H1');assert.equal(nav.querySelectorAll('[aria-selected=true]').length,1);}
  for(const [name,tabs] of f.view.controllers){for(const entry of tabs.entries){entry.button.click();assert.equal(tabs.selected,entry.key);if(entry.panel){assert.equal(entry.panel.hidden,false);assert.equal(tabs.entries.filter(e=>e.panel&&!e.panel.hidden).length,1);}}}
  f.destroy();
+});
+await test('workspace starts post preparation and the account panel has no duplicate entry',()=>{
+ let starts=0;
+ const f=fixture(()=>starts++);
+ const panel=f.$('#sma-overview-panel-work'),button=panel.firstElementChild;
+ assert.equal(button.tagName,'BUTTON');
+ assert.equal(button.type,'button');
+ assert.equal(button.textContent,'Beitrag vorbereiten');
+ assert.equal(button.dataset.en,'Prepare a post');
+ assert.equal(f.$('#sma-overview-panel-account .sma-prepare-post'),null);
+ button.click();assert.equal(starts,1);
+ f.view.controllers.get('overview').select('account');assert.equal(panel.hidden,true);
+ f.destroy();button.click();assert.equal(starts,1);
+ const unavailable=fixture();assert.equal(unavailable.$('.sma-prepare-post'),null);unavailable.destroy();
 });
 await test('keeps the large content heading ahead of the tabs when the shell title changes',async()=>{
  const f=fixture(), title=f.$('.topbar-title');
