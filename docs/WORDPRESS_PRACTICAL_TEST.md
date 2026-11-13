@@ -8,6 +8,10 @@ Der produktive SMA-Kundenbereich hat auf einer isolierten WPSandbox-Testseite f�
 
 Die angemeldete WordPress-Vorschau und der öffentliche SMA-Testshop zeigten dieselben drei Artikel. Geprüft wurden Namen, Preise (9,90 €, 39,90 €, 34,90 €), Verfügbarkeit und Bilddarstellung (ein Platzhalter und zwei Produktbilder). Der anonyme Abruf der Entwurfsseite über die WordPress-REST-API ergab HTTP 401 mit `rest_forbidden`. Nach der Prüfung wurden beide Testfreigaben getrennt. Es blieben null Tickets, null aktive Verbindungen, null laufende Aufträge und ein gespeicherter Abschluss. Der Screenshot der Vorschau wurde vor dem Trennen gesichert.
 
+### Mobiler Katalog
+
+Der Browser-Test lädt den Katalog im eingebetteten Fenster bei 320, 360, 390 und 430 CSS-Pixeln Bildschirmbreite. Er prüft drei Produktnamen, Preise und Verfügbarkeiten auf Überlauf. In jeder Größe öffnet eine simulierte Berührung des Produktnamens die zugehörige Shop-Detailseite. Auch das Aktualisieren und der Link zum gesamten Shop werden ausgeführt. Die Oberfläche lädt im Test dieselben Dateien wie im Betrieb, die Produktantworten kommen aus einem festen Testbestand. Der Workflow „Dashboard chapter navigation checks“ führt den Test mit Chrome aus.
+
 ### Wie SMA die REST-Adresse auswählt
 
 Die WordPress-Routenübersicht der Testseite nannte ihre `wp-json/sma-bridge/v1/command`-Adresse als eigenen Endpunkt. Aus dem SMA-Projekt antwortete dieser auf einen leeren, unsignierten POST mit der erwarteten Plugin-Antwort `403 sma_not_authorized`. Derselbe Aufruf über die Query-Adresse lieferte die Zugangscode-Seite des Hosters als HTML. Der produktive signierte Lese- und Schreibaufruf gelang über die vom Plugin bestätigte REST-Adresse.
