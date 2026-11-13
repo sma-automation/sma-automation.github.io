@@ -41,6 +41,25 @@ sechs davon als Test. Am 13.11.2026 zeigte der Shopify-Admin unter
 und „Akzeptiert nur Testzahlungen“. Für diesen Abgleich wurde keine Bestellung
 angelegt. Die SQL-Abfrage liest diese externe Einstellung nicht.
 
+**Kundenwebseite.** Die automatisch eingerichtete SMA-Unteradresse gehört weiterhin
+zum gespeicherten privaten Testentwurf. Der Einrichtungsauftrag ist aktiv. Am
+13.11.2026 zeigte der Browser beim Aufruf über HTTPS „Diese Webseite ist derzeit
+nicht verfügbar.“ Der anonyme Inhaltsabruf lieferte ausschließlich
+`{"ok":false,"code":"NOT_AVAILABLE"}`. Der Startcheck zählt im Feld
+`websites.connections` externe Providerverbindungen. Die SMA-Unteradresse
+wurde anhand des Einrichtungsauftrags und der registrierten Adresse geprüft.
+
+Die isolierte Prüfung mit fiktiver Firma führt denselben Webseitenablauf über die
+Besitzer-RPC, die anonyme Inhaltsabfrage und den öffentlichen Renderer aus. Eine
+veröffentlichte Überschrift und Firmenadresse bleiben sichtbar, während der
+Kunde den Entwurf bearbeitet. Eine veraltete Firmenprofilrevision wird bei der
+Veröffentlichung abgewiesen. Nach der nächsten gültigen Veröffentlichung erscheinen
+die neuen Angaben. Nach der Rücknahme ist der Inhalt beim erneuten Aufruf verborgen.
+Entwurf und Adresse bleiben erhalten. Reproduzierbar mit
+`node tests/run-website-setup-sql.mjs` nach Installation der Testabhängigkeiten
+in `tests/sql-runtime` und `tests/dom-runtime`. Der externe WordPress-Test steht
+weiterhin aus. [Früherer Live-Durchlauf der SMA-Unteradresse](CUSTOMER_WEBSITE_AUTOMATION.md).
+
 ## Historische Momentaufnahme vom 11.11.2026
 
 | Bereich | Beobachtung | Konsequenz |
