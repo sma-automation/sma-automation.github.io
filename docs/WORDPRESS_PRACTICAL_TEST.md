@@ -25,6 +25,29 @@ verwendet dasselbe per SHA-256 geprüfte WordPress-Archiv und eine temporäre
 MariaDB. Er läuft bei Änderungen am Plugin, am Signaturadapter oder an der
 nativen Teststrecke.
 
+## Durchgehender Test mit SMA-Ticket und verloren gegangener Antwort
+
+Der zusätzliche Lauf verwendet die SMA-Handler für Verbindung, Ticket und
+Synchronisierung, die SQL-Funktionen aus dem Repository und das unveränderte
+Plugin in WordPress mit MariaDB. Ein fiktiver Kunde mit Testshop startet die
+Freigabe. Das WordPress-Formular und sein Administratorhandler holen das Ticket
+jeweils über eine lokale HTTP-Verbindung ab. SMA bestätigt die Verbindung durch
+einen signierten Leseaufruf. Bis dahin existiert keine Produktseite.
+
+Beim ersten Synchronisieren speichert WordPress die Seite „Produkte“ als Entwurf.
+Die Teststrecke verwirft die erfolgreiche Antwort an SMA. Der Auftrag ist in SMA
+zur Wiederholung vorgemerkt, während die Seite in WordPress bereits existiert.
+Nach der regulären Wartefrist verwendet SMA dieselbe Auftragskennung und
+Ausgangsrevision. SMA und WordPress melden dieselbe Seiten-ID und Revision 1.
+Ein erneuter Statusabruf und ein weiterer Klick liefern den gespeicherten
+Abschluss ohne weiteren Schreibaufruf. In MariaDB bleibt genau ein Produktentwurf.
+
+Die Testidentität ersetzt die echte Benutzeranmeldung. Das PostgreSQL-System
+läuft lokal mit PGlite und einem Vault-Testadapter. Der Ticketabruf verwendet
+Loopback, die signierten Befehle laufen durch den nativen WordPress-REST-Dispatcher.
+Öffentliches HTTPS, Supabase Auth und eine freigegebene externe Plugin-Installation
+gehören zur noch offenen Live-Abnahme.
+
 ## Externer WordPress-Smoke-Test ohne Hostingbuchung – 10. November 2026
 
 Eine isolierte, automatisch ablaufende Gratis-Sandbox bei WPSandbox wurde
@@ -96,7 +119,7 @@ Dies ist noch keine externe Ende-zu-Ende-Abnahme. Die lokale Freigabe verwendet 
 | Privater Entwurf | Anonyme WordPress-REST-Abfrage abgewiesen; keine veröffentlichten Testinhalte |
 | Ungeeignete Tabellen und Widerruf | MyISAM wird abgewiesen; Deaktivierung entfernt den Prüfschlüssel; Reaktivierung verlangt neue Freigabe |
 
-Der Lauf benutzt keinen HTTP-Webserver. Standardmäßig spricht MariaDB nur über einen Unix-Socket. Da die verwendete Arbeitsumgebung keine Unix-Sockets unterstützt, lief die Abnahme über einen zufälligen Port ausschließlich an `127.0.0.1` mit einem temporären Passwort. WordPress-HTTP-Anfragen, E-Mail, Cron und automatische Updates sind im isolierten Test deaktiviert. Schlüssel entstehen neu; der private Signierschlüssel bleibt im Node-Prozess. Temporäre Installation und Datenbank werden nach dem Lauf entfernt.
+Der ursprüngliche Lauf vom 4. November benutzt keinen HTTP-Webserver. Standardmäßig spricht MariaDB nur über einen Unix-Socket. Da die verwendete Arbeitsumgebung keine Unix-Sockets unterstützt, lief die Abnahme über einen zufälligen Port ausschließlich an `127.0.0.1` mit einem temporären Passwort. WordPress-HTTP-Anfragen, E-Mail, Cron und automatische Updates sind im isolierten Test deaktiviert. Schlüssel entstehen neu; der private Signierschlüssel bleibt im Node-Prozess. Temporäre Installation und Datenbank werden nach dem Lauf entfernt.
 
 Die WordPress-REST-Aufrufe erfolgen innerhalb echter PHP-Prozesse mit gesetztem HTTPS-Kontext; daraus wird **kein TLS-Nachweis** abgeleitet. Der Katalog-Frame wird als HTML geprüft, nicht in einem Browser geladen. Externe Plugin-Nebenwirkungen wie E-Mail/Webhooks, persistente Objektcaches, zusätzliche Themes und andere Datenbankversionen sind nicht pauschal abgenommen.
 
@@ -113,6 +136,7 @@ sma_wp_source="$(mktemp -d)"
 curl -fsSL https://wordpress.org/wordpress-7.1.4.tar.gz -o "$sma_wp_source/wordpress.tar.gz"
 printf '%s  %s\n' '881e53a4681ff2cd911651b11cccdede5ae477ddf0765af5d6a1a8b219a1d835' "$sma_wp_source/wordpress.tar.gz" | sha256sum -c -
 tar -xzf "$sma_wp_source/wordpress.tar.gz" -C "$sma_wp_source"
+npm ci --prefix tests/sql-runtime --ignore-scripts
 node tests/run-wordpress-real.mjs --wordpress="$sma_wp_source/wordpress"
 ```
 

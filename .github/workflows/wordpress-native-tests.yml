@@ -5,6 +5,15 @@ on:
     paths: &wordpress_paths
       - wordpress/sma-bridge/**
       - supabase/functions/_shared/wordpress-bridge.mjs
+      - supabase/functions/sma-wordpress-connect/**
+      - supabase/functions/sma-wordpress-ticket/**
+      - supabase/functions/sma-wordpress-sync/**
+      - supabase/functions/_shared/wordpress-transport.mjs
+      - supabase/sql/wordpress-*.sql
+      - supabase/sql/website-*.sql
+      - tests/sql-runtime/wordpress-fixture.mjs
+      - tests/sql-runtime/vault-test-double.sql
+      - tests/sql-runtime/package*.json
       - tests/run-wordpress-real.mjs
       - tests/wordpress-real/**
       - .github/workflows/wordpress-native-tests.yml
@@ -28,6 +37,8 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends mariadb-server-core mariadb-client-core php8.3-cli php8.3-mysql
           php8.3 -r 'exit(extension_loaded("mysqli") && extension_loaded("openssl") ? 0 : 1);'
+      - name: Install pinned PostgreSQL test runtime
+        run: npm ci --prefix tests/sql-runtime --ignore-scripts
       - name: Run native WordPress test
         env:
           SMA_TEST_PHP: php8.3

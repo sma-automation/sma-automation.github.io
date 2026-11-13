@@ -12,8 +12,20 @@ add_filter('pre_http_request', function ($pre, $args, $url) use ($ticket, $input
         return $pre; // The fixture's isolation plugin blocks every other HTTP request.
     }
     $ticket_reads++;
+    if (isset($input['ticket_port'])) {
+        $port = $input['ticket_port'];
+        if (!is_int($port) || $port < 1 || $port > 65535) throw new RuntimeException('Expected local ticket port');
+        $context = stream_context_create(['http' => [
+            'method' => 'POST', 'header' => "Content-Type: application/json\r\n",
+            'content' => $args['body'], 'timeout' => 5, 'follow_location' => 0,
+        ]]);
+        $body = file_get_contents('http://127.0.0.1:'.$port.'/ticket', false, $context);
+        if ($body === false) throw new RuntimeException('Local ticket handler did not return approval data');
+    } else {
+        $body = wp_json_encode($input['approval']);
+    }
     return ['headers' => [], 'response' => ['code' => 200, 'message' => 'OK'],
-            'body' => wp_json_encode($input['approval']), 'cookies' => []];
+            'body' => $body, 'cookies' => []];
 }, PHP_INT_MAX, 3);
 
 if ($input['operation'] === 'consent_form') {
@@ -34,10 +46,11 @@ if ($input['operation'] === 'consent_form') {
             $fields[$name] = $tags->get_attribute('value');
         }
     }
+    $labels = $input['ticket_labels'] ?? $input['approval'];
     if (($fields['action'] ?? '') !== 'sma_bridge_connect' || ($fields['ticket'] ?? '') !== $ticket
         || !wp_verify_nonce($fields['_wpnonce'] ?? '', 'sma_bridge_connect_'.$ticket)
-        || !str_contains($html, esc_html($input['approval']['account_label']))
-        || !str_contains($html, esc_html($input['approval']['shop_slug']))
+        || !str_contains($html, esc_html($labels['account_label']))
+        || !str_contains($html, esc_html($labels['shop_slug']))
         || $ticket_reads !== 1 || sma_bridge_store()->load() !== []) {
         throw new RuntimeException('Unexpected approval form or state');
     }
