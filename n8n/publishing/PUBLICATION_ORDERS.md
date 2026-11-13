@@ -1,5 +1,35 @@
 # Dashboard-Auftrag und gebundene Freigabe
 
+## Isolierter n8n-Lauf zum privaten YouTube-Auftrag (13.11.2026)
+
+Mit n8n **2.47.5** und dem vollständigen Verbindungsgraphen der Auftrags-API
+ließ sich der Übergabefehler aus #251 mit einem künstlichen Auftrag nachstellen.
+Der Webhook antwortete mit HTTP 200 und `checked`. Der Inhaltsabgleich lief
+durch, und „Unveränderte Auftragsantwort“ gab den geprüften Auftrag zurück.
+Trotz gültigem `get` wählte „Geprüften Providerauftrag fortsetzen?“ Ausgang 1.
+Die lokale Provider-Kontextabfrage wurde kein einziges Mal erreicht.
+
+Der Ausdruck las die authentifizierte Aktion mit
+`$('Dashboard-Anfrage prüfen').first()`. Für diesen Knoten mit getrenntem
+Erfolgs- und Fehlerausgang ist der automatisch ermittelte Ausgang an dieser
+Stelle unzuverlässig. `.first(0)` liest ausdrücklich den Erfolgsausgang.
+Nur diese Auswahl wurde in der generierten Auftrags-API geändert.
+
+Die Wiederholung mit lokalen HTTP-Antworten ergab fünf zulässige Übergaben
+mit jeweils genau einer Kontextabfrage und drei Fälle ohne Übergabe. Enthalten
+waren `get`, `approve`, ein laufender Inhaltsabgleich, HTTP-Fehler im Abgleich
+und beim Lesen des Providerkontexts sowie gesperrte Kombinationen von Status und Aktion.
+Der Test prüft den tatsächlichen Webhook, die n8n-Knotenausgänge, die
+Unterworkflow-Ausführungen und die Reihenfolge der lokalen HTTP-Anfragen.
+
+Wiederholbar auf Linux mit Python 3 und installiertem n8n 2.47.5 über
+`python3 tests/run-publication-handoff-n8n.py`, optional mit `SMA_N8N_BIN`
+als Pfad zur ausführbaren Datei. Der Test startet eine eigene n8n-Instanz mit
+temporärer SQLite-Datenbank und ausschließlich synthetischen Aufträgen.
+Der Providerzweig endet nach der lokalen Kontextabfrage. Die Übernahme in n8n Cloud,
+ein echter Providerbeleg und die separate Betreiberfreigabe bleiben offen.
+Der historische Lauf selbst hat keine gespeicherten Knotendetails.
+
 ## Aktueller Anschlussstand – 6. November 2026
 
 Die folgenden Abschnitte dokumentieren die historischen Schritte vom
