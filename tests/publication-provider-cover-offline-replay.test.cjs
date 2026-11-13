@@ -28,7 +28,8 @@ function run(name,{json={},lookups={},data=null}={}){
  const node=nodes.get(name);
  assert.equal(node?.type,'n8n-nodes-base.code','Code node not present: '+name);
  const sandbox={
-  Buffer,URL,Date,$json:json,
+  Buffer,Date,$json:json,
+  helpers:{getBinaryDataBuffer:async()=>data,prepareBinaryData:async bytes=>({size:bytes.length})},
   require:moduleName=>{
    assert.equal(moduleName,'crypto','Offline test must not load network packages');
    return crypto;
@@ -40,7 +41,7 @@ function run(name,{json={},lookups={},data=null}={}){
   $input:{first:()=>({json,binary:{data:'SYNTHETIC_IN_MEMORY'}})}
  };
  const fn=vm.runInNewContext('(async function(){\n'+node.parameters.jsCode+'\n})',sandbox,{timeout:4000});
- return fn.call({helpers:{getBinaryDataBuffer:async()=>data}}).then(items=>{
+ return fn().then(items=>{
   assert.equal(items.length,1);
   return JSON.parse(JSON.stringify(items[0].json));
  });
@@ -133,6 +134,28 @@ test('YouTube and TikTok init preserve exactly the saved owner shop CTA and prod
  // Offline result is an intended request only, never a provider receipt or post.
  assert.equal(yt.request.body.status.privacyStatus,'private');
  assert.equal(tt.request.body.source_info.source,'FILE_UPLOAD');
+});
+
+test('strict runner reads bound video bytes and preserves the resumable session',async()=>{
+ const bytes=Buffer.from('000000186674797000000000','hex');
+ const revision='sha256:'+crypto.createHash('sha256').update(bytes).digest('hex')+':10';
+ const session='https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=fixture';
+ const intent={...tiktokIntent,platform:'youtube',binding:{...binding,asset_revision:revision},
+  cover:null,operation:'upload',size_bytes:bytes.length,received_bytes:3,session_url:session,
+  session_expires_at:new Date(Date.now()+60000).toISOString()};
+ const lookups={...refs(intent),'Providerverbindung bestätigen':{json:{binding:intent.binding,token}},
+  'Provider-Dateistand bestätigen':{json:{size_bytes:bytes.length}}};
+ const verified=await run('Provider-Dateiprüfsumme bestätigen',{data:bytes,lookups});
+ assert.equal(verified.size_bytes,bytes.length);
+ await assert.rejects(run('Provider-Dateiprüfsumme bestätigen',{data:Buffer.alloc(bytes.length),lookups}),/FILE_CHANGED/);
+ const request=await run('Provideranfrage erstellen',{lookups});
+ assert.equal(request.request.url,session);
+ const remainder=await run('Provider-Dateirest auswählen',{data:bytes,lookups:{...lookups,
+  'Provider-Dateiprüfsumme bestätigen':{binary:{data:'fixture'}},'Provideranfrage erstellen':{json:request}}});
+ assert.equal(remainder.request.offset,3);
+ const observed=await run('Providerantwort auswerten',{json:{statusCode:200,headers:{location:session}},
+  lookups:refs({...intent,operation:'init'})});
+ assert.equal(observed.state,'session_ready');
 });
 
 test('actual n8n YouTube cover request uses only validated PNG and bound video ID',async()=>{

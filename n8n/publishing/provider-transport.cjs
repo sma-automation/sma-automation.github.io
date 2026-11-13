@@ -5,14 +5,29 @@ const {providerUploadPlan}=require('./provider-upload-plan.cjs');
 const {providerContext,youtubeResult,tiktokResult,youtubeTransfer,tiktokTransfer}=require('./provider-results.cjs');
 function providerSession(platform,raw){
  if(typeof raw!=='string'||raw.length>4000||/[\s\\#]/.test(raw))throw Error('PROVIDER_SESSION_INVALID');
- let u;try{u=new URL(raw);}catch{throw Error('PROVIDER_SESSION_INVALID');}
- const keys=[...u.searchParams.keys()];
- if(u.protocol!=='https:'||u.username||u.password||u.port||new Set(keys).size!==keys.length)throw Error('PROVIDER_SESSION_INVALID');
- if(platform==='youtube'){
-  if(u.hostname!=='www.googleapis.com'||u.pathname!=='/upload/youtube/v3/videos'||u.searchParams.get('uploadType')!=='resumable'||!u.searchParams.get('upload_id')||keys.some(k=>!['part','uploadType','upload_id','alt'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');
- }else if(platform==='tiktok'){
-  if(!['open-upload.tiktokapis.com','upload.us.tiktokapis.com'].includes(u.hostname)||!['/video/','/upload/'].includes(u.pathname)||!u.searchParams.get('upload_id')||!u.searchParams.get('upload_token')||keys.some(k=>!['upload_id','upload_token'].includes(k)))throw Error('PROVIDER_SESSION_INVALID');
- }else throw Error('PROVIDER_SESSION_INVALID');
+ // n8n's isolated Code runner has no global URL constructor. Match only the
+ // fixed HTTPS endpoints, then validate each decoded query parameter.
+ const split=raw.indexOf('?');
+ if(split<0||/[^\x21-\x7e]/.test(raw))throw Error('PROVIDER_SESSION_INVALID');
+ const endpoint=raw.slice(0,split),youtube=platform==='youtube';
+ const allowed=youtube?['part','uploadType','upload_id','alt']:['upload_id','upload_token'];
+ const endpoints=youtube?['https://www.googleapis.com/upload/youtube/v3/videos']:
+  ['https://open-upload.tiktokapis.com/video/','https://open-upload.tiktokapis.com/upload/',
+   'https://upload.us.tiktokapis.com/video/','https://upload.us.tiktokapis.com/upload/'];
+ if(!['youtube','tiktok'].includes(platform)||!endpoints.includes(endpoint))throw Error('PROVIDER_SESSION_INVALID');
+ const params=new Map();
+ for(const field of raw.slice(split+1).split('&')){
+  const equals=field.indexOf('=');
+  if(equals<1)throw Error('PROVIDER_SESSION_INVALID');
+  let name,value;
+  try{
+   name=decodeURIComponent(field.slice(0,equals));
+   value=decodeURIComponent(field.slice(equals+1).replace(/\+/g,' '));
+  }catch{throw Error('PROVIDER_SESSION_INVALID');}
+  if(!allowed.includes(name)||params.has(name)||/[\x00-\x1f\x7f]/.test(value))throw Error('PROVIDER_SESSION_INVALID');
+  params.set(name,value);
+ }
+ if(!params.get('upload_id')||(youtube?params.get('uploadType')!=='resumable':!params.get('upload_token')))throw Error('PROVIDER_SESSION_INVALID');
  return raw;
 }
 function providerHttp(raw){
