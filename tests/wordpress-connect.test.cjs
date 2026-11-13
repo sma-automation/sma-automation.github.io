@@ -79,3 +79,13 @@ test('changing owner or invalidating the draft discards an in-flight WordPress r
  const c=createWordpressClient({getOwnerId:async()=>uid,request:()=>new Promise(r=>{release=r;})});
  const loading=c.load(website);await new Promise(r=>setImmediate(r));c.invalidate();release({ok:true,state:'not_requested',revision:0,website_url:website,can_publish:false,can_synchronize:false});await assert.rejects(loading,{code:'AUTH_REQUIRED'});
 });
+
+test('a provider HTML page releases the verification lease without establishing a connection',async()=>{
+ const s=await setup();s.stored();
+ s.deps.probe=async()=>{throw Object.assign(new Error('private provider detail'),{code:'WORDPRESS_HTML_RESPONSE'});};
+ const result=await s.handler()(request({action:'verify',attempt_id:attempt}));
+ assert.equal(result.status,409);
+ assert.deepEqual(await result.json(),{ok:false,code:'WORDPRESS_HTML_RESPONSE'});
+ assert(s.calls.some(call=>call.name==='sma_wordpress_verify_release_v1'));
+ assert(!s.calls.some(call=>call.name==='sma_wordpress_ticket_finish_v1'));
+});

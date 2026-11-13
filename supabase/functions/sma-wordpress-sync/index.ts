@@ -3,6 +3,7 @@ import {boundedJson} from '../sma-wordpress-connect/handler.mjs';
 import {authenticate,serviceRpc} from '../sma-wordpress-connect/runtime.ts';
 import {createWordpressTransport,readWordpressDns} from '../_shared/wordpress-transport.mjs';
 const probe=createWordpressTransport({
+ onFailure:(facts:{stage:string;kind:string;status?:string})=>console.warn('wordpress_transport',JSON.stringify(facts)),
  allowBridgeErrors:true,
  resolve:async(host:string)=>{
   const url=new URL('https://dns.google/resolve');url.search=new URLSearchParams({name:host,type:'A',cd:'false',edns_client_subnet:'0.0.0.0/0'}).toString();

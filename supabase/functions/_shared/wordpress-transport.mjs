@@ -27,64 +27,87 @@ export function readWordpressDns(data,hostname){
  if(ips.length<1||ips.length>16||!ips.every(publicIPv4))error('TARGET_REJECTED');return ips;
 }
 export function parseWordpressHttp(bytes,{allowBridgeErrors=false}={}){
- if(!(bytes instanceof Uint8Array)||bytes.length>32768)error('PROVIDER_UNAVAILABLE');
+ const invalid=reason=>{throw Object.assign(new Error('PROVIDER_UNAVAILABLE'),{code:'PROVIDER_UNAVAILABLE',responseReason:reason});};
+ if(!(bytes instanceof Uint8Array)||bytes.length>32768)invalid('size');
  const latin=new TextDecoder('latin1').decode(bytes),cut=latin.indexOf('\r\n\r\n');
- if(cut<0||cut>8192)error('PROVIDER_UNAVAILABLE');
+ if(cut<0||cut>8192)invalid('headers');
  const lines=latin.slice(0,cut).split('\r\n');
  const status=/^HTTP\/1\.[01] (200|403|409)(?: [\x20-\x7e]*)?$/.exec(lines.shift());
- if(!status||status[1]!=='200'&&!allowBridgeErrors)error('PROVIDER_UNAVAILABLE');
+ if(!status||status[1]!=='200'&&!allowBridgeErrors)invalid('status');
  const h={};
  for(const line of lines){
-  const m=/^([!#$%&'*+.^_`|~0-9A-Za-z-]+):[ \t]*([\x20-\x7e\t]*)$/.exec(line);if(!m)error('PROVIDER_UNAVAILABLE');
+  const m=/^([!#$%&'*+.^_`|~0-9A-Za-z-]+):[ \t]*([\x20-\x7e\t]*)$/.exec(line);if(!m)invalid('header_line');
   const key=m[1].toLowerCase();
-  if(Object.hasOwn(h,key)&&['content-length','transfer-encoding','content-type','content-encoding'].includes(key))error('PROVIDER_UNAVAILABLE');
+  if(Object.hasOwn(h,key)&&['content-length','transfer-encoding','content-type','content-encoding'].includes(key))invalid('duplicate_header');
   h[key]=m[2].trim();
  }
- if(!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(h['content-type']||'')||h['content-encoding']&&h['content-encoding']!=='identity')error('PROVIDER_UNAVAILABLE');
+ if(h['content-encoding']&&h['content-encoding']!=='identity')invalid('content_encoding');
+ if(!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(h['content-type']||'')){
+  if(/^text\/html(?:;|$)/i.test(h['content-type']||''))invalid('html_response');
+  invalid('media_type');
+ }
  let body=bytes.subarray(cut+4);
  if(h['transfer-encoding']){
-  if(h['transfer-encoding'].toLowerCase()!=='chunked'||h['content-length'])error('PROVIDER_UNAVAILABLE');
+  if(h['transfer-encoding'].toLowerCase()!=='chunked'||h['content-length'])invalid('transfer_encoding');
   const parts=[];let offset=0,total=0;
   for(;;){
    const rest=new TextDecoder('latin1').decode(body.subarray(offset)),end=rest.indexOf('\r\n');
-   if(end<1||end>8||!/^[0-9a-f]+$/i.test(rest.slice(0,end)))error('PROVIDER_UNAVAILABLE');
+   if(end<1||end>8||!/^[0-9a-f]+$/i.test(rest.slice(0,end)))invalid('chunk_size');
    const n=parseInt(rest.slice(0,end),16);offset+=end+2;
-   if(n===0){if(offset+2!==body.length||body[offset]!==13||body[offset+1]!==10)error('PROVIDER_UNAVAILABLE');break;}
-   if(total+n>16384||offset+n+2>body.length||body[offset+n]!==13||body[offset+n+1]!==10)error('PROVIDER_UNAVAILABLE');
+   if(n===0){if(offset+2!==body.length||body[offset]!==13||body[offset+1]!==10)invalid('chunk_end');break;}
+   if(total+n>16384||offset+n+2>body.length||body[offset+n]!==13||body[offset+n+1]!==10)invalid('chunk_data');
    parts.push(body.subarray(offset,offset+n));total+=n;offset+=n+2;
   }
   body=new Uint8Array(total);let at=0;for(const p of parts){body.set(p,at);at+=p.length;}
- }else if(h['content-length']!==undefined&&(!/^\d{1,5}$/.test(h['content-length'])||Number(h['content-length'])!==body.length))error('PROVIDER_UNAVAILABLE');
- if(body.length>16384)error('PROVIDER_UNAVAILABLE');
- let value;try{value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}catch{error('PROVIDER_UNAVAILABLE');}
+ }else if(h['content-length']!==undefined&&(!/^\d{1,5}$/.test(h['content-length'])||Number(h['content-length'])!==body.length))invalid('content_length');
+ if(body.length>16384)invalid('body_size');
+ let value;try{value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}catch{invalid('json');}
  if(status[1]==='200')return value;
  if(status[1]==='409'&&value?.ok===false&&Object.keys(value).sort().join('|')==='code|ok'
   &&['PAGE_CHANGED','REVISION_CONFLICT','REQUEST_CONFLICT','WEBSITE_CHANGED','ACCESS_REVOKED','NOT_CONNECTED','TRANSACTION_REQUIRED','CONTENT_FILTERED'].includes(value.code))return {ok:false,code:value.code};
  if(status[1]==='403'&&value?.code==='sma_not_authorized'&&value?.data?.status===403)return {ok:false,code:'NOT_CONNECTED'};
- error('PROVIDER_UNAVAILABLE');
+ invalid('bridge_error');
 }
-export function createWordpressTransport({resolve,connect,startTls,timeoutMs=12000,allowBridgeErrors=false}){
+export function createWordpressTransport({resolve,connect,startTls,timeoutMs=12000,allowBridgeErrors=false,onFailure}){
  return async(website,signed)=>{
   const {hostname,path}=wordpressTarget(website);
   if(typeof signed?.body!=='string'||encoder.encode(signed.body).length>2048||!/^[A-Za-z0-9+/]{300,700}={0,2}$/.test(signed.headers?.['X-SMA-Signature']||''))error('INVALID_REQUEST');
   let conn,closed=false,timer;
+  let stage='dns',status;
+  const timeout=()=>Object.assign(new Error('PROVIDER_UNAVAILABLE'),{name:'TimeoutError'});
   const close=()=>{try{conn?.close();}catch{}};
   const work=(async()=>{
    const addresses=await resolve(hostname);
    if(closed)error('PROVIDER_UNAVAILABLE');
    if(!Array.isArray(addresses)||addresses.length<1||addresses.length>16||!addresses.every(publicIPv4))error('TARGET_REJECTED');
+   stage='connect';
    conn=await connect(addresses[0]);if(closed){close();error('PROVIDER_UNAVAILABLE');}
+   stage='tls';
    conn=await startTls(conn,hostname);if(closed){close();error('PROVIDER_UNAVAILABLE');}
+   stage='handshake';
    const tls=await conn.handshake();if(closed||tls?.alpnProtocol&&!['http/1.1'].includes(tls.alpnProtocol))error('PROVIDER_UNAVAILABLE');
    const request=encoder.encode('POST '+path+' HTTP/1.1\r\nHost: '+hostname+'\r\nConnection: close\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nContent-Type: application/json\r\nX-SMA-Signature: '+signed.headers['X-SMA-Signature']+'\r\nContent-Length: '+encoder.encode(signed.body).length+'\r\n\r\n'+signed.body);
+   stage='write';
    for(let at=0;at<request.length;){const n=await conn.write(request.subarray(at));if(!Number.isInteger(n)||n<=0)error('PROVIDER_UNAVAILABLE');at+=n;}
+   stage='read';
    const parts=[];let total=0;
    for(;;){const buffer=new Uint8Array(4096),n=await conn.read(buffer);if(n===null)break;if(!Number.isInteger(n)||n<=0)error('PROVIDER_UNAVAILABLE');total+=n;if(total>32768)error('PROVIDER_UNAVAILABLE');parts.push(buffer.slice(0,n));}
    const bytes=new Uint8Array(total);let at=0;for(const p of parts){bytes.set(p,at);at+=p.length;}
+   stage='response';
+   const line=new TextDecoder().decode(bytes.subarray(0,24));
+   status=/^HTTP\/1\.[01] (\d{3})[ \r]/.exec(line)?.[1];
    return parseWordpressHttp(bytes,{allowBridgeErrors});
   })();
-  try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('PROVIDER_UNAVAILABLE')),timeoutMs);})]);}
-  catch(e){error(e?.code==='TARGET_REJECTED'?'TARGET_REJECTED':'PROVIDER_UNAVAILABLE');}
+  try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>reject(timeout()),timeoutMs);})]);}
+  catch(e){
+   // Log only a closed set of transport facts, never exception text, host, headers or payload.
+   const kinds=['TypeError','NotSupported','PermissionDenied','InvalidData','ConnectionRefused','ConnectionReset','UnexpectedEof','TimedOut','TimeoutError','NotFound','NetworkUnreachable','NotCapable'];
+   const kind=kinds.includes(e?.name)?e.name:'other';
+   const reason=stage==='response'?e?.responseReason:undefined;
+   if(onFailure)onFailure({stage,kind,...(status?{status}:{}),...(reason?{reason}:{})});
+   if(reason==='html_response')error('WORDPRESS_HTML_RESPONSE');
+   error(e?.code==='TARGET_REJECTED'?'TARGET_REJECTED':'PROVIDER_UNAVAILABLE');
+  }
   finally{closed=true;clearTimeout(timer);close();}
  };
 }

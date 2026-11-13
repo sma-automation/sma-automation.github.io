@@ -46,7 +46,8 @@ const messages={
  WEBSITE_REQUIRED:'Speichere zuerst die Adresse deiner WordPress-Webseite.',TARGET_REJECTED:'Verwende die öffentliche HTTPS-Startadresse deiner WordPress-Webseite mit abschließendem Schrägstrich.',
  SHOP_REQUIRED:'Für die Verbindung muss dein SMA-Shop öffentlich freigeschaltet sein.',SHOP_CHANGED:'Deine Shop-Zuordnung hat sich geändert. Starte die Verbindung neu.',
  REQUEST_STALE:'Dieser Vorgang ist abgelaufen oder die Webseite wurde geändert. Lade den Stand neu.',TICKET_UNAVAILABLE:'Die Freigabe ist nicht mehr verfügbar. Lade den Stand neu.',
- PROVIDER_UNAVAILABLE:'Der SMA-Baustein antwortet noch nicht. Prüfe seine Aktivierung und bestätige die Freigabe in WordPress.',
+ WORDPRESS_HTML_RESPONSE:'Die WordPress-Adresse liefert SMA eine HTML-Seite. Für die Verbindung muss die WordPress-REST-Schnittstelle dem SMA-Server mit JSON antworten. Prüfe mit deinem Hoster die Erreichbarkeit der Plugin-Schnittstelle.',
+ PROVIDER_UNAVAILABLE:'SMA konnte die Antwort deiner WordPress-Webseite nicht bestätigen. Wenn WordPress die Freigabe bereits anzeigt, klicke hier erneut auf „Verbindung prüfen“.',
  VERIFICATION_BUSY:'Die Prüfung läuft bereits. Bitte warte kurz.',REQUEST_RATE_LIMITED:'Bitte warte eine Minute, bevor du eine neue Freigabe startest.',
  ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',REVISION_CONFLICT:'Der Vorgang wurde inzwischen geändert. Lade den Stand neu.'
 };

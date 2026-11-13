@@ -36,3 +36,35 @@ test('mixed public/private DNS results never open a socket and late timed-out so
  let release;const late=createWordpressTransport({resolve:async()=>['93.184.216.34'],connect:()=>new Promise(r=>{release=r;}),startTls:async()=>{throw Error('must not start');},timeoutMs:10});
  await assert.rejects(late('https://example.com/',signed));release({close(){closed++;}});await new Promise(r=>setImmediate(r));assert.equal(closed,1);
 });
+
+test('failure diagnostics report only the failing stage, allowed error kind, status and response category',async()=>{
+ const {createWordpressTransport}=await ready;
+ const signed={body:'{}',headers:{'X-SMA-Signature':'A'.repeat(512)}};
+ const reports=[];
+ const options={resolve:async()=>['93.184.216.34'],onFailure:facts=>reports.push(facts)};
+ const transport=createWordpressTransport({...options,connect:async()=>{throw new TypeError('private error details');}});
+ await assert.rejects(transport('https://example.com/',signed),{code:'PROVIDER_UNAVAILABLE'});
+ assert.deepEqual(reports,[{stage:'connect',kind:'TypeError'}]);
+ let sent=false;
+ const conn={handshake:async()=>({}),write:async b=>b.length,close(){},read:async b=>{
+  if(sent)return null;
+  sent=true;const raw=bytes('HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\n\r\nprivate response');
+  b.set(raw);return raw.length;
+ }};
+ const rejected=createWordpressTransport({...options,connect:async()=>conn,startTls:async()=>conn});
+ await assert.rejects(rejected('https://example.com/',signed),{code:'PROVIDER_UNAVAILABLE'});
+ assert.deepEqual(reports[1],{stage:'response',kind:'other',status:'503',reason:'status'});
+});
+
+test('the HTML response from an external host is never accepted as a WordPress acknowledgement',async()=>{
+ const {createWordpressTransport}=await ready;
+ let received=false;
+ const conn={handshake:async()=>({}),write:async b=>b.length,close(){},read:async b=>{
+  if(received)return null;
+  received=true;
+  const raw=bytes('HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<html>Website</html>');
+  b.set(raw);return raw.length;
+ }};
+ const call=createWordpressTransport({resolve:async()=>['93.184.216.34'],connect:async()=>conn,startTls:async()=>conn});
+ await assert.rejects(call('https://example.com/',{body:'{}',headers:{'X-SMA-Signature':'A'.repeat(512)}}),{code:'WORDPRESS_HTML_RESPONSE'});
+});

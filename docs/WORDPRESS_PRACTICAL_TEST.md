@@ -160,9 +160,17 @@ Zugangscode. Der lesende Abruf bestätigt die Installation und die registrierte
 Route. Eine aktuelle Administratorfreigabe oder einen signierten
 Synchronisierungsauftrag weist er nicht nach.
 
+## Externe WordPress-Freigabe und Rückruf am 13. November 2026
+
+Auf einer frisch angelegten, kostenlosen WPSandbox-Testinstallation wurde das ausgelieferte SMA-Plugin aktiviert. Der Administrator bestätigte über den regulären SMA-Kundenbereich die Freigabe für den Shop `sma-testkunde`. WordPress zeigte die Zuordnung an. Der Ticketdienst beantwortete die Anfragen erfolgreich.
+
+Der öffentliche WordPress-REST-Index enthielt die SMA-Route, und OPTIONS meldete POST als zulässige Methode. Der signierte POST aus der produktiven SMA-Verbindungsfunktion erhielt auf dem vorgesehenen HTTPS-Pfad HTTP 200 mit HTML. Für die Verifizierung ist eine gültige JSON-Antwort mit den Daten der konkreten Verbindung erforderlich. SMA hat keine verifizierte Verbindung und keinen Synchronisierungsauftrag für diesen Versuch gespeichert. Ein externer Produktentwurf ist weiterhin offen. Die konkrete Ursache der HTML-Seite beim Anbieter ist unbekannt.
+
+Beim Verbindungscheck meldet SMA diese Antwort als `WORDPRESS_HTML_RESPONSE`. Die technischen Protokolle enthalten nur den Verarbeitungsschritt, eine feste Fehlerkategorie und gegebenenfalls den HTTP-Status. Die Oberfläche erklärt, welche Serverantwort die Freigabe benötigt.
+
 ## Geeignete externe Testseite ohne Neubuchung
 
-Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testadresse auf bereits vorhandenem Hosting** benötigt. Eine vorhandene, im Tarif enthaltene Staging-Seite ist geeignet, wenn der Anbieter die nötigen Rechte und Erreichbarkeit tatsächlich zulässt. Aktuell ist keine solche Adresse bestätigt. Es wird weder ein neues Hostingkonto angelegt noch ein Tarif geändert oder ein öffentlicher Tunnel eingerichtet.
+Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testadresse auf bereits vorhandenem Hosting** benötigt. Eine vorhandene, im Tarif enthaltene Staging-Seite ist geeignet, wenn der Anbieter die nötigen Rechte und Erreichbarkeit tatsächlich zulässt. Eine Testadresse mit bestätigtem signiertem Rückruf ist noch offen. Es wird weder ein neues Hostingkonto angelegt noch ein Tarif geändert oder ein öffentlicher Tunnel eingerichtet.
 
 Vor dem ersten Anbieterauftrag müssen folgende Punkte für genau diese Seite feststehen:
 
