@@ -44,5 +44,5 @@ test('manual recognition invalidates any older background load',()=>{
  assert.match(reset,/magicLoadTicket\+\+/);
  assert.match(recognize,/magicLoadTicket\+\+;lock\(true\)/);
  assert.match(action,/magicLoadTicket\+\+;automaticMode=mode;lock\(true\)/);
- assert.match(html,/publication-preview\.js\?v=89/);
+ assert.match(html,/publication-preview\.js\?v=90/);
 });
