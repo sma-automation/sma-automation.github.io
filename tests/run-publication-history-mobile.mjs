@@ -21,7 +21,7 @@ const file={id:asset,media_kind:'video',mime_type:'video/mp4',name:'Testclip.mp4
 const draft={platform:'youtube',title:'Aktueller mobiler Entwurf',body:'Testtext für die aktuelle Dateiversion.',
  hashtags:[],review_notes:[],caption:'Testtext für die aktuelle Dateiversion.'};
 const saved={ok:true,status:'completed',id:uuid(20),revision:1,assignment_revision:2,
- preview:{can_publish:false,language:'de',shop_url:site+'/app/shop.html?shop=test',drafts:[draft]}};
+ preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=test',drafts:[draft]}};
 const order={ok:true,id:target,state:'prepared',approved_at:null,approval_token:null,approval_window:expiry,
  can_publish:false,can_upload:false,binding:{asset_id:asset,asset_revision:'previous',platform:'youtube',
  preview_id:uuid(19),preview_revision:1,assignment_revision:1}};
