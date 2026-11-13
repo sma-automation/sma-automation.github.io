@@ -407,8 +407,8 @@ await test('unfinished order links to its saved preparation until the server dea
  }finally{f.view.destroy();mock.timers.reset();}
 });
 await test('History searches the full owner archive and opens the saved order without a new tab',async()=>{
- const selected=entry(3,{title:'Hotel-Türgriff Demo'});
- const found={ok:true,version:1,entries:[{id:selected.id,title:selected.title,platform:'youtube',status:'blocked',created_at:selected.created_at}],has_more:false,can_upload:false,can_publish:false};
+ const selected=entry(3,{title:'Hotel-Türgriff Demo',status:'uncertain'});
+ const found={ok:true,version:1,entries:[{id:selected.id,title:selected.title,platform:'youtube',status:selected.status,created_at:selected.created_at}],has_more:false,can_upload:false,can_publish:false};
  const terms=[],lookups=[];
  mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
  const f=fixture({
@@ -425,11 +425,14 @@ await test('History searches the full owner archive and opens the saved order wi
   const buttons=[...f.$('.sma-history-find-results').querySelectorAll('button')];
   assert.equal(buttons.length,1);
   assert.match(buttons[0].textContent,/Hotel-Türgriff Demo/);
+  const description=f.doc.getElementById(buttons[0].getAttribute('aria-describedby'));
+  assert.match(description.textContent,/YouTube · Ergebnis unklar/);
   buttons[0].click();await tick();await tick();
   assert.deepEqual(lookups,[[selected.id,null]]);
   assert.equal(input.value,'');
   assert.equal(f.$('.sma-history-list').hidden,false);
   assert.match(f.$('.sma-history-list').textContent,/Hotel-Türgriff Demo/);
+  assert.match(f.$('.sma-history-list').textContent,/Ergebnis unklar/);
   assert.equal(f.doc.querySelectorAll('a[target="_blank"]').length,0);
  }finally{f.view.destroy();mock.timers.reset();}
 });

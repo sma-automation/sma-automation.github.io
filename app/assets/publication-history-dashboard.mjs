@@ -5,7 +5,7 @@ import {mountPublicationTextHistory} from './publication-text-history-dashboard.
 import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
-import {readHistoryFind} from './publication-history-find.mjs?v=1';
+import {readHistoryFind} from './publication-history-find.mjs?v=2';
 
 export function mountPublicationHistory({doc,request,requestOrderPage,requestFind,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
@@ -229,7 +229,9 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    for(const entry of found.entries){
     const row=create('li'),button=create('button'),heading=create('strong',entry.title||'Gespeicherter Beitrag');
     const caption=create('small',historyPlatforms[entry.platform]+' · '+historyStatuses[entry.status][0]+' · '+format(entry.created_at));
+    caption.id='sma-history-find-detail-'+entry.id;
     button.type='button';button.className='sma-history-find-open';button.append(heading,caption);
+    button.setAttribute('aria-describedby',caption.id);
     button.setAttribute('aria-label','Auftrag in History öffnen: '+(entry.title||'Gespeicherter Beitrag'));
     button.addEventListener('click',()=>{
      if(!active()||!requestOrderPage)return;

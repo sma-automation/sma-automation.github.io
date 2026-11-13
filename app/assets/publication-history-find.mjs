@@ -9,7 +9,7 @@ export function readHistoryFind(value){
  const entries=value.entries.map(row=>{
   if(!row||typeof row!=='object'||Array.isArray(row)||typeof row.id!=='string'||
    !id.test(row.id)||seen.has(row.id)||typeof row.title!=='string'||
-   row.title.length>180||!Object.hasOwn(historyPlatforms,row.platform)||
+   [...row.title].length>180||!Object.hasOwn(historyPlatforms,row.platform)||
    !Object.hasOwn(historyStatuses,row.status)||typeof row.created_at!=='string'||
    !Number.isFinite(Date.parse(row.created_at)))throw Error('HISTORY_FIND_INVALID');
   seen.add(row.id);
