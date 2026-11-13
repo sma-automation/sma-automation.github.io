@@ -7,11 +7,11 @@ const output=noComments.slice(noComments.lastIndexOf('SELECT jsonb_build_object(
 
 test('YouTube preflight is one aggregated read-only query with no mutation or network call',()=>{
  assert.match(noComments,/^WITH\s+prepared\s+AS\s*\(/i);
- assert.match(noComments,/FROM aggregates a CROSS JOIN media_rollup r;\s*$/i);
+ assert.match(noComments,/FROM aggregates a CROSS JOIN media_rollup r CROSS JOIN checked_private c;\s*$/i);
  assert.equal((noComments.match(/;/g)||[]).length,1);
  assert.doesNotMatch(noComments,/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|CALL|EXECUTE|PERFORM|MERGE)\b/i);
  assert.doesNotMatch(noComments,/\b(pg_sleep|dblink|http_post|net\.http_post|SECURITY\s+DEFINER)\b/i);
- assert.doesNotMatch(noComments,/\b(sma_publication_order_v1|publication_provider_begin_v1|publication_provider_finish_v1)\s*\(/i);
+ assert.doesNotMatch(noComments,/\b(sma_publication_order_v1|sma_publication_provider_v1|sma_publication_provider_cover_v1|publication_provider_begin_v1|publication_provider_finish_v1)\s*\(/i);
 });
 
 test('reads prepared YouTube accounts, exact catalog revision and the actual pending media codes',()=>{

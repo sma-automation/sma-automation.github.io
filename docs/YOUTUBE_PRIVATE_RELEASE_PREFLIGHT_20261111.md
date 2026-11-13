@@ -1,6 +1,6 @@
 # SMA – Privater YouTube-Test: wiederholbarer Nur-Lesen-Abnahmecheck
 
-**Stand: 11. November 2026, Österreich.** Kein Kunde und kein Upload wird durch
+**Stand: 13. November 2026, Österreich.** Kein Kunde und kein Upload wird durch
 diesen Prüfbericht freigegeben.
 
 ## Zweck
@@ -11,6 +11,23 @@ Sie durchsucht vorbereitete YouTube-Aufträge, bindet den SMA-Dateikatalog
 über Eigentümer und exakte Revision, ruft die vorhandene stabile Medienvorprüfung
 und Freigabefrist-Prüfung auf und zählt gespeicherte Provider-Berechtigungs-
 und Versuchseinträge.
+
+Seit Version 2 enthält `checked_private_youtube` zusätzlich die bereits geprüften
+privaten YouTube-Aufträge. `order_counts` und `media_check` beziehen sich weiterhin
+auf vorbereitete Aufträge. Ein geprüfter Auftrag kann eine gespeicherte Kundenfreigabe
+und gleichzeitig null Übertragungsversuche haben. Die Betreiberfreigabe zählt nur
+bei passendem Auftragsfingerabdruck als aktuell oder abgelaufen. Die Kontoprüfung
+wertet den gespeicherten Nachweis für das gewählte Ziel aus.
+
+Versuche und Ereignisse werden je Auftrag gezählt. Mehrere Ereignisse für eine
+Übertragung zählen einmal. `portal_confirmed_private` verwendet denselben
+bestätigten Privatstatus wie die Kunden-History.
+
+Am 13.11.2026 um 12:51 Uhr (Wien) ergab die Leseprüfung drei vorbereitete
+YouTube-Aufträge und einen geprüften privaten Auftrag. Für diesen waren die
+Kundenfreigabe und eine abgelaufene, passende Betreiberberechtigung gespeichert.
+Die Zähler für aktuelle Kontonachweise, aktuelle Betreiberberechtigungen,
+Übertragungsversuche, Ereignisse und bestätigte private Ergebnisse standen bei null.
 
 Die Ausgabe enthält nur **aggregierte Zahlen, technische Prüfstatus und
 standardisierte Prüfcode-Namen**, niemals Auftrag-, Kunde-, Datei- oder
