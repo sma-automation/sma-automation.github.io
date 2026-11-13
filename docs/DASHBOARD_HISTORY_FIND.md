@@ -1,6 +1,6 @@
 # SMA Dashboard – Veröffentlichungsaufträge im gesamten Verlauf finden
 
-Stand: 11.11.2026. Ergänzung zur bereits umgesetzten
+Stand: 13.11.2026. Ergänzung zur bereits umgesetzten
 Dateisuche und Bestellsuche.
 
 ## Problem
@@ -44,7 +44,12 @@ Funktion im privaten Schema als `SECURITY DEFINER`
 auf die Datensätze zugreift.
 
 Die Funktion gibt nur Auftrags-ID, Titel, Portal,
-nicht bindenden Auftragszustand und Erstellungszeit zurück.
+Status und Erstellungszeit zurück. Bei eindeutiger Kundenzuordnung nutzt
+die Suche dieselbe Auswertung wie die Auftragsansicht. Ein unklarer
+Übertragungsversuch erscheint als „Ergebnis unklar“. Eine erfolgreich
+abgeschlossene private Übertragung erfordert den passenden gespeicherten
+Beleg. Bei älteren Anmeldungen mit mehreren Kundenzuordnungen zeigt
+die Suche weiterhin nur den bisherigen Auftragszustand.
 Keine Caption, Passwörter, Datei-URLs, Bearer-Tokens,
 Anmeldedaten, Musikguthaben oder personenbezogenen
 Kundeneinträge. Eine Suche verändert keine Datensätze.
@@ -71,11 +76,8 @@ und Verwerfen verspäteter Ergebnisse beim Kontowechsel.
 
 ## Betriebsgrenzen
 
-Der neue RPC ist zunächst nur vorbereitet. Er muss nach
-erfolgreichem CI und separater Sicherheitsprüfung installiert
-werden, bevor die neue Browser-Suche produktiv genutzt
-werden kann. Bis dahin bleiben bestehende History,
-Auftragsseiten und Monatsarchiv unverändert funktionsfähig.
+Die produktive Suche liest den gespeicherten Verlauf. Eine Suche
+oder das Öffnen eines Treffers startet keine neue Übertragung.
 
 Keine Provider-Uploads, Veröffentlichungen, echten Käufe,
 Credit-Abbuchungen, Paketänderungen oder n8n-Mutationen.
@@ -90,6 +92,3 @@ Einstieg durch einen reinen SECURITY-INVOKER-Wrapper. Die privilegierte
 Funktion wandert in das **nicht exponierte** Schema `sma_private`.
 Der Aufruf hat dieselbe Eigentümer- und Ergebnisprüfung;
 Kundentabellen bleiben unverändert und nicht direkt lesbar.
-
-Die Nachbesserung wird vor dem Merge mit eigenen SQL-Tests und
-Sicherheitsberatern erneut geprüft.

@@ -18,3 +18,10 @@ test('history search never renders arbitrary status or malformed IDs',async()=>{
  }
  assert.throws(()=>read({...result(),entries:Array.from({length:21},(_,i)=>({...result().entries[0],id:'ab660000-0000-4000-9000-'+String(i).padStart(12,'0')}))}),/HISTORY_FIND_INVALID/);
 });
+
+test('search accepts 180 Unicode characters as returned by the database',async()=>{
+ const {readHistoryFind:read}=await load;
+ const title='🎬'.repeat(180),row={...result().entries[0],title,status:'uncertain'};
+ assert.equal(read({...result(),entries:[row]}).entries[0].title,title);
+ assert.throws(()=>read({...result(),entries:[{...row,title:title+'a'}]}),/HISTORY_FIND_INVALID/);
+});
