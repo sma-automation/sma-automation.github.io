@@ -677,9 +677,11 @@ $('reviewContent').addEventListener('click',async()=>{
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
 const orderUuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-if(workspace&&orderUuid.test(params.get('order'))){
+// The fragment is only a return address. Only the order query opens a stored order.
+const returnOrderId=params.get('order')??new URLSearchParams(location.hash?.slice(1)).get('returnOrder');
+if(workspace&&orderUuid.test(returnOrderId)){
  const back=$('back');
- back.href='dashboard.html#auftrag/'+params.get('order').toLowerCase();
+ back.href='dashboard.html#auftrag/'+returnOrderId.toLowerCase();
  back.textContent='← Zurück zum Auftrag';
 }
 const readStoredOrder=id=>storedOrderRequest('get',id);
@@ -1161,7 +1163,7 @@ $('refreshFiles').addEventListener('click',()=>{
  if(signedOut)return;
  if(currentHistoryAsset){
   const query=new URLSearchParams({wide:'1',portal:selectedPortal,asset:currentHistoryAsset});
-  location.assign('publication-preview.html?'+query);
+  location.assign('publication-preview.html?'+query+'#returnOrder='+params.get('order'));
   return;
  }
  return retryHistoryPreview?loadHistoryPreview():refreshFiles();
