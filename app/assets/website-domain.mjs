@@ -41,14 +41,14 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  '<label class="sma-website-field" data-existing>Vorhandene Webseite<input name="website_url" type="text" inputmode="url" autocomplete="url" placeholder="https://meine-firma.at" maxlength="2048"></label>'+
  '<label class="sma-website-field"><span>Eigene Domain oder Wunschdomain <span class="sma-website-optional">(optional)</span></span><input name="desired_domain" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="meine-firma.at" maxlength="253"><span class="sma-website-help">Eine Domain, die dir bereits gehört, kannst du nach dem Speichern nachweisen. Ein Wunsch wird dadurch weder geprüft noch reserviert.</span></label>'+
  '</fieldset><div class="sma-website-actions"><button type="submit" disabled class="sma-website-primary">Vorbereitung speichern</button><button type="button" data-reload>Gespeicherten Stand laden</button></div>'+
- '</form><div class="sma-website-actions" data-existing-route><button type="button" data-website-open="connection" data-wp-entry>Vorhandene WordPress-Webseite verbinden</button></div><p class="sma-website-help" data-existing-note>Deine vorhandene Webseite bleibt bei ihrem Anbieter. Nach bestätigter WordPress-Verbindung kannst du deinen SMA-Produktbereich automatisch als Entwurf erzeugen.</p><div class="sma-website-actions" data-new-route hidden><a href="https://sma-automation.com/app/website-builder.html" target="_top" class="sma-website-primary">Webseite erzeugen / bearbeiten</a><a href="https://sma-automation.com/app/website-preview-shk.html" target="_blank" rel="noopener noreferrer">Beispiel Sanitär · Heizung · Klima ↗</a><button type="button" data-website-open="domain" data-new-domain-entry>Eigene Domain nachweisen</button></div><p class="sma-website-help" data-new-note hidden>Erstelle eine bearbeitbare Webseite mit SMA-Adresse und automatisch zugeordnetem Shop. Der Entwurf bleibt bis zu deiner Veröffentlichung privat. Deine SMA-Webadresse kannst du unten automatisch einrichten.</p></section>'+
+ '</form><div class="sma-website-actions" data-existing-route><button type="button" data-website-open="shop" aria-controls="smaWebsiteView-shop">Shop ohne Plugin verlinken</button><button type="button" data-website-open="connection" data-wp-entry>Vorhandene WordPress-Webseite verbinden</button></div><p class="sma-website-help" data-existing-note>Ein Shop-Link funktioniert auch auf WordPress.com im kostenlosen Tarif. Für einen automatisch erstellten Produktentwurf muss deine Webseite eigene WordPress-Plugins erlauben.</p><div class="sma-website-actions" data-new-route hidden><a href="https://sma-automation.com/app/website-builder.html" target="_top" class="sma-website-primary">Webseite erzeugen / bearbeiten</a><a href="https://sma-automation.com/app/website-preview-shk.html" target="_blank" rel="noopener noreferrer">Beispiel Sanitär · Heizung · Klima ↗</a><button type="button" data-website-open="domain" data-new-domain-entry>Eigene Domain nachweisen</button></div><p class="sma-website-help" data-new-note hidden>Erstelle eine bearbeitbare Webseite mit SMA-Adresse und automatisch zugeordnetem Shop. Der Entwurf bleibt bis zu deiner Veröffentlichung privat. Deine SMA-Webadresse kannst du unten automatisch einrichten.</p></section>'+
  '<section id="smaWebsiteView-shop" data-website-view="shop" class="sma-website-link-section" aria-labelledby="smaWebsiteLinkTitle" hidden><h2 id="smaWebsiteLinkTitle" tabindex="-1">Shop-Button einbauen</h2>'+
  '<p data-shop-hint>Der Link zu deinem öffentlichen SMA-Shop wird hier bereitgestellt.</p>'+
  '<div data-shop-actions hidden><label class="sma-website-field">Dein Shop-Link<input data-shop-url type="text" readonly></label><div class="sma-website-actions"><button type="button" data-copy>Shop-Link kopieren</button><a data-shop-open target="_blank" rel="noopener noreferrer">Shop ansehen</a><a data-shop-preview target="_blank" rel="noopener noreferrer">Shop-Button testen</a></div>'+
- '<details class="sma-website-embed"><summary>Shop-Button auf deiner Webseite einbauen</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details><div data-catalog-actions hidden><p class="sma-website-help">Du kannst auch eine Produktliste mit aktuellem Preis und Bestand auf deiner Webseite anzeigen.</p><div class="sma-website-actions"><a data-catalog-preview target="_blank" rel="noopener noreferrer">Produktliste einbauen</a></div></div></div>'+
- '<p class="sma-website-help">Der Button führt Besucher zu deinem SMA-Shop. Kopiere den Einbaucode auf deine Webseite, um ihn dort zu verwenden.</p></section>'+
+ '<p role="status" aria-live="polite" data-shop-status></p><details class="sma-website-embed"><summary>In WordPress als Button einfügen</summary><ol><li>Kopiere oben deinen Shop-Link.</li><li>Öffne eine Seite im WordPress-Editor. Füge über das Plus den Block „Buttons“ ein und beschrifte den Button mit „Zum Shop“.</li><li>Wähle am Button das Link-Symbol, füge den Shop-Link ein und bestätige mit der Eingabetaste. Speichere deine Testseite als Entwurf.</li></ol></details><details class="sma-website-embed"><summary>HTML-Einbaucode verwenden</summary><p class="sma-website-help">Kopiere den Code in einen HTML-Baustein deiner Webseite. Für ein einfaches Linkfeld verwende den Shop-Link oben.</p><label class="sma-website-field">Einbaucode<textarea data-shop-code readonly spellcheck="false" rows="4"></textarea></label><button type="button" data-copy-code>Einbaucode kopieren</button></details><div data-catalog-actions hidden><p class="sma-website-help">Du kannst auch eine Produktliste mit aktuellem Preis und Bestand auf deiner Webseite anzeigen.</p><div class="sma-website-actions"><a data-catalog-preview target="_blank" rel="noopener noreferrer">Produktliste einbauen</a></div></div></div>'+
+ '</section>'+
  '<section id="smaWebsiteView-domain" data-website-view="domain" hidden><div data-domain-panel></div><div class="sma-website-actions" data-domain-setup><button type="button" data-website-open="website">Webadresse oder Domain hinterlegen</button></div></section>'+
- '<section id="smaWebsiteView-connection" data-website-view="connection" hidden><h2 tabindex="-1">WordPress verbinden</h2><div data-wordpress-panel></div></section>'+
+ '<section id="smaWebsiteView-connection" data-website-view="connection" hidden><h2 tabindex="-1">WordPress verbinden</h2><div data-wordpress-panel></div><div class="sma-website-actions"><button type="button" data-website-open="shop" aria-controls="smaWebsiteView-shop">Shop ohne Plugin verlinken</button></div></section>'+
  '<p class="sma-website-status" role="status" aria-live="polite" hidden></p>';
  const placeholder=page.querySelector('.package-module-slot');
  if(placeholder)placeholder.replaceWith(root);else page.append(root);
@@ -66,6 +66,7 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
   if(chapterNavigation&&name==='overview')name='website';
   if(name!=='overview'&&!viewNames.includes(name))return;
   if(name==='connection')wordpressView?.load();
+  $('[data-shop-status]').textContent='';
   activeView=name;if(name!=='overview')lastView=name==='connection'?'website':name;
   for(const panel of root.querySelectorAll('[data-website-view]'))panel.hidden=panel.dataset.websiteView!==name;
   $('[data-website-overview]').hidden=name!=='overview';$('[data-website-toolbar]').hidden=name==='overview';
@@ -101,6 +102,7 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
    $('[name="website_url"]').value=draft.website_url;$('[name="desired_domain"]').value=draft.desired_domain;
   }
   toggle();
+  $('[data-shop-status]').textContent='';
   const link=safeShopLink(state.shop_url);$('[data-shop-actions]').hidden=!link;
   $('[data-shop-url]').value=link||'';$('[data-shop-open]').removeAttribute('href');
   const button=createShopButton(link);$('[data-shop-code]').value=button?.html||'';
@@ -139,13 +141,13 @@ export function mountWebsitePreparation({page,request,setupRequest,domainRequest
  $('[data-reload]').addEventListener('click',load);
  $('[data-copy]').addEventListener('click',async()=>{
   const link=safeShopLink($('[data-shop-url]').value);if(!link||destroyed)return;
-  try{await win.navigator.clipboard.writeText(link);notice('Shop-Link kopiert.');}
-  catch{$('[data-shop-url]').focus();$('[data-shop-url]').select();notice('Markierten Shop-Link mit Strg+C oder ⌘C kopieren.');}
+  try{await win.navigator.clipboard.writeText(link);$('[data-shop-status]').textContent='Shop-Link kopiert.';}
+  catch{$('[data-shop-url]').focus();$('[data-shop-url]').select();$('[data-shop-status]').textContent='Markierten Shop-Link mit Strg+C oder ⌘C kopieren.';}
  });
  $('[data-copy-code]').addEventListener('click',async()=>{
   const button=createShopButton($('[data-shop-url]').value);if(!button||destroyed)return;
-  try{await win.navigator.clipboard.writeText(button.html);notice('Einbaucode kopiert.');}
-  catch{$('[data-shop-code]').focus();$('[data-shop-code]').select();notice('Markierten Einbaucode mit Strg+C oder ⌘C kopieren.');}
+  try{await win.navigator.clipboard.writeText(button.html);$('[data-shop-status]').textContent='Einbaucode kopiert.';}
+  catch{$('[data-shop-code]').focus();$('[data-shop-code]').select();$('[data-shop-status]').textContent='Markierten Einbaucode mit Strg+C oder ⌘C kopieren.';}
  });
  // Load only when the existing navigation displays this module.
  const observer=new win.MutationObserver(()=>{if(!chapterNavigation&&!page.classList.contains('active')&&activeView!=='overview')openView('overview',{focus:false,scroll:false});if(page.classList.contains('active')&&!dirty&&!loaded)load();});
