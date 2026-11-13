@@ -76,6 +76,13 @@ for(const platform of ['youtube','tiktok']){
   {target:{id:'foreign',platform:'other'}}]){
   eq(t.view.resumePrepared({...saved,...patch}),false);eq(!!t.$('publicationOrderDialog').open,false);
  }
+ const opened=fixture({platform,post:{title:'Saved title',caption:'Saved caption'}});
+ const checked={...saved,state:'checked',approval_token:null,approval_window:null,
+  approved_at:new Date().toISOString(),approval_review:{media_rights:true}};
+ eq(opened.view.resumePrepared(checked),true);eq(opened.requests.length,0);
+ eq(opened.approve.hidden,true);eq(opened.status.textContent,'Auftrag prüfen und fortsetzen');
+ await opened.status.handlers.click();
+ eq(opened.requests.map(req=>[req.action,req.input.id]),[['get',checked.id]]);
  eq(t.view.resumePrepared(saved),true);
  eq(t.$('publicationOrderDialog').open,true);eq(t.approve.disabled,true);
  eq(t.$('order-final-consent').checked,false);eq(t.$('order-review-media_rights').checked,false);
