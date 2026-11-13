@@ -50,7 +50,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  let focusOnReturn=!!orderId;
  const chooseMonth=value=>{
   if(!active())return;
-  if(orderId&&ownerWindow.location?.hash===hash)ownerWindow.history.replaceState(ownerWindow.history.state,'',ownerWindow.location.pathname+ownerWindow.location.search);
+  if(orderId&&ownerWindow.location?.hash==='#auftrag/'+orderId)ownerWindow.history.replaceState(ownerWindow.history.state,'',ownerWindow.location.pathname+ownerWindow.location.search);
   orderId=null;focusOnReturn=false;selection=value;periodDisclosure?.removeAttribute('open');clear();load();};
  if(monthSlot){
   monthSlot.classList.add('sma-history-months');
@@ -160,6 +160,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   if(periodHeading)periodHeading.textContent=label+' · Zeitraum ändern';
   if(monthButtons){monthButtons.replaceChildren();for(const m of result.months){const b=create('button',formatHistoryMonth(m.month)+' · '+m.orders);b.type='button';b.setAttribute('aria-pressed',String(selection===m.month));b.addEventListener('click',()=>chooseMonth(m.month));monthButtons.append(b);}}
   list.replaceChildren();
+  let selectedToggle;
   for(const entry of entries.slice(pageNumber*pageSize,(pageNumber+1)*pageSize)){
    const row=create('li'),heading=create('div',null,'sma-history-heading');
    const window=entry.approval_window||entry.preparation_window;
@@ -213,13 +214,16 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    row.append(details);list.append(row);
    if(entry.id===orderId){
     details.open=true;
-    if(focusOnReturn){focusOnReturn=false;toggle.focus();toggle.scrollIntoView?.({block:'center'});}
+    selectedToggle=toggle;
    }
   }
   const start=(pagesBeforeBatch+pageNumber)*pageSize;
   message.textContent=entries.length?(start+1)+'–'+(pagesBeforeBatch*pageSize+Math.min((pageNumber+1)*pageSize,entries.length))+' von '+summary.orders+' Aufträgen · Seite '+(pagesBeforeBatch+pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';
   nav.hidden=!entries.length;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
   syncSearchMode();
+  if(focusOnReturn&&selectedToggle&&!list.hidden){
+   focusOnReturn=false;selectedToggle.focus();selectedToggle.scrollIntoView?.({block:'center'});
+  }
  }
  function syncSearchMode(){
   if(!findInput)return;
@@ -258,7 +262,10 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
      if(!active()||!requestOrderPage)return;
      cancelFind();
      findInput.value='';findResults.replaceChildren();findStatus.textContent='';
-     orderId=entry.id;focusOnReturn=true;selection=undefined;clear();load();
+     orderId=entry.id.toLowerCase();focusOnReturn=true;selection=undefined;
+     const history=ownerWindow.history;
+     history.replaceState(history.state?.smaOptimization?null:history.state,'','#auftrag/'+orderId);
+     clear();load();
     });
     row.append(button);findResults.append(row);
    }

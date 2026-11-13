@@ -11,7 +11,10 @@ function fixture({active=true,hash='',requestOrderPage,requestFind,request=()=>r
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
  const route={hash,pathname:'/app/dashboard.html',search:''};
  Object.defineProperty(window,'location',{value:route,configurable:true});
- Object.defineProperty(window,'history',{value:{replaceState(){route.hash='';}},configurable:true});
+ Object.defineProperty(window,'history',{value:{state:null,replaceState(state,_,url){
+  const next=new URL(url,'https://sma.test'+route.pathname+route.search+route.hash);
+  Object.assign(route,{pathname:next.pathname,search:next.search,hash:next.hash});this.state=state;
+ }},configurable:true});
  const historyNav=doc.createElement('button');historyNav.dataset.page='history';
  historyNav.addEventListener('click',()=>doc.getElementById('page-history').classList.add('active'));
  doc.body.prepend(historyNav);
@@ -445,10 +448,48 @@ await test('History searches the full owner archive and opens the saved order wi
   buttons[0].click();await tick();await tick();
   assert.deepEqual(lookups,[[selected.id,null]]);
   assert.equal(input.value,'');
+  assert.equal(f.window.location.hash,'#auftrag/'+selected.id);
   assert.equal(f.$('.sma-history-list').hidden,false);
   assert.match(f.$('.sma-history-list').textContent,/Hotel-Türgriff Demo/);
   assert.match(f.$('.sma-history-list').textContent,/Ergebnis unklar/);
   assert.equal(f.doc.querySelectorAll('a[target="_blank"]').length,0);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+await test('selecting a same-title order replaces the previous return address and survives reload',async()=>{
+ const first=entry(1),second=entry(2),rows=[first,second];
+ const orderPage=()=>result(rows,null,{order_page:1});
+ const found=rows.map(({id,title,platform,status,created_at})=>({id,title,platform,status,created_at}));
+ mock.timers.enable({apis:['setTimeout']});
+ const f=fixture({hash:'#auftrag/'+first.id,requestOrderPage:orderPage,
+  requestFind:()=>({ok:true,version:1,entries:found,has_more:false,can_upload:false,can_publish:false})});
+ try{
+  await tick();
+  const field=f.$('#smaHistorySearch');
+  field.value=second.title;field.dispatchEvent(new f.window.Event('input'));
+  mock.timers.tick(351);await tick();
+  f.window.location.search='?lang=de';
+  const focused=[];
+  const proto=f.window.HTMLElement.prototype,original=proto.focus;
+  try{
+   proto.focus=function(){if(!this.closest('[hidden]'))focused.push(this);};
+   f.$('.sma-history-find-results').querySelectorAll('button')[1].click();await tick();
+  }finally{proto.focus=original;}
+  assert.equal(f.window.location.hash,'#auftrag/'+second.id);
+  assert.equal(f.window.location.search,'?lang=de');
+  const selected=f.$('.sma-history-list').querySelectorAll('details')[1];
+  assert.equal(selected.open,true);
+  assert.equal(focused.at(-1),selected.querySelector('summary'));
+  const savedHash=f.window.location.hash;
+  button(f,'Aktueller Monat').click();await tick();
+  assert.equal(f.window.location.hash,'');
+  assert.equal(f.window.location.search,'?lang=de');
+  const reloaded=fixture({hash:savedHash,requestOrderPage:id=>{
+   assert.equal(id,second.id);return orderPage();
+  }});
+  try{
+   await tick();const details=reloaded.$('.sma-history-list').querySelectorAll('details');
+   assert.equal(details[1].open,true);assert.ok(!details[0].open);
+  }finally{reloaded.view.destroy();}
  }finally{f.view.destroy();mock.timers.reset();}
 });
 await test('search results and the order list share deadlines and expire without another request',async()=>{
