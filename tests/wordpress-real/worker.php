@@ -34,15 +34,15 @@ if ($input['operation'] === 'install') {
     foreach (get_posts(['post_type' => 'any', 'post_status' => 'any', 'numberposts' => -1]) as $post) wp_delete_post($post->ID, true);
     $error = activate_plugin('sma-bridge/sma-bridge.php');
     if (is_wp_error($error)) throw new RuntimeException($error->get_error_message());
-    $admin = get_user_by('login', 'sma_fixture_admin');
-    $approved = SMA_Bridge_Protocol::approval($input['approval'], home_url('/'), time(), (int)$admin->ID);
-    $store = sma_bridge_store();
-    $store->transaction(fn() => $store->save($approved)); // Synthetic local consent, not live ticket/admin E2E.
     $foreign = wp_insert_post(['post_type' => 'page', 'post_status' => 'draft', 'post_title' => 'Existing fixture page', 'post_content' => 'Do not change.'], true);
     if (is_wp_error($foreign)) throw new RuntimeException('Fixture page failed');
     update_option('sma_fixture_foreign', (int)$foreign);
     global $wpdb, $wp_version;
     reply(['wordpress' => $wp_version, 'php' => PHP_VERSION, 'database' => $wpdb->get_var('SELECT VERSION()'), 'foreign_id' => $foreign]);
+    exit;
+}
+if (in_array($input['operation'], ['consent_form', 'submit_consent'], true)) {
+    require __DIR__ . '/consent.php';
     exit;
 }
 if ($input['operation'] === 'command') {

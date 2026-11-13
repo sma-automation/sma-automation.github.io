@@ -2,6 +2,29 @@
 
 Historischer Praxistest vom **4. November 2026**, übertragen auf den aktuellen SMA-Code am **10. November 2026**. Ursprüngliche Testbasis: `website-v1` nach PR #68 (`1a10658293db7c33614915d0adbdcb7ac8013442`). Der GitHub-Quellabgleich bestätigte: `wordpress/sma-bridge/{sma-bridge.php,protocol.php,store.php}`, der SMA-Signaturadapter und der Edge-Einstieg `sma-wordpress-sync` sind gegenüber dem dokumentierten nativen Test **bytegenau unverändert**. Die archivierten 29 WordPress-/MariaDB-Prüfungen und 359 damaligen Node-Tests sind historische Ergebnisse, **kein heute erneut ausgeführter nativer Test**. Kundenoberfläche, Schrift, produktives Plugin und ZIP wurden nicht verändert.
 
+## Prüfung vom 13. November 2026
+
+SMA hat eine Adresse bei WPSandbox als vorhandene Webseite gespeichert. Die
+zugehörige Verbindungsanfrage ist abgelaufen. Die lesende Prüfung ergab null
+verifizierte WordPress-Verbindungen und null Synchronisierungsaufträge.
+
+Der native Lauf mit WordPress 7.1.4, PHP 8.3.6 und MariaDB 10.11.14 prüft nun
+das Administratorformular des Plugins. Das Öffnen des Formulars lässt den
+Anschluss gesperrt. Beim Absenden prüft WordPress die Nonce aus dem Formular.
+Eine fehlende Nonce und eine abgelaufene Ticketantwort werden abgewiesen.
+Eine gültige Bestätigung führt zurück in die WordPress-Einstellungen. Erst
+danach gelingt der signierte Leseaufruf. Zu diesem Zeitpunkt existiert noch
+keine Produktseite. Zwei gleichzeitige Erstellungsbefehle ergeben genau
+einen Entwurf. Erneute Bestätigung erhält dessen Seiten-ID und Revision.
+Die 29 bisherigen Prüfungen und der Paralleltest bestanden ebenfalls.
+
+Die Testinstallation ersetzt den HTTPS-Abruf des Tickets durch eine lokale
+Antwort und setzt den Testadministrator im WordPress-Prozess. Der externe
+Anmelde-, Ticket- und HTTPS-Weg bleibt separat offen. Der neue GitHub-Prüflauf
+verwendet dasselbe per SHA-256 geprüfte WordPress-Archiv und eine temporäre
+MariaDB. Er läuft bei Änderungen am Plugin, am Signaturadapter oder an der
+nativen Teststrecke.
+
 ## Externer WordPress-Smoke-Test ohne Hostingbuchung – 10. November 2026
 
 Eine isolierte, automatisch ablaufende Gratis-Sandbox bei WPSandbox wurde

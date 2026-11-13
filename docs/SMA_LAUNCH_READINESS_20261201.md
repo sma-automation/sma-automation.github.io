@@ -58,7 +58,10 @@ die neuen Angaben. Nach der Rücknahme ist der Inhalt beim erneuten Aufruf verbo
 Entwurf und Adresse bleiben erhalten. Reproduzierbar mit
 `node tests/run-website-setup-sql.mjs` nach Installation der Testabhängigkeiten
 in `tests/sql-runtime` und `tests/dom-runtime`. Der externe WordPress-Test steht
-weiterhin aus. [Früherer Live-Durchlauf der SMA-Unteradresse](CUSTOMER_WEBSITE_AUTOMATION.md).
+weiterhin aus. Die gespeicherte WPSandbox-Anfrage ist abgelaufen. Der native
+Test mit WordPress und MariaDB prüft jetzt die Administratorfreigabe bis zum
+privaten Produktentwurf. [WordPress-Praxistest](WORDPRESS_PRACTICAL_TEST.md) ·
+[Früherer Live-Durchlauf der SMA-Unteradresse](CUSTOMER_WEBSITE_AUTOMATION.md).
 
 ## Historische Momentaufnahme vom 11.11.2026
 

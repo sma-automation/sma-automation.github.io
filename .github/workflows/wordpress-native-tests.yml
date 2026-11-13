@@ -1,0 +1,40 @@
+name: WordPress admin consent and draft
+on:
+  pull_request:
+    branches: [website-v1]
+    paths: &wordpress_paths
+      - wordpress/sma-bridge/**
+      - supabase/functions/_shared/wordpress-bridge.mjs
+      - tests/run-wordpress-real.mjs
+      - tests/wordpress-real/**
+      - .github/workflows/wordpress-native-tests.yml
+  push:
+    branches: [website-v1]
+    paths: *wordpress_paths
+permissions: {}
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch exact public source
+        run: |
+          git init .
+          git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Prepare isolated MariaDB and PHP tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends mariadb-server-core mariadb-client-core php8.3-cli php8.3-mysql
+          php8.3 -r 'exit(extension_loaded("mysqli") && extension_loaded("openssl") ? 0 : 1);'
+      - name: Run native WordPress test
+        env:
+          SMA_TEST_PHP: php8.3
+        run: |
+          src_dir=$(mktemp -d)
+          trap 'rm -rf -- "$src_dir"' EXIT
+          curl --fail --silent --show-error --location --retry 2 https://wordpress.org/wordpress-7.1.4.tar.gz -o "$src_dir/wordpress.tar.gz"
+          printf '%s  %s\n' '881e53a4681ff2cd911651b11cccdede5ae477ddf0765af5d6a1a8b219a1d835' "$src_dir/wordpress.tar.gz" | sha256sum --check
+          tar -xzf "$src_dir/wordpress.tar.gz" -C "$src_dir"
+          node tests/run-wordpress-real.mjs --wordpress="$src_dir/wordpress"
