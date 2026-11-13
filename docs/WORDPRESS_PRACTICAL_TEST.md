@@ -150,6 +150,16 @@ SMA_TEST_DB_TRANSPORT=loopback node tests/run-wordpress-real.mjs --wordpress="$s
 
 Abweichende lokale Programmorte sind über `SMA_TEST_PHP`, `SMA_TEST_MARIADBD`, `SMA_TEST_MARIADB`, `SMA_TEST_MARIADB_INSTALL` und optional `SMA_TEST_MARIADB_BASEDIR` einstellbar. Diese Variablen wählen nur lokale Testprogramme, keine externe Datenbank. Die geprüfte Arbeitsumgebung verwendete entpackte native Pakete in einem temporären Verzeichnis; eine Installation auf dem Rechner des Kunden ist damit nicht verbunden.
 
+## Erreichbarkeit der gespeicherten Sandbox am 13. November 2026
+
+Die WordPress-REST-Übersicht der oben genannten Sandbox antwortete am
+13. November über ihre Unterverzeichnis-Adresse direkt mit HTTP 200. Sie
+meldete dieselbe Installationsadresse und die Route `/sma-bridge/v1/command`
+für POST. Beim Öffnen von `wp-admin/` verlangte der Anbieter einen eigenen
+Zugangscode. Der lesende Abruf bestätigt die Installation und die registrierte
+Route. Eine aktuelle Administratorfreigabe oder einen signierten
+Synchronisierungsauftrag weist er nicht nach.
+
 ## Geeignete externe Testseite ohne Neubuchung
 
 Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testadresse auf bereits vorhandenem Hosting** benötigt. Eine vorhandene, im Tarif enthaltene Staging-Seite ist geeignet, wenn der Anbieter die nötigen Rechte und Erreichbarkeit tatsächlich zulässt. Aktuell ist keine solche Adresse bestätigt. Es wird weder ein neues Hostingkonto angelegt noch ein Tarif geändert oder ein öffentlicher Tunnel eingerichtet.
@@ -157,9 +167,9 @@ Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testa
 Vor dem ersten Anbieterauftrag müssen folgende Punkte für genau diese Seite feststehen:
 
 1. Eigene Testinstallation ohne echte Kundeninhalte; Zugriff zur einmaligen Plugin-Installation und Adminfreigabe. Die Produktseite bleibt ein Entwurf. Eine produktive Kundenwebsite ist kein Ersatz für diese Testinstallation.
-2. Öffentliche HTTPS-Rootadresse, gültiges Zertifikat, mindestens eine öffentliche IPv4-Adresse und direkte Erreichbarkeit ohne Redirect. Subdirectory-Installationen unterstützt der aktuelle SMA-Transport nicht.
+2. Öffentliche HTTPS-Startadresse der Installation mit abschließendem Schrägstrich, gültigem Zertifikat und öffentlicher IPv4-Adresse. Auch ein Unterverzeichnis wie `/blog/` ist möglich. Der Transport behält diesen Pfad bei und folgt keiner Weiterleitung.
 3. WordPress ab 6.8, PHP ab 8.1 mit OpenSSL und InnoDB für die benötigten Tabellen. Vorhandene Sicherheits-, Cache- und Inhaltsfilter dokumentieren.
-4. Der signierte Endpoint `/wp-json/sma-bridge/v1/command` muss vom SMA-Server erreichbar sein; eine vorgeschaltete Basic-Auth-Sperre würde den derzeitigen Transport blockieren. Deshalb keinen bestehenden Zugriffsschutz ungefragt abschalten, sondern die passende Testumgebung festlegen.
+4. Die WordPress-REST-Route `/sma-bridge/v1/command` muss vom SMA-Server erreichbar sein. SMA sendet den signierten POST an die gespeicherte Installationsadresse mit `?rest_route=%2Fsma-bridge%2Fv1%2Fcommand`; eine vorgeschaltete Basic-Auth-Sperre würde den derzeitigen Transport blockieren. Deshalb keinen bestehenden Zugriffsschutz ungefragt abschalten, sondern die passende Testumgebung festlegen.
 5. Das bestehende SMA-Delta-Demo-Konto und ein öffentlicher **Testshop** sind eindeutig zugeordnet. Keine echten Firmenprofiltexte oder echten Kundendaten für diese Abnahme einsetzen.
 
 ### Vorbereiteter externer Ablauf
