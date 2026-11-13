@@ -7,6 +7,7 @@ import {join, resolve, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
+import {randomBytes} from 'node:crypto';
 import {createBridgeKeys, signBridgeCommand} from '../supabase/functions/_shared/wordpress-bridge.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -111,8 +112,29 @@ $table_prefix = 'wp_'; if (!defined('ABSPATH')) define('ABSPATH', __DIR__ . '/')
   const keys = await createBridgeKeys(); // Ephemeral key; private half never written to disk.
   const attemptId = crypto.randomUUID(), requestId = crypto.randomUUID();
   const sign = patch => signBridgeCommand({privateKey: keys.privateKey, attemptId, requestId, ...patch});
-  const versions = await worker({operation: 'install', approval: {ok: true, attempt_id: attemptId, website_url: 'https://sma-wordpress.test/', shop_slug: 'sma-local-fixture', account_label: 'Synthetic local fixture', public_key: keys.publicKey, expires_at: Math.floor(Date.now()/1000) + 300}});
+  const versions = await worker({operation: 'install'});
   console.log(JSON.stringify({environment: versions, network: `No HTTP listener; MariaDB ${loopback ? '127.0.0.1 with disposable password' : 'Unix socket only'}; WordPress HTTP and mail disabled`}));
+  const website = 'https://sma-wordpress.test/';
+  const ticket = randomBytes(32).toString('hex');
+  const approval = {ok: true, attempt_id: attemptId, website_url: website, shop_slug: 'sma-local-fixture',
+    account_label: 'Synthetic local fixture', public_key: keys.publicKey, expires_at: Math.floor(Date.now()/1000) + 300};
+  const fields = await worker({operation: 'consent_form', ticket, approval});
+  const inspect = await sign({action: 'inspect', requestId: crypto.randomUUID()});
+  const beforeConsent = await worker({operation: 'command', command: inspect});
+  assert.equal(beforeConsent.status, 403);
+  assert.equal(beforeConsent.data.code, 'sma_not_authorized');
+  const consent = (form, response = approval) => worker({operation: 'submit_consent', fields: form, ticket, approval: response});
+  assert.deepEqual(await consent({...fields, _wpnonce: ''}), {rejected: true, ticket_reads: 0});
+  assert.deepEqual(await consent(fields, {...approval, expires_at: 0}), {rejected: true, ticket_reads: 1});
+  assert.equal((await worker({operation: 'command', command: inspect})).status, 403);
+  const redirect = {redirect: website+'wp-admin/options-general.php?page=sma-bridge', status: 302, ticket_reads: 1};
+  assert.deepEqual(await consent(fields), redirect);
+  const approved = await worker({operation: 'command', command: inspect});
+  assert.equal(approved.status, 200);
+  assert.equal(approved.data.revision, 0);
+  assert.equal(approved.data.post_id, null);
+  assert.equal(approved.data.can_publish, false);
+  console.log('Real WordPress consent form and admin action passed with an isolated ticket response.');
   const create = await sign({action: 'sync_draft', expectedRevision: 0});
   const first = worker({operation: 'command', command: create, hold: true});
   // Attach immediately so an early worker failure cannot become an unhandled rejection.
@@ -149,7 +171,10 @@ $table_prefix = 'wp_'; if (!defined('ABSPATH')) define('ABSPATH', __DIR__ . '/')
   assert.deepEqual(a.data, b.data);
   assert.equal(a.data.revision, 1);
   console.log('Second locking read waited for the first transaction: same page ID and revision, no duplicate');
-  const inspect = await sign({action: 'inspect', requestId: crypto.randomUUID()});
+  assert.deepEqual(await consent(fields), redirect);
+  const afterRepeat = await worker({operation: 'command', command: inspect});
+  assert.equal(afterRepeat.data.post_id, a.data.post_id);
+  assert.equal(afterRepeat.data.revision, a.data.revision);
   const commands = {
     inspect, unsigned: {...inspect, headers: {}}, tampered: {...create, body: create.body.replace('"expected_revision":0', '"expected_revision":1')},
     replay: await sign({action: 'sync_draft', expectedRevision: 0, issuedAt: Math.floor(Date.now()/1000) + 1}),
