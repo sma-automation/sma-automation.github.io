@@ -28,9 +28,11 @@ export function canSearchOrders(value){
 export function quickFindMatches(query,areas,files){
  const q=normalize(query);
  const nav=Array.isArray(areas)?areas:[];
+ const matchedFiles=q.length>=2?filterDashboardFiles(files||[],q):[];
  return {
   areas:nav.filter(a=>a&&typeof a.key==='string'&&typeof a.label==='string'&&(!q||normalize(a.label+' '+(a.hint||'')).includes(q))).slice(0,8),
-  files:q.length>=2?filterDashboardFiles(files||[],q).slice(0,10):[]
+  files:matchedFiles.slice(0,10),
+  fileCount:matchedFiles.length
  };
 }
 export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',onNavigate,onOpenFile}){
@@ -90,6 +92,9 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   const found=quickFindMatches(query,areas,getFiles());
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key));
   for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
+  if(found.fileCount>found.files.length&&Array.isArray(areas)&&areas.some(a=>a.key==='files')){
+   item('Alle '+found.fileCount+' Dateien anzeigen','Gefilterte Galerie öffnen',()=>onNavigate('files',query),false);
+  }
   // Deep-search actions are NOT matches; keep them out of the hit count.
   let deepActions=0;
   if(Array.isArray(areas)){
@@ -102,7 +107,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
     deepActions++;
    }
   }
-  const directHits=found.areas.length+found.files.length;
+  const directHits=found.areas.length+found.fileCount;
   const fileStatus=getFileStatus();
   const prefix=directHits===1?'1 direkter Treffer':directHits>1?directHits+' direkte Treffer':'';
   if(fileStatus==='loading')
