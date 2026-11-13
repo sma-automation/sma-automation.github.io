@@ -6,14 +6,14 @@ if (!$root || !is_file($root . '/sma-test-fixture') || !is_file($root . '/wordpr
 }
 $input = json_decode(stream_get_contents(STDIN), true, 32, JSON_THROW_ON_ERROR);
 set_exception_handler(function($error) { fwrite(STDERR, get_class($error) . ': ' . $error->getMessage() . "\n" . $error->getTraceAsString()); exit(1); });
-$_SERVER['HTTP_HOST'] = 'sma-wordpress.test';
-$_SERVER['SERVER_NAME'] = 'sma-wordpress.test';
+$_SERVER['HTTP_HOST'] = 'sma-wordpress.example.org';
+$_SERVER['SERVER_NAME'] = 'sma-wordpress.example.org';
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_SERVER['REQUEST_URI'] = '/';
 $_SERVER['HTTPS'] = 'on'; // REST dispatch in-process; this is not a TLS test.
 if ($input['operation'] === 'install') define('WP_INSTALLING', true);
 require $root . '/wordpress/wp-load.php';
-if (wp_get_environment_type() !== 'local' || DB_NAME !== 'sma_wp_test' || WP_HOME !== 'https://sma-wordpress.test') {
+if (wp_get_environment_type() !== 'local' || DB_NAME !== 'sma_wp_test' || WP_HOME !== 'https://sma-wordpress.example.org') {
     throw new RuntimeException('Wrong fixture');
 }
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -29,7 +29,7 @@ if ($input['operation'] === 'install') {
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     wp_install('SMA disposable test', 'sma_fixture_admin', 'fixture@example.invalid', false, '', bin2hex(random_bytes(24)));
     wp_installing(false);
-    if (home_url('/') !== 'https://sma-wordpress.test/') throw new RuntimeException('Wrong installed URL');
+    if (home_url('/') !== 'https://sma-wordpress.example.org/') throw new RuntimeException('Wrong installed URL');
     // Remove WordPress sample content; no content is served by an HTTP listener.
     foreach (get_posts(['post_type' => 'any', 'post_status' => 'any', 'numberposts' => -1]) as $post) wp_delete_post($post->ID, true);
     $error = activate_plugin('sma-bridge/sma-bridge.php');
@@ -60,6 +60,12 @@ if ($input['operation'] === 'command') {
         });
     }
     reply(dispatch($input['command'])); exit;
+}
+if ($input['operation'] === 'product_pages') {
+    global $wpdb;
+    $pages = $wpdb->get_results("SELECT ID, post_status FROM {$wpdb->posts} WHERE post_type='page' AND post_title='Produkte' ORDER BY ID");
+    reply(array_map(fn($p) => ['id' => (int)$p->ID, 'status' => $p->post_status], $pages));
+    exit;
 }
 if ($input['operation'] !== 'scenarios') throw new RuntimeException('Unknown fixture operation');
 $passed = [];

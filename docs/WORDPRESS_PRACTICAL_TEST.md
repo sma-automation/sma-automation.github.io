@@ -25,6 +25,29 @@ verwendet dasselbe per SHA-256 geprüfte WordPress-Archiv und eine temporäre
 MariaDB. Er läuft bei Änderungen am Plugin, am Signaturadapter oder an der
 nativen Teststrecke.
 
+## Durchgehender Test mit SMA-Ticket und verloren gegangener Antwort
+
+Der zusätzliche Lauf verwendet die SMA-Handler für Verbindung, Ticket und
+Synchronisierung, die SQL-Funktionen aus dem Repository und das unveränderte
+Plugin in WordPress mit MariaDB. Ein fiktiver Kunde mit Testshop startet die
+Freigabe. Das WordPress-Formular und sein Administratorhandler holen das Ticket
+jeweils über eine lokale HTTP-Verbindung ab. SMA bestätigt die Verbindung durch
+einen signierten Leseaufruf. Bis dahin existiert keine Produktseite.
+
+Beim ersten Synchronisieren speichert WordPress die Seite „Produkte“ als Entwurf.
+Die Teststrecke verwirft die erfolgreiche Antwort an SMA. Der Auftrag ist in SMA
+zur Wiederholung vorgemerkt, während die Seite in WordPress bereits existiert.
+Nach der regulären Wartefrist verwendet SMA dieselbe Auftragskennung und
+Ausgangsrevision. SMA und WordPress melden dieselbe Seiten-ID und Revision 1.
+Ein erneuter Statusabruf und ein weiterer Klick liefern den gespeicherten
+Abschluss ohne weiteren Schreibaufruf. In MariaDB bleibt genau ein Produktentwurf.
+
+Die Testidentität ersetzt die echte Benutzeranmeldung. Das PostgreSQL-System
+läuft lokal mit PGlite und einem Vault-Testadapter. Der Ticketabruf verwendet
+Loopback, die signierten Befehle laufen durch den nativen WordPress-REST-Dispatcher.
+Öffentliches HTTPS, Supabase Auth und eine freigegebene externe Plugin-Installation
+gehören zur noch offenen Live-Abnahme.
+
 ## Externer WordPress-Smoke-Test ohne Hostingbuchung – 10. November 2026
 
 Eine isolierte, automatisch ablaufende Gratis-Sandbox bei WPSandbox wurde
@@ -96,7 +119,7 @@ Dies ist noch keine externe Ende-zu-Ende-Abnahme. Die lokale Freigabe verwendet 
 | Privater Entwurf | Anonyme WordPress-REST-Abfrage abgewiesen; keine veröffentlichten Testinhalte |
 | Ungeeignete Tabellen und Widerruf | MyISAM wird abgewiesen; Deaktivierung entfernt den Prüfschlüssel; Reaktivierung verlangt neue Freigabe |
 
-Der Lauf benutzt keinen HTTP-Webserver. Standardmäßig spricht MariaDB nur über einen Unix-Socket. Da die verwendete Arbeitsumgebung keine Unix-Sockets unterstützt, lief die Abnahme über einen zufälligen Port ausschließlich an `127.0.0.1` mit einem temporären Passwort. WordPress-HTTP-Anfragen, E-Mail, Cron und automatische Updates sind im isolierten Test deaktiviert. Schlüssel entstehen neu; der private Signierschlüssel bleibt im Node-Prozess. Temporäre Installation und Datenbank werden nach dem Lauf entfernt.
+Der ursprüngliche Lauf vom 4. November benutzt keinen HTTP-Webserver. Standardmäßig spricht MariaDB nur über einen Unix-Socket. Da die verwendete Arbeitsumgebung keine Unix-Sockets unterstützt, lief die Abnahme über einen zufälligen Port ausschließlich an `127.0.0.1` mit einem temporären Passwort. WordPress-HTTP-Anfragen, E-Mail, Cron und automatische Updates sind im isolierten Test deaktiviert. Schlüssel entstehen neu; der private Signierschlüssel bleibt im Node-Prozess. Temporäre Installation und Datenbank werden nach dem Lauf entfernt.
 
 Die WordPress-REST-Aufrufe erfolgen innerhalb echter PHP-Prozesse mit gesetztem HTTPS-Kontext; daraus wird **kein TLS-Nachweis** abgeleitet. Der Katalog-Frame wird als HTML geprüft, nicht in einem Browser geladen. Externe Plugin-Nebenwirkungen wie E-Mail/Webhooks, persistente Objektcaches, zusätzliche Themes und andere Datenbankversionen sind nicht pauschal abgenommen.
 
@@ -113,6 +136,7 @@ sma_wp_source="$(mktemp -d)"
 curl -fsSL https://wordpress.org/wordpress-7.1.4.tar.gz -o "$sma_wp_source/wordpress.tar.gz"
 printf '%s  %s\n' '881e53a4681ff2cd911651b11cccdede5ae477ddf0765af5d6a1a8b219a1d835' "$sma_wp_source/wordpress.tar.gz" | sha256sum -c -
 tar -xzf "$sma_wp_source/wordpress.tar.gz" -C "$sma_wp_source"
+npm ci --prefix tests/sql-runtime --ignore-scripts
 node tests/run-wordpress-real.mjs --wordpress="$sma_wp_source/wordpress"
 ```
 
@@ -126,6 +150,16 @@ SMA_TEST_DB_TRANSPORT=loopback node tests/run-wordpress-real.mjs --wordpress="$s
 
 Abweichende lokale Programmorte sind über `SMA_TEST_PHP`, `SMA_TEST_MARIADBD`, `SMA_TEST_MARIADB`, `SMA_TEST_MARIADB_INSTALL` und optional `SMA_TEST_MARIADB_BASEDIR` einstellbar. Diese Variablen wählen nur lokale Testprogramme, keine externe Datenbank. Die geprüfte Arbeitsumgebung verwendete entpackte native Pakete in einem temporären Verzeichnis; eine Installation auf dem Rechner des Kunden ist damit nicht verbunden.
 
+## Erreichbarkeit der gespeicherten Sandbox am 13. November 2026
+
+Die WordPress-REST-Übersicht der oben genannten Sandbox antwortete am
+13. November über ihre Unterverzeichnis-Adresse direkt mit HTTP 200. Sie
+meldete dieselbe Installationsadresse und die Route `/sma-bridge/v1/command`
+für POST. Beim Öffnen von `wp-admin/` verlangte der Anbieter einen eigenen
+Zugangscode. Der lesende Abruf bestätigt die Installation und die registrierte
+Route. Eine aktuelle Administratorfreigabe oder einen signierten
+Synchronisierungsauftrag weist er nicht nach.
+
 ## Geeignete externe Testseite ohne Neubuchung
 
 Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testadresse auf bereits vorhandenem Hosting** benötigt. Eine vorhandene, im Tarif enthaltene Staging-Seite ist geeignet, wenn der Anbieter die nötigen Rechte und Erreichbarkeit tatsächlich zulässt. Aktuell ist keine solche Adresse bestätigt. Es wird weder ein neues Hostingkonto angelegt noch ein Tarif geändert oder ein öffentlicher Tunnel eingerichtet.
@@ -133,9 +167,9 @@ Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testa
 Vor dem ersten Anbieterauftrag müssen folgende Punkte für genau diese Seite feststehen:
 
 1. Eigene Testinstallation ohne echte Kundeninhalte; Zugriff zur einmaligen Plugin-Installation und Adminfreigabe. Die Produktseite bleibt ein Entwurf. Eine produktive Kundenwebsite ist kein Ersatz für diese Testinstallation.
-2. Öffentliche HTTPS-Rootadresse, gültiges Zertifikat, mindestens eine öffentliche IPv4-Adresse und direkte Erreichbarkeit ohne Redirect. Subdirectory-Installationen unterstützt der aktuelle SMA-Transport nicht.
+2. Öffentliche HTTPS-Startadresse der Installation mit abschließendem Schrägstrich, gültigem Zertifikat und öffentlicher IPv4-Adresse. Auch ein Unterverzeichnis wie `/blog/` ist möglich. Der Transport behält diesen Pfad bei und folgt keiner Weiterleitung.
 3. WordPress ab 6.8, PHP ab 8.1 mit OpenSSL und InnoDB für die benötigten Tabellen. Vorhandene Sicherheits-, Cache- und Inhaltsfilter dokumentieren.
-4. Der signierte Endpoint `/wp-json/sma-bridge/v1/command` muss vom SMA-Server erreichbar sein; eine vorgeschaltete Basic-Auth-Sperre würde den derzeitigen Transport blockieren. Deshalb keinen bestehenden Zugriffsschutz ungefragt abschalten, sondern die passende Testumgebung festlegen.
+4. Die WordPress-REST-Route `/sma-bridge/v1/command` muss vom SMA-Server erreichbar sein. SMA sendet den signierten POST an die gespeicherte Installationsadresse mit `?rest_route=%2Fsma-bridge%2Fv1%2Fcommand`; eine vorgeschaltete Basic-Auth-Sperre würde den derzeitigen Transport blockieren. Deshalb keinen bestehenden Zugriffsschutz ungefragt abschalten, sondern die passende Testumgebung festlegen.
 5. Das bestehende SMA-Delta-Demo-Konto und ein öffentlicher **Testshop** sind eindeutig zugeordnet. Keine echten Firmenprofiltexte oder echten Kundendaten für diese Abnahme einsetzen.
 
 ### Vorbereiteter externer Ablauf

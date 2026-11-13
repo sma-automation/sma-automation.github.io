@@ -7,6 +7,7 @@ import {join, resolve, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
+import {checkDraftRoundTrip} from './wordpress-real/roundtrip.mjs';
 import {randomBytes} from 'node:crypto';
 import {createBridgeKeys, signBridgeCommand} from '../supabase/functions/_shared/wordpress-bridge.mjs';
 
@@ -87,7 +88,7 @@ add_filter('pre_http_request', fn() => new WP_Error('sma_test_offline', 'Externa
   await writeFile(join(wordpress, 'wp-config.php'), `<?php
 define('DB_NAME', 'sma_wp_test'); define('DB_USER', 'root'); define('DB_PASSWORD', ${phpString(password)});
 define('DB_HOST', ${phpString(loopback ? '127.0.0.1:' + port : 'localhost:' + socket)}); define('DB_CHARSET', 'utf8mb4'); define('DB_COLLATE', '');
-define('WP_HOME', 'https://sma-wordpress.test'); define('WP_SITEURL', 'https://sma-wordpress.test');
+define('WP_HOME', 'https://sma-wordpress.example.org'); define('WP_SITEURL', 'https://sma-wordpress.example.org');
 define('WP_ENVIRONMENT_TYPE', 'local'); define('WP_HTTP_BLOCK_EXTERNAL', true);
 define('DISABLE_WP_CRON', true); define('AUTOMATIC_UPDATER_DISABLED', true); define('WP_AUTO_UPDATE_CORE', false);
 define('WP_DEBUG', true); define('WP_DEBUG_DISPLAY', true); define('WP_DISABLE_FATAL_ERROR_HANDLER', true);
@@ -113,8 +114,8 @@ $table_prefix = 'wp_'; if (!defined('ABSPATH')) define('ABSPATH', __DIR__ . '/')
   const attemptId = crypto.randomUUID(), requestId = crypto.randomUUID();
   const sign = patch => signBridgeCommand({privateKey: keys.privateKey, attemptId, requestId, ...patch});
   const versions = await worker({operation: 'install'});
-  console.log(JSON.stringify({environment: versions, network: `No HTTP listener; MariaDB ${loopback ? '127.0.0.1 with disposable password' : 'Unix socket only'}; WordPress HTTP and mail disabled`}));
-  const website = 'https://sma-wordpress.test/';
+  console.log(JSON.stringify({environment: versions, network: `Ticket handler on loopback only; MariaDB ${loopback ? '127.0.0.1 with disposable password' : 'Unix socket only'}; WordPress HTTP and mail disabled`}));
+  const website = 'https://sma-wordpress.example.org/';
   const ticket = randomBytes(32).toString('hex');
   const approval = {ok: true, attempt_id: attemptId, website_url: website, shop_slug: 'sma-local-fixture',
     account_label: 'Synthetic local fixture', public_key: keys.publicKey, expires_at: Math.floor(Date.now()/1000) + 300};
@@ -185,6 +186,7 @@ $table_prefix = 'wp_'; if (!defined('ABSPATH')) define('ABSPATH', __DIR__ . '/')
   };
   const result = await worker({operation: 'scenarios', commands});
   for (const name of result.passed) console.log('PASS ' + name);
+  await checkDraftRoundTrip({worker, website});
   console.log(`Real WordPress/MariaDB: ${result.count} assertions and concurrent request check passed. No live SMA connection or external TLS test.`);
 } finally {
   if (server) {
