@@ -24,6 +24,9 @@ und zu einer genaueren Suche aufgefordert.
 Ein Klick auf einen Treffer öffnet den **gespeicherten
 Originalauftrag in derselben History**, einschließlich
 seiner Status-/Medieninformationen und bestehenden Aktionen.
+Die Dashboard-Adresse verweist auf den gewählten Auftrag. Auch nach
+dem Neuladen öffnet sich derselbe Eintrag, selbst wenn mehrere Aufträge
+den gleichen Titel haben. Die Monatsauswahl entfernt den Auftragsverweis.
 Es wird kein zweiter Freigabedialog und kein Upload-Endpunkt
 erzeugt. Die drei Reiter **Aufträge, Bearbeiten, Analyse**
 und die bisherige Monats-/Seiten-Navigation bleiben erhalten.
