@@ -35,7 +35,8 @@ try {
   `);
   await db.exec((await sql('sql/publication-files.sql')).split('-- Metadata precheck')[0]);
   await db.exec((await sql('sql/publication-device-upload.sql')).split('create or replace function')[0]);
-  await db.exec(await sql('migrations/20261113163000_publication_verified_file_metadata_v1.sql'));
+  await db.exec(await sql('migrations/20261113163429_publication_verified_file_metadata_v1.sql'));
+  await db.exec(await sql('migrations/20261113163657_publication_content_bound_metadata_v1.sql'));
   await db.query("insert into public.sma_kunden values (1,$1,true,true,false,'test','test@example.invalid')", [owner]);
   await db.query("insert into sma_private.publication_file_sync_v1(user_id,customer_id,n8n_kunde_id,kunde_email) values($1,1,'test','test@example.invalid')", [owner]);
   await sync(catalogFile); await dimensions(unknown);
@@ -43,8 +44,12 @@ try {
   await sync({...catalogFile, width_px:1280}); await dimensions(measurements);
   await sync({...catalogFile, width_px:1920}); await dimensions([1920,null,null]);
 
+  // Drive can increment the final revision counter while keeping the full file digest.
+  await sync(measured);
+  await sync({...catalogFile, revision:measured.revision.slice(0,-1) + '2'});
+  await dimensions(measurements);
   for (const changed of [
-    {revision: measured.revision.slice(0,-1) + '2'},
+    {revision: 'sha256:' + 'a'.repeat(64) + ':invalid'},
     {revision: 'sha256:' + 'b'.repeat(64) + ':1'},
     {size_bytes:'1001'}, {mime_type:'video/quicktime'}
   ]) {
