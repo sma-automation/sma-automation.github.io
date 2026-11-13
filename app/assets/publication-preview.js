@@ -11,7 +11,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=23';
-import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=25';
+import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=26';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -687,8 +687,15 @@ async function readTransferStatus(id,platform){
  if(error||signedOut||(await session()).user.id!==previewOwnerId)throw Error('HISTORY_UNAVAILABLE');
  const entry=readPublicationCoverHistory(data).entries.find(row=>row.id===id&&row.platform===platform);
  if(!entry)throw Error('HISTORY_UNAVAILABLE');
- if(entry.status==='checked')return 'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.';
- return historyStatuses[entry.status][0]+'. '+historyStatuses[entry.status][1];
+ if(entry.status==='uncertain'){
+  const canContinue=data.can_reconcile_transfer===true;
+  return {canContinue,message:canContinue
+   ? 'Ergebnis unklar. Du kannst den bestehenden Vorgang mit dem Portal abgleichen.'
+   : 'Ergebnis unklar. Die Übertragung muss geprüft werden. Hier kannst du den gespeicherten Stand aktualisieren.'};
+ }
+ const message=entry.status==='checked'?'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.'
+  : historyStatuses[entry.status][0]+'. '+historyStatuses[entry.status][1];
+ return {message,canContinue:true};
 }
 async function storedOrderRequest(action,id){
  if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
