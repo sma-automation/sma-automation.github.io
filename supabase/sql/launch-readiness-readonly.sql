@@ -24,6 +24,13 @@ WITH snapshot AS (
   (SELECT count(*) FROM sma_private.publication_files_v1
     WHERE available IS TRUE AND verified_at >= now()-interval '15 minutes') AS recently_verified_files,
   (SELECT count(*) FROM sma_private.publication_provider_permissions_v1) AS operator_permissions,
+  (SELECT count(*)
+   FROM sma_private.publication_provider_permissions_v1 p
+   JOIN sma_private.publication_orders_v1 o ON o.id = p.order_id
+   WHERE o.state = 'checked' AND o.approved_at IS NOT NULL
+     AND p.created_at <= now() AND p.expires_at > now()
+     AND p.fingerprint = sma_private.publication_provider_fingerprint_v1(o)
+  ) AS current_bound_operator_permissions,
   (SELECT count(*) FROM sma_private.publication_provider_attempts_v1) AS provider_attempts,
   (SELECT count(*) FROM sma_private.publication_provider_events_v1) AS provider_events,
   (SELECT count(*) FROM sma_private.publication_gallery_technical_v1) AS gallery_technical_records,
@@ -38,7 +45,7 @@ WITH snapshot AS (
     WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
 )
 SELECT jsonb_build_object(
- 'version',1,
+ 'version',2,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
@@ -49,9 +56,10 @@ SELECT jsonb_build_object(
   'orders',publication_orders,'prepared',prepared_orders,
   'cancelled',cancelled_orders,'approved',approved_orders,
   'operator_permissions',operator_permissions,
+  'current_bound_operator_permissions',current_bound_operator_permissions,
   'provider_attempts',provider_attempts,'provider_events',provider_events,
   'state',CASE
-    WHEN approved_orders=0 OR operator_permissions=0 THEN 'BLOCKED_NO_EXPLICIT_APPROVAL'
+    WHEN current_bound_operator_permissions=0 THEN 'BLOCKED_NO_EXPLICIT_APPROVAL'
     ELSE 'MANUAL_PROVIDER_E2E_REVIEW_REQUIRED' END
  ),
  'media',jsonb_build_object(

@@ -1,6 +1,6 @@
 # SMA – Startcheck zum 1. Dezember 2026 (rein lesend)
 
-Stand: **11. November 2026**, Österreich. Dieser Bericht ist eine
+Stand: **13. November 2026**, Österreich. Dieser Bericht ist eine
 Momentaufnahme und **keine** automatisierte Kunden- oder Uploadfreigabe.
 
 ## Ziel
@@ -17,7 +17,28 @@ E-Mail-Adressen, Medienbytes, Dateipfade noch Tokens. **Eine Anzahl
 gilt nie als Beweis für den unveränderten Freigabe-Fingerprint oder
 einen erfolgreich veröffentlichten Beitrag.**
 
-## Live-Momentaufnahme vom 11.11.2026
+## Live-Abgleich vom 13.11.2026
+
+Für zwei Aufträge ist eine Kundenfreigabe gespeichert. Beide zugehörigen
+Betreiberfenster sind abgelaufen. Version 2 des Startchecks gibt dafür
+`operator_permissions=2`, `current_bound_operator_permissions=0` und
+`BLOCKED_NO_EXPLICIT_APPROVAL` zurück. Der erste Zähler umfasst alle
+gespeicherten Betreiberfreigaben. Der zweite zählt nur solche, deren
+Zeitfenster jetzt läuft und deren Fingerprint zum selben geprüften,
+vom Kunden freigegebenen Auftrag passt. Selbst bei einem Treffer verlangt
+der Bericht die gesonderte Prüfung der Providerstrecke.
+
+Der private YouTube-Test ist abgeschlossen. SMA hat den privaten Videoerfolg
+und die separate Coverannahme für dasselbe Video bestätigt
+([Cover-Übergabe](PORTAL_COVER_HANDOFF.md), [PR #263](https://github.com/sma-automation/sma-automation.github.io/pull/263)).
+Im Produktionsbestand stehen vier SMA-Konten, davon drei nur mit Demozugang
+und keines mit aktivem bestätigtem Zahlungseingang. Es gibt vier
+Galerie-Musikaufträge und noch keinen registrierten technischen
+Galerie-Nachweis. Veröffentlichte Kundenwebseiten und Providerverbindungen
+stehen jeweils bei null. Shopify und SMA melden je zehn Bestellungen,
+sechs davon als Test. Der aktuelle Zahlungstestmodus ist separat zu prüfen.
+
+## Historische Momentaufnahme vom 11.11.2026
 
 | Bereich | Beobachtung | Konsequenz |
 | --- | --- | --- |
@@ -107,7 +128,10 @@ vorgesehen.
 `tests/launch-readiness-readonly.test.cjs` kontrolliert,
 dass die Datei ausschließlich eine lesende SQL-Abfrage enthält,
 keine persönlichen Daten ausgibt und Veröffentlichungs- sowie
-Checkout-Sperren nicht aufhebt. Die SQL wurde am 11.11.2026
+Checkout-Sperren nicht aufhebt. `node tests/run-launch-readiness-sql.mjs`
+prüft den tatsächlichen Bericht mit acht Szenarien in einer isolierten
+PostgreSQL-Datenbank, darunter abgelaufene, noch nicht begonnene und
+nicht mehr zum Auftrag passende Freigaben. Version 2 wurde am 13.11.2026
 auf dem vorhandenen SMA-Supabase-Projekt rein lesend ausgeführt.
 
 Keine neuen Tabellen, Rollen, Berechtigungen, Workflows,
