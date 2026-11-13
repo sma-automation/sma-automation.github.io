@@ -180,6 +180,8 @@ on:
       - supabase/sql/publication-history.sql
       - supabase/sql/publication-history-find.sql
       - supabase/sql/publication-history-find-invoker-wrapper.sql
+      - supabase/sql/publication-history-find-window.sql
+      - supabase/migrations/*_publication_history_find_window_v1.sql
       - supabase/sql/publication-history-find-status.sql
       - supabase/migrations/*_publication_history_find_status_v1.sql
       - tests/run-publication-history-find-sql.mjs

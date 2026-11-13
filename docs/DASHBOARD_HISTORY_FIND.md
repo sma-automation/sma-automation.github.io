@@ -28,6 +28,14 @@ Es wird kein zweiter Freigabedialog und kein Upload-Endpunkt
 erzeugt. Die drei Reiter **Aufträge, Bearbeiten, Analyse**
 und die bisherige Monats-/Seiten-Navigation bleiben erhalten.
 
+Die Trefferliste und der geöffnete Auftrag zeigen denselben Freigabestand.
+„Freigabe ausstehend“ bedeutet, dass die Vorbereitung gültig ist und der Kunde
+noch bestätigen muss. „Kontoprüfung erforderlich“ verweist auf die erneute
+Prüfung des Zielkontos. Endet die Frist bei geöffneter Suche, wechselt auch der
+Treffer zu „Vorbereitung abgelaufen“. Ein Klick öffnet den Auftrag mit seinem
+nächsten Schritt. Ältere Datensätze ohne dokumentierte Frist behalten ihren
+gespeicherten Status.
+
 ## Datensicherheit
 
 Die öffentliche `sma_publication_history_find_v1(text)` ist ein
@@ -43,8 +51,9 @@ Diese explizite Eigentumsprüfung ist zwingend, weil die
 Funktion im privaten Schema als `SECURITY DEFINER`
 auf die Datensätze zugreift.
 
-Die Funktion gibt nur Auftrags-ID, Titel, Portal,
-Status und Erstellungszeit zurück. Bei eindeutiger Kundenzuordnung nutzt
+Die Funktion gibt Auftrags-ID, Titel, Portal, Status und Erstellungszeit zurück.
+Bei einem eindeutig zugeordneten Kunden kann ein vorbereiteter Auftrag zusätzlich
+den Zustand und das Ende der Vorbereitung enthalten. Bei eindeutiger Kundenzuordnung nutzt
 die Suche dieselbe Auswertung wie die Auftragsansicht. Ein unklarer
 Übertragungsversuch erscheint als „Ergebnis unklar“. Eine erfolgreich
 abgeschlossene private Übertragung erfordert den passenden gespeicherten

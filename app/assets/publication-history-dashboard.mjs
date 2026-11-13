@@ -2,10 +2,10 @@ import {mountPublicationAnalysisHistory} from './publication-analysis-history-da
 import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
 import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=2';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
-import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
+import {historyStatuses,historyStatusLabel,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=5';
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
-import {readHistoryFind} from './publication-history-find.mjs?v=2';
+import {readHistoryFind} from './publication-history-find.mjs?v=3';
 
 export function mountPublicationHistory({doc,request,requestOrderPage,requestFind,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
@@ -24,6 +24,12 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  const findInput=requestFind?create('input'):null,findResults=requestFind?create('ol',null,'sma-history-find-results'):null;
  const findStatus=requestFind?create('p',null,'sma-history-find-status'):null;
  let findTimer=null,findSerial=0;
+ const findExpiryTimers=[];
+ function cancelFind(){
+  findSerial++;
+  clearTimeout(findTimer);
+  findExpiryTimers.splice(0).forEach(timer=>clearTimeout(timer));
+ }
  if(findInput){
   findInput.id='smaHistorySearch';findInput.type='search';findInput.autocomplete='off';findInput.maxLength=80;
   findInput.placeholder='Auftrag, Titel oder Portal suchen …';
@@ -141,7 +147,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
  }
- function invalidateOwner(){invalidOwner=true;findSerial++;clearTimeout(findTimer);if(findInput)findInput.disabled=true;findResults?.replaceChildren();clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
+ function invalidateOwner(){invalidOwner=true;cancelFind();if(findInput)findInput.disabled=true;findResults?.replaceChildren();clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
  const current=g=>g===generation&&active();
  const format=value=>new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(value));
  function render(result=lastResult){
@@ -156,7 +162,8 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   list.replaceChildren();
   for(const entry of entries.slice(pageNumber*pageSize,(pageNumber+1)*pageSize)){
    const row=create('li'),heading=create('div',null,'sma-history-heading');
-   const name=create('strong',entry.title||'Beitrag'),status=create('span',historyStatuses[entry.status][0],'sma-history-status');
+   const window=entry.approval_window||entry.preparation_window;
+   const name=create('strong',entry.title||'Beitrag'),status=create('span',historyStatusLabel(entry.status,window),'sma-history-status');
    status.dataset.status=entry.status;heading.append(name,status);
    const meta=create('small',historyPlatforms[entry.platform]+' · '+format(entry.created_at));
    const cover=create('span','Cover: '+historyCoverStatuses[entry.cover.status][0],'sma-history-cover-status');
@@ -164,7 +171,6 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    const details=create('details'),toggle=create('summary');toggle.append(heading,meta);
    const detail=create('p',historyStatuses[entry.status][1]);
    let previewLink;
-   const window=entry.approval_window||entry.preparation_window;
    const supportsCurrentPost=['youtube','tiktok'].includes(entry.platform);
    const currentPost=entry.status==='cancelled'&&supportsCurrentPost;
    const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
@@ -178,14 +184,14 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    }
    if(window){
     const expire=()=>{
-     status.textContent='Vorbereitung abgelaufen';
+     status.textContent=historyStatusLabel(entry.status,window);
      detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';
      previewLink.href=previewUrl;previewLink.textContent=supportsCurrentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen';
     };
     const remaining=Date.parse(window.expires_at)-Date.now();
     if(window.status==='expired'||remaining<=0)expire();
     else if(window.status==='recheck'){
-     status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';
+     detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';
     }else{
      detail.textContent=entry.status==='preparing'
        ? 'Das Zielkonto ist noch offen. Du kannst diese Vorbereitung bis '+format(window.expires_at)+' Uhr (Wien) fortsetzen.'
@@ -237,14 +243,20 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    const found=readHistoryFind(response);findResults.replaceChildren();
    for(const entry of found.entries){
     const row=create('li'),button=create('button'),heading=create('strong',entry.title||'Gespeicherter Beitrag');
-    const caption=create('small',historyPlatforms[entry.platform]+' · '+historyStatuses[entry.status][0]+' · '+format(entry.created_at));
+    const caption=create('small');
+    const showStatus=()=>{caption.textContent=historyPlatforms[entry.platform]+' · '+historyStatusLabel(entry.status,entry.window)+' · '+format(entry.created_at);};
+    showStatus();
+    if(entry.window&&entry.window.status!=='expired'){
+     const remaining=Date.parse(entry.window.expires_at)-Date.now();
+     if(remaining>0)findExpiryTimers.push(setTimeout(showStatus,remaining+1));
+    }
     caption.id='sma-history-find-detail-'+entry.id;
     button.type='button';button.className='sma-history-find-open';button.append(heading,caption);
     button.setAttribute('aria-describedby',caption.id);
     button.setAttribute('aria-label','Auftrag in History öffnen: '+(entry.title||'Gespeicherter Beitrag'));
     button.addEventListener('click',()=>{
      if(!active()||!requestOrderPage)return;
-     findSerial++;clearTimeout(findTimer);
+     cancelFind();
      findInput.value='';findResults.replaceChildren();findStatus.textContent='';
      orderId=entry.id;focusOnReturn=true;selection=undefined;clear();load();
     });
@@ -260,7 +272,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  }
  function onFindInput(){
   if(!findInput||disposed)return;
-  findSerial++;clearTimeout(findTimer);
+  cancelFind();
   const term=findInput.value.trim();findResults.replaceChildren();
   if(term.length<2){
    findStatus.textContent=term?'Mindestens zwei Zeichen eingeben.':'';
@@ -349,5 +361,5 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   refresh.focus();
   return true;
  }
- return {hasSearchView,openSearchView,destroy(){disposed=true;findSerial++;clearTimeout(findTimer);findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {hasSearchView,openSearchView,destroy(){disposed=true;cancelFind();findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

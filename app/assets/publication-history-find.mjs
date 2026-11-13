@@ -12,8 +12,16 @@ export function readHistoryFind(value){
    [...row.title].length>180||!Object.hasOwn(historyPlatforms,row.platform)||
    !Object.hasOwn(historyStatuses,row.status)||typeof row.created_at!=='string'||
    !Number.isFinite(Date.parse(row.created_at)))throw Error('HISTORY_FIND_INVALID');
+  const window=row.window;
+  if(window!=null){
+   const states=row.status==='prepared'?['active','recheck','expired']:row.status==='preparing'?['active','expired']:[];
+   if(!states.includes(window.status)||typeof window.expires_at!=='string'||
+    !/^20\d{2}-\d\d-\d\dT[\d:.]+(?:Z|[+-]\d\d:\d\d)$/.test(window.expires_at)||
+    !Number.isFinite(Date.parse(window.expires_at)))throw Error('HISTORY_FIND_INVALID');
+  }
   seen.add(row.id);
-  return {id:row.id,title:row.title,platform:row.platform,status:row.status,created_at:row.created_at};
+  return {id:row.id,title:row.title,platform:row.platform,status:row.status,created_at:row.created_at,
+   ...(window?{window:{status:window.status,expires_at:window.expires_at}}:{})};
  });
  return {entries,has_more:value.has_more};
 }

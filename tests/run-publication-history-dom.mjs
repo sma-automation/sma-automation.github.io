@@ -451,6 +451,30 @@ await test('History searches the full owner archive and opens the saved order wi
   assert.equal(f.doc.querySelectorAll('a[target="_blank"]').length,0);
  }finally{f.view.destroy();mock.timers.reset();}
 });
+await test('search results and the order list share deadlines and expire without another request',async()=>{
+ const now=Date.now();mock.timers.enable({apis:['Date','setTimeout'],now});
+ const deadline=new Date(now+6000).toISOString();
+ const rows=[entry(1,{status:'prepared',approval_window:{status:'active',expires_at:deadline}}),
+  entry(2,{status:'prepared',approval_window:{status:'recheck',expires_at:deadline}}),
+  entry(3,{status:'preparing',preparation_window:{status:'expired',expires_at:new Date(now-1000).toISOString()}})];
+ const searchRows=rows.map(({id,title,created_at,platform,status,approval_window,preparation_window})=>
+  ({id,title,created_at,platform,status,window:approval_window||preparation_window}));
+ let requests=0;
+ const f=fixture({request:()=>result(rows),requestFind:()=>{requests++;return {ok:true,version:1,entries:searchRows,has_more:false,can_publish:false,can_upload:false};}});
+ try{
+  await tick();
+  const field=f.$('#smaHistorySearch');
+  field.value='Test';field.dispatchEvent(new f.window.Event('input'));mock.timers.tick(351);await tick();
+  const labels=()=>[...f.page.querySelectorAll('.sma-history-find-results small')].map(c=>c.textContent.split(' · ')[1]);
+  const listLabels=()=>[...f.page.querySelectorAll('.sma-history-list .sma-history-status')].map(n=>n.textContent);
+  assert.deepEqual(labels(),['Freigabe ausstehend','Kontoprüfung erforderlich','Vorbereitung abgelaufen']);
+  assert.deepEqual(labels(),listLabels());
+  mock.timers.tick(6001);
+  assert.deepEqual(labels(),Array(3).fill('Vorbereitung abgelaufen'));
+  assert.deepEqual(labels(),listLabels());
+  assert.equal(requests,1);assert.deepEqual(f.calls,[{}]);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
 await test('History search rejects late results after losing the current owner',async()=>{
  const pending=deferred(),calls=[];
  mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});

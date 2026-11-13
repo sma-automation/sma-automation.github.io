@@ -25,3 +25,14 @@ test('search accepts 180 Unicode characters as returned by the database',async()
  assert.equal(read({...result(),entries:[row]}).entries[0].title,title);
  assert.throws(()=>read({...result(),entries:[{...row,title:title+'a'}]}),/HISTORY_FIND_INVALID/);
 });
+
+test('search preparation windows are optional and only accepted for matching order states',async()=>{
+ const {readHistoryFind}=await load;
+ const parse=(status,window)=>readHistoryFind({...result(),entries:[{...result().entries[0],status,window}]}).entries[0];
+ const deadline={status:'recheck',expires_at:'2026-11-13T17:44:00+00:00'};
+ assert.deepEqual(parse('prepared',deadline).window,deadline);
+ assert.equal(parse('prepared',undefined).window,undefined);
+ for(const [status,window] of [['checked',deadline],['preparing',deadline],['prepared',{...deadline,status:'confirmed'}],['prepared',{...deadline,expires_at:'yesterday'}]]){
+  assert.throws(()=>parse(status,window),/HISTORY_FIND_INVALID/);
+ }
+});
