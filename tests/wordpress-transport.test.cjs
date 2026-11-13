@@ -21,12 +21,50 @@ test('HTTP parser accepts bounded JSON and chunks while rejecting redirects and 
  for(const s of ['HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1/\r\n\r\n',head+'Content-Length: 3\r\n\r\n{}',head+'Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}',head+'Transfer-Encoding: chunked\r\nContent-Length: 2\r\n\r\n{}',head+'Content-Encoding: gzip\r\n\r\n{}',head+'Transfer-Encoding: chunked\r\n\r\nffff\r\n{}',head+' folded: value\r\n\r\n{}'])assert.throws(()=>parseWordpressHttp(bytes(s)));
  assert.throws(()=>parseWordpressHttp(new Uint8Array(32769)));
 });
-test('transport pins the resolved IP but validates TLS and Host against the original domain',async()=>{
- const {createWordpressTransport}=await ready;const calls=[];let read=false,closed=0,written='';
- const conn={handshake:async()=>{calls.push('handshake');return {alpnProtocol:'http/1.1'};},write:async b=>{written+=new TextDecoder().decode(b);return b.length;},read:async b=>{if(read)return null;read=true;const v=bytes('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}');b.set(v);return v.length;},close(){closed++;}};
- const send=createWordpressTransport({resolve:async h=>{calls.push(['dns',h]);return ['93.184.216.34'];},connect:async ip=>{calls.push(['ip',ip]);return conn;},startTls:async(c,h)=>{assert.equal(c,conn);calls.push(['tls',h]);return conn;}});
- assert.deepEqual(await send('https://example.com/',{body:'{}',headers:{'X-SMA-Signature':'A'.repeat(512)}}),{});
- assert.deepEqual(calls,[['dns','example.com'],['ip','93.184.216.34'],['tls','example.com'],'handshake']);assert.match(written,/Host: example.com\r\n/);assert.equal(closed,1);
+function routeTransport(dependencies, responses) {
+ const requests=[],closed=[];
+ const call=dependencies.createWordpressTransport({
+  resolve:async host=>{assert.equal(host,'example.com');return ['93.184.216.34'];},
+  connect:async ip=>{
+   assert.equal(ip,'93.184.216.34');
+   const index=requests.length;requests.push('');let read=false;
+   return {handshake:async()=>({alpnProtocol:'http/1.1'}),
+    write:async data=>{requests[index]+=new TextDecoder().decode(data);return data.length;},
+    read:async buffer=>{if(read)return null;read=true;const data=bytes(responses[index]);buffer.set(data);return data.length;},
+    close:()=>closed.push(index)};
+  },
+  startTls:async(conn,host)=>{assert.equal(host,'example.com');return conn;}
+ });
+ return {call,requests,closed};
+}
+const testWebsite='https://example.com/blog/';
+const canonical=testWebsite+'wp-json/sma-bridge/v1/command';
+const signedCommand={body:'{}',headers:{'X-SMA-Signature':'A'.repeat(512)}};
+const routeInfo=href=>({namespace:'sma-bridge/v1',methods:['POST'],_links:{self:[{href}]}});
+const jsonResponse=data=>'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(data);
+const htmlResponse='HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<html>Website</html>';
+
+test('use the registered canonical route, with one signed POST and pinned TLS on both requests',async()=>{
+ const t=routeTransport(await ready,[jsonResponse(routeInfo(canonical)),jsonResponse({ok:true})]);
+ assert.deepEqual(await t.call(testWebsite,signedCommand),{ok:true});
+ assert.match(t.requests[0],/^OPTIONS \/blog\/wp-json\/sma-bridge\/v1\/command HTTP/);
+ assert.doesNotMatch(t.requests[0],/X-SMA-Signature|Content-Length/);
+ assert.match(t.requests[1],/^POST \/blog\/wp-json\/sma-bridge\/v1\/command HTTP/);
+ assert.match(t.requests[1],/Host: example.com\r\n/);assert.match(t.requests[1],/X-SMA-Signature: A+/);
+ assert.deepEqual(t.closed,[0,1]);
+});
+test('plain permalinks remain usable and provider-supplied URLs are never followed',async()=>{
+ for(const reply of [htmlResponse,'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n',jsonResponse({}),jsonResponse(routeInfo('https://other.example/shop')),jsonResponse({...routeInfo(canonical),methods:['GET']})]){
+  const t=routeTransport(await ready,[reply,jsonResponse({ok:true})]);
+  assert.deepEqual(await t.call(testWebsite,signedCommand),{ok:true});
+  assert.match(t.requests[1],/^POST \/blog\/\?rest_route=%2Fsma-bridge%2Fv1%2Fcommand HTTP/);
+  assert.equal(t.requests.length,2);
+ }
+});
+test('denied discovery is not followed by a signed command',async()=>{
+ const t=routeTransport(await ready,['HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\nForbidden']);
+ await assert.rejects(t.call(testWebsite,signedCommand),{code:'PROVIDER_UNAVAILABLE'});
+ assert.equal(t.requests.length,1);
 });
 test('mixed public/private DNS results never open a socket and late timed-out sockets are closed',async()=>{
  const {createWordpressTransport}=await ready;let opened=0,closed=0;
@@ -58,13 +96,7 @@ test('failure diagnostics report only the failing stage, allowed error kind, sta
 
 test('the HTML response from an external host is never accepted as a WordPress acknowledgement',async()=>{
  const {createWordpressTransport}=await ready;
- let received=false;
- const conn={handshake:async()=>({}),write:async b=>b.length,close(){},read:async b=>{
-  if(received)return null;
-  received=true;
-  const raw=bytes('HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<html>Website</html>');
-  b.set(raw);return raw.length;
- }};
- const call=createWordpressTransport({resolve:async()=>['93.184.216.34'],connect:async()=>conn,startTls:async()=>conn});
- await assert.rejects(call('https://example.com/',{body:'{}',headers:{'X-SMA-Signature':'A'.repeat(512)}}),{code:'WORDPRESS_HTML_RESPONSE'});
+ const t=routeTransport({createWordpressTransport},[jsonResponse(routeInfo(canonical)),htmlResponse]);
+ await assert.rejects(t.call(testWebsite,signedCommand),{code:'WORDPRESS_HTML_RESPONSE'});
+ assert.equal(t.requests.length,2,'failed POST must never be replayed on another route');
 });
