@@ -2,7 +2,7 @@ import {createBridgeKeys,signBridgeCommand,readBridgeResult} from '../_shared/wo
 import {wordpressTarget} from '../_shared/wordpress-transport.mjs';
 const ORIGIN='https://sma-automation.com',UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const fail=code=>{throw Object.assign(new Error(code),{code});};
-const codes=new Set(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','WEBSITE_REQUIRED','SHOP_REQUIRED','SHOP_CHANGED','TARGET_REJECTED','REQUEST_STALE','TICKET_UNAVAILABLE','VERIFICATION_BUSY','REVISION_CONFLICT','REQUEST_CONFLICT','REQUEST_RATE_LIMITED','CREDENTIAL_UNAVAILABLE','PROVIDER_UNAVAILABLE','ALREADY_VERIFIED']);
+const codes=new Set(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','WEBSITE_REQUIRED','SHOP_REQUIRED','SHOP_CHANGED','TARGET_REJECTED','REQUEST_STALE','TICKET_UNAVAILABLE','VERIFICATION_BUSY','REVISION_CONFLICT','REQUEST_CONFLICT','REQUEST_RATE_LIMITED','CREDENTIAL_UNAVAILABLE','PROVIDER_UNAVAILABLE','WORDPRESS_HTML_RESPONSE','ALREADY_VERIFIED']);
 export async function boundedJson(request,max=4096){
  if(!request.body||Number(request.headers.get('content-length'))>max)fail('INVALID_INPUT');
  const reader=request.body.getReader(),parts=[];let total=0;
