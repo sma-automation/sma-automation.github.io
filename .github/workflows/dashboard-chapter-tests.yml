@@ -27,6 +27,7 @@ jobs:
           node tests/run-website-preparation-chromium.mjs
           node tests/run-publication-tab-reload.mjs
           node tests/run-dashboard-chapters-dom.mjs
+          node tests/run-wordpress-dom.mjs
           node tests/run-publication-history-dom.mjs
           node tests/run-website-setup-dom.mjs
           node tests/run-new-website-domain-dom.mjs
