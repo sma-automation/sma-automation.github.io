@@ -36,7 +36,10 @@ und keines mit aktivem bestätigtem Zahlungseingang. Es gibt vier
 Galerie-Musikaufträge und noch keinen registrierten technischen
 Galerie-Nachweis. Veröffentlichte Kundenwebseiten und Providerverbindungen
 stehen jeweils bei null. Shopify und SMA melden je zehn Bestellungen,
-sechs davon als Test. Der aktuelle Zahlungstestmodus ist separat zu prüfen.
+sechs davon als Test. Am 13.11.2026 zeigte der Shopify-Admin unter
+**Einstellungen → Zahlungen → Shopify Payments** „Testmodus ist aktiviert“
+und „Akzeptiert nur Testzahlungen“. Für diesen Abgleich wurde keine Bestellung
+angelegt. Die SQL-Abfrage liest diese externe Einstellung nicht.
 
 ## Historische Momentaufnahme vom 11.11.2026
 
@@ -85,8 +88,8 @@ und einzelne YouTube-/TikTok-Vorbereitungsschritte. Daraus folgt
    keine kostenpflichtige Tarifänderung ohne Zustimmung.
 4. **Webseite und Verkauf:** Eine vollständige fiktive
    Kundenwebseite einschließlich WordPress-/Domain-Anbindung
-   zunächst isoliert abnehmen. Den Shopify-Payments-Testmodus
-   im Admin kontrollieren, **ohne** Kauf oder Zahlungen.
+   zunächst isoliert abnehmen. Der Shopify-Payments-Testmodus wurde am
+   13.11.2026 direkt im Admin bestätigt (siehe Live-Abgleich oben).
 5. **Produktfreigabe:** Testnutzer kann ohne Anleitung Datei,
    Text, Portal, Freigabe, Shop und History finden. Fehler und
    ausstehende Nachweise werden sichtbar als solche markiert,
