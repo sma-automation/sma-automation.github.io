@@ -3,6 +3,9 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - supabase/sql/launch-readiness-readonly.sql
+      - tests/run-launch-readiness-sql.mjs
+      - tests/launch-readiness-readonly.test.cjs
       - app/assets/original-video-preview.mjs
       - tests/run-original-video-preview-dom.mjs
       - app/assets/publication-order.mjs
@@ -238,6 +241,7 @@ jobs:
           SMA_REQUIRE_FFMPEG: '1'
         run: |
           node --test tests/*.test.cjs
+          node tests/run-launch-readiness-sql.mjs
           node tests/run-publication-comparison-sql.mjs
           node tests/run-publication-video-sql.mjs
           node tests/run-publication-file-metadata-sql.mjs
