@@ -97,7 +97,29 @@ try{
   try{return (await db.query('select public.sma_publication_history_order_page_v1($1,$2) r',[orderId,page])).rows[0].r;}
   finally{await db.exec('reset role');}
  };
+ const projection=await sql('publication-history-transfer-recovery.sql');
+ eq(projection,await readFile(new URL('../supabase/migrations/20261113152844_publication_history_transfer_recovery_v1.sql',import.meta.url),'utf8'));
+ await db.exec(projection);
  const savedRows=await snapshot();
+ await db.exec('begin');
+ await db.query("update sma_private.publication_provider_attempts_v1 set state='uncertain',provider_id=null,session_url=null,session_expires_at=null where order_id=$1",[id(1)]);
+ eq((await locate(id(1))).can_reconcile_transfer,false);
+ await db.query("update sma_private.publication_provider_attempts_v1 set session_url='PRIVATE_SESSION_URL',session_expires_at=now()+interval '1 hour' where order_id=$1",[id(1)]);
+ const resumable=await locate(id(1));eq(resumable.can_reconcile_transfer,true);
+ await db.query("update sma_private.publication_provider_attempts_v1 set target_id='other' where order_id=$1",[id(1)]);
+ eq((await locate(id(1))).can_reconcile_transfer,false);
+ await db.query("update sma_private.publication_provider_attempts_v1 set target_id='fixture-target' where order_id=$1",[id(1)]);
+ assert.doesNotMatch(JSON.stringify(resumable),/PRIVATE_SESSION_URL|session_url|provider_id/);checks++;
+ eq((await locate(id(2),null,other)).can_reconcile_transfer,false);
+ eq((await locate(id(1),null,other)).code,'ORDER_UNAVAILABLE');
+ await db.query("update sma_private.publication_provider_attempts_v1 set session_expires_at=now()-interval '1 hour' where order_id=$1",[id(1)]);
+ eq((await locate(id(1))).can_reconcile_transfer,false);
+ await db.query("update sma_private.publication_provider_attempts_v1 set platform='tiktok',session_expires_at=now()+interval '1 hour' where order_id=$1",[id(1)]);
+ eq((await locate(id(1))).can_reconcile_transfer,false);
+ await db.query("update sma_private.publication_orders_v1 set binding=jsonb_set(binding,'{platform}','\"tiktok\"') where id=$1",[id(1)]);
+ await db.query("update sma_private.publication_provider_attempts_v1 a set provider_id='PRIVATE_PROVIDER_ID',fingerprint=sma_private.publication_provider_fingerprint_v1(j) from sma_private.publication_orders_v1 j where a.order_id=j.id and j.id=$1",[id(1)]);
+ eq((await locate(id(1))).can_reconcile_transfer,true);
+ await db.exec('rollback');
  const last=await locate(id(1));
  eq(last.order_page,5);eq(last.month,page.month);eq(last.entries,next.entries);eq(last.summary,page.summary);
  eq((await locate(id(1),1)).entries,page.entries);eq((await locate(id(1),999)).order_page,5);

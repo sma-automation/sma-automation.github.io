@@ -76,11 +76,19 @@ for(const platform of ['youtube','tiktok']){
   {target:{id:'foreign',platform:'other'}}]){
   eq(t.view.resumePrepared({...saved,...patch}),false);eq(!!t.$('publicationOrderDialog').open,false);
  }
- const opened=fixture({platform,post:{title:'Saved title',caption:'Saved caption'}});
+ let finishRead;
+ const opened=fixture({platform,post:{title:'Saved title',caption:'Saved caption'},
+  readTransferStatus:()=>new Promise(resolve=>{finishRead=resolve;})});
  const checked={...saved,state:'checked',approval_token:null,approval_window:null,
   approved_at:new Date().toISOString(),approval_review:{media_rights:true}};
  eq(opened.view.resumePrepared(checked),true);eq(opened.requests.length,0);
  eq(opened.approve.hidden,true);eq(opened.status.textContent,'Auftrag prüfen und fortsetzen');
+ eq(opened.status.hidden,true);await opened.status.handlers.click();eq(opened.requests.length,0);
+ finishRead({message:'Ergebnis unklar.',canContinue:false});await new Promise(resolve=>setImmediate(resolve));
+ eq(opened.status.hidden,true);await opened.status.handlers.click();eq(opened.requests.length,0);
+ const refresh=[...opened.doc.querySelectorAll('button')].find(b=>b.textContent==='Übertragungsstand aktualisieren');
+ const updated=refresh.handlers.click();finishRead({message:'Bestehender Vorgang kann abgeglichen werden.',canContinue:true});
+ await updated;eq(opened.status.hidden,false);eq(opened.requests.length,0);
  await opened.status.handlers.click();
  eq(opened.requests.map(req=>[req.action,req.input.id]),[['get',checked.id]]);
  eq(t.view.resumePrepared(saved),true);
@@ -149,7 +157,7 @@ for(const platform of ['youtube','tiktok']){
  const t=fixture({platform,approvalResponse:timeout,storedResponse:(_,row)=>({...row,state:'checked'}),
   readTransferStatus:async(id,target)=>{
    eq(id,savedId);eq(target,platform);readCount++;
-   if(readCount===1)return 'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.';
+   if(readCount===1)return {message:'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.',canContinue:true};
    if(readCount===2)throw Error('unavailable');
    return new Promise(resolve=>{finish=resolve;});
   }});
@@ -158,10 +166,11 @@ for(const platform of ['youtube','tiktok']){
  assert.match(t.doc.body.textContent,/noch kein Übertragungsversuch gespeichert/);
  eq(t.status.textContent,'Auftrag prüfen und fortsetzen');
  await reload.handlers.click();
+ eq(t.status.hidden,true);await t.status.handlers.click();
  assert.match(t.doc.body.textContent,/Übertragungsstand konnte nicht geladen werden/);
  assert.doesNotMatch(t.doc.body.textContent,/noch kein Übertragungsversuch gespeichert/);
  const pending=reload.handlers.click();await reload.handlers.click();eq(readCount,3);
- t.view.clear();finish('Veraltete Rückmeldung');await pending;
+ t.view.clear();finish({message:'Veraltete Rückmeldung',canContinue:true});await pending;
  assert.doesNotMatch(t.doc.body.textContent,/Veraltete Rückmeldung/);
  eq(t.requests.map(r=>r.action),['account','prepare','approve']);
 }

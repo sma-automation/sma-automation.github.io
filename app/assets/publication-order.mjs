@@ -358,20 +358,24 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     reload.type='button';reload.className='secondary';
     details.append(message,reload);
     async function load(){
-      if(reload.disabled||!dialog.open||order!==row)return;
-      reload.disabled=true;
+      if(reload.disabled||!dialog.open||order!==row||!message.isConnected)return;
+      reload.disabled=true;statusButton.hidden=true;
       message.textContent='Der gespeicherte Übertragungsstand wird geladen …';
       try{
-        const text=await readTransferStatus(row.id,row.binding.platform);
-        if(dialog.open&&order===row)message.textContent=text;
+        const result=await readTransferStatus(row.id,row.binding.platform);
+        if(dialog.open&&order===row&&message.isConnected){
+          message.textContent=result.message;
+          statusButton.hidden=result.canContinue!==true;
+        }
       }catch{
-        if(dialog.open&&order===row)message.textContent='Der Übertragungsstand konnte nicht geladen werden.';
+        if(dialog.open&&order===row&&message.isConnected)message.textContent='Der Übertragungsstand konnte nicht geladen werden.';
       }finally{
         reload.disabled=false;
       }
     }
     reload.addEventListener('click',load);
-    void load();
+    // A History resume opens the dialog immediately after rendering its contents.
+    void Promise.resolve().then(load);
   }
   function showDuplicate(row,targetId){
     // The journal identifies duplicate approvals by file version, platform and target.
@@ -425,7 +429,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
     if(r.check_error)details.append(make('p',orderError(r.check_error)));
     if(context.binding.platform==='tiktok')details.append(make('p','Nach einer späteren Veröffentlichung kann TikTok einige Minuten benötigen, bis der Beitrag im Profil sichtbar ist.'));
-    statusButton.hidden=r.state==='cancelled';
+    statusButton.hidden=r.state==='cancelled'||(r.state==='checked'&&recordedApproval(r));
     if(r.state==='cancelled')notice.textContent='Dieser Auftrag wurde storniert und kann nicht mehr freigegeben werden. Schließe dieses Fenster und bereite bei Bedarf einen neuen Auftrag vor.';
     else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
     else if(r.state==='checked')notice.textContent=(r.approved_at?'Deine Freigabe ist gespeichert. ':'')+'Die Auftragsprüfung ist abgeschlossen.';
