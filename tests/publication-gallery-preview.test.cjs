@@ -33,7 +33,7 @@ function gallery(wide, overrideAssets){
   document:{createElement:tag=>new Element(tag)},
   $:id=>{assert.ok(nodes[id],id);return nodes[id];},
   workspace:wide?{galleryVisible:()=>true,openEmptyPreview(){firstUploadCalls++}}:null,
-  assets,selectedAsset:{id:'synthetic-video'},selectedPortal:'youtube',filePickerPage:0,busy:false,
+  assets,currentHistoryAsset:null,selectedAsset:{id:'synthetic-video'},selectedPortal:'youtube',filePickerPage:0,busy:false,
   describeFile:file=>({title:file.name.replace(/\.mp4$/,'').replaceAll('_',' '),version:file.media_kind==='video'?'Video · 10 Sek.':'Bild'}),
   fileFitsPortal:file=>file.media_kind==='video',
   pickerThumbnails:{reset(){},observe(){observed++;}},

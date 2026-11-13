@@ -36,6 +36,13 @@ Treffer zu „Vorbereitung abgelaufen“. Ein Klick öffnet den Auftrag mit sein
 nächsten Schritt. Ältere Datensätze ohne dokumentierte Frist behalten ihren
 gespeicherten Status.
 
+Wenn die Dateiversion eines abgelaufenen YouTube- oder TikTok-Auftrags ersetzt
+wurde, führt **Aktuelle Dateiversion öffnen** zum regulären Optimierer für
+dieselbe Datei und dasselbe Portal. Dort liest SMA den aktuellen Kundenkatalog.
+Ist die frühere Textzuordnung veraltet, kann der Kunde einen neuen Beitragstext
+erstellen. Die alte Auftrags-ID und die frühere Freigabe werden dabei nicht
+übernommen.
+
 ## Datensicherheit
 
 Die öffentliche `sma_publication_history_find_v1(text)` ist ein
