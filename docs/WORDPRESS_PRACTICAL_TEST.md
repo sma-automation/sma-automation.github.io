@@ -2,7 +2,19 @@
 
 Historischer Praxistest vom **4. November 2026**, übertragen auf den aktuellen SMA-Code am **10. November 2026**. Ursprüngliche Testbasis: `website-v1` nach PR #68 (`1a10658293db7c33614915d0adbdcb7ac8013442`). Der GitHub-Quellabgleich bestätigte: `wordpress/sma-bridge/{sma-bridge.php,protocol.php,store.php}`, der SMA-Signaturadapter und der Edge-Einstieg `sma-wordpress-sync` sind gegenüber dem dokumentierten nativen Test **bytegenau unverändert**. Die archivierten 29 WordPress-/MariaDB-Prüfungen und 359 damaligen Node-Tests sind historische Ergebnisse, **kein heute erneut ausgeführter nativer Test**. Kundenoberfläche, Schrift, produktives Plugin und ZIP wurden nicht verändert.
 
-## Prüfung vom 13. November 2026
+## Externe Abnahme vom 13. November 2026
+
+Der produktive SMA-Kundenbereich hat auf einer isolierten WPSandbox-Testseite für den Shop `sma-testkunde` genau eine WordPress-Seite „Produkte“ angelegt. Der WordPress-Admin bestätigte vorher die Freigabe. SMA bestätigte den signierten Leseaufruf. Vor dem Klick auf **Produktbereich erzeugen** lagen null Aufträge vor. Danach meldeten SMA und WordPress die Seite **103**, Revision **1**, Status **Entwurf**. Ein erneuter Klick auf **Stand laden** lieferte dieselbe Seite. In der WordPress-Seitenliste stand genau eine Zeile „Produkte“, in der SMA-Datenbank genau ein erfolgreicher Auftrag.
+
+Die angemeldete WordPress-Vorschau und der öffentliche SMA-Testshop zeigten dieselben drei Artikel. Geprüft wurden Namen, Preise (9,90 €, 39,90 €, 34,90 €), Verfügbarkeit und Bilddarstellung (ein Platzhalter und zwei Produktbilder). Der anonyme Abruf der Entwurfsseite über die WordPress-REST-API ergab HTTP 401 mit `rest_forbidden`. Nach der Prüfung wurden beide Testfreigaben getrennt. Es blieben null Tickets, null aktive Verbindungen, null laufende Aufträge und ein gespeicherter Abschluss. Der Screenshot der Vorschau wurde vor dem Trennen gesichert.
+
+### Wie SMA die REST-Adresse auswählt
+
+Die WordPress-Routenübersicht der Testseite nannte ihre `wp-json/sma-bridge/v1/command`-Adresse als eigenen Endpunkt. Aus dem SMA-Projekt antwortete dieser auf einen leeren, unsignierten POST mit der erwarteten Plugin-Antwort `403 sma_not_authorized`. Derselbe Aufruf über die Query-Adresse lieferte die Zugangscode-Seite des Hosters als HTML. Der produktive signierte Lese- und Schreibaufruf gelang über die vom Plugin bestätigte REST-Adresse.
+
+SMA fragt per OPTIONS die bekannte REST-Adresse unter derselben gespeicherten Installation ab. Es verwendet diese Adresse, wenn die Antwort den Plugin-Namensraum, die POST-Methode und exakt die erwartete Adresse bestätigt. Installationen ohne diese Route können die bisherige Query-Adresse verwenden. Ein abgesetzter POST wird nie auf einem zweiten Pfad wiederholt. DNS- und TLS-Prüfung, Signatur, Frist und maximale Antwortgröße gelten weiterhin. [WordPress REST API Discovery](https://developer.wordpress.org/rest-api/using-the-rest-api/discovery/)
+
+## Früherer Prüfstand vom 13. November 2026
 
 SMA hat eine Adresse bei WPSandbox als vorhandene Webseite gespeichert. Die
 zugehörige Verbindungsanfrage ist abgelaufen. Die lesende Prüfung ergab null
@@ -160,24 +172,24 @@ Zugangscode. Der lesende Abruf bestätigt die Installation und die registrierte
 Route. Eine aktuelle Administratorfreigabe oder einen signierten
 Synchronisierungsauftrag weist er nicht nach.
 
-## Externe WordPress-Freigabe und Rückruf am 13. November 2026
+## Erster externer Rückruf am 13. November 2026, vor der erfolgreichen Abnahme
 
 Auf einer frisch angelegten, kostenlosen WPSandbox-Testinstallation wurde das ausgelieferte SMA-Plugin aktiviert. Der Administrator bestätigte über den regulären SMA-Kundenbereich die Freigabe für den Shop `sma-testkunde`. WordPress zeigte die Zuordnung an. Der Ticketdienst beantwortete die Anfragen erfolgreich.
 
-Der öffentliche WordPress-REST-Index enthielt die SMA-Route, und OPTIONS meldete POST als zulässige Methode. Der signierte POST aus der produktiven SMA-Verbindungsfunktion erhielt auf dem vorgesehenen HTTPS-Pfad HTTP 200 mit HTML. Für die Verifizierung ist eine gültige JSON-Antwort mit den Daten der konkreten Verbindung erforderlich. SMA hat keine verifizierte Verbindung und keinen Synchronisierungsauftrag für diesen Versuch gespeichert. Ein externer Produktentwurf ist weiterhin offen. Die konkrete Ursache der HTML-Seite beim Anbieter ist unbekannt.
+Der öffentliche WordPress-REST-Index enthielt die SMA-Route, und OPTIONS meldete POST als zulässige Methode. Der signierte POST aus der produktiven SMA-Verbindungsfunktion erhielt auf dem vorgesehenen HTTPS-Pfad HTTP 200 mit HTML. Für die Verifizierung ist eine gültige JSON-Antwort mit den Daten der konkreten Verbindung erforderlich. SMA hat keine verifizierte Verbindung und keinen Synchronisierungsauftrag für diesen Versuch gespeichert. Zu diesem Zeitpunkt war der externe Produktentwurf offen. Der spätere Vergleich der Routen und die erfolgreiche Abnahme sind oben dokumentiert.
 
 Beim Verbindungscheck meldet SMA diese Antwort als `WORDPRESS_HTML_RESPONSE`. Die technischen Protokolle enthalten nur den Verarbeitungsschritt, eine feste Fehlerkategorie und gegebenenfalls den HTTP-Status. Die Oberfläche erklärt, welche Serverantwort die Freigabe benötigt.
 
 ## Geeignete externe Testseite ohne Neubuchung
 
-Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testadresse auf bereits vorhandenem Hosting** benötigt. Eine vorhandene, im Tarif enthaltene Staging-Seite ist geeignet, wenn der Anbieter die nötigen Rechte und Erreichbarkeit tatsächlich zulässt. Eine Testadresse mit bestätigtem signiertem Rückruf ist noch offen. Es wird weder ein neues Hostingkonto angelegt noch ein Tarif geändert oder ein öffentlicher Tunnel eingerichtet.
+Für die nächste Abnahme wird eine **ausdrücklich freigegebene WordPress-Testadresse auf bereits vorhandenem Hosting** benötigt. Eine vorhandene, im Tarif enthaltene Staging-Seite ist geeignet, wenn der Anbieter die nötigen Rechte und Erreichbarkeit tatsächlich zulässt. Die oben dokumentierte kostenlose Testinstallation erfüllte die Voraussetzungen während ihrer Laufzeit. Es wird weder ein neues Hostingkonto angelegt noch ein Tarif geändert oder ein öffentlicher Tunnel eingerichtet.
 
 Vor dem ersten Anbieterauftrag müssen folgende Punkte für genau diese Seite feststehen:
 
 1. Eigene Testinstallation ohne echte Kundeninhalte; Zugriff zur einmaligen Plugin-Installation und Adminfreigabe. Die Produktseite bleibt ein Entwurf. Eine produktive Kundenwebsite ist kein Ersatz für diese Testinstallation.
 2. Öffentliche HTTPS-Startadresse der Installation mit abschließendem Schrägstrich, gültigem Zertifikat und öffentlicher IPv4-Adresse. Auch ein Unterverzeichnis wie `/blog/` ist möglich. Der Transport behält diesen Pfad bei und folgt keiner Weiterleitung.
 3. WordPress ab 6.8, PHP ab 8.1 mit OpenSSL und InnoDB für die benötigten Tabellen. Vorhandene Sicherheits-, Cache- und Inhaltsfilter dokumentieren.
-4. Die WordPress-REST-Route `/sma-bridge/v1/command` muss vom SMA-Server erreichbar sein. SMA sendet den signierten POST an die gespeicherte Installationsadresse mit `?rest_route=%2Fsma-bridge%2Fv1%2Fcommand`; eine vorgeschaltete Basic-Auth-Sperre würde den derzeitigen Transport blockieren. Deshalb keinen bestehenden Zugriffsschutz ungefragt abschalten, sondern die passende Testumgebung festlegen.
+4. Die WordPress-REST-Route `/sma-bridge/v1/command` muss vom SMA-Server erreichbar sein. SMA prüft die registrierte REST-Adresse und unterstützt die Query-Adresse für einfache Permalinks. Eine vorgeschaltete Basic-Auth-Sperre würde den Transport blockieren. Deshalb keinen bestehenden Zugriffsschutz ungefragt abschalten, sondern die passende Testumgebung festlegen.
 5. Das bestehende SMA-Delta-Demo-Konto und ein öffentlicher **Testshop** sind eindeutig zugeordnet. Keine echten Firmenprofiltexte oder echten Kundendaten für diese Abnahme einsetzen.
 
 ### Vorbereiteter externer Ablauf

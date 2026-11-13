@@ -57,8 +57,7 @@ Veröffentlichung abgewiesen. Nach der nächsten gültigen Veröffentlichung ers
 die neuen Angaben. Nach der Rücknahme ist der Inhalt beim erneuten Aufruf verborgen.
 Entwurf und Adresse bleiben erhalten. Reproduzierbar mit
 `node tests/run-website-setup-sql.mjs` nach Installation der Testabhängigkeiten
-in `tests/sql-runtime` und `tests/dom-runtime`. Der externe WordPress-Test steht
-weiterhin aus. Die gespeicherte WPSandbox-Anfrage ist abgelaufen. Der native
+in `tests/sql-runtime` und `tests/dom-runtime`. Im externen WordPress-Test hat der signierte Auftrag genau einen privaten Produktentwurf erzeugt (Seite 103, Revision 1). Die Vorschau stimmte bei allen drei Artikeln mit dem Testshop überein. Die anonyme REST-Abfrage war gesperrt. Nach Abschluss wurden die Testfreigaben getrennt. Der native
 Test verbindet SMA-Ticketausgabe, WordPress-Administratorfreigabe und die
 Auftragsverwaltung. Nach einer verlorenen WordPress-Antwort schließt die
 Wiederholung denselben Auftrag mit genau einem unveröffentlichten Entwurf ab. [WordPress-Praxistest](WORDPRESS_PRACTICAL_TEST.md) ·
