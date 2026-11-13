@@ -37,6 +37,11 @@ def patch(source):
  for name in ('Providerauftrag lesen','Provideranfrage atomar reservieren'):
   nodes[name]['parameters']['url']=m.BASE+'sma_publication_provider_cover_v1'
  nodes['Provideranfrage atomar reservieren']['parameters']['jsonBody']=nodes['Provideranfrage atomar reservieren']['parameters']['jsonBody'].replace("p_action:'begin'","p_action:'provider_begin'")
+ # HTTP Request parses its JSON Headers field as text, including when the
+ # request itself has a binary body or no body.
+ header_expression='={{ JSON.stringify($json.request.headers) }}'
+ for name in ('Provider-JSON-Anfrage','Provider-Dateitransfer','Provider-Statusanfrage'):
+  nodes[name]['parameters']['jsonHeaders']=header_expression
  old=nodes['Provideranfrage erstellen']['parameters']['jsCode']
  if old.count('request:providerRequest(i,c.token)')!=1:raise ValueError('PROVIDER_ADAPTER_CHANGED')
  nodes['Provideranfrage erstellen']['parameters']['jsCode']=core('provider-cover.cjs')+'\n'+old.replace('request:providerRequest(i,c.token)','request:withTikTokCover(providerRequest(i,c.token),i)')
@@ -75,7 +80,7 @@ def patch(source):
  w.condition('Coveranfrage reserviert?',"={{ $json.ok === true && $json.operation === 'youtube_thumbnail' && !!$json.lease_id }}",3600,1000)
  w.code('Geprüfte Coverdatei übernehmen',"return [{json:$json,binary:$('Coverbytes prüfen').first().binary}];",3840,1000,onError='continueErrorOutput')
  w.code('Coveranfrage erstellen',core('provider-cover.cjs')+"\nconst i=$('Coveranfrage reservieren').first().json,c=$('Providerverbindung bestätigen').first().json,bytes=await helpers.getBinaryDataBuffer(0,'data');return [{json:{request:youtubeCoverRequest(i,c.token,bytes)},binary:$input.first().binary}];",4080,1000,onError='continueErrorOutput')
- w.node('YouTube-Cover übertragen','httpRequest',{'method':'={{ $json.request.method }}','url':'={{ $json.request.url }}','sendHeaders':True,'specifyHeaders':'json','jsonHeaders':'={{ $json.request.headers }}','sendBody':True,'contentType':'binaryData','inputDataFieldName':'data','options':{'redirect':{'redirect':{'followRedirects':False}},'timeout':90000,'response':{'response':{'fullResponse':True,'neverError':True,'responseFormat':'text'}}}},4320,1000,v=4.5,onError='continueErrorOutput')
+ w.node('YouTube-Cover übertragen','httpRequest',{'method':'={{ $json.request.method }}','url':'={{ $json.request.url }}','sendHeaders':True,'specifyHeaders':'json','jsonHeaders':header_expression,'sendBody':True,'contentType':'binaryData','inputDataFieldName':'data','options':{'redirect':{'redirect':{'followRedirects':False}},'timeout':90000,'response':{'response':{'fullResponse':True,'neverError':True,'responseFormat':'text'}}}},4320,1000,v=4.5,onError='continueErrorOutput')
  w.code('Coverantwort auswerten',core('provider-cover.cjs')+'\nreturn [{json:youtubeCoverObservation($json)}];',4560,1000,onError='continueErrorOutput')
  w.code('Unklare Coverantwort',"return [{json:{state:'uncertain',code:'COVER_RESPONSE_UNCERTAIN'}}];",4560,1300)
  rpc('Coverergebnis speichern',"={{ {p_action:'cover_finish',p_id:$('Coveranfrage reservieren').first().json.id,p_lease:$('Coveranfrage reservieren').first().json.lease_id,p_data:$json} }}",4800)
