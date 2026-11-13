@@ -86,6 +86,13 @@ def patch(source):
  for name in chain[1:8]+['Coverergebnis speichern']:w.edge(name,'Coverstatus zurückgeben',1)
  for name in chain[9:13]:w.edge(name,'Unklare Coverantwort',1)
  w.edge('Unklare Coverantwort','Coverergebnis speichern')
+ # HTTP Request parses JSON Headers as text and defaults a text response
+ # to the "data" property. The response adapters consume raw text in "body".
+ for node in w.nodes:
+  if node['name'] in ('Provider-JSON-Anfrage','Provider-Dateitransfer','Provider-Statusanfrage','YouTube-Cover übertragen'):
+   params=node['parameters']
+   params['jsonHeaders']='={{ JSON.stringify($json.request.headers) }}'
+   params['options']['response']['response']['outputPropertyName']='body'
  for n in w.nodes[29:]:
   n['id']=str(uuid.uuid5(uuid.NAMESPACE_URL,'sma-provider-cover-v1/'+n['name']))
   for c in n['parameters'].get('conditions',{}).get('conditions',[]):c['id']=str(uuid.uuid5(uuid.NAMESPACE_URL,'sma-provider-cover-condition/'+n['name']))
