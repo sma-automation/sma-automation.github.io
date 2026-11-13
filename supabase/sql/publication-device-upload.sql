@@ -86,8 +86,9 @@ begin
            coalesce(excluded.height_px, case when same_source then catalog.height_px end),
            coalesce(excluded.duration_ms, case when same_source then catalog.duration_ms end)
     from (select catalog.user_id = excluded.user_id
-      and catalog.revision = excluded.revision
       and catalog.revision ~ '^sha256:[0-9a-f]{64}:[0-9]{1,30}$'
+      and excluded.revision ~ '^sha256:[0-9a-f]{64}:[0-9]{1,30}$'
+      and split_part(catalog.revision, ':', 2) = split_part(excluded.revision, ':', 2)
       and catalog.size_bytes = excluded.size_bytes
       and catalog.mime_type = excluded.mime_type
       and catalog.media_kind = excluded.media_kind
@@ -133,8 +134,9 @@ begin
            coalesce(excluded.height_px, case when same_source then catalog.height_px end),
            coalesce(excluded.duration_ms, case when same_source then catalog.duration_ms end)
     from (select catalog.user_id = excluded.user_id
-      and catalog.revision = excluded.revision
       and catalog.revision ~ '^sha256:[0-9a-f]{64}:[0-9]{1,30}$'
+      and excluded.revision ~ '^sha256:[0-9a-f]{64}:[0-9]{1,30}$'
+      and split_part(catalog.revision, ':', 2) = split_part(excluded.revision, ':', 2)
       and catalog.size_bytes = excluded.size_bytes
       and catalog.mime_type = excluded.mime_type
       and catalog.media_kind = excluded.media_kind

@@ -33,6 +33,7 @@ on:
       - tests/run-publication-video-sql.mjs
       - supabase/sql/publication-assignment-stale-file-reason.sql
       - supabase/migrations/*_publication_verified_file_metadata_v1.sql
+      - supabase/migrations/*_publication_content_bound_metadata_v1.sql
       - tests/run-publication-file-metadata-sql.mjs
       - tests/run-publication-assignment-freshness-sql.mjs
       - tests/run-publication-shop-invitation-sql.mjs
