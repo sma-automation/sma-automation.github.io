@@ -14,7 +14,7 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=31';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=4';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=5';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=6';
@@ -267,7 +267,11 @@ frame.addEventListener('load',()=>{
       return true;
     }
   }):null;
-  dashboardChapters=mountDashboardChapters({doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=3',location.href).href});
+  dashboardChapters=mountDashboardChapters({
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=4',location.href).href,
+    onPreparePost:ownerId&&page.querySelector('.sma-optimize')&&findAreaNavigation('publishing')
+      ?()=>navigateDashboardArea('portals'):null
+  });
   const cloudButton=doc.getElementById('smaDashboardCloudUpload');
   if(fileView&&cloudButton?.parentElement?.matches('aside,.sidebar,#sidebar')){
     const find=doc.createElement('button');find.type='button';find.id='smaFindFiles';find.textContent='⌕  Dateien suchen';
@@ -300,6 +304,44 @@ frame.addEventListener('load',()=>{
        target==='music'&&label==='musikbibliothek';
     })||null;
   }
+  function navigateDashboardArea(key,query){
+    if(signedOut||dashboardOwnerId!==ownerId)return false;
+    const area=sectionCatalog.find(entry=>entry.key===key);
+    const target=area?.page||(key==='history-search'?'history':key==='shop-search'?'shop':key);
+    const nav=findAreaNavigation(target);if(!nav)return false;
+    if(area?.historyView&&!publicationHistory?.hasSearchView?.(area.historyView))return false;
+    // Never dispatch a search into an absent or still-loading page.
+    if(key==='history-search'&&!doc.getElementById('smaHistorySearch'))return false;
+    if(key==='shop-search'&&!doc.getElementById('smaShopFrame')?.contentDocument?.getElementById('smaOrderSearch'))return false;
+    nav.click();
+    if(area?.historyView)return publicationHistory.openSearchView(area.historyView);
+    if(key==='files'||key==='portals'){
+      if(optimizerPage&&!optimizerPage.hidden){
+        if(history.state?.smaOptimization)history.pushState(null,'',location.pathname+location.search);
+        showPublishing();
+      }
+      if(key==='portals')return dashboardChapters?.controllers.get('publishing')?.select('portals',{focus:true})===true;
+      if(!dashboardChapters?.controllers.get('publishing')?.select('files'))return false;
+      return fileView.focusSearch(query);
+    }
+    if(key==='history-search'){
+      doc.getElementById('sma-history-tab-orders')?.click();
+      const field=doc.getElementById('smaHistorySearch');
+      if(canSearchHistory(query)){
+        field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
+      }
+      field.focus();
+    }
+    if(key==='shop-search'){
+      dashboardChapters?.controllers.get('shop')?.select('orders');
+      const field=doc.getElementById('smaShopFrame').contentDocument.getElementById('smaOrderSearch');
+      if(canSearchOrders(query)){
+        field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
+      }
+      field.focus();
+    }
+    return true;
+  }
   dashboardQuickFind=ownerId&&fileView?mountDashboardQuickFind({
     doc,
     getAreas:()=>sectionCatalog.filter(area=>{
@@ -310,44 +352,7 @@ frame.addEventListener('load',()=>{
     }),
     getFiles:()=>fileView?.getFiles()||[],
     getFileStatus:()=>fileView?.getCatalogState()||'loading',
-    onNavigate:(key,query)=>{
-      if(signedOut||dashboardOwnerId!==ownerId)return false;
-      const area=sectionCatalog.find(entry=>entry.key===key);
-      const target=area?.page||(key==='history-search'?'history':key==='shop-search'?'shop':key);
-      const nav=findAreaNavigation(target);if(!nav)return false;
-      if(area?.historyView&&!publicationHistory?.hasSearchView?.(area.historyView))return false;
-      // Never dispatch a search into an absent or still-loading page.
-      if(key==='history-search'&&!doc.getElementById('smaHistorySearch'))return false;
-      if(key==='shop-search'&&!doc.getElementById('smaShopFrame')?.contentDocument?.getElementById('smaOrderSearch'))return false;
-      nav.click();
-      if(area?.historyView)return publicationHistory.openSearchView(area.historyView);
-      if(key==='files'||key==='portals'){
-        if(optimizerPage&&!optimizerPage.hidden){
-          if(history.state?.smaOptimization)history.pushState(null,'',location.pathname+location.search);
-          showPublishing();
-        }
-        if(key==='portals')return dashboardChapters?.controllers.get('publishing')?.select('portals',{focus:true})===true;
-        if(!dashboardChapters?.controllers.get('publishing')?.select('files'))return false;
-        return fileView.focusSearch(query);
-      }
-      if(key==='history-search'){
-        doc.getElementById('sma-history-tab-orders')?.click();
-        const field=doc.getElementById('smaHistorySearch');
-        if(canSearchHistory(query)){
-          field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
-        }
-        field.focus();
-      }
-      if(key==='shop-search'){
-        dashboardChapters?.controllers.get('shop')?.select('orders');
-        const field=doc.getElementById('smaShopFrame').contentDocument.getElementById('smaOrderSearch');
-        if(canSearchOrders(query)){
-          field.value=query;field.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
-        }
-        field.focus();
-      }
-      return true;
-    },
+    onNavigate:navigateDashboardArea,
     onOpenFile:id=>{
       if(signedOut||dashboardOwnerId!==ownerId||!fileView?.getFiles().some(f=>f.id===id))return false;
       const nav=findAreaNavigation('publishing');if(!nav)return false;

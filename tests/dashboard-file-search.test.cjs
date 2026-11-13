@@ -95,7 +95,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  const next=()=>[...document.querySelectorAll('.sma-file-pages button')].find(b=>b.textContent==='Weiter');
  portal.value='youtube';portal.dispatchEvent(new window.Event('change'));next().click();
  assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 2 von 2/);
- const routeSource=html.slice(html.indexOf('onNavigate:(key,query)=>')+'onNavigate:'.length,html.indexOf('    onOpenFile:id=>')).trim().replace(/,$/,'');
+ const routeSource=html.slice(html.indexOf('  function navigateDashboardArea('),html.indexOf('  dashboardQuickFind=ownerId&&fileView?mountDashboardQuickFind('));
  const visits=[];
  const optimizer={hidden:false};
  const navigate=require('node:vm').runInNewContext('('+routeSource+')',{

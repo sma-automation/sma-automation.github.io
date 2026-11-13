@@ -41,7 +41,7 @@ export function placeChapterBar(page,nav){
  page.setAttribute('data-sma-chapters','');
 }
 
-export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
+export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPreparePost}){
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
  const cleanups=[],controllers=new Map();
  const children=(el,selector)=>el?[...el.children].filter(child=>child.matches(selector)):[];
@@ -80,6 +80,18 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
   {key:'portals',label:'Portale',en:'Platforms',nodes:children(publishing,'.card')},
   {key:'files',label:'Dateien',en:'Files',nodes:[...heads.slice(1),doc.getElementById('publishingFilesSlot')]}
  ]);
+ const workPanel=doc.getElementById('sma-overview-panel-work');
+ if(workPanel&&controllers.has('publishing')&&typeof onPreparePost==='function'){
+  const prepare=doc.createElement('button');
+  prepare.type='button';
+  prepare.className='sma-prepare-post';
+  prepare.dataset.de='Beitrag vorbereiten';
+  prepare.dataset.en='Prepare a post';
+  prepare.textContent=/^en/i.test(doc.documentElement.lang)?prepare.dataset.en:prepare.dataset.de;
+  prepare.addEventListener('click',onPreparePost);
+  workPanel.prepend(prepare);
+  cleanups.push(()=>{prepare.removeEventListener('click',onPreparePost);prepare.remove();});
+ }
  const socialCards=[...page('social')?.querySelectorAll('.platform-card')||[]];
  mount('social',['YouTube','TikTok','Instagram','Facebook'].map(label=>({key:label.toLowerCase(),label,nodes:socialCards.filter(card=>card.querySelector('.platform-info strong')?.textContent.trim()===label)})));
  const content=page('content'),contentTools=children(content?.querySelector('.grid'),'.card');
