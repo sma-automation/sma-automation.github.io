@@ -18,6 +18,16 @@ let offline=false;
 export function createClient(){return {auth:{onAuthStateChange(){},getSession:async()=>({data:{session:{user:{id:'fixture-owner'},access_token:'fixture'}}})},
  rpc(name,args){
   const call=(async()=>{
+   if(name==='sma_publication_history_order_page_v1'){
+    const status=sessionStorage.fixtureTransferStatus;
+    const date='2026-11-07T10:00:00Z';
+    const row={id:args.p_order_id,status,platform:'youtube',title:'Gespeichert',target_name:'Testkanal',
+     created_at:date,updated_at:date,cover:{status:'not_recorded',updated_at:null}};
+    if(status==='missing')return {data:{ok:false,code:'ORDER_UNAVAILABLE'}};
+    if(status==='wrong_order')Object.assign(row,{id:'a7700000-0000-4000-8000-000000000099',status:'private_complete'});
+    return {data:{ok:true,version:3,timezone:'Europe/Vienna',month:'2026-11',
+     summary:{orders:1,public_confirmed:0,platforms:['youtube']},months:[],entries:[row],has_more:false,next:null}};
+   }
    if(name==='sma_publication_files_v1'){
     if(args.p_action==='list')return {data:{ok:true,files:[file]}};
     if(args.p_action==='save'){
@@ -136,6 +146,17 @@ try{
   review.querySelector('form').requestSubmit();await until(()=>!review.open);
   report.staleStopped=document.activeElement===$('loadLatest')&&$('sourcePanel').open&&!$('workspaceSource').hidden&&
    $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account,account';
+  const historyId='a7700000-0000-4000-8000-000000000033';
+  for(const [stored,expected] of [['checked','noch kein Übertragungsversuch'],['private_complete','Privat abgeschlossen']]){
+   sessionStorage.fixtureTransferStatus=stored;
+   if(!(await readTransferStatus(historyId,'youtube')).includes(expected))throw Error('Wrong transfer status: '+stored);
+  }
+  for(const [stored,platform] of [['missing','youtube'],['wrong_order','youtube'],['private_complete','tiktok']]){
+   sessionStorage.fixtureTransferStatus=stored;
+   let rejected=false;
+   try{await readTransferStatus(historyId,platform);}catch{rejected=true;}
+   if(!rejected)throw Error('Unbound history result displayed');
+  }
   parent.postMessage(report,location.origin);
  }
 }catch(error){parent.postMessage({type:'reload-result',error:String(error)},location.origin);}`;
