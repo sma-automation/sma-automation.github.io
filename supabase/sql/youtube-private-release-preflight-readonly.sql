@@ -70,12 +70,35 @@ media_rollup AS (
       FILTER (WHERE status='pending' AND code IS NOT NULL),'[]'::jsonb)
       AS pending_codes
   FROM media_codes
+),
+checked_private AS (
+  SELECT
+    count(*) AS orders,
+    count(*) FILTER (WHERE o.approved_at IS NOT NULL) AS customer_approvals,
+    count(*) FILTER (WHERE sma_private.publication_account_valid_v1(
+      o.account_check, o.target, o.choices)) AS current_stored_account_checks,
+    count(*) FILTER (WHERE p.fingerprint = sma_private.publication_provider_fingerprint_v1(o)
+      AND p.expires_at > now()) AS current_bound_permissions,
+    count(*) FILTER (WHERE p.fingerprint = sma_private.publication_provider_fingerprint_v1(o)
+      AND p.expires_at <= now()) AS expired_bound_permissions,
+    count(a.order_id) AS orders_with_attempt_records,
+    count(*) FILTER (WHERE a.order_id IS NULL) AS orders_without_attempt_records,
+    count(*) FILTER (WHERE EXISTS (
+      SELECT 1 FROM sma_private.publication_provider_events_v1 e WHERE e.order_id = o.id
+    )) AS orders_with_event_records,
+    count(*) FILTER (WHERE sma_private.publication_history_entry_v1(o)->>'status'
+      = 'private_complete') AS portal_confirmed_private
+  FROM sma_private.publication_orders_v1 o
+  LEFT JOIN sma_private.publication_provider_permissions_v1 p ON p.order_id = o.id
+  LEFT JOIN sma_private.publication_provider_attempts_v1 a ON a.order_id = o.id
+  WHERE o.state = 'checked' AND o.binding->>'platform' = 'youtube'
+    AND o.choices->>'visibility' = 'private'
 )
 SELECT jsonb_build_object(
-  'version', 1,
+  'version', 2,
   'checked_at', now(),
   'scope', 'internal_operator_aggregate_read_only',
-  'selection', 'prepared_youtube_orders',
+  'selection', 'prepared_youtube_orders_and_checked_private_youtube_orders',
   'order_counts', jsonb_build_object(
     'prepared_youtube', a.prepared_youtube,
     'private_visibility_selected', a.private_selected,
@@ -94,6 +117,7 @@ SELECT jsonb_build_object(
     'failed_check_count', r.failed_checks,
     'pending_codes', r.pending_codes
   ),
+  'checked_private_youtube', to_jsonb(c),
   'limits', jsonb_build_object(
     'stored_catalog_match_is_not_fresh_drive_proof', true,
     'current_youtube_oauth_not_verified', true,
@@ -105,4 +129,4 @@ SELECT jsonb_build_object(
   'allows_publication', false,
   'initiates_checkout', false
 ) AS readiness
-FROM aggregates a CROSS JOIN media_rollup r;
+FROM aggregates a CROSS JOIN media_rollup r CROSS JOIN checked_private c;
