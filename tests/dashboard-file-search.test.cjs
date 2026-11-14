@@ -78,7 +78,7 @@ test('dashboard search is in the existing publishing file area and opens the opt
  assert.match(html,/const matches=filterDashboardFiles\(files,finder.value,portalFilter.value\)/);
  assert.match(html,/for\(const f of matches\.slice\(pageNumber\*10,pageNumber\*10\+10\)\)/);
  assert.match(html,/const open=doc.createElement\('button'\);open.type='button';open.textContent='Im Portal öffnen'/);
- assert.match(html,/openOptimizer\(portal,trigger\)/);
+ assert.match(html,/openSearchFile\(portal,trigger,origin\)/);
  assert.doesNotMatch(html,/window\.open\(.+smaFileSearch/);
  assert.doesNotMatch(html,/supabase\.rpc\('sma_publication_order_v1'/);
 });
@@ -90,7 +90,7 @@ test('search is client-side only: no new API, upload or approval path',async()=>
 
 test('gallery receives the global query, resets the portal and opens the first filtered page',async()=>{
  const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
- const {filterDashboardFiles,dashboardFileDescription}=await modulePromise;
+ const {filterDashboardFiles,dashboardFileDescription,searchFilePage}=await modulePromise;
  const html=readFileSync('app/dashboard.html','utf8');
  const source=html.slice(html.indexOf('function attachFileList('),html.indexOf('let pending;'));
  const {document,window}=parseHTML('<html><head></head><body><main><div id="publishingFilesSlot"></div></main></body></html>');
@@ -99,7 +99,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  files.push({id:'other',name:'Sommer.png',media_kind:'image',assignments:[]});
  const calls=[];
  const env={dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
-  portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,
+  portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
   supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);
@@ -137,6 +137,15 @@ test('gallery receives the global query, resets the portal and opens the first f
  assert.equal(navigate('portals'),true);
  assert.deepEqual(visits,['publishing','/app/dashboard.html','portals']);
  assert.equal(optimizer.hidden,true);
+ let focused=null;
+ window.HTMLElement.prototype.focus=function(){focused=this;};
+ gallery.restoreResult({id:'clip-23',query:'KÜCHE mai',portal:'tiktok',page:0});
+ assert.equal(portal.value,'tiktok');assert.equal(finder.value,'KÜCHE mai');
+ assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 2 von 2/);
+ assert.equal(focused.dataset.assetId,'clip-23');
+ gallery.restoreResult({id:'removed',query:'KÜCHE mai',portal:'tiktok',page:7});
+ assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 2 von 2/);
+ assert.equal(focused,finder);
  env.dashboardOwnerId='other';assert.equal(gallery.focusSearch('private'),false);
  assert.equal(finder.value,'KÜCHE mai');assert.deepEqual(calls,[['sma_publication_files_v1','list']]);
  gallery.clear();

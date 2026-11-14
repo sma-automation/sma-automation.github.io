@@ -9,8 +9,8 @@ function setup(){
  const observed=new Set();
  let resize;
  class ResizeObserver{constructor(callback){resize=callback;}observe(el){observed.add(el);}disconnect(){observed.clear();}}
- const context={ResizeObserver,window:{addEventListener:(name,fn)=>events[name]=fn,location:{href:'https://sma-automation.com/app/dashboard.html'}},history,location:{pathname:'/app/dashboard.html',search:''},URL,portalNames:{instagram:'Instagram',youtube:'YouTube'},api:null};
- vm.runInNewContext(code+';api={attachOptimizerPage,openOptimizer,closeOptimizer,clearOptimizer,optimizerWorkspaceView,select(id){selectedFileId=id},view(){return {optimizerFrames,optimizerPage,optimizerHeader,publishingPage}}};',context);
+ const context={crypto:require('node:crypto').webcrypto,ResizeObserver,window:{addEventListener:(name,fn)=>events[name]=fn,location:{href:'https://sma-automation.com/app/dashboard.html'}},history,location:{pathname:'/app/dashboard.html',search:''},URL,portalNames:{instagram:'Instagram',youtube:'YouTube'},api:null};
+ vm.runInNewContext(code+';api={attachOptimizerPage,openSearchFile,openOptimizer,closeOptimizer,clearOptimizer,optimizerWorkspaceView,select(id){selectedFileId=id},view(){return {optimizerFrames,optimizerPage,optimizerHeader,publishingPage}}};',context);
  const page=new Element('section'),original=new Element('div');page.append(original);context.api.attachOptimizerPage(doc,page);return {...context.api,history,page,original,observed,resize,trigger:new Element('button')};
 }
 test('Optimieren replaces the publishing content with a full page while retaining the dashboard shell',()=>{
@@ -73,4 +73,16 @@ test('only media in a hidden optimizer pauses, retaining the position and releas
  p.resize([{target:frame,contentRect:{width:0,height:0}}]);assert.equal(media.paused,true);
  p.resize([{target:frame,contentRect:{width:320,height:300}}]);assert.equal(media.paused,true);assert.equal(media.currentTime,1.25);
  p.clearOptimizer();assert.equal(p.observed.size,0);
+});
+
+test('opening a search result adds one history entry and keeps its query out of browser history',()=>{
+ const p=setup();p.select('own-video');
+ p.openSearchFile('youtube',p.trigger,{global:true,id:'own-video',query:'privater Suchbegriff'});
+ const frame=p.view().optimizerFrames.children[0];
+ assert.equal(new URL(frame.src).searchParams.get('fromSearch'),'1');
+ const key=p.history.state.searchKey;assert.ok(key);assert.equal(p.history.state.view,'files');
+ p.optimizerWorkspaceView(frame,'preview');assert.equal(p.history.state.view,'preview');
+ assert(!JSON.stringify(p.history.state).includes('privater Suchbegriff'));
+ p.history.back();assert.equal(p.history.state.smaSearchResults,key);assert.equal(p.view().optimizerPage.hidden,true);
+ p.history.forward();assert.equal(p.history.state.view,'preview');assert.equal(p.view().optimizerFrames.children[0],frame);
 });

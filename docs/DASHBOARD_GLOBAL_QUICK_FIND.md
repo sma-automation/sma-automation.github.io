@@ -21,6 +21,13 @@ Ein Treffer für Dateien öffnet den vorhandenen Optimierer mit genau der bereit
 berechtigten Datei. Bei einem passenden Beitragstitel öffnet sich das zugehörige Portal.
 Die Dateigalerie verwendet denselben Filter. Der technische Dateiname steht in den Dateidetails.
 
+„Zurück zu den Suchergebnissen“ oder Browser-Zurück führt aus der Vorschau mit einem
+Schritt zur verwendeten Suche. Das Dashboard stellt den Suchbegriff wieder her und
+setzt den Tastaturfokus auf dieselbe Dateifassung. In der Dateigalerie bleibt der
+Portalfilter erhalten. Die Galerie öffnet die Seite, auf der die Fassung jetzt steht.
+Fehlt der Treffer inzwischen, erhält das Suchfeld den Fokus. Browser-Vorwärts öffnet
+den Entwurf erneut. Der Suchbegriff bleibt nur im geöffneten Dashboard.
+
 ## Sicherheit und Grenzen
 
 Die Suche arbeitet ausschließlich mit den momentan sichtbaren

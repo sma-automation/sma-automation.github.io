@@ -16,8 +16,8 @@ import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=31';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=5';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
-import {filterDashboardFiles,dashboardFileDescription} from './assets/dashboard-file-search.mjs?v=2';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=7';
+import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=8';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=3';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -27,10 +27,27 @@ const frame=document.getElementById('dashboard');
 const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
-let optimizerFrameObserver=null;
+let optimizerFrameObserver=null,optimizerBack=null,optimizerBackLabel=null;
 let optimizerTrigger=null,selectedFileId=null,returningFromPreview=null;
 let fileView=null,fileFindShortcut=null,dashboardQuickFind=null,dashboardMobileNav=null,musicLibraryDashboard=null;
 let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardCloudUpload=null,dashboardOwnerId=null;
+// Search terms and customer data stay in this dashboard instance. History carries only a lookup key.
+const fileSearchReturns=new Map();
+function openSearchFile(portal,trigger,origin){
+ const key=crypto.randomUUID();
+ fileSearchReturns.set(key,origin);
+ const previous={smaSearchResults:key};
+ if(history.state?.smaOptimization||location.hash)history.pushState(previous,'',location.pathname+location.search);
+ else history.replaceState(previous,'',location.pathname+location.search);
+ openOptimizer(portal,trigger,false,key);
+}
+function restoreFileResults(key){
+ const origin=fileSearchReturns.get(key);
+ if(!origin)return;
+ dashboardChapters?.controllers.get('publishing')?.select('files');
+ if(origin.global)dashboardQuickFind?.restore(origin.query,origin.id);
+ else fileView?.restoreResult(origin);
+}
 function showPublishing(){
  returningFromPreview=null;
  if(!publishingPage)return;optimizerPage.hidden=true;publishingPage.classList.remove('sma-optimizing');
@@ -38,19 +55,33 @@ function showPublishing(){
  optimizerTrigger?.focus();
 }
 function closeOptimizer(){if(history.state?.smaOptimization)history.back();else showPublishing();}
-function openOptimizer(portal,trigger,restoring=false){
+function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  returningFromPreview=null;
  if(!optimizerPage)return;optimizerTrigger=trigger;optimizerHeading.textContent=portalNames[portal]+' optimieren';
+ const backTitle=searchKey?'Zurück zu den Suchergebnissen':'Zurück zur Veröffentlichung';
+ optimizerBack.title=backTitle;optimizerBack.setAttribute('aria-label',backTitle);
+ optimizerBackLabel.textContent=searchKey?'Suchergebnisse':'Veröffentlichung';
  const frameKey=portal+':'+(selectedFileId||'template');
  let preview=[...(optimizerFrames?.children||[])].find(el=>el.dataset.key===frameKey);
+ const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','46');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','47');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
  publishingPage.classList.add('sma-optimizing');optimizerPage.hidden=false;optimizerPage.scrollIntoView({block:'start'});optimizerHeading.focus();
  optimizerHeader.hidden=preview.dataset.view==='preview';
+ if(reused&&(preview.dataset.searchReturn==='true')!==Boolean(searchKey)){
+  preview.contentWindow?.postMessage({type:'sma-publication-search-context',fromSearch:Boolean(searchKey)},window.location.origin);
+ }
+ preview.dataset.searchReturn=String(Boolean(searchKey));
+ if(searchKey&&!restoring){
+  const view=preview.dataset.view==='preview'?'preview':'files';
+  history.pushState({smaOptimization:true,portal,assetId:selectedFileId,view,searchKey},'','#optimieren/'+portal+(view==='preview'?'/vorschau':''));
+  if(reused)preview.contentWindow?.postMessage({type:'sma-publication-open-search-file',assetId:selectedFileId},window.location.origin);
+  return;
+ }
  if(restoring){const view=['preview','source'].includes(history.state?.view)?history.state.view:'files';preview.dataset.view=view;optimizerHeader.hidden=view==='preview';preview.contentWindow?.postMessage({type:'sma-publication-show-view',view},window.location.origin);}
  if(!restoring){
   const route={smaOptimization:true,portal,assetId:selectedFileId,view:preview.dataset.view==='source'?'source':'files'};
@@ -59,7 +90,7 @@ function openOptimizer(portal,trigger,restoring=false){
   if(preview.dataset.view==='preview')history.pushState({...route,view:'preview'},'','#optimieren/'+portal+'/vorschau');
  }
 }
-function clearOptimizer(){optimizerFrameObserver?.disconnect();optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(history.state?.smaOptimization)history.replaceState(null,'',location.pathname+location.search);}
+function clearOptimizer(){fileSearchReturns.clear();optimizerFrameObserver?.disconnect();optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(history.state?.smaOptimization||history.state?.smaSearchResults)history.replaceState(null,'',location.pathname+location.search);}
 function optimizerWorkspaceView(preview,view,previewUnavailable=false){
  if(preview.hidden||optimizerPage.hidden||!['files','source','preview'].includes(view))return;
  if(previewUnavailable){
@@ -72,7 +103,9 @@ function optimizerWorkspaceView(preview,view,previewUnavailable=false){
   return;
  }
  const before=preview.dataset.view;preview.dataset.view=view;optimizerHeader.hidden=view==='preview';
- if(view==='preview'&&history.state?.smaOptimization&&history.state.view!=='preview')history.pushState({...history.state,view:'preview'},'', '#optimieren/'+preview.dataset.portal+'/vorschau');
+ if(history.state?.searchKey&&history.state.smaOptimization){
+  if(history.state.view!==view)history.replaceState({...history.state,view},'','#optimieren/'+preview.dataset.portal+(view==='preview'?'/vorschau':''));
+ }else if(view==='preview'&&history.state?.smaOptimization&&history.state.view!=='preview')history.pushState({...history.state,view:'preview'},'', '#optimieren/'+preview.dataset.portal+'/vorschau');
  else if(view!=='preview'&&history.state?.smaOptimization){
   if(history.state.view==='preview'){
    if(!returningFromPreview){returningFromPreview=preview;history.back();}
@@ -82,9 +115,11 @@ function optimizerWorkspaceView(preview,view,previewUnavailable=false){
 }
 window.addEventListener('popstate',event=>{
  const route=event.state,returning=returningFromPreview;returningFromPreview=null;
+ dashboardQuickFind?.hide(false);
  if(!route?.smaOptimization||!Object.hasOwn(portalNames,route.portal)){
   showPublishing();
-  if(route?.smaFileSearch&&dashboardChapters?.controllers.get('publishing')?.select('files'))fileView?.focusSearch();
+  if(route?.smaSearchResults)restoreFileResults(route.smaSearchResults);
+  else if(route?.smaFileSearch&&dashboardChapters?.controllers.get('publishing')?.select('files'))fileView?.focusSearch();
   return;
  }
  selectedFileId=route.assetId||null;
@@ -93,7 +128,7 @@ window.addEventListener('popstate',event=>{
     route.view!=='preview'&&['files','source'].includes(returning.dataset.view)){
   history.replaceState({...route,view:returning.dataset.view},'');return;
  }
- openOptimizer(route.portal,optimizerTrigger,true);
+ openOptimizer(route.portal,optimizerTrigger,true,fileSearchReturns.has(route.searchKey)?route.searchKey:null);
 });
 function attachOptimizerPage(doc,page){
  optimizerFrameObserver?.disconnect();
@@ -107,7 +142,7 @@ function attachOptimizerPage(doc,page){
   }
  });
  publishingPage=page;optimizerPage=doc.createElement('section');optimizerPage.id='smaOptimizationPage';optimizerPage.hidden=true;
- const header=doc.createElement('header');optimizerHeader=header;header.className='sma-optimization-header';const back=doc.createElement('button');back.type='button';back.className='sma-optimization-back';back.setAttribute('aria-label','Zurück zur Veröffentlichung');back.title='Zurück zur Veröffentlichung';const arrow=doc.createElement('span');arrow.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';arrow.setAttribute('aria-hidden','true');const backLabel=doc.createElement('span');backLabel.textContent='Veröffentlichung';back.append(arrow,backLabel);back.addEventListener('click',closeOptimizer);
+ const header=doc.createElement('header');optimizerHeader=header;header.className='sma-optimization-header';const back=doc.createElement('button');back.type='button';back.className='sma-optimization-back';back.setAttribute('aria-label','Zurück zur Veröffentlichung');back.title='Zurück zur Veröffentlichung';const arrow=doc.createElement('span');arrow.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';arrow.setAttribute('aria-hidden','true');const backLabel=doc.createElement('span');backLabel.textContent='Veröffentlichung';optimizerBack=back;optimizerBackLabel=backLabel;back.append(arrow,backLabel);back.addEventListener('click',closeOptimizer);
  optimizerHeading=doc.createElement('h1');optimizerHeading.tabIndex=-1;header.append(back,optimizerHeading);optimizerFrames=doc.createElement('div');optimizerFrames.id='smaOptimizerFrames';optimizerPage.append(header,optimizerFrames);page.append(optimizerPage);
  const style=doc.createElement('style');style.textContent=`.sma-publishing-hidden{display:none!important}.sma-optimizing{background:#fff!important}#smaOptimizationPage{border:0;background:transparent;padding:0;margin:0;width:100%;min-width:0}#smaOptimizationPage[hidden],#smaOptimizerFrames iframe[hidden]{display:none!important}.sma-optimization-header{margin-bottom:18px}.sma-optimization-header .sma-optimization-back{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:auto;min-height:48px;border:0;border-radius:9px;background:#4065d8;padding:12px 17px;color:#fff;cursor:pointer;margin-bottom:6px;font:500 14px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;white-space:nowrap}.sma-optimization-back span{display:flex}.sma-optimization-back svg{width:24px;height:24px}.sma-optimization-header .sma-optimization-back:hover{background:#3157cd}.sma-optimization-header .sma-optimization-back:focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}.sma-optimization-header h1{font-size:28px;margin:12px 0 0;line-height:1.25;outline:none}#smaOptimizerFrames{width:100%;min-width:0}#smaOptimizerFrames iframe{display:block;border:0;width:100%;height:300px;min-height:300px}@media(max-width:650px){.sma-optimization-header h1{font-size:23px}}`;doc.head.append(style);
 }
@@ -368,11 +403,12 @@ frame.addEventListener('load',()=>{
     getFiles:()=>fileView?.getFiles()||[],
     getFileStatus:()=>fileView?.getCatalogState()||'loading',
     onNavigate:navigateDashboardArea,
-    onOpenFile:(id,portal)=>{
+    onDismiss:()=>{if(fileSearchReturns.get(history.state?.smaSearchResults)?.global)history.replaceState(null,'');},
+    onOpenFile:(id,portal,query)=>{
       if(signedOut||dashboardOwnerId!==ownerId||!fileView?.getFiles().some(f=>f.id===id))return false;
       const nav=findAreaNavigation('publishing');if(!nav)return false;
       nav.click();dashboardChapters?.controllers.get('publishing')?.select('files');
-      return fileView.openFile(id,portal)===true;
+      return fileView.openFile(id,portal,{global:true,query,id})===true;
     }
   }):null;
   dashboardMobileNav=ownerId&&fileView?mountDashboardMobileNav({
@@ -409,16 +445,25 @@ function attachFileList(doc,page){
  doc.addEventListener('sma-music-unlocked',wakeMusic);
  let files=[],pageNumber=0,loading=false,lastSync=0,catalogState='loading';
  const say=text=>message.textContent=text;
- function draw(){thumbnails.reset();list.replaceChildren();pages.replaceChildren();const matches=filterDashboardFiles(files,finder.value,portalFilter.value);selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':'Noch keine Bild- oder Videodateien im zugeordneten Kundenordner.';
-  if(!matches.length){if(files.length)selection.textContent='Keine Treffer. Versuche einen kürzeren Namen oder „Alle Portale“.';return;}
+ function draw(){const focusedId=doc.activeElement?.dataset?.assetId;thumbnails.reset();list.replaceChildren();pages.replaceChildren();const matches=filterDashboardFiles(files,finder.value,portalFilter.value);selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':'Noch keine Bild- oder Videodateien im zugeordneten Kundenordner.';
+  if(!matches.length){if(files.length)selection.textContent='Keine Treffer. Versuche einen kürzeren Namen oder „Alle Portale“.';if(focusedId)finder.focus();return;}
   pageNumber=Math.min(pageNumber,Math.max(0,Math.ceil(matches.length/10)-1));
   for(const f of matches.slice(pageNumber*10,pageNumber*10+10)){
     const description=dashboardFileDescription(f,finder.value,portalFilter.value);
     const caption=[description.title,description.version].filter(Boolean).join(' · ');
-    const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+caption+(selectedFileId===f.id?' · Ausgewählt':'');label.title=caption;choose.textContent='';choose.className='sma-gallery-select';choose.setAttribute('aria-label','Datei auswählen: '+caption);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.setAttribute('aria-label','Datei im Portal öffnen: '+caption);
-    open.addEventListener('click',()=>{if(disposed||signedOut||owner!==dashboardOwnerId)return;selectedFileId=f.id;const portal=description.portal;const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);if(trigger)openOptimizer(portal,trigger);else{draw();say('Bitte oben das gewünschte Portal auswählen.');}});
+    const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+caption+(selectedFileId===f.id?' · Ausgewählt':'');label.title=caption;choose.textContent='';choose.className='sma-gallery-select';choose.setAttribute('aria-label','Datei auswählen: '+caption);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.dataset.assetId=f.id;open.setAttribute('aria-label','Datei im Portal öffnen: '+caption);
+    open.addEventListener('click',()=>{
+     if(!openFile(f.id,description.portal,{id:f.id,query:finder.value,portal:portalFilter.value,page:pageNumber})){
+      say('Bitte oben das gewünschte Portal auswählen.');
+     }
+    });
     row.append(choose,open,info);list.append(row);thumbnails.observe(visual,f);}
   if(matches.length>10){const back=doc.createElement('button');back.textContent='Zurück';back.disabled=pageNumber===0;back.addEventListener('click',()=>{pageNumber--;draw();});const next=doc.createElement('button');next.textContent='Weiter';next.disabled=(pageNumber+1)*10>=matches.length;next.addEventListener('click',()=>{pageNumber++;draw();});const count=doc.createElement('span');count.textContent='Seite '+(pageNumber+1)+' von '+Math.ceil(matches.length/10);pages.append(back,count,next);}
+  if(focusedId)focusResult(focusedId);
+ }
+ function focusResult(id){
+  const hit=[...list.querySelectorAll('.sma-file-open')].find(button=>button.dataset.assetId===id);
+  (hit||finder).focus();
  }
  finder.addEventListener('input',()=>{pageNumber=0;draw();});portalFilter.addEventListener('change',()=>{pageNumber=0;draw();});
  async function load(sync=false){if(loading||disposed)return;loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();try{
@@ -427,17 +472,25 @@ function attachFileList(doc,page){
  }catch(e){catalogState='error';say(e.message);}finally{loading=false;refresh.disabled=false;dashboardQuickFind?.refresh();}}
  refresh.addEventListener('click',()=>load(true));
  for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))button.addEventListener('click',()=>load(Date.now()-lastSync>60000));
+ function openFile(id,portal,origin){
+  if(disposed||signedOut||owner!==dashboardOwnerId)return false;
+  const item=files.find(f=>f.id===id);if(!item)return false;
+  if(!Object.hasOwn(portalNames,portal))portal=dashboardFileDescription(item).portal;
+  const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);
+  if(!trigger)return false;
+  selectedFileId=id;openSearchFile(portal,trigger,origin);return true;
+ }
  load(false);return {load,
     getFiles(){return disposed||signedOut||owner!==dashboardOwnerId?[]:files.slice();},
     getCatalogState(){return disposed||signedOut||owner!==dashboardOwnerId?'error':catalogState;},
-    openFile(id,portal){
-      if(disposed||signedOut||owner!==dashboardOwnerId)return false;
-      const item=files.find(f=>f.id===id);if(!item)return false;
-      selectedFileId=id;
-      if(!Object.hasOwn(portalNames,portal))portal=dashboardFileDescription(item).portal;
-      const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);
-      if(!trigger)return false;
-      openOptimizer(portal,trigger);return true;
+    openFile,
+    restoreResult(origin){
+      if(disposed||signedOut||owner!==dashboardOwnerId)return;
+      finder.value=origin.query;portalFilter.value=origin.portal;
+      const page=searchFilePage(filterDashboardFiles(files,finder.value,portalFilter.value),origin.id);
+      pageNumber=page<0?origin.page:page;
+      draw();
+      focusResult(origin.id);
     },
     focusSearch(query){
       if(disposed||signedOut||owner!==dashboardOwnerId)return false;
@@ -479,6 +532,11 @@ async function logout(){signedOut=true;dashboardMobileNav?.destroy();dashboardMo
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-search-return'){
+    const active=[...(optimizerFrames?.children||[])].find(el=>!el.hidden&&el.contentWindow===event.source);
+    if(active&&!optimizerPage.hidden&&fileSearchReturns.has(history.state?.searchKey))history.back();
+    return;
+  }
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-order-open'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview&&!preview.hidden&&!optimizerPage.hidden){optimizerPage.scrollIntoView({block:'start'});preview.contentWindow.postMessage({type:'sma-publication-order-viewport',height:Math.max(240,Math.min(720,window.innerHeight-140))},window.location.origin);}return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-workspace-view'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview)optimizerWorkspaceView(preview,event.data.view,event.data.previewUnavailable===true);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-height'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);const height=event.data.height;if(preview&&Number.isFinite(height)&&height>=300&&height<=30000)preview.style.height=Math.ceil(height)+'px';return;}
