@@ -17,13 +17,15 @@ import {mountPublicationHistory} from './assets/publication-history-dashboard.mj
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=5';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=8';
-import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=3';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=12';
+import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
+import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=3';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
 const frame=document.getElementById('dashboard');
+const galleryReload=galleryReloadStore(window);
 const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
@@ -31,8 +33,28 @@ let optimizerFrameObserver=null,optimizerBack=null,optimizerBackLabel=null;
 let optimizerTrigger=null,selectedFileId=null,returningFromPreview=null;
 let fileView=null,fileFindShortcut=null,dashboardQuickFind=null,dashboardMobileNav=null,musicLibraryDashboard=null;
 let websitePreparation=null,companyProfileDashboard=null,customerWebsiteDashboard=null,publicationHistory=null,mediaEditorEntry=null,dashboardChapters=null,dashboardCloudUpload=null,dashboardOwnerId=null;
-// Search terms and customer data stay in this dashboard instance. History carries only a lookup key.
+// History contains the lookup key. A same-tab reload may restore the matching customer view.
 const fileSearchReturns=new Map();
+let activateSearchPage=null,startupView=null;
+function galleryVisible(){
+ return !signedOut&&dashboardOwnerId&&publishingPage?.classList.contains('active')&&optimizerPage?.hidden&&
+  dashboardChapters?.controllers.get('publishing')?.selected==='files'&&
+  publishingPage.ownerDocument.getElementById('smaQuickFindDialog')?.hidden!==false;
+}
+window.addEventListener('pagehide',event=>{
+ if(event.persisted||!dashboardOwnerId)return;
+ const route=history.state,origin=fileSearchReturns.get(route?.searchKey);
+ const preview=optimizerPage&&!optimizerPage.hidden&&publishingPage?.classList.contains('active')?
+  previewReloadSnapshot(route,origin):null;
+ const pending=previewMatchesHistory(startupView,route)?startupView:null;
+ galleryReload.save(dashboardOwnerId,preview||pending||(galleryVisible()?fileView.snapshot():null));
+});
+window.addEventListener('online',()=>{
+ if(signedOut)return;
+ if(retryDashboardOnReconnect){void load();return;}
+ const searchOpen=publishingPage?.ownerDocument.getElementById('smaQuickFindDialog')?.hidden===false;
+ if(galleryVisible()||searchOpen)fileView?.retryCatalog();
+});
 function openSearchFile(portal,trigger,origin){
  const key=crypto.randomUUID();
  fileSearchReturns.set(key,origin);
@@ -44,9 +66,14 @@ function openSearchFile(portal,trigger,origin){
 function restoreFileResults(key){
  const origin=fileSearchReturns.get(key);
  if(!origin)return;
- dashboardChapters?.controllers.get('publishing')?.select('files');
- if(origin.global)dashboardQuickFind?.restore(origin.query,origin.id);
- else fileView?.restoreResult(origin);
+ if(origin.global){
+  activateSearchPage?.(origin.page,origin.chapter);
+  if(origin.dismissed)dashboardQuickFind?.focusLauncher(origin.launcher);
+  else dashboardQuickFind?.restore(origin.query,origin.id,origin.launcher);
+ }else{
+  activateSearchPage?.('publishing','files');
+  fileView?.restoreResult(origin);
+ }
 }
 function showPublishing(){
  returningFromPreview=null;
@@ -54,7 +81,12 @@ function showPublishing(){
  for(const child of publishingPage.children)child.classList.remove('sma-publishing-hidden');
  optimizerTrigger?.focus();
 }
-function closeOptimizer(){if(history.state?.smaOptimization)history.back();else showPublishing();}
+function closeOptimizer(){
+ if(!history.state?.smaOptimization){showPublishing();return;}
+ const origin=fileSearchReturns.get(history.state.searchKey);
+ if(origin?.global)origin.dismissed=false;
+ history.back();
+}
 function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  returningFromPreview=null;
  if(!optimizerPage)return;optimizerTrigger=trigger;optimizerHeading.textContent=portalNames[portal]+' optimieren';
@@ -90,7 +122,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
   if(preview.dataset.view==='preview')history.pushState({...route,view:'preview'},'','#optimieren/'+portal+'/vorschau');
  }
 }
-function clearOptimizer(){fileSearchReturns.clear();optimizerFrameObserver?.disconnect();optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(history.state?.smaOptimization||history.state?.smaSearchResults)history.replaceState(null,'',location.pathname+location.search);}
+function clearOptimizer(keepRoute=false){fileSearchReturns.clear();optimizerFrameObserver?.disconnect();optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(!keepRoute&&(history.state?.smaOptimization||history.state?.smaSearchResults))history.replaceState(null,'',location.pathname+location.search);}
 function optimizerWorkspaceView(preview,view,previewUnavailable=false){
  if(preview.hidden||optimizerPage.hidden||!['files','source','preview'].includes(view))return;
  if(previewUnavailable){
@@ -122,6 +154,14 @@ window.addEventListener('popstate',event=>{
   else if(route?.smaFileSearch&&dashboardChapters?.controllers.get('publishing')?.select('files'))fileView?.focusSearch();
   return;
  }
+ if(route.searchKey&&!fileSearchReturns.has(route.searchKey)){
+  showPublishing();history.replaceState(null,'',location.pathname+location.search);return;
+ }
+ if(route.searchKey&&fileView?.getCatalogState()==='ready'&&!fileView.getFiles().some(f=>f.id===route.assetId)){
+  showPublishing();history.replaceState({smaSearchResults:route.searchKey},'',location.pathname+location.search);
+  restoreFileResults(route.searchKey);return;
+ }
+ if(route.searchKey)activateSearchPage?.('publishing','files');
  selectedFileId=route.assetId||null;
  // The child already opened the requested editor or gallery. Preserve its keyboard focus.
  if(returning&&!optimizerPage.hidden&&!returning.hidden&&returning.dataset.key===route.portal+':'+(selectedFileId||'template')&&
@@ -147,7 +187,7 @@ function attachOptimizerPage(doc,page){
  const style=doc.createElement('style');style.textContent=`.sma-publishing-hidden{display:none!important}.sma-optimizing{background:#fff!important}#smaOptimizationPage{border:0;background:transparent;padding:0;margin:0;width:100%;min-width:0}#smaOptimizationPage[hidden],#smaOptimizerFrames iframe[hidden]{display:none!important}.sma-optimization-header{margin-bottom:18px}.sma-optimization-header .sma-optimization-back{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:auto;min-height:48px;border:0;border-radius:9px;background:#4065d8;padding:12px 17px;color:#fff;cursor:pointer;margin-bottom:6px;font:500 14px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;white-space:nowrap}.sma-optimization-back span{display:flex}.sma-optimization-back svg{width:24px;height:24px}.sma-optimization-header .sma-optimization-back:hover{background:#3157cd}.sma-optimization-header .sma-optimization-back:focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}.sma-optimization-header h1{font-size:28px;margin:12px 0 0;line-height:1.25;outline:none}#smaOptimizerFrames{width:100%;min-width:0}#smaOptimizerFrames iframe{display:block;border:0;width:100%;height:300px;min-height:300px}@media(max-width:650px){.sma-optimization-header h1{font-size:23px}}`;doc.head.append(style);
 }
 // Extend the existing portal cards; no extra shared publishing card.
-frame.addEventListener('load',()=>{
+frame.addEventListener('load',async()=>{
   const doc=frame.contentDocument;
   dashboardCloudUpload?.destroy();dashboardCloudUpload=null;
   fileFindShortcut?.remove();fileFindShortcut=null;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;
@@ -354,6 +394,18 @@ frame.addEventListener('load',()=>{
        target==='music'&&label==='musikbibliothek';
     })||null;
   }
+  activateSearchPage=(key,chapter)=>{
+    if(signedOut||dashboardOwnerId!==ownerId)return false;
+    const page=doc.getElementById('page-'+key);
+    if(!page)return false;
+    if(!page.classList.contains('active')){
+      const nav=findAreaNavigation(key);if(!nav)return false;
+      if(key==='publishing'&&chapter==='files')fileView.navigateWithCatalog(nav);
+      else nav.click();
+    }
+    if(chapter)dashboardChapters?.controllers.get(key)?.select(chapter);
+    return page.classList.contains('active');
+  };
   function navigateDashboardArea(key,query){
     if(signedOut||dashboardOwnerId!==ownerId)return false;
     const area=sectionCatalog.find(entry=>entry.key===key);
@@ -363,7 +415,8 @@ frame.addEventListener('load',()=>{
     // Never dispatch a search into an absent or still-loading page.
     if(key==='history-search'&&!doc.getElementById('smaHistorySearch'))return false;
     if(key==='shop-search'&&!doc.getElementById('smaShopFrame')?.contentDocument?.getElementById('smaOrderSearch'))return false;
-    nav.click();
+    if(key==='files'&&typeof query==='string')fileView.navigateWithCatalog(nav);
+    else nav.click();
     if(area?.historyView)return publicationHistory.openSearchView(area.historyView);
     if(key==='files'||key==='portals'){
       if(optimizerPage&&!optimizerPage.hidden){
@@ -402,13 +455,22 @@ frame.addEventListener('load',()=>{
     }),
     getFiles:()=>fileView?.getFiles()||[],
     getFileStatus:()=>fileView?.getCatalogState()||'loading',
+    getFileWarning:()=>fileView?.catalogWarning()||'',
+    getFileRetry:()=>fileView?.retryAction(),
+    onRetryFiles:()=>fileView?.retryFiles(),
     onNavigate:navigateDashboardArea,
-    onDismiss:()=>{if(fileSearchReturns.get(history.state?.smaSearchResults)?.global)history.replaceState(null,'');},
-    onOpenFile:(id,portal,query)=>{
+    onDismiss:()=>{
+      const origin=fileSearchReturns.get(history.state?.smaSearchResults);
+      if(origin?.global)origin.dismissed=true;
+    },
+    onOpenFile:(id,portal,query,launcher)=>{
       if(signedOut||dashboardOwnerId!==ownerId||!fileView?.getFiles().some(f=>f.id===id))return false;
-      const nav=findAreaNavigation('publishing');if(!nav)return false;
-      nav.click();dashboardChapters?.controllers.get('publishing')?.select('files');
-      return fileView.openFile(id,portal,{global:true,query,id})===true;
+      const page=doc.querySelector('[id^="page-"].active')?.id.slice(5);
+      const chapter=dashboardChapters?.controllers.get(page)?.selected;
+      const origin={global:true,query,id,page,chapter,launcher};
+      if(!activateSearchPage('publishing','files'))return false;
+      if(fileView.openFile(id,portal,origin))return true;
+      activateSearchPage(page,chapter);return false;
     }
   }):null;
   dashboardMobileNav=ownerId&&fileView?mountDashboardMobileNav({
@@ -419,14 +481,48 @@ frame.addEventListener('load',()=>{
       if(key==='history')doc.getElementById('sma-history-tab-orders')?.click();
       return true;
     },
-    onSearch:()=>{
+    onSearch:launcher=>{
       if(signedOut||dashboardOwnerId!==ownerId||!dashboardQuickFind)return false;
-      dashboardQuickFind.show();return true;
+      dashboardQuickFind.show(launcher);return true;
     }
   }):null;
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
+  const saved=startupView;
+  if(saved?.kind==='preview'&&fileView){
+   await reopenSearchPreview(saved,fileView,doc,page,ownerId);
+  }else{
+   startupView=null;
+   if(saved&&fileView)await fileView.reopenGallery(saved,()=>navigateDashboardArea('files'));
+  }
 });
+async function reopenSearchPreview(saved,list,doc,page,ownerId){
+ const origin={...saved.origin,id:saved.id};
+ if(origin.global)origin.launcher=(origin.mobile?doc.querySelector('#smaMobileQuickNav [data-sma-mobile-target="search"]'):
+  (origin.launcherId&&doc.getElementById(origin.launcherId)))||dashboardQuickFind?.button;
+ fileSearchReturns.set(saved.key,origin);
+ // A customer who navigates during a slow catalogue read owns the new selection.
+ const controller=new AbortController();
+ const cancel=event=>{
+  if(!event.isTrusted)return;
+  controller.abort();
+  if(previewMatchesHistory(saved,history.state))history.replaceState(null,'',location.pathname+location.search);
+ };
+ for(const type of ['pointerdown','keydown','input','click'])doc.addEventListener(type,cancel,{capture:true,signal:controller.signal});
+ window.addEventListener('popstate',()=>controller.abort(),{once:true,signal:controller.signal});
+ try{
+  await list.initialRead;
+  if(controller.signal.aborted||fileView!==list||signedOut||dashboardOwnerId!==ownerId||
+     !previewMatchesHistory(saved,history.state))return;
+  const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===saved.portal);
+  if(trigger&&list.getFiles().some(f=>f.id===saved.id)&&activateSearchPage('publishing','files')){
+   selectedFileId=saved.id;openOptimizer(saved.portal,trigger,true,saved.key);
+  }else{
+   // The preceding entry is the original search. Reuse it for an unavailable file.
+   closeOptimizer();
+  }
+ }finally{controller.abort();if(startupView===saved)startupView=null;}
+}
 function attachFileList(doc,page){
  let disposed=false;const owner=dashboardOwnerId;
  const slot=doc.getElementById('publishingFilesSlot');if(!slot)return null;
@@ -444,34 +540,222 @@ function attachFileList(doc,page){
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
  let files=[],pageNumber=0,loading=false,lastSync=0,catalogState='loading';
+ const back=doc.createElement('button'),next=doc.createElement('button'),count=doc.createElement('span');
+ back.type=next.type='button';back.textContent='Zurück';next.textContent='Weiter';
+ count.setAttribute('role','status');
+ back.addEventListener('click',()=>{pageNumber--;draw();});
+ next.addEventListener('click',()=>{pageNumber++;draw();});
+ function updatePages(total){
+  const focused=doc.activeElement;
+  const pageCount=Math.ceil(total/10);
+  pageNumber=Math.max(0,Math.min(pageNumber,pageCount-1));
+  if(pageCount<=1){
+   if(back.parentNode===pages)pages.replaceChildren();
+   if(focused===back||focused===next)finder.focus();
+   return;
+  }
+  if(back.parentNode!==pages)pages.append(back,count,next);
+  back.disabled=pageNumber===0;next.disabled=pageNumber===pageCount-1;
+  const label='Seite '+(pageNumber+1)+' von '+pageCount;
+  if(count.textContent!==label)count.textContent=label;
+  if(focused===next&&next.disabled)back.focus();
+  if(focused===back&&back.disabled)next.focus();
+ }
  const say=text=>message.textContent=text;
- function draw(){const focusedId=doc.activeElement?.dataset?.assetId;thumbnails.reset();list.replaceChildren();pages.replaceChildren();const matches=filterDashboardFiles(files,finder.value,portalFilter.value);selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':'Noch keine Bild- oder Videodateien im zugeordneten Kundenordner.';
+ let restoringGallery=false,pendingReload=null,reloadController=null,restoreFocus=true;
+ let retryStep=null,hasCatalog=false,navigatingWithCatalog=false;
+ let folderNotice='',scanRunning=false;
+ const interruptedNotice='Der Ordnerabgleich wurde nicht abgeschlossen.';
+ const runningNotice='Ein Ordnerabgleich läuft bereits.';
+ const rateLimitNotice='Bitte warte kurz, bevor du den Ordnerabgleich erneut startest.';
+ function finishReload(){
+  if(!pendingReload||disposed||signedOut||owner!==dashboardOwnerId||catalogState!=='ready')return;
+  const v=pendingReload;
+  cancelReload();
+  if(!galleryVisible()||v.query!==finder.value||v.portal!==portalFilter.value)return;
+  const matches=filterDashboardFiles(files,v.query,v.portal);
+  const onFile=v.focus==='file'||v.focus==='select';
+  const found=onFile?searchFilePage(matches,v.file):-1;
+  selectedFileId=files.some(f=>f.id===v.selected)?v.selected:null;
+  pageNumber=found>=0?found:Math.min(v.page,Math.max(0,Math.ceil(matches.length/10)-1));
+  draw();
+  if(!restoreFocus)return true;
+  if(onFile)focusResult(v.file,v.focus);
+  else if(v.focus==='filter')portalFilter.focus();
+  else{
+   const button=v.focus==='next'?next:v.focus==='back'?back:null;
+   if(!button||button.parentNode!==pages)finder.focus();
+   else if(!button.disabled)button.focus();
+   else (button===next?back:next).focus();
+  }
+  return true;
+ }
+ function cancelReload(){
+  pendingReload=null;reloadController?.abort();reloadController=null;
+ }
+ async function reopenGallery(view,navigate){
+  const controller=new AbortController();
+  reloadController=controller;
+  restoreFocus=true;
+  const onInteraction=event=>{
+   if(restoringGallery)return;
+   if(pendingReload&&event.target===refresh&&retryStep==='catalog'){
+    restoreFocus=true;
+    return;
+   }
+   // Moving keyboard focus through the toolbar doesn't change the search.
+   if(pendingReload&&(event.key==='Tab'||event.key==='Shift'||
+      ([finder,portalFilter].includes(event.target)&&!['input','change'].includes(event.type)))){
+    restoreFocus=false;
+    return;
+   }
+   cancelReload();
+  };
+  for(const type of ['pointerdown','keydown','input','change','click'])
+   doc.addEventListener(type,onInteraction,{capture:true,signal:controller.signal});
+  try{
+   const session=await dashboardSession();
+   if(controller.signal.aborted||disposed||signedOut||owner!==dashboardOwnerId||session?.user?.id!==owner)return;
+   restoringGallery=true;
+   if(!navigate())return;
+   finder.value=view.query;portalFilter.value=view.portal;pageNumber=view.page;
+   pendingReload=view;
+   finishReload();
+  }catch{cancelReload();}
+  finally{restoringGallery=false;if(!pendingReload)cancelReload();}
+ }
+ function snapshot(){
+  if(pendingReload)return pendingReload;
+  const el=doc.activeElement;
+  const file=list.contains(el)?el?.dataset?.assetId||null:null;
+  let focus='search';
+  if(file)focus=el.classList.contains('sma-gallery-select')?'select':'file';
+  else if(el===portalFilter)focus='filter';
+  else if(el===back)focus='back';
+  else if(el===next)focus='next';
+  return {query:finder.value,portal:portalFilter.value,page:pageNumber,selected:selectedFileId,file,focus};
+ }
+ function draw(followFocusedFile=false){
+  const active=doc.activeElement;
+  const focusedId=list.contains(active)?active?.dataset?.assetId:null;
+  const focusedControl=focusedId&&active.classList.contains('sma-gallery-select')?'select':'file';
+  const matches=filterDashboardFiles(files,finder.value,portalFilter.value);
+  if(followFocusedFile&&focusedId){
+   const newPage=searchFilePage(matches,focusedId);
+   if(newPage>=0)pageNumber=newPage;
+  }
+  updatePages(matches.length);
+  thumbnails.reset();list.replaceChildren();
+  selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':hasCatalog?'Noch keine Bild- oder Videodateien in der gespeicherten Liste.':'';
   if(!matches.length){if(files.length)selection.textContent='Keine Treffer. Versuche einen kürzeren Namen oder „Alle Portale“.';if(focusedId)finder.focus();return;}
-  pageNumber=Math.min(pageNumber,Math.max(0,Math.ceil(matches.length/10)-1));
   for(const f of matches.slice(pageNumber*10,pageNumber*10+10)){
     const description=dashboardFileDescription(f,finder.value,portalFilter.value);
     const caption=[description.title,description.version].filter(Boolean).join(' · ');
-    const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+caption+(selectedFileId===f.id?' · Ausgewählt':'');label.title=caption;choose.textContent='';choose.className='sma-gallery-select';choose.setAttribute('aria-label','Datei auswählen: '+caption);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.dataset.assetId=f.id;open.setAttribute('aria-label','Datei im Portal öffnen: '+caption);
+    const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+caption+(selectedFileId===f.id?' · Ausgewählt':'');label.title=caption;choose.textContent='';choose.className='sma-gallery-select';choose.dataset.assetId=f.id;choose.setAttribute('aria-label','Datei auswählen: '+caption);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.dataset.assetId=f.id;open.setAttribute('aria-label','Datei im Portal öffnen: '+caption);
     open.addEventListener('click',()=>{
      if(!openFile(f.id,description.portal,{id:f.id,query:finder.value,portal:portalFilter.value,page:pageNumber})){
       say('Bitte oben das gewünschte Portal auswählen.');
      }
     });
     row.append(choose,open,info);list.append(row);thumbnails.observe(visual,f);}
-  if(matches.length>10){const back=doc.createElement('button');back.textContent='Zurück';back.disabled=pageNumber===0;back.addEventListener('click',()=>{pageNumber--;draw();});const next=doc.createElement('button');next.textContent='Weiter';next.disabled=(pageNumber+1)*10>=matches.length;next.addEventListener('click',()=>{pageNumber++;draw();});const count=doc.createElement('span');count.textContent='Seite '+(pageNumber+1)+' von '+Math.ceil(matches.length/10);pages.append(back,count,next);}
-  if(focusedId)focusResult(focusedId);
+  if(focusedId)focusResult(focusedId,focusedControl);
  }
- function focusResult(id){
-  const hit=[...list.querySelectorAll('.sma-file-open')].find(button=>button.dataset.assetId===id);
+ function focusResult(id,control='file'){
+  const selector=control==='select'?'.sma-gallery-select':'.sma-file-open';
+  const hit=[...list.querySelectorAll(selector)].find(button=>button.dataset.assetId===id);
   (hit||finder).focus();
  }
  finder.addEventListener('input',()=>{pageNumber=0;draw();});portalFilter.addEventListener('change',()=>{pageNumber=0;draw();});
- async function load(sync=false){if(loading||disposed)return;loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();try{
-  if(sync){say('Kundenordner wird geprüft …');const {data,error}=await supabase.auth.getSession();if(error||!data?.session)throw Error('Bitte melde dich erneut an.');const res=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1',{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});const body=await res.json();if(!res.ok||!body.ok){if(!['FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING'].includes(body.code))throw Error(body.code==='FOLDER_UNAVAILABLE'?'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.':'Die Dateien konnten noch nicht aktualisiert werden. Bitte erneut versuchen.');}else lastSync=Date.now();}
-  const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}});if(error||!data?.ok)throw Error('Die Dateiliste konnte nicht geladen werden.');if(disposed||signedOut||owner!==dashboardOwnerId)return;files=data.files||[];catalogState='ready';wakeMusic();if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;draw();say(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.');
- }catch(e){catalogState='error';say(e.message);}finally{loading=false;refresh.disabled=false;dashboardQuickFind?.refresh();}}
- refresh.addEventListener('click',()=>load(true));
- for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))button.addEventListener('click',()=>load(Date.now()-lastSync>60000));
+ async function catalogSession(){
+  const session=await dashboardSession();
+  if(disposed||signedOut||owner!==dashboardOwnerId)return null;
+  if(!owner||session?.user?.id!==owner){leaveDashboard();return null;}
+  return session;
+ }
+ function catalogWarning(){
+  if(disposed||signedOut||owner!==dashboardOwnerId)return '';
+  if(retryStep==='catalog')return files.length?'Die Dateiliste ist gerade nicht erreichbar. Die Suche verwendet die zuletzt geladene Dateiliste.':'';
+  if(!folderNotice)return '';
+  const summary=files.length?'Die Suche verwendet die zuletzt gespeicherte Dateiliste.':'Keine gespeicherten Dateien in dieser Ansicht geladen.';
+  return folderNotice+' '+summary;
+ }
+ async function syncFolder(session){
+  let res,body;
+  try{
+   res=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1',{method:'POST',
+    headers:{Authorization:'Bearer '+session.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});
+   body=await res.json();
+  }catch{
+   throw Error(interruptedNotice);
+  }
+  if(res.ok&&body?.ok===true){lastSync=Date.now();folderNotice='';return;}
+  if(!res.ok||!body||['FILE_CATALOG_TOO_LARGE','FILE_SYNC_UNAVAILABLE','FILE_METADATA_INVALID'].includes(body.code)){
+   throw Error(interruptedNotice);
+  }
+  if(['FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING'].includes(body.code)){
+   return body.code==='FILE_SYNC_RUNNING'?runningNotice:rateLimitNotice;
+  }
+  if(body.code==='FOLDER_UNAVAILABLE')throw Error('Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.');
+  throw Error('Die Dateien konnten noch nicht aktualisiert werden. Bitte erneut versuchen.');
+ }
+ async function load(sync=false){
+  if(loading||disposed||signedOut||owner!==dashboardOwnerId)return;
+  const retryingCatalog=retryStep==='catalog';
+  const checkingStatus=!sync&&scanRunning;
+  let attemptNotice='';
+  let step=sync?'folder':'catalog';
+  loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();
+  try{
+   if(sync){
+    say('Kundenordner wird geprüft …');
+    const session=await catalogSession();if(!session)return;
+    attemptNotice=await syncFolder(session)||'';
+    if(attemptNotice)folderNotice=attemptNotice;
+   }
+   if(disposed||signedOut||owner!==dashboardOwnerId)return;
+   step='catalog';
+   if(retryingCatalog)say('Die Dateiliste wird erneut geladen …');
+   const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}});
+   if(error||!data?.ok||!Array.isArray(data.files))throw Error('Die Dateiliste konnte nicht geladen werden.');
+   if(!await catalogSession())return;
+   files=data.files;hasCatalog=true;catalogState='ready';retryStep=null;
+   scanRunning=data.sync_state==='running';
+   if(scanRunning)folderNotice=runningNotice;
+   else if(data.sync_state==='interrupted')folderNotice=attemptNotice===rateLimitNotice?interruptedNotice+' '+rateLimitNotice:interruptedNotice;
+   else if(data.sync_state==='complete'||data.sync_state==='idle')folderNotice=attemptNotice===rateLimitNotice?rateLimitNotice:'';
+   if(!retryingCatalog&&!checkingStatus)wakeMusic();
+   if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;
+   if(!finishReload())draw(true);
+   say(catalogWarning()||(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.'));
+  }catch(error){
+   if(disposed||signedOut||owner!==dashboardOwnerId)return;
+   catalogState='error';retryStep=step;
+   if(step==='catalog')say('Die Dateiliste ist gerade nicht erreichbar. Du kannst sie erneut laden.');
+   else{folderNotice=error.message;say(catalogWarning());}
+  }finally{
+   loading=false;
+   if(!disposed){
+    refresh.textContent=retryStep==='catalog'?'Dateiliste erneut laden':scanRunning?'Abgleichstatus prüfen':'Dateien aktualisieren';
+    refresh.disabled=false;dashboardQuickFind?.refresh();
+   }
+  }
+ }
+ function retryCatalog(){if(retryStep==='catalog')void load(false);}
+ function retryAction(){return retryStep||(scanRunning?'status':folderNotice?'folder':null);}
+ function retryFiles(){
+  const action=retryAction();
+  if(action)void load(action==='folder');
+ }
+ function navigateWithCatalog(nav){
+  // The search result already belongs to the loaded catalogue. Keep the sidebar's
+  // normal page switch, including its refresh when the catalogue is unavailable.
+  const previous=navigatingWithCatalog;
+  navigatingWithCatalog=catalogState==='ready'||(hasCatalog&&Boolean(folderNotice));
+  try{nav.click();}finally{navigatingWithCatalog=previous;}
+ }
+ refresh.addEventListener('click',()=>load(retryStep!=='catalog'&&!scanRunning));
+ for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))
+  button.addEventListener('click',()=>{if(!restoringGallery&&!navigatingWithCatalog)void load(retryStep!=='catalog'&&!scanRunning&&Date.now()-lastSync>60000);});
  function openFile(id,portal,origin){
   if(disposed||signedOut||owner!==dashboardOwnerId)return false;
   const item=files.find(f=>f.id===id);if(!item)return false;
@@ -480,7 +764,7 @@ function attachFileList(doc,page){
   if(!trigger)return false;
   selectedFileId=id;openSearchFile(portal,trigger,origin);return true;
  }
- load(false);return {load,
+ const initialRead=load(false);return {initialRead,load,snapshot,reopenGallery,retryCatalog,retryAction,retryFiles,navigateWithCatalog,catalogWarning,
     getFiles(){return disposed||signedOut||owner!==dashboardOwnerId?[]:files.slice();},
     getCatalogState(){return disposed||signedOut||owner!==dashboardOwnerId?'error':catalogState;},
     openFile,
@@ -503,38 +787,74 @@ function attachFileList(doc,page){
       finder.focus();
       return true;
     },
-    clear(){disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
+    clear(){cancelReload();disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
 }
 let pending;
-let signedOut=false;
-async function dashboardHtml(){
+let signedOut=false,retryDashboardOnReconnect=false;
+function connectionError(message){return Object.assign(new Error(message),{retryOnReconnect:true});}
+async function dashboardSession(){
+ try{
   const {data,error}=await supabase.auth.getSession();
-  if(error||!data?.session){window.location.replace('index.html');throw new Error('Bitte melde dich bei SMA an.');}
-  const response=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token},cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(45000)});
-  if(!response.ok)throw new Error(response.status===403?'Dein SMA-Zugang konnte noch nicht zugeordnet werden.':'Das Dashboard ist gerade nicht erreichbar. Bitte versuche es erneut.');
-  const result=await response.json();
-  if(typeof result.html!=='string'||!result.html.includes('data-sma-customer-id'))throw new Error('Das Dashboard konnte nicht vollständig geladen werden.');
-  dashboardOwnerId=data.session.user.id;
-  return result.html;
+  if(!error)return data?.session??null;
+ }catch{}
+ throw connectionError('Deine Anmeldung konnte gerade nicht geprüft werden. Bitte versuche es erneut.');
+}
+async function dashboardHtml(){
+ const session=await dashboardSession();
+ if(signedOut)throw Error('Bitte melde dich bei SMA an.');
+ if(!session?.user?.id){
+  window.location.replace('index.html');
+  throw Error('Bitte melde dich bei SMA an.');
+ }
+ const owner=session.user.id;
+ if(dashboardOwnerId&&dashboardOwnerId!==owner){leaveDashboard();throw Error('Die Anmeldung wurde gewechselt.');}
+ dashboardOwnerId=owner;
+ const unavailable='Das Dashboard ist gerade nicht erreichbar. Bitte versuche es erneut.';
+ let response;
+ try{
+  response=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token},cache:'no-store',
+   credentials:'omit',signal:AbortSignal.timeout(45000)});
+ }catch{throw connectionError(unavailable);}
+ if(!response.ok){
+  if(response.status>=500)throw connectionError(unavailable);
+  throw Error(response.status===403?'Dein SMA-Zugang konnte noch nicht zugeordnet werden.':unavailable);
+ }
+ const result=await response.json().catch(()=>null);
+ if(typeof result?.html!=='string'||!result.html.includes('data-sma-customer-id'))throw Error('Das Dashboard konnte nicht vollständig geladen werden.');
+ const current=await dashboardSession();
+ if(signedOut||dashboardOwnerId!==owner||current?.user?.id!==owner){
+  if(!signedOut)leaveDashboard();
+  throw Error('Die Anmeldung wurde gewechselt.');
+ }
+ return result.html;
 }
 // Called only by the same-origin dashboard frame after OAuth returns.
 window.smaDashboardResponse=async()=>new Response(await dashboardHtml(),{headers:{'Content-Type':'text/html'}});
 async function load(){
   if(pending)return pending;
   pending=(async()=>{
+    retryDashboardOnReconnect=false;
     document.getElementById('retry').hidden=true;
-    try{const html=await dashboardHtml();if(signedOut)return;clearOptimizer();frame.srcdoc=html;frame.hidden=false;state.hidden=true;}
-    catch(error){frame.hidden=true;frame.removeAttribute('srcdoc');state.hidden=false;document.getElementById('heading').textContent='SMA-Dashboard';document.getElementById('message').textContent=error.message;document.getElementById('retry').hidden=false;document.getElementById('logout').hidden=false;}
+    document.getElementById('message').textContent='Die Anmeldung wird geprüft …';
+    try{
+     const html=await dashboardHtml();if(signedOut)return;
+     startupView=galleryReload.take(dashboardOwnerId);
+     const keepRoute=previewMatchesHistory(startupView,history.state);
+     if(startupView?.kind==='preview'&&!keepRoute)startupView=null;
+     clearOptimizer(keepRoute);frame.srcdoc=html;frame.hidden=false;state.hidden=true;
+    }
+    catch(error){if(signedOut)return;retryDashboardOnReconnect=error.retryOnReconnect===true;
+      frame.hidden=true;frame.removeAttribute('srcdoc');state.hidden=false;document.getElementById('heading').textContent='SMA-Dashboard';document.getElementById('message').textContent=error.message;document.getElementById('retry').hidden=false;document.getElementById('logout').hidden=false;}
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){galleryReload.clear();signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-search-return'){
     const active=[...(optimizerFrames?.children||[])].find(el=>!el.hidden&&el.contentWindow===event.source);
-    if(active&&!optimizerPage.hidden&&fileSearchReturns.has(history.state?.searchKey))history.back();
+    if(active&&!optimizerPage.hidden&&fileSearchReturns.has(history.state?.searchKey))closeOptimizer();
     return;
   }
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-order-open'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview&&!preview.hidden&&!optimizerPage.hidden){optimizerPage.scrollIntoView({block:'start'});preview.contentWindow.postMessage({type:'sma-publication-order-viewport',height:Math.max(240,Math.min(720,window.innerHeight-140))},window.location.origin);}return;}
@@ -548,7 +868,12 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-reload')load();
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
-supabase.auth.onAuthStateChange((event,s)=>{if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId)){signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.removeAttribute('srcdoc');window.location.replace('index.html');}});
+function leaveDashboard(){
+ galleryReload.clear();signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');
+}
+supabase.auth.onAuthStateChange((event,s)=>{
+ if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
+});
 await load();
 </script></body></html>
 

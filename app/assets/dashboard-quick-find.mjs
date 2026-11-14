@@ -38,7 +38,7 @@ export function quickFindMatches(query,areas,files){
   fileCount:matchedFiles.length
  };
 }
-export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',onNavigate,onOpenFile,onDismiss}){
+export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',getFileWarning=()=>'',getFileRetry=()=>null,onRetryFiles,onNavigate,onOpenFile,onDismiss}){
  if(!doc||[getAreas,getFiles,onNavigate,onOpenFile].some(fn=>typeof fn!=='function')||
    doc.getElementById('smaGlobalQuickFind'))return null;
  const header=[...doc.querySelectorAll('header,[role="banner"],.topbar,.top-bar')]
@@ -76,10 +76,21 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  const input=create('input');input.type='search';input.id='smaQuickFindInput';input.placeholder='Datei oder Bereich eingeben …';
  input.setAttribute('aria-label','Dashboard durchsuchen');input.autocomplete='off';
  const status=create('p');status.className='sma-qf-status';status.setAttribute('role','status');
+ const retry=create('button');retry.type='button';retry.hidden=true;
+ retry.addEventListener('click',()=>{
+  if(!disposed&&!overlay.hidden&&getFileStatus()!=='loading'&&getFileRetry())onRetryFiles?.();
+ });
  const results=create('div');results.id='smaQuickFindResults';
- panel.append(head,input,status,results);overlay.append(panel);doc.body.append(overlay);
- let disposed=false;
- function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)button.focus();}
+ panel.append(head,input,status,retry,results);overlay.append(panel);doc.body.append(overlay);
+ let disposed=false,launcher=button;
+ function focusLauncher(target=launcher){
+  if(target&&target!==doc.body&&target!==doc.documentElement){
+   target.focus?.();if(doc.activeElement===target)return;
+  }
+  button.focus();
+  if(doc.activeElement!==button)doc.querySelector('#smaMobileQuickNav [data-sma-mobile-target="search"]')?.focus();
+ }
+ function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)focusLauncher();}
  function dismiss(){hide();onDismiss?.();}
  function item(title,subtitle,handler,restoreFocus=true){
   const el=create('button');el.type='button';el.className='sma-qf-item';
@@ -98,7 +109,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page);
   for(const file of found.files){
    const label=dashboardFileDescription(file,query);
-   const hit=item(label.title,label.version||'Kundendatei · im Portal öffnen',()=>onOpenFile(file.id,label.portal,input.value),false);
+   const hit=item(label.title,label.version||'Kundendatei · im Portal öffnen',()=>onOpenFile(file.id,label.portal,input.value,launcher),false);
    hit.dataset.quickFile=file.id;
   }
   if(found.fileCount>found.files.length&&Array.isArray(areas)&&areas.some(a=>a.key==='files')){
@@ -117,12 +128,20 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
    }
   }
   const directHits=found.areas.length+found.fileCount;
-  const fileStatus=getFileStatus();
+  const fileStatus=getFileStatus(),fileWarning=getFileWarning();
+  const retryAction=onRetryFiles&&getFileRetry();
+  const retryFocused=doc.activeElement===retry;
+  retry.hidden=!retryAction;
+  retry.textContent=retryAction==='folder'?'Ordnerabgleich wiederholen':retryAction==='status'?'Abgleichstatus prüfen':'Dateiliste erneut laden';
+  retry.setAttribute('aria-disabled',String(fileStatus==='loading'));
+  if(retry.hidden&&retryFocused)input.focus();
   const prefix=directHits===1?'1 direkter Treffer':directHits>1?directHits+' direkte Treffer':'';
   if(fileStatus==='loading')
-   status.textContent=(prefix?prefix+' · ':'')+'Kundendateien werden geladen …';
+   status.textContent=(prefix?prefix+' · ':'')+(retryAction==='folder'?'Kundenordner wird geprüft …':'Kundendateien werden geladen …');
+  else if(fileWarning)
+   status.textContent=(prefix?prefix+' · ':'')+fileWarning;
   else if(fileStatus==='error')
-   status.textContent=(prefix?prefix+' · ':'')+'Dateiliste nicht erreichbar. Bitte unter „Dateien“ aktualisieren.';
+   status.textContent=(prefix?prefix+' · ':'')+'Dateiliste nicht erreichbar.';
   else
    status.textContent=prefix||(deepActions?'Keine direkten Treffer. Suche in Aufträgen oder Bestellungen.':'Keine Treffer. Versuche einen kürzeren Begriff.');
   status.setAttribute('aria-busy',fileStatus==='loading'?'true':'false');
@@ -132,25 +151,26 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   const hit=[...results.children].find(el=>el.dataset.quickFile===id);
   (hit||input).focus();
  }
- function restore(query,id){
-  if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render();
+ function restore(query,id,trigger=button){
+  if(disposed)return;launcher=trigger;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render();
   focusFile(id);
  }
- function show(){restore('',null);}
+ function show(trigger=button){restore('',null,trigger);}
+ const openFromHeader=()=>show(button);
  const keydown=e=>{
   if(disposed)return;
   if(e.key==='Escape'&&!overlay.hidden){e.preventDefault();dismiss();return;}
-  if((e.ctrlKey||e.metaKey)&&e.key?.toLowerCase()==='k'){e.preventDefault();overlay.hidden?show():dismiss();}
+  if((e.ctrlKey||e.metaKey)&&e.key?.toLowerCase()==='k'){e.preventDefault();overlay.hidden?show(doc.activeElement||button):dismiss();}
  };
  const backdrop=e=>{if(e.target===overlay)dismiss();};
  const inputHandler=()=>render();
- button.addEventListener('click',show);close.addEventListener('click',dismiss);
+ button.addEventListener('click',openFromHeader);close.addEventListener('click',dismiss);
  overlay.addEventListener('click',backdrop);input.addEventListener('input',inputHandler);
  doc.addEventListener('keydown',keydown);
- return {button,show,hide,restore,refresh:render,destroy(){
+ return {button,show,hide,restore,focusLauncher,refresh:render,destroy(){
   if(disposed)return;disposed=true;doc.removeEventListener('keydown',keydown);
   input.removeEventListener('input',inputHandler);overlay.removeEventListener('click',backdrop);
-  button.removeEventListener('click',show);close.removeEventListener('click',dismiss);
+  button.removeEventListener('click',openFromHeader);close.removeEventListener('click',dismiss);
   button.remove();overlay.remove();style.remove();
  }};
 }

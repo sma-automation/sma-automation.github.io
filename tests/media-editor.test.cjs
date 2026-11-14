@@ -17,6 +17,8 @@ test('editor response is bound to the exact file version and strips private extr
  assert.deepEqual(read({...response,token:'private'},file),{revision:0,settings:d,saved_at:null,changed:false});
  for(const patch of [{can_publish:true},{asset_id:id(2)},{asset_revision:'r2'},{revision:1},{saved_at:'2026-11-06T12:00:00Z'},{version:2},{changed:null}])assert.throws(()=>read({...response,...patch},file));
  assert.deepEqual(readEditorFiles({ok:true,files:[{...file,user_id:'private',access_token:'private'}]}),[file]);
+ const catalog=Array.from({length:1001},(_,n)=>({...file,id:id(n+1)}));
+ assert.equal(readEditorFiles({ok:true,files:catalog}).at(-1).id,id(1001));
  for(const files of [[file,file],[{...file,revision:''}],[{...file,duration_ms:-1}],[{...file,width_px:0}]])assert.throws(()=>readEditorFiles({ok:true,files}));
 });
 test('editor history requires exact differences, correct month and bounded cursor while hiding private fields',async()=>{

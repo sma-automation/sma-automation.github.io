@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
 import {readFile} from 'node:fs/promises';
 import {chromium} from './dom-runtime/node_modules/playwright-core/index.mjs';
 
@@ -284,6 +285,7 @@ async function checkSearchReturn(page,frame,width){
  await filter.selectOption('youtube');
  await hit.click();await page.waitForURL(previewURL);
  await portal.getByRole('heading',{name:draft.title}).waitFor();
+ await page.reload();await portal.getByRole('heading',{name:draft.title}).waitFor();
  await back.click();await page.waitForURL(dashboard);
  assert.equal(await finder.inputValue(),draft.title);assert.equal(await filter.inputValue(),'youtube');
  assert(await focused(hit),'the file action should regain focus');
@@ -350,8 +352,410 @@ async function checkDashboardPreview(browser,width,height){
  }catch(e){throw Error('Dashboard playback: '+e.message+'; '+errors.join(', '),{cause:e});}
  finally{await context.close();}
 }
+async function checkOverviewSearchReturn(browser,width,interrupted,reloadCase=null){
+ const mobile=width===320;
+ const context=await browser.newContext({viewport:{width,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+ try{
+  const errors=[];
+  let catalogReads=0,driveReads=0,afterReload=false,portalReads=0;
+  let files;
+  const started=Promise.withResolvers(),resume=Promise.withResolvers();
+  const query='SMA Privattest 02';
+  const searchFile={...file,display:{variant:'export'},assignments:[{...file.assignments[0],title:query}]};
+  const originalFile={...searchFile,id:uuid(11),display:{variant:'original'}};
+  files=[originalFile,searchFile];
+  await context.routeWebSocket('**/*',ws=>ws.close());
+  await context.route('**/*',async route=>{
+   try{
+    const req=route.request(),path=new URL(req.url()).pathname;
+    if(afterReload&&reloadCase==='other'&&new URL(req.url()).origin==='https://esm.sh'){
+     return await route.fulfill({contentType:'text/javascript',headers:{'Access-Control-Allow-Origin':'*'},body:client.replace("id:'fixture'","id:'other'")});
+    }
+    if(req.method()==='POST'&&path==='/fixture/sma_publication_files_v1'){
+     const q=req.postDataJSON();
+     if(q.p_action==='list'&&q.p_input?.platform)portalReads++;
+     if(q.p_action==='list'&&q.p_input?.dashboard_labels){
+      if(afterReload&&reloadCase==='slow'){started.resolve();await resume.promise;}
+      if(afterReload&&reloadCase==='unreachable'&&catalogReads===1){catalogReads++;return await route.abort('internetdisconnected');}
+      catalogReads++;
+      if(interrupted&&catalogReads===1)return await route.abort('internetdisconnected');
+     }
+    }
+    if(path==='/webhook/sma-publication-files-v1')driveReads++;
+    await firstPostRoute(route,()=>({ok:true,files:[file]}),files);
+   }catch(error){errors.push(error.message);await route.abort();}
+  });
+  const page=await context.newPage();page.setDefaultTimeout(5000);page.on('pageerror',e=>errors.push(e.message));
+  const frame=page.frameLocator('#dashboard'),account=frame.getByRole('tab',{name:'Konto & Paket'});
+  const launcher=mobile?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
+  const dialog=frame.getByRole('dialog',{name:'SMA durchsuchen'}),input=dialog.getByRole('searchbox');
+  const hit=dialog.locator('[data-quick-file="'+asset+'"]');
+  const editor=frame.frameLocator('iframe[data-portal="youtube"]:visible');
+  const back=editor.getByRole('button',{name:/Zurück zu den Suchergebnissen/});
+  const focus=el=>el.evaluate(node=>node.ownerDocument.activeElement===node);
+  await page.goto(dashboard);await account.click();await launcher.click();await input.fill(query);
+  if(interrupted){
+   await dialog.getByRole('status').filter({hasText:'nicht erreichbar'}).waitFor();
+   if(mobile)await dialog.getByRole('button',{name:'Dateiliste erneut laden'}).click();
+   else await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+  }
+  await hit.waitFor();assert.equal(catalogReads,interrupted?2:1);assert.equal(driveReads,0);
+  assert.equal(await dialog.locator('[data-quick-file]').count(),2);assert.match(await hit.innerText(),/Bearbeitetes Video · 3 Sek/);
+  await hit.click();await back.waitFor();
+  if(reloadCase){
+   const previousPortalReads=portalReads;afterReload=true;
+   if(reloadCase==='removed')files=[originalFile];
+   await page.reload({waitUntil:'domcontentloaded'});
+   if(reloadCase==='slow'){
+    await started.promise;
+    try{
+     await account.click();await launcher.click();await input.fill('meine neue Suche');
+    }finally{resume.resolve();}
+    await dialog.getByRole('status').filter({hasText:/Keine (direkten )?Treffer/}).waitFor();
+    assert.equal(await input.inputValue(),'meine neue Suche');assert(await focus(input));
+   }else if(reloadCase==='other'){
+    await launcher.waitFor();await launcher.click();
+    assert.equal(await input.inputValue(),'');
+    assert.equal(await page.evaluate(()=>history.state?.searchKey??null),null);
+   }else{
+    await dialog.waitFor();assert.equal(await input.inputValue(),query);assert(await focus(input));
+    assert.equal(await hit.count(),0);assert.equal(await account.getAttribute('aria-selected'),'true');
+    if(reloadCase==='unreachable'){
+     await dialog.getByRole('status').filter({hasText:'nicht erreichbar'}).waitFor();
+     await page.evaluate(()=>window.dispatchEvent(new Event('online')));await hit.waitFor();
+    }else{assert.equal(await dialog.locator('[data-quick-file]').count(),1);}
+   }
+   assert.equal(await frame.locator('iframe[data-portal]').count(),0);
+   assert.equal(portalReads,previousPortalReads);assert.equal(driveReads,0);assert.deepEqual(errors,[]);
+   console.log(width+'px: search preview reload, '+reloadCase+' passed');return;
+  }
+  await back.click();await hit.waitFor();
+  assert.equal(await input.inputValue(),query);assert(await focus(hit));
+  await hit.press('Escape');await account.waitFor();
+  assert.equal(await account.getAttribute('aria-selected'),'true');assert(await focus(launcher));
+  await page.goForward();await back.waitFor();await page.goBack();await account.waitFor();
+  assert(!await dialog.isVisible());assert(await focus(launcher));
+  await page.goForward();await back.click();await hit.waitFor();assert(await focus(hit));
+  await dialog.getByRole('button',{name:'Suche schließen'}).click();
+  await account.waitFor();assert.equal(await account.getAttribute('aria-selected'),'true');assert(await focus(launcher));
+  await account.focus();await account.press('Control+k');await dialog.waitFor();await input.press('Escape');
+  assert(await focus(account));assert.equal(driveReads,0,'opening a saved search result must not synchronize the customer folder');assert.deepEqual(errors,[]);
+  console.log(width+'px: global search returned to the original overview chapter and launcher'+(interrupted?' after reconnect':''));
+ }finally{await context.close();}
+}
+
+async function checkGalleryKeyboard(browser,width){
+ const mobile=width===320;
+ const ctx=await browser.newContext({viewport:{width,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+ try{
+  const wanted={...file,name:'Werkstatt Ziel.mp4'};
+  const rest=Array.from({length:999},(_,i)=>({...file,id:uuid(i+100),name:'Werkstatt '+i+'.mp4'}));
+  let catalog=[...rest,wanted],catalogReads=0,driveReads=0,folderError=null,holdRetry=false,failNextRead=false;
+  const requested=Promise.withResolvers(),release=Promise.withResolvers();
+  const errors=[];
+  await ctx.routeWebSocket('**/*',ws=>ws.close());
+  await ctx.route('**/*',async route=>{
+   try{
+    const req=route.request();
+    if(new URL(req.url()).pathname==='/webhook/sma-publication-files-v1'){
+     driveReads++;
+     if(holdRetry){requested.resolve();await release.promise;}
+     if(folderError)return await route.fulfill({json:{ok:false,code:folderError}});
+    }
+    if(req.method()==='POST'&&new URL(req.url()).pathname==='/fixture/sma_publication_files_v1'){
+     const q=req.postDataJSON();
+     if(q.p_action==='list'&&q.p_input?.dashboard_labels){
+      catalogReads++;
+      if(failNextRead){failNextRead=false;return await route.abort('internetdisconnected');}
+     }
+    }
+    await firstPostRoute(route,()=>({ok:true,files:catalog}),catalog);
+   }catch(e){errors.push(e.message);await route.abort();}
+  });
+  const page=await ctx.newPage();page.setDefaultTimeout(5000);page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(dashboard);
+  const frame=page.frameLocator('#dashboard'),nav=frame.locator('.sma-file-pages');
+  const launcher=mobile?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
+  await launcher.click();const dialog=frame.getByRole('dialog');await dialog.getByRole('searchbox').fill('Werkstatt');
+  await dialog.getByRole('button',{name:/Alle 1000 Dateien anzeigen/}).click();
+  const field=frame.locator('#smaFileSearch'),filter=frame.locator('#smaFilePortalFilter');
+  await filter.selectOption('youtube');
+  const next=nav.getByRole('button',{name:'Weiter'}),back=nav.getByRole('button',{name:'Zurück'});
+  const focus=loc=>loc.evaluate(el=>el.ownerDocument.activeElement===el);
+  await nav.getByText('Seite 1 von 100',{exact:true}).waitFor();assert(await back.isDisabled());
+  const initialReads=catalogReads;
+  await next.focus();await page.keyboard.press('Enter');
+  await nav.getByText('Seite 2 von 100',{exact:true}).waitFor();assert(await focus(next),'Weiter must retain keyboard focus after paging');
+  for(let i=2;i<100;i++)await page.keyboard.press('Enter');
+  await nav.getByText('Seite 100 von 100',{exact:true}).waitFor();
+  assert(await next.isDisabled());assert(await focus(back),'Zurück must take focus at the last page');
+  await page.keyboard.press('Space');await nav.getByText('Seite 99 von 100',{exact:true}).waitFor();assert(await focus(back));
+  for(let i=99;i>1;i--)await page.keyboard.press('Enter');
+  await nav.getByText('Seite 1 von 100',{exact:true}).waitFor();assert(await focus(next),'Weiter must take focus at the first page');
+  assert.equal(catalogReads,initialReads,'Blättern must use the loaded catalogue');
+  assert.equal(driveReads,0,'showing all matches must not synchronize the customer folder');
+  catalog=[wanted,...rest];await page.reload();await nav.getByText('Seite 1 von 100',{exact:true}).waitFor();
+  assert(await focus(next),'reloading should restore the paging control');
+  const select=frame.getByRole('button',{name:/Datei auswählen: Werkstatt Ziel/});
+  await select.focus();await page.keyboard.press('Space');
+  assert.equal(await select.getAttribute('aria-pressed'),'true');assert(await focus(select),'selecting a file must keep focus on its toggle');
+  catalog=[...rest,wanted];await page.reload();await nav.getByText('Seite 100 von 100',{exact:true}).waitFor();
+  assert.equal(await select.getAttribute('aria-pressed'),'true');assert(await focus(select));
+  await page.keyboard.press('Space');assert.equal(await select.getAttribute('aria-pressed'),'false');assert(await focus(select));
+  catalog=[];await page.reload();await frame.getByText(/Noch keine Bild- oder Videodateien/).waitFor();
+  assert(await focus(field));assert.equal(await field.inputValue(),'Werkstatt');assert.equal(await filter.inputValue(),'youtube');
+  const manual=frame.getByRole('button',{name:'Dateien aktualisieren',exact:true});
+  const before=catalogReads,status=frame.locator('.sma-file-toolbar [role=status]').first();
+  const quickStatus=dialog.getByRole('status');
+  folderError='FILE_CATALOG_TOO_LARGE';await manual.click();await status.filter({hasText:'nicht abgeschlossen'}).waitFor();
+  await launcher.click();await dialog.getByRole('searchbox').fill('Werkstatt');
+  await quickStatus.filter({hasText:'Keine gespeicherten Dateien'}).waitFor();
+  assert.equal(await dialog.locator('[data-quick-file]').count(),0);
+  const retry=dialog.getByRole('button',{name:'Ordnerabgleich wiederholen'});
+  folderError=null;catalog=[wanted];await retry.click();
+  await retry.waitFor({state:'hidden'});await dialog.locator('[data-quick-file]').waitFor();
+  await dialog.getByRole('button',{name:'Suche schließen'}).click();await select.waitFor();
+  assert.equal(driveReads,2,'an explicit refresh must still synchronize the folder');
+  assert.equal(catalogReads,before+1);assert.equal(await select.getAttribute('aria-pressed'),'false');
+  folderError='FILE_SYNC_UNAVAILABLE';await manual.click();await status.filter({hasText:'zuletzt gespeicherte'}).waitFor();
+  await launcher.click();const input=dialog.getByRole('searchbox');await input.fill('Werkstatt');
+  assert.equal(await dialog.locator('[data-quick-file]').count(),1);assert.match(await quickStatus.innerText(),/zuletzt gespeicherte/);
+  await input.fill('Fehlt im Katalog');assert.equal(await dialog.locator('[data-quick-file]').count(),0);
+  assert.match(await quickStatus.innerText(),/zuletzt gespeicherte/);
+  folderError='FILE_SYNC_RATE_LIMITED';await retry.click();await quickStatus.filter({hasText:'Bitte warte kurz'}).waitFor();
+  assert.equal(await input.inputValue(),'Fehlt im Katalog');assert(await focus(retry));
+  folderError='FILE_SYNC_RUNNING';await retry.click();await quickStatus.filter({hasText:'läuft bereits'}).waitFor();
+  folderError=null;holdRetry=true;
+  await retry.press('Enter');await requested.promise;
+  try{
+   assert.equal(await retry.getAttribute('aria-disabled'),'true');await page.keyboard.press('Enter');
+   await input.fill('Werkstatt Ziel');await dialog.locator('[data-quick-file]').waitFor();
+  }finally{release.resolve();}
+  await retry.waitFor({state:'hidden'});assert.equal(await input.inputValue(),'Werkstatt Ziel');assert(await focus(input));
+  assert.equal(await quickStatus.innerText(),'1 direkter Treffer');
+  assert.equal(catalogReads,before+4);assert.equal(driveReads,6);
+  await input.press('Escape');folderError='FILE_SYNC_UNAVAILABLE';await manual.click();
+  await status.filter({hasText:'nicht abgeschlossen'}).waitFor();
+  await launcher.click();await input.fill('Werkstatt');
+  folderError=null;catalog=[{...wanted,name:'Werkstatt Neu.mp4'}];failNextRead=true;await retry.click();
+  await quickStatus.filter({hasText:'zuletzt geladene Dateiliste'}).waitFor();
+  await dialog.getByRole('button',{name:/Werkstatt Ziel/}).waitFor();
+  await dialog.getByRole('button',{name:'Dateiliste erneut laden'}).click();
+  await dialog.getByRole('button',{name:/Werkstatt Neu/}).waitFor();
+  assert.equal(await input.inputValue(),'Werkstatt');assert(await focus(input));
+  assert.equal(catalogReads,before+6);assert.equal(driveReads,8);
+  assert.deepEqual(errors,[]);console.log(width+'px: 1000 files paged forward and back by keyboard; selected file followed across reload and removal');
+ }finally{await ctx.close();}
+}
+
+async function galleryReloadTest(browser,width,variant){
+ const ctx=await browser.newContext({viewport:{width,height:800},isMobile:width===320,hasTouch:width===320,serviceWorkers:'block'});
+ const query='Werkstatt',expectedId=asset;
+ const rows=Array.from({length:24},(_,i)=>({...file,id:uuid(i+100),name:'Werkstatt Aufnahme '+i+'.mp4'}));
+ const wanted={...file,name:'Werkstatt Aufnahme.mp4',assignments:[{...file.assignments[0],title:draft.title}]};
+ let catalog=[...rows,wanted],user='fixture',delayed=false,release,start,driveReads=0,editorReads=0;
+ const held=new Promise(resolve=>{release=resolve;}),began=new Promise(resolve=>{start=resolve;});
+ const recovering=['retry','reconnect','edit-offline'].includes(variant);
+ let failures=0,checkingRecovery=false,listReads=0,musicReads=0;
+ const errors=[];
+ try{
+  await ctx.routeWebSocket('**/*',ws=>ws.close());
+  await ctx.route('**/*',async route=>{try{
+   const req=route.request(),url=new URL(req.url()),path=url.pathname;
+   if(url.origin==='https://esm.sh')return await route.fulfill({contentType:'text/javascript',headers:{'Access-Control-Allow-Origin':'*'},body:client.replace("id:'fixture'","id:"+JSON.stringify(user))});
+   if(req.method()==='POST'&&path==='/fixture/sma_publication_files_v1'){
+    const q=req.postDataJSON();
+    if(q.p_action==='list'&&q.p_input.dashboard_labels){
+     if(checkingRecovery)listReads++;
+     if(failures){failures--;return await route.abort('internetdisconnected');}
+     if(delayed){start();await held;}
+     return await route.fulfill({json:{ok:true,files:catalog}});
+    }
+    if(q.p_action==='get')editorReads++;
+   }
+   if(path==='/webhook/sma-publication-files-v1')driveReads++;
+   if(checkingRecovery&&path==='/rest/v1/rpc/sma_gallery_music_v1')musicReads++;
+   await firstPostRoute(route,()=>({ok:true,files:catalog}),catalog);
+  }catch(e){if(!e.message.includes('has been closed'))errors.push(e.message);await route.abort().catch(()=>{});}});
+  const p=await ctx.newPage();p.setDefaultTimeout(5000);p.on('pageerror',e=>errors.push(e.message));
+  const frame=p.frameLocator('#dashboard'),field=frame.locator('#smaFileSearch'),filter=frame.locator('#smaFilePortalFilter');
+  const pages=frame.locator('.sma-file-pages'),next=pages.getByRole('button',{name:'Weiter'});
+  const hit=frame.locator('.sma-file-open[data-asset-id="'+expectedId+'"]');
+  const launcher=width===320?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
+  await p.goto(dashboard);await launcher.click();const quick=frame.getByRole('dialog',{name:'SMA durchsuchen'});
+  await quick.getByRole('searchbox').fill(query);
+  await quick.getByRole('button',{name:/Alle 25 Dateien anzeigen/}).click();
+  await filter.selectOption('youtube');
+  for(let i=1;i<3;i++)await next.click();
+  await pages.getByText('Seite 3 von 3',{exact:true}).waitFor();
+  await hit.click();
+  const editor=frame.frameLocator('iframe[data-portal="youtube"]:visible');
+  await editor.getByRole('heading',{name:draft.title}).waitFor();
+  await editor.getByRole('button',{name:/Zurück zu den Suchergebnissen/}).click();
+  await hit.waitFor();assert(await hit.evaluate(el=>el.ownerDocument.activeElement===el));
+  if(variant==='move')catalog=[wanted,...rows];
+  if(variant==='remove')catalog=rows;
+  if(variant==='other'){user='second';catalog=[];}
+  if(variant==='slow')delayed=true;
+  if(recovering){checkingRecovery=true;failures=variant==='retry'?2:1;}
+  const before=[driveReads,editorReads];await p.reload();
+  if(variant==='other'){
+   await frame.getByRole('heading',{name:'Übersicht'}).waitFor();
+   assert(!await field.isVisible());assert.equal(await field.inputValue(),'');
+  }else{
+   await field.waitFor();assert.equal(await field.inputValue(),query);assert.equal(await filter.inputValue(),'youtube');
+   if(recovering){
+    const retry=frame.getByRole('button',{name:'Dateiliste erneut laden'});
+    const status=frame.locator('.sma-file-toolbar [role=status]').first();
+    const online=()=>p.evaluate(()=>window.dispatchEvent(new Event('online')));
+    await retry.waitFor();
+    if(variant==='retry'){
+     await retry.click();await status.filter({hasText:'nicht erreichbar'}).waitFor();
+    }
+    delayed=true;
+    if(variant==='reconnect')await online();
+    else{await retry.focus();await retry.press('Enter');}
+    await status.filter({hasText:'wird erneut geladen'}).waitFor();
+    await online();await online();
+    if(variant==='edit-offline')await field.fill('Aufnahme 14');
+    release();
+    await frame.getByRole('button',{name:'Dateien aktualisieren',exact:true}).waitFor();
+    assert.equal(listReads,variant==='retry'?3:2);
+    assert.equal(musicReads,0);
+   }
+   if(variant==='edit-offline'){
+    assert.equal(await field.inputValue(),'Aufnahme 14');
+    assert(await field.evaluate(el=>el.ownerDocument.activeElement===el));assert.equal(await hit.count(),0);
+    assert.equal(await frame.locator('.sma-file-open').count(),1);
+   }else if(variant==='slow'){await began;await field.fill('Aufnahme 14');release();await frame.locator('.sma-file-open').first().waitFor();assert.equal(await field.inputValue(),'Aufnahme 14');}
+   else{
+    await pages.getByText(variant==='move'?'Seite 1 von 3':'Seite 3 von 3',{exact:true}).waitFor();
+    if(variant==='remove'){assert.equal(await hit.count(),0);assert.equal(await frame.locator('.sma-gallery-select[aria-pressed="true"]').count(),0);assert(await field.evaluate(el=>el.ownerDocument.activeElement===el));}
+    else{assert(await hit.evaluate(el=>el.ownerDocument.activeElement===el));assert.equal(await frame.locator('.sma-gallery-select[aria-pressed="true"]').count(),1);}
+   }
+  }
+  assert.deepEqual([driveReads,editorReads],before);
+  assert.deepEqual(errors,[]);console.log(width,variant,'OK');
+ }finally{release();await ctx.close();}
+}
+
+// Called by the SQL rehearsal with the running, isolated database and workflow.
+export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList,scan}){
+ const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
+ try{
+  for(const width of [320,1024]){
+   const mobile=width===320,errors=[];
+   const ctx=await browser.newContext({viewport:{width,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+   try{
+    let scans=0;
+    assert.deepEqual(await scan('first-only'),{ok:true,count:1000});
+    await ctx.routeWebSocket('**/*',ws=>ws.close());
+    await ctx.route('**/*',async route=>{
+     try{
+      const req=route.request(),path=new URL(req.url()).pathname;
+      const reply=json=>route.fulfill({json,headers:{'Access-Control-Allow-Origin':'*'}});
+      if(req.method()==='POST'){
+       if(path==='/webhook/sma-publication-files-v1')return await reply(await scan(++scans===2?'complete':'interrupt'));
+       const args=req.postDataJSON();
+       if(path==='/fixture/sma_publication_files_v1'){
+        if(args.p_action==='list')return await reply(await (args.p_input.dashboard_labels?dashboardList():portalList()));
+        assert.equal(args.p_input.asset_id,wanted.id);
+        if(args.p_action==='get')return await reply({ok:true,status:'empty'});
+        if(args.p_action==='check')return await reply({ok:true});
+       }
+       if(path==='/webhook/sma-publication-asset-preview-v1')return await reply({ok:true,can_publish:false,
+        asset_id:args.asset_id,asset_revision:args.asset_revision,media_kind:'video',mime_type:'image/png',image_base64:png});
+       if(path==='/webhook/sma-publication-editor-source-v1'){
+        assert.deepEqual(args,{asset_id:wanted.id,asset_revision:wanted.revision});
+        return await reply({ok:true,can_publish:false,...args,mime_type:'video/mp4',size_bytes:original.length,
+          sha256:checksum,data_base64:original.toString('base64')});
+       }
+       if(path==='/fixture/sma_publication_editor_result_v1')return await reply({ok:true,version:1,can_publish:false,asset_id:wanted.id,asset_revision:wanted.revision,cover:null});
+      }
+      await firstPostRoute(route,()=>({ok:true,files:[]}));
+     }catch(e){errors.push(e.message);await route.abort();}
+    });
+    const page=await ctx.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
+    const frame=page.frameLocator('#dashboard'),mobileNav=frame.getByRole('navigation',{name:'SMA Schnellnavigation'});
+    const launcher=mobile?mobileNav.getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
+    const dialog=frame.getByRole('dialog',{name:'SMA durchsuchen'}),input=dialog.getByRole('searchbox');
+    const hit=dialog.locator('[data-quick-file="'+wanted.id+'"]');
+    const status=frame.locator('.sma-file-toolbar [role=status]').first();
+    const manual=frame.getByRole('button',{name:'Dateien aktualisieren',exact:true});
+    await page.goto(dashboard);await launcher.click();await input.fill('Werkstatt Finale');
+    await dialog.getByRole('status').filter({hasText:/Keine (direkten )?Treffer/}).waitFor();
+    assert(!await hit.count());
+    await input.fill('Kundenclip');await dialog.getByRole('button',{name:'Alle 1000 Dateien anzeigen'}).click();
+    const previous=await dashboardList();
+    await manual.click();
+    await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
+    assert.deepEqual(await dashboardList(),{...previous,sync_state:'interrupted'});
+    await launcher.click();await input.fill('Werkstatt Finale');assert.equal(await hit.count(),0);
+    const retry=dialog.getByRole('button',{name:'Ordnerabgleich wiederholen'});
+    await retry.click();await hit.waitFor();assert.equal(await input.inputValue(),'Werkstatt Finale');
+    assert.equal(await retry.count(),0);await input.press('Escape');
+    await frame.getByText(/1000 von 1001 Dateien gefunden/).waitFor();
+    const complete=await dashboardList();
+    await launcher.click();await input.fill('Werkstatt Finale');await hit.waitFor();await input.press('Escape');
+    await manual.click();await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
+    assert.deepEqual(await dashboardList(),{...complete,sync_state:'interrupted'});
+    const overview=mobile?mobileNav.getByRole('button',{name:'Start'}):frame.locator('aside').getByRole('button',{name:'Übersicht'});
+    const account=frame.getByRole('tab',{name:'Konto & Paket'});
+    await overview.click();await account.click();await launcher.click();await input.fill('Werkstatt Finale');
+    await hit.click();
+    const editor=frame.frameLocator('iframe[data-portal="youtube"]:visible');
+    const back=editor.getByRole('button',{name:/Zurück zu den Suchergebnissen/});
+    await back.waitFor();
+    await editor.locator('#selectedFileName').filter({hasText:wanted.name}).waitFor({state:'attached'});
+    await editor.getByRole('button',{name:'Originalvideo laden'}).click();
+    const video=editor.locator('#originalVideoPreview video');
+    await video.waitFor();await video.evaluate(v=>v.play());
+    await video.evaluate(v=>new Promise((resolve,reject)=>{
+     if(v.ended)return resolve();
+     const timer=setTimeout(()=>reject(Error('Test video did not finish')),8000);
+     v.addEventListener('ended',()=>{clearTimeout(timer);resolve();},{once:true});
+    }));
+    assert.deepEqual(await video.evaluate(v=>[v.error?.code??null,v.videoWidth,v.videoHeight,v.duration,v.currentTime]),[null,160,90,3,3]);
+    await page.reload();await back.waitFor();
+    await editor.locator('#selectedFileName').filter({hasText:wanted.name}).waitFor({state:'attached'});
+    await back.click();await hit.waitFor();
+    await retry.waitFor();
+    assert.match(await dialog.getByRole('status').innerText(),/zuletzt gespeicherte/);
+    const focus=el=>el.evaluate(node=>node.ownerDocument.activeElement===node);
+    assert(await focus(hit));assert.equal(await input.inputValue(),'Werkstatt Finale');
+    await hit.press('Escape');await account.waitFor();
+    assert.equal(await account.getAttribute('aria-selected'),'true');assert(await focus(launcher));
+    const checkStatus=dialog.getByRole('button',{name:'Abgleichstatus prüfen'});
+    await scan('complete',async()=>{
+      await page.reload();await launcher.click();await input.fill('Werkstatt Finale');await hit.waitFor();
+      await checkStatus.waitFor();assert.match(await dialog.getByRole('status').innerText(),/läuft bereits/);
+      await checkStatus.click();await dialog.getByRole('status').filter({hasText:'läuft bereits'}).waitFor();
+      assert(await focus(checkStatus));assert.equal(scans,3);
+    });
+    await checkStatus.click();await checkStatus.waitFor({state:'hidden'});
+    assert.equal(await dialog.getByRole('status').innerText(),'1 direkter Treffer');
+    assert.equal(await input.inputValue(),'Werkstatt Finale');assert(await focus(input));assert.equal(await retry.count(),0);
+    await hit.click();await back.waitFor();
+    assert.equal(scans,3);assert.deepEqual(errors,[]);
+    console.log(width+'px: saved video and retry survived F5; checking another running and completed scan kept file 1001 without an extra Drive request.');
+   }catch(error){throw new Error(width+'px catalogue: '+error.message+' '+errors.join(', '),{cause:error});}
+   finally{await ctx.close();}
+  }
+ }finally{await browser.close();}
+}
+
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await runMobileChecks();
+async function runMobileChecks(){
 const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
 try{
+ for(const width of [320,1024]){
+  await checkGalleryKeyboard(browser,width);
+  await checkOverviewSearchReturn(browser,width,false);
+  await checkOverviewSearchReturn(browser,width,true);
+ }
+ for(const [width,mode] of [[320,'removed'],[1024,'other'],[320,'slow'],[1024,'unreachable']])
+  await checkOverviewSearchReturn(browser,width,false,mode);
+ for(const [width,scenario] of [[1024,'same'],[320,'move'],[1024,'remove'],[320,'slow'],[320,'other'],[1024,'retry'],[320,'reconnect'],[320,'edit-offline']])await galleryReloadTest(browser,width,scenario);
  for(const [width,height] of [[320,568],[360,740],[390,844],[430,932]]){
   const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true,locale:'de-AT',serviceWorkers:'block'});
   try{
@@ -384,3 +788,4 @@ try{
  await firstPost(browser,320,568,{failFirstRead:true});
  for(const [width,height] of [[320,568],[1024,768]])await checkDashboardPreview(browser,width,height);
 }finally{await browser.close();}
+}

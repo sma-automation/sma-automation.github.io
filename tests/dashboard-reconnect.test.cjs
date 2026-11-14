@@ -1,0 +1,46 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {readFileSync}=require('node:fs');
+const vm=require('node:vm');
+const html=readFileSync('app/dashboard.html','utf8');
+const code=html.slice(html.indexOf('function connectionError('),html.indexOf('// Called only by the same-origin'));
+const shell='<body data-sma-customer-id="test">Übersicht</body>';
+
+function setup(){
+ let owner='first',authFailure=false,fetchFailure=null,switched=null,requests=0;
+ const redirects=[];
+ const env={AbortSignal,dashboardOwnerId:null,signedOut:false,endpoint:'https://fixture.invalid',window:{location:{replace:url=>redirects.push(url)}},
+  leaveDashboard:()=>{env.signedOut=true;redirects.push('index.html');},
+  supabase:{auth:{getSession:async()=>({error:authFailure||null,data:{session:owner?{user:{id:owner},access_token:owner}:null}})}},
+  fetch:async(_url,opts)=>{
+   requests++;assert.equal(opts.headers.Authorization,'Bearer '+owner);
+   if(fetchFailure==='offline')throw Error('offline');
+   if(switched)owner=switched;
+   return {ok:fetchFailure===null,status:fetchFailure,json:async()=>({html:shell})};
+  }
+ };
+ vm.runInNewContext(code,env);
+ return {read:()=>env.dashboardHtml(),redirects,requests:()=>requests,auth:state=>{authFailure=state;},
+  owner:id=>{owner=id;},fail:status=>{fetchFailure=status;},switchDuringRead:id=>{switched=id;}};
+}
+
+test('a temporary session error keeps the dashboard route available for reconnect',async()=>{
+ const f=setup();f.auth(true);await assert.rejects(f.read(),e=>e.retryOnReconnect===true);
+ assert.equal(f.requests(),0);assert.deepEqual(f.redirects,[]);
+ f.auth(false);assert.equal(await f.read(),shell);
+});
+
+test('transport and server failures allow reconnect while an access refusal needs an explicit retry',async()=>{
+ for(const status of ['offline',503,403]){
+  const f=setup();f.fail(status);
+  await assert.rejects(f.read(),e=>(e.retryOnReconnect===true)===(status!==403));
+  assert.deepEqual(f.redirects,[]);f.fail(null);assert.equal(await f.read(),shell);
+ }
+});
+
+test('a late shell for the previous customer is discarded and a missing session returns to sign-in',async()=>{
+ const f=setup();f.switchDuringRead('second');await assert.rejects(f.read(),/Anmeldung wurde gewechselt/);
+ assert.deepEqual(f.redirects,['index.html']);assert.equal(f.requests(),1);
+ const empty=setup();empty.owner(null);await assert.rejects(empty.read(),/melde dich/);assert.equal(empty.requests(),0);
+ assert.deepEqual(empty.redirects,['index.html']);
+});

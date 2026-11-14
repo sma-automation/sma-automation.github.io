@@ -18,7 +18,7 @@ test('empty file results are valid only after both configured folders are access
 test('compiled catalog routes every sync through folder access checks before listing and storage',()=>{
  const fs=require('fs'),vm=require('vm'),w=JSON.parse(fs.readFileSync('n8n/publishing/file-catalog-workflow.json'));
  const next=(name,port=0)=>w.connections[name]?.main[port]?.map(e=>e.node)||[];
- assert.deepEqual(next('Ordner prüfen'),['Uploadordner lesen']);assert.deepEqual(next('Uploadordner lesen'),['Verarbeitungsordner lesen']);assert.deepEqual(next('Verarbeitungsordner lesen'),['Ordnerzugriff bestätigen']);assert.deepEqual(next('Ordnerzugriff bestätigen'),['Dateimetadaten aus Drive lesen']);assert.deepEqual(next('Ordnerzugriff bestätigen',1),['Dateifehler zuordnen']);
+ assert.deepEqual(next('Ordner prüfen'),['Uploadordner lesen']);assert.deepEqual(next('Uploadordner lesen'),['Verarbeitungsordner lesen']);assert.deepEqual(next('Verarbeitungsordner lesen'),['Ordnerzugriff bestätigen']);assert.deepEqual(next('Ordnerzugriff bestätigen'),['Drive-Seite vorbereiten']);assert.deepEqual(next('Ordnerzugriff bestätigen',1),['Dateifehler zuordnen']);
  for(const name of ['Uploadordner lesen','Verarbeitungsordner lesen']){
   const n=w.nodes.find(n=>n.name===name);assert.equal(n.onError,'continueRegularOutput');assert.equal(n.credentials.googleDriveOAuth2Api.id,'VcVRAhAAnk2YcHNE');assert.equal(n.parameters.options.redirect.redirect.followRedirects,false);assert.match(n.parameters.queryParameters.parameters[0].value,/canListChildren/);
  }
@@ -31,6 +31,64 @@ test('compiled catalog routes every sync through folder access checks before lis
 });
 test('only verified folder files become catalog entries with stable content/version identity',()=>{const r=catalogFiles({files:[file]},[row.upload_folder_id]);assert.equal(r[0].revision,'md5:'+'a'.repeat(32)+':3');assert.equal(r[0].media_kind,'video');assert.equal(r[0].size_bytes,'1024');});
 test('partial listings, foreign parents, duplicates and malformed metadata fail without a partial catalog',()=>{for(const response of [{files:[file],nextPageToken:'next'},{files:[file],incompleteSearch:true},{files:[{...file,parents:['foreign']}]},{files:[file,file]},{files:[{...file,version:undefined}]},{files:[{...file,trashed:true}]},{files:[{...file,name:'bad\nname'}]}])assert.throws(()=>catalogFiles(response,[row.upload_folder_id]));});
+const {runCatalog}=require('./fixtures/private-file-catalog.cjs');
+const mapping=verifiedFolders([row],context);
+const lease={user_id:'own',lease_id:'test-lease'};
+const batch=Array.from({length:1000},(_,i)=>({...file,id:'fixture_drive_'+i}));
+const lastFile={...file,id:'fixture_drive_1000',name:'Werkstatt Finale.mp4',parents:[mapping.folders[1]]};
+async function scan(pages){
+ const requests=[],finishes=[];
+ const result=await runCatalog({mapping,lease,readPage:query=>{
+  assert.equal(query.q,mapping.q);assert.equal(query.pageSize,1000);assert.equal(query.spaces,'drive');
+  assert.match(query.fields,/nextPageToken/);
+  const page=pages[requests.length];requests.push(query);
+  if(page instanceof Error)throw page;
+  return page;
+ },finish:payload=>{
+  finishes.push(payload);assert.equal(payload.p_user_id,lease.user_id);assert.equal(payload.p_lease_id,lease.lease_id);
+  return payload.p_error?{ok:false,code:payload.p_error}:{ok:true,count:payload.p_files.length};
+ }});
+ assert.equal(finishes.length,1);
+ return {result,requests,payload:finishes[0]};
+}
+test('Drive follows opaque tokens after full, short and empty pages and commits once',async()=>{
+ const token='a/+=&%b';
+ for(const first of [[],batch.slice(0,3),batch]){
+  const {requests,payload,result}=await scan([{files:first,nextPageToken:token},{files:[],nextPageToken:'c'},{files:[lastFile]}]);
+  assert(!Object.hasOwn(requests[0],'pageToken'));
+  assert.deepEqual(requests.map(q=>q.pageToken),[undefined,token,'c']);
+  assert.deepEqual(result,{ok:true,count:first.length+1});assert.equal(payload.p_files.at(-1).drive_file_id,lastFile.id);
+ }
+ assert.deepEqual((await scan([{files:batch}])).result,{ok:true,count:1000});
+ assert.deepEqual((await scan([{files:[]}])).result,{ok:true,count:0});
+});
+test('interrupted, incomplete, malformed and looping continuations send only the lease error',async()=>{
+ for(const [tail,code] of [
+  [[Error('Drive disconnected')],'FILE_SYNC_UNAVAILABLE'],
+  [[{files:[lastFile],incompleteSearch:true}],'FILE_METADATA_INVALID'],
+  [[{files:[lastFile],nextPageToken:'again'}],'FILE_METADATA_INVALID'],
+  [[{files:[],nextPageToken:'other'},{files:[],nextPageToken:'again'}],'FILE_METADATA_INVALID'],
+  [[{files:[lastFile],nextPageToken:17}],'FILE_METADATA_INVALID'],
+  [[{files:[lastFile],incompleteSearch:'true'}],'FILE_METADATA_INVALID'],
+  [[{files:[{...lastFile,parents:['foreign']}]}],'FILE_METADATA_INVALID'],
+  [[{files:[batch[0]]}],'FILE_METADATA_INVALID'],
+  [[{files:[...batch,lastFile]}],'FILE_CATALOG_TOO_LARGE']
+ ]){
+  const {result,requests,payload}=await scan([{files:batch,nextPageToken:'again'},...tail]);
+  assert.equal(requests.length,tail.length+1);
+  assert.deepEqual(result,{ok:false,code});assert.deepEqual(payload,{p_user_id:lease.user_id,p_lease_id:lease.lease_id,p_error:code});
+ }
+});
+test('a rejected database finish releases the same lease using its error response',async()=>{
+ const calls=[];
+ const result=await runCatalog({mapping,lease,readPage:()=>({files:[file]}),finish:body=>{
+  calls.push(body);
+  return {ok:false,code:body.p_error||'FILE_CATALOG_TOO_LARGE'};
+ }});
+ assert.equal(calls.length,2);assert.equal(calls[0].p_files.length,1);
+ assert.deepEqual(calls[1],{p_user_id:lease.user_id,p_lease_id:lease.lease_id,p_error:'FILE_CATALOG_TOO_LARGE'});
+ assert.deepEqual(result,{ok:false,code:'FILE_CATALOG_TOO_LARGE'});
+});
 test('video metadata is extracted without substituting missing dimensions or duration',()=>{
  const get=extra=>catalogFiles({files:[{...file,...extra}]},[row.upload_folder_id])[0];
  const valid=get({videoMediaMetadata:{width:1080,height:1920,durationMillis:'12500',location:'private'}});

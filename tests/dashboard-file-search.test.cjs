@@ -101,7 +101,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  const env={dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
   portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
-  supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
+  dashboardSession:async()=>({user:{id:'owner'}}),supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);
  const gallery=attach(document,document.querySelector('main'));
  const portal=document.querySelector('#smaFilePortalFilter'),finder=document.querySelector('#smaFileSearch');
