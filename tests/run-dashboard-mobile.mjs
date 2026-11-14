@@ -123,7 +123,7 @@ const newCustomerShell=`<!doctype html><html lang="de"><meta charset="utf-8"><me
 <div id="publishingFilesSlot"></div></section></main>
 <script>document.querySelector('aside button').onclick=()=>{document.querySelector('#page-overview').classList.remove('active');document.querySelector('#page-publishing').classList.add('active')}</script></body></html>`;
 
-async function firstPostRoute(route){
+async function firstPostRoute(route,readPortalFiles){
  const request=route.request();
  if(request.method()==='GET')return serve(route);
  const url=new URL(request.url());
@@ -134,7 +134,9 @@ async function firstPostRoute(route){
    if(url.pathname==='/webhook/sma-publication-files-v1')return reply({ok:true});
   }
   const args=request.postDataJSON();
-  if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='list')return reply({ok:true,files:[]});
+  if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='list'){
+   return reply(args.p_input?.platform==='youtube'?readPortalFiles():{ok:true,files:[]});
+  }
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_preview_v1'&&args.p_action==='latest'){
    assert.equal(args.p_input.platform,'youtube');return reply({ok:true,status:'empty'});
   }
@@ -143,11 +145,17 @@ async function firstPostRoute(route){
  throw Error('Unexpected first-post request '+request.method()+' '+url.pathname);
 }
 
-async function firstPost(browser,width,height){
+async function firstPost(browser,width,height,{failFirstRead=false}={}){
  const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true,locale:'de-AT',serviceWorkers:'block'});
  const errors=[];
  try{
-  await context.route('**/*',route=>firstPostRoute(route).catch(async error=>{errors.push(error.message);await route.abort();}));
+  let portalReads=0;
+  function readPortalFiles(){
+   portalReads++;
+   if(failFirstRead&&portalReads===1)return {ok:false,code:'FILE_SYNC_UNAVAILABLE'};
+   return {ok:true,files:[]};
+  }
+  await context.route('**/*',route=>firstPostRoute(route,readPortalFiles).catch(async error=>{errors.push(error.message);await route.abort();}));
   const page=await context.newPage();page.setDefaultTimeout(8000);
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(dashboard);
@@ -161,7 +169,14 @@ async function firstPost(browser,width,height){
   await frame.getByRole('button',{name:'Optimieren'}).tap();
   const editor=frame.frameLocator('iframe[data-portal="youtube"]');
   const empty=editor.getByRole('button',{name:'Leere Dateivorschau für den ersten Upload öffnen'});
-  await fits(empty,width);await empty.tap();
+  if(failFirstRead){
+   const retry=editor.getByRole('button',{name:'Dateiliste erneut laden',exact:true});
+   await fits(retry,width);
+   assert.match(await editor.locator('#portalStatus').innerText(),/Die Dateiliste konnte nicht/);
+   assert.equal(await empty.count(),0);
+   await retry.tap();
+  }
+  await fits(empty,width);assert.equal(portalReads,failFirstRead?2:1);await empty.tap();
   await fits(editor.getByRole('heading',{name:'Datei für YouTube vorbereiten'}),width);
   const add=editor.getByRole('button',{name:'Datei hinzufügen',exact:true});
   await fits(add,width);
@@ -172,7 +187,8 @@ async function firstPost(browser,width,height){
   await editor.getByRole('button',{name:/Zu den Dateien/}).tap();
   await fits(empty,width);
   assert.deepEqual(errors,[]);
-  console.log(width+' × '+height+': first post, empty YouTube preview, device picker and gallery return passed');
+  const recovery=failFirstRead?'catalog error and retry, ':'';
+  console.log(width+' × '+height+': '+recovery+'first post, empty YouTube preview, device picker and gallery return passed');
  }catch(error){throw Error(width+'px first post: '+error.message+'; '+errors.join(', '),{cause:error});}
  finally{await context.close();}
 }
@@ -206,4 +222,5 @@ try{
   }finally{await context.close();}
  }
  for(const [width,height] of [[320,568],[390,844]])await firstPost(browser,width,height);
+ await firstPost(browser,320,568,{failFirstRead:true});
 }finally{await browser.close();}

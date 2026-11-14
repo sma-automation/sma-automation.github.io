@@ -26,6 +26,7 @@ const tabDrafts=tabDraftStore(window);
 let startupDraft=null,tabRecord=null,comparisonBase=null;
 let reviewStatus=null,reloadChoice=null;
 let retryHistoryPreview=false,currentHistoryAsset=null;
+let galleryConfirmed=false,catalogRetry=null;
 let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
@@ -376,7 +377,6 @@ async function ensureFreshFile(context,force=false){
  status('Die Datei wird automatisch im Kundenordner geprüft. Deine Eingaben bleiben erhalten …');
  await syncFileCatalog();assertFileContext(context);
  const catalog=await optimizerCatalog();assertFileContext(context);
- if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
  const latest=catalog.files.find(file=>file.id===context.asset_id);
  if(!latest)throw fileError('FILE_UNAVAILABLE');
  if(latest.revision!==context.asset_revision||latest.media_kind!==selectedAsset.media_kind)throw fileError('FILE_CHANGED');
@@ -472,7 +472,9 @@ function describeFile(file){
  return {title,version:[variant,duration].filter(Boolean).join(' · ')};
 }
 async function optimizerCatalog(signal){
- return fileRpc('list',workspace?{platform:selectedPortal}:{},signal);
+ const catalog=await fileRpc('list',workspace?{platform:selectedPortal}:{},signal);
+ if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
+ return catalog;
 }
 function renderSelectedFile(refreshCover=false){
  showProductContext(null,null);
@@ -497,11 +499,12 @@ function renderFilePicker(){
  const pageSize=workspace?4:10;
  const count=Math.max(1,Math.ceil(visible.length/pageSize));filePickerPage=Math.min(filePickerPage,count-1);
  $('filePickerList').replaceChildren();
- if(currentHistoryAsset){
-  $('filePickerCount').textContent='';
+ if(currentHistoryAsset||signedOut||(!galleryConfirmed&&!assets.length)){
+  $('filePickerPages').hidden=true;
+  $('filePickerCount').textContent=!workspace&&catalogRetry&&!signedOut?'Die Dateiliste konnte nicht geladen werden.':'';
   return;
  }
- $('filePickerCount').textContent=!assets.length?'Noch keine Dateien geladen. Klicke auf „Dateien aktualisieren“.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
+ $('filePickerCount').textContent=!assets.length?'Noch keine Dateien in deiner Galerie.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
  for(const file of visible.slice(filePickerPage*pageSize,(filePickerPage+1)*pageSize)){
   const description=describeFile(file);
   const row=document.createElement('li');row.className='file-picker-row';
@@ -528,7 +531,7 @@ function renderFilePicker(){
  // If a new customer has no media compatible with this portal, the empty
  // gallery must still lead into the large preview, where Add File now lives.
  // No upload, provider request, or file mutation occurs from this placeholder.
- if(workspace&&!assets.some(fileFitsPortal)&&filePickerPage===0&&!query){
+ if(workspace&&galleryConfirmed&&!assets.some(fileFitsPortal)&&filePickerPage===0&&!query){
   const row=document.createElement('li');row.className='workspace-first-upload';
   const open=document.createElement('button');open.type='button';open.className='workspace-first-upload-action';
   open.setAttribute('aria-label','Leere Dateivorschau für den ersten Upload öffnen');
@@ -617,7 +620,23 @@ $('chooseGeneralTemplate').addEventListener('click',()=>requestFileSelection('')
 $('confirmFileSwitch').addEventListener('click',()=>pendingAssetId!==null?requestFileSelection(pendingAssetId,true):undefined);
 $('cancelFileSwitch').addEventListener('click',()=>{pendingAssetId=null;$('fileSwitchNotice').hidden=true;});
 async function loadFiles(preferredId=null){
- const r=await optimizerCatalog();if(signedOut)return;void galleryMusic?.wake();assets=r.files||[];const old=preferredId??selectedAsset?.id??'';
+ const old=preferredId??selectedAsset?.id??'';
+ let catalog;
+ try{
+  catalog=await optimizerCatalog(AbortSignal.timeout(20000));
+ }catch(error){
+  if(!signedOut){
+   galleryConfirmed=false;
+   catalogRetry={assetId:old};
+   for(const id of ['refreshFiles','pickerRefresh'])$(id).textContent='Dateiliste erneut laden';
+  }
+  throw error?.code&&Object.hasOwn(messages,error.code)?error:fileError('FILE_SYNC_UNAVAILABLE');
+ }
+ if(signedOut)return;
+ galleryConfirmed=true;
+ catalogRetry=null;
+ for(const id of ['refreshFiles','pickerRefresh'])$(id).textContent='Dateien aktualisieren';
+ void galleryMusic?.wake();assets=catalog.files;
  selectedAsset=assets.find(f=>f.id===old&&fileFitsPortal(f))||null;
  assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;renderSelectedFile(!!selectedAsset&&mediaViewKey===selectedAsset.id+':'+selectedAsset.revision);renderFilePicker();
  if(old&&!selectedAsset){clearDraft();resetMediaCheck(messages.FILE_UNAVAILABLE);throw Error(messages.FILE_UNAVAILABLE);}
@@ -833,7 +852,7 @@ async function loadCurrentHistoryPost(order,owner){
 async function showHistoryPost({owner,catalog,file,saved,repairLink,previousOrder,resume=false,message}){
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  // Select only after the order, file and saved portal text have all been verified.
- assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
+ galleryConfirmed=true;assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
  renderSelectedFile();showProductContext(saved.product_context,file,savedProductSelection(saved));fillInput(saved.input);render(saved);
  const restored=restoreTabAttempt(saved,file);
  if(restored){
@@ -1121,7 +1140,24 @@ $('cancelMagicReplace').addEventListener('click',()=>{pendingAutomatic=null;$('m
 
 async function refreshFiles(){
  if(busy)return;if(hasDraftEdits()||hasSourceEdits()){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
- lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
+ const retry=catalogRetry;
+ const reopenVideo=retry?.assetId&&!selectedAsset;
+ const message=retry?'Die Dateiliste wird geladen …':'Dein Kundenordner wird geprüft …';
+ galleryConfirmed=false;
+ lock(true);
+ try{
+  status(message);$('filePickerStatus').textContent=message;
+  if(!retry)await syncFileCatalog();
+  if(signedOut)return;
+  await loadFiles(selectedAsset?.id??retry?.assetId);
+  if(signedOut)return;
+  if(!retry)fileChanged();
+  if(reopenVideo&&workspace&&selectedAsset?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
+  await loadLatest();
+  if(!signedOut)$('filePickerStatus').textContent='Dateiliste aktualisiert.';
+ }catch(error){
+  if(!signedOut){status(error.message,true);$('filePickerStatus').textContent=error.message;}
+ }finally{lock(false);syncMedia();}
 }
 // A metadata-only Drive version bump should not strand a brand-new, empty
 // portal preparation. Never transfer a saved draft, edits, review or approval.
@@ -1683,7 +1719,7 @@ try{
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
   galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:text=>{if(!signedOut)$('galleryMusicStatus').textContent=text;},
-   onComplete:async()=>{const list=await optimizerCatalog();if(!signedOut&&(await session()).user.id===coverOwner){assets=list.files||[];renderFilePicker();}}
+   onComplete:async()=>{const list=await optimizerCatalog();if(!signedOut&&(await session()).user.id===coverOwner&&galleryConfirmed){assets=list.files;renderFilePicker();}}
   });
  }
  coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
