@@ -47,3 +47,15 @@ test('editing a post from the embedded preview keeps the requested editor and it
  p.optimizerWorkspaceView(frame,'files');assert.equal(p.history.state.view,'files');
  p.closeOptimizer();assert.equal(p.view().optimizerPage.hidden,true);
 });
+
+test('restoring a preview that is no longer available keeps the same history entry on the gallery',()=>{
+ const p=setup();p.openOptimizer('youtube',p.trigger);
+ const frame=p.view().optimizerFrames.children[0];
+ p.optimizerWorkspaceView(frame,'preview');
+ p.history.back();p.history.forward();
+ p.optimizerWorkspaceView(frame,'files',true);
+ assert.equal(p.history.state.view,'files');assert.equal(p.view().optimizerHeader.hidden,false);
+ assert.equal(frame.dataset.view,'files');
+ p.history.back();
+ assert.equal(p.history.state.smaOptimization,true,'failed restoration must not navigate back an extra entry');
+});

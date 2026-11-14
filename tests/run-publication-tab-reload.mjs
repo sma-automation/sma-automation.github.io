@@ -172,7 +172,7 @@ attachOptimizerPage(document,document.querySelector('main'));
 addEventListener('message',event=>{
  const frame=optimizerFrames.firstElementChild;
  if(event.origin!==location.origin||event.source!==frame?.contentWindow)return;
- if(event.data?.type==='sma-publication-workspace-view')optimizerWorkspaceView(frame,event.data.view);
+ if(event.data?.type==='sma-publication-workspace-view')optimizerWorkspaceView(frame,event.data.view,event.data.previewUnavailable===true);
  if(event.data?.type==='reload-result'){const o=document.createElement('output');o.textContent=JSON.stringify(event.data);document.body.append(o);}
 });
 selectedFileId='${fileId}';openOptimizer('youtube',document.getElementById('optimize'));

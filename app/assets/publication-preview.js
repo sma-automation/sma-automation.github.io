@@ -10,7 +10,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=23';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=24';
 import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=26';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
@@ -65,10 +65,16 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
    facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
    draftStep,invalidHashtags,draftStatus:draftStep?.note||(draft?'Gespeicherter Entwurf':'')};
  },
- onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
+ onView:(view,requestedView)=>{
+  if(view!=='source')choosingLinkFor=null;
+  if(view!=='preview')originalVideo?.stop();
+  if(window.parent!==window&&view!==requestedView){
+   window.top.postMessage({type:'sma-publication-workspace-view',view,previewUnavailable:requestedView==='preview'},location.origin);
+  }
+ },
 }):null;
 if(workspace){
- window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(event.data.view))workspace.show(event.data.view);});
+ window.addEventListener('message',event=>{if(!signedOut&&event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(event.data.view))workspace.restoreView(event.data.view);});
  let heightQueued=false;
  const sendHeight=()=>{if(heightQueued)return;heightQueued=true;requestAnimationFrame(()=>{heightQueued=false;window.top.postMessage({type:'sma-publication-preview-height',height:Math.max(300,Math.ceil(document.querySelector('main').getBoundingClientRect().height)+20)},location.origin);});};
  new ResizeObserver(sendHeight).observe(document.querySelector('main'));sendHeight();
