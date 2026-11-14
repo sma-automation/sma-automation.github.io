@@ -24,6 +24,7 @@ function setup(previewData={},callbacks={}){
  body.append(main);const header=el('header');header.append(el('a','back'));main.append(header);
  const ids=['assetPanel','deviceBrowse','browseFiles','refreshFiles','filePicker','filePickerHelp','pickerRefresh','chooseGeneralTemplate','fileSearch','fileSwitchNotice','assetPreview','fileDetails','mediaPanel','magicPanel','sourcePanel','catalogLookup','portalNote','result','resultFileActions','uploadPanel','portalStatus','magicActionsSource','magicActionsText','magicReplaceNotice','exampleFiles','sourceSummary','source_text','generate','loadLatest','language','resultHeading','save'];
  for(const id of ids)main.append(el('div',id));
+ pickerBody.append(el('ul','filePickerList'));
  byId.get('filePicker').append(pickerBody);pickerBody.append(searchLabel,byId.get('fileSearch'),byId.get('fileSwitchNotice'));
  for(const id of ['pickerRefresh','chooseGeneralTemplate']){const parent=el('div');parent.append(byId.get(id));pickerBody.append(parent)}
  byId.get('assetPanel').append(byId.get('deviceBrowse'),byId.get('browseFiles'),byId.get('refreshFiles'),byId.get('magicPanel'));
@@ -99,6 +100,24 @@ test('a customer with no files can reach the existing Add File control through a
  assert.equal(p.get('workspacePreviewHeading').textContent,'Vorschau für Instagram');
 });
 
+test('return and browser history restore the first upload entry and focus only while available',()=>{
+ const views=[],p=setup({}, {onView:(view,requested)=>views.push([view,requested])});
+ const tile={focus(){this.focused=true;}};
+ const gallery=p.get('filePickerList');
+ let available=true;
+ gallery.querySelector=selector=>selector.includes('workspace-first-upload-action')&&available?tile:null;
+ p.workspace.openEmptyPreview();
+ p.get('workspacePreviewBack').click();
+ assert.equal(tile.focused,true);
+ p.workspace.restoreView('preview');
+ assert.equal(p.get('workspaceUploadIntro').hidden,false);
+ assert.equal(p.get('workspacePreview').hidden,false);
+ assert.deepEqual(views.at(-1),['preview','preview']);
+ tile.focused=false;p.workspace.restoreView('files');assert.equal(tile.focused,true);
+ available=false;p.workspace.restoreView('preview');
+ assert.equal(p.get('workspaceFiles').hidden,false);
+ assert.deepEqual(views.at(-1),['files','preview']);
+});
 test('preview auto-text offer keeps a manual, non-network editor alternative',()=>{
  const data={draftStep:{target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',note:'Noch kein Portalbeitrag.'}};
  const p=setup(data);
@@ -292,7 +311,7 @@ test('professional preview places only publication in the primary action host',(
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
  assert.ok(html.includes('optimizer-workspace.css?v=19'));
- assert.ok(html.includes('publication-preview.js?v=94'));
+ assert.ok(html.includes('publication-preview.js?v=95'));
 });
 
 test('empty preview exposes upload action and becomes a complete preview after file choice',()=>{

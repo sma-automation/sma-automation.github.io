@@ -184,11 +184,19 @@ async function firstPost(browser,width,height,{failFirstRead=false}={}){
   const [picker]=await Promise.all([page.waitForEvent('filechooser'),add.tap()]);
   assert.equal(await picker.element().getAttribute('accept'),'video/*');
   await picker.setFiles([]);
-  await editor.getByRole('button',{name:/Zu den Dateien/}).tap();
-  await fits(empty,width);
+  const back=editor.getByRole('button',{name:/Zu den Dateien/});
+  const previewURL=dashboard+'#optimieren/youtube/vorschau',filesURL=dashboard+'#optimieren/youtube';
+  await page.waitForURL(previewURL);
+  await back.tap();await page.waitForURL(filesURL);await fits(empty,width);
+  assert(await empty.evaluate(el=>el===el.ownerDocument.activeElement));
+  await page.goForward();await page.waitForURL(previewURL);
+  await fits(add,width);assert(await back.evaluate(el=>el===el.ownerDocument.activeElement));
+  await page.goBack();await page.waitForURL(filesURL);await fits(empty,width);
+  assert(await empty.evaluate(el=>el===el.ownerDocument.activeElement));
+  assert.equal(portalReads,failFirstRead?2:1,'browser navigation must not reload the gallery');
   assert.deepEqual(errors,[]);
   const recovery=failFirstRead?'catalog error and retry, ':'';
-  console.log(width+' × '+height+': '+recovery+'first post, empty YouTube preview, device picker and gallery return passed');
+  console.log(width+' × '+height+': '+recovery+'first post, empty YouTube preview, device picker, gallery return and browser history passed');
  }catch(error){throw Error(width+'px first post: '+error.message+'; '+errors.join(', '),{cause:error});}
  finally{await context.close();}
 }
