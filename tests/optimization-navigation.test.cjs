@@ -6,9 +6,12 @@ function setup(){
  const history={state:null,pushState(state){stack.splice(++index);stack.push(state);this.state=state;},replaceState(state){stack[index]=this.state=state;},back(){if(index>0)this.state=stack[--index];events.popstate({state:this.state});},forward(){if(index+1<stack.length)this.state=stack[++index];events.popstate({state:this.state});}};
  const doc={createElement:tag=>new Element(tag),head:{append(){}}};
  class Element{constructor(tag){this.tag=tag;this.ownerDocument=doc;this.children=[];this.dataset={};this.events={};this.hidden=false;this.classes=new Set();this.classList={add:v=>this.classes.add(v),remove:v=>this.classes.delete(v)};}setAttribute(k,v){this[k]=v}append(...e){this.children.push(...e)}replaceChildren(...e){this.children=e}addEventListener(k,f){this.events[k]=f}focus(){this.focused=true}scrollIntoView(){this.scrolled=true}}
- const context={window:{addEventListener:(name,fn)=>events[name]=fn,location:{href:'https://sma-automation.com/app/dashboard.html'}},history,location:{pathname:'/app/dashboard.html',search:''},URL,portalNames:{instagram:'Instagram',youtube:'YouTube'},api:null};
+ const observed=new Set();
+ let resize;
+ class ResizeObserver{constructor(callback){resize=callback;}observe(el){observed.add(el);}disconnect(){observed.clear();}}
+ const context={ResizeObserver,window:{addEventListener:(name,fn)=>events[name]=fn,location:{href:'https://sma-automation.com/app/dashboard.html'}},history,location:{pathname:'/app/dashboard.html',search:''},URL,portalNames:{instagram:'Instagram',youtube:'YouTube'},api:null};
  vm.runInNewContext(code+';api={attachOptimizerPage,openOptimizer,closeOptimizer,clearOptimizer,optimizerWorkspaceView,select(id){selectedFileId=id},view(){return {optimizerFrames,optimizerPage,optimizerHeader,publishingPage}}};',context);
- const page=new Element('section'),original=new Element('div');page.append(original);context.api.attachOptimizerPage(doc,page);return {...context.api,history,page,original,trigger:new Element('button')};
+ const page=new Element('section'),original=new Element('div');page.append(original);context.api.attachOptimizerPage(doc,page);return {...context.api,history,page,original,observed,resize,trigger:new Element('button')};
 }
 test('Optimieren replaces the publishing content with a full page while retaining the dashboard shell',()=>{
  const p=setup();p.select('own-asset');p.openOptimizer('instagram',p.trigger);const v=p.view();
@@ -58,4 +61,16 @@ test('restoring a preview that is no longer available keeps the same history ent
  assert.equal(frame.dataset.view,'files');
  p.history.back();
  assert.equal(p.history.state.smaOptimization,true,'failed restoration must not navigate back an extra entry');
+});
+
+test('only media in a hidden optimizer pauses, retaining the position and releasing detached frames',()=>{
+ const p=setup();p.openOptimizer('youtube',p.trigger);
+ const frame=p.view().optimizerFrames.children[0];
+ const media={paused:false,currentTime:1.25,pause(){this.paused=true;}};
+ frame.contentDocument={querySelectorAll(selector){assert.equal(selector,'video,audio');return [media];}};
+ assert(p.observed.has(frame));
+ p.resize([{target:frame,contentRect:{width:320,height:300}}]);assert.equal(media.paused,false);
+ p.resize([{target:frame,contentRect:{width:0,height:0}}]);assert.equal(media.paused,true);
+ p.resize([{target:frame,contentRect:{width:320,height:300}}]);assert.equal(media.paused,true);assert.equal(media.currentTime,1.25);
+ p.clearOptimizer();assert.equal(p.observed.size,0);
 });
