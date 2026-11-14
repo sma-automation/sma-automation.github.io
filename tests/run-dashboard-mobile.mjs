@@ -102,7 +102,7 @@ async function fits(locator,width){
  const box=await locator.boundingBox();
  assert(box&&box.x>=-1&&box.x+box.width<=width+1,JSON.stringify(box));
 }
-async function checkOriginalPlayback(page,width,{failFirstRead}){
+async function mockOriginalVideo(page,failFirstRead=false){
  // Only this explicit playback scenario accepts an original-file request.
  const sourceURL='https://johnmusic.app.n8n.cloud/webhook/sma-publication-editor-source-v1';
  let reads=0;
@@ -115,6 +115,10 @@ async function checkOriginalPlayback(page,width,{failFirstRead}){
    mime_type:file.mime_type,size_bytes:original.length,sha256:failFirstRead&&reads===1?'0'.repeat(64):checksum,
    data_base64:original.toString('base64')},headers:{'Access-Control-Allow-Origin':'*'}});
  });
+ return ()=>reads;
+}
+async function checkOriginalPlayback(page,width,{failFirstRead}){
+ const readCount=await mockOriginalVideo(page,failFirstRead);
  const load=page.getByRole('button',{name:'Originalvideo laden'});
  const video=page.locator('#originalVideoPreview video');
  await fits(load,width);await load.tap();
@@ -137,7 +141,7 @@ async function checkOriginalPlayback(page,width,{failFirstRead}){
  await video.press('Space');
  await page.waitForFunction(()=>document.querySelector('#originalVideoPreview video')?.ended);
  assert.deepEqual(await video.evaluate(v=>[v.error?.code??null,v.currentTime]),[null,file.duration_ms/1000]);
- assert.equal(reads,failFirstRead?2:1,'returning to the preview must reuse the verified file');
+ assert.equal(readCount(),failFirstRead?2:1,'returning to the preview must reuse the verified file');
  console.log(width+'px: original MP4 verified, paused on details and played to end'+(failFirstRead?' after checksum retry':''));
 }
 async function selectedRow(frame,width){
@@ -156,15 +160,15 @@ async function selectedRow(frame,width){
 // First visit with an empty gallery. The shell provides only the customer's
 // existing dashboard elements. Production code builds the navigation and preview.
 const newCustomerShell=`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}aside,.page:not(.active){display:none}main{padding:16px}</style>
+<style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}.page:not(.active){display:none}@media(max-width:650px){aside{display:none}}main{padding:16px}</style>
 <body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"></div></header>
-<aside><button data-page="publishing">Veröffentlichung</button></aside><main>
+<aside><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button></aside><main>
 <section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid">
 <div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
 <section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
 <div class="card"><div class="platform-card"><span class="platform-info"><strong>YouTube</strong></span></div></div>
 <div id="publishingFilesSlot"></div></section></main>
-<script>document.querySelector('aside button').onclick=()=>{document.querySelector('#page-overview').classList.remove('active');document.querySelector('#page-publishing').classList.add('active')}</script></body></html>`;
+<script>document.querySelector('aside').onclick=e=>{for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+e.target.dataset.page)}</script></body></html>`;
 
 async function firstPostRoute(route,readPortalFiles){
  const request=route.request();
@@ -185,6 +189,8 @@ async function firstPostRoute(route,readPortalFiles){
   }
   if(url.origin==='https://bnvnmdxosbnuzedokqgh.supabase.co'&&url.pathname==='/rest/v1/rpc/sma_gallery_music_v1'&&args.p_action==='claim')return reply({ok:true,state:'idle'});
  }
+ if(url.origin===site&&['/fixture/sma_publication_files_v1','/fixture/sma_publication_video_magic_v1','/fixture/sma_publication_editor_result_v1'].includes(url.pathname))return serve(route);
+ if(url.origin==='https://johnmusic.app.n8n.cloud'&&url.pathname==='/webhook/sma-publication-asset-preview-v1')return serve(route);
  throw Error('Unexpected first-post request '+request.method()+' '+url.pathname);
 }
 
@@ -243,6 +249,44 @@ async function firstPost(browser,width,height,{failFirstRead=false}={}){
  }catch(error){throw Error(width+'px first post: '+error.message+'; '+errors.join(', '),{cause:error});}
  finally{await context.close();}
 }
+async function checkDashboardPlayback(browser){
+ const context=await browser.newContext({viewport:{width:1024,height:768},locale:'de-AT',serviceWorkers:'block'});
+ const errors=[];
+ try{
+  await context.route('**/*',route=>firstPostRoute(route,()=>({ok:true,files:[file]})).catch(async e=>{errors.push(e.message);await route.abort();}));
+  const page=await context.newPage();page.setDefaultTimeout(8000);
+  page.on('pageerror',e=>errors.push(e.message));
+  const readCount=await mockOriginalVideo(page);
+  await page.goto(dashboard);
+  const frame=page.frameLocator('#dashboard'),sidebar=frame.locator('aside');
+  await frame.getByRole('button',{name:'Beitrag vorbereiten'}).click();
+  await frame.getByRole('button',{name:'Optimieren'}).click();
+  const editor=frame.frameLocator('iframe[data-portal="youtube"]');
+  await editor.getByRole('button',{name:/Beitragsvorschau öffnen/}).click();
+  const heading=editor.getByRole('heading',{name:draft.title});
+  await heading.waitFor();
+  await editor.getByRole('button',{name:'Originalvideo laden'}).click();
+  const video=editor.locator('#originalVideoPreview video');
+  const playerFrame=page.frames().find(f=>f.url().startsWith(site+'/app/publication-preview.html'));
+  const state=expression=>playerFrame.waitForFunction(expression);
+  await state(()=>document.querySelector('#originalVideoPreview video')?.readyState>=2);
+  await video.press('Space');
+  await state(()=>{const v=document.querySelector('#originalVideoPreview video');return !v.paused&&v.currentTime>0;});
+  await sidebar.getByRole('button',{name:'Übersicht'}).click();
+  await frame.getByRole('heading',{name:'Übersicht'}).waitFor();
+  await playerFrame.waitForFunction(()=>document.querySelector('#originalVideoPreview video').paused,null,{polling:50});
+  const pauseTime=await video.evaluate(v=>v.ended?null:v.currentTime);
+  assert(pauseTime>0&&pauseTime<file.duration_ms/1000,'hidden preview must pause mid-clip');
+  await sidebar.getByRole('button',{name:'Veröffentlichung'}).click();
+  await heading.waitFor();
+  assert.deepEqual(await video.evaluate(v=>[v.paused,v.currentTime]),[true,pauseTime]);
+  await video.press('Space');
+  await state(()=>document.querySelector('#originalVideoPreview video').ended);
+  assert.equal(readCount(),1);assert.deepEqual(errors,[]);
+  console.log('Dashboard: hidden YouTube preview paused, returned to the same position and resumed without reloading');
+ }catch(e){throw Error('Dashboard playback: '+e.message+'; '+errors.join(', '),{cause:e});}
+ finally{await context.close();}
+}
 const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
 try{
  for(const [width,height] of [[320,568],[360,740],[390,844],[430,932]]){
@@ -275,4 +319,5 @@ try{
  }
  for(const [width,height] of [[320,568],[390,844]])await firstPost(browser,width,height);
  await firstPost(browser,320,568,{failFirstRead:true});
+ await checkDashboardPlayback(browser);
 }finally{await browser.close();}
