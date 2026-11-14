@@ -33,6 +33,8 @@ export async function checkProductContext({db,load,first}) {
   assert.equal((await read()).product_context,null);
   await db.query(`insert into sma_private.publication_product_sources_v1 values(1,$1,$2,$3)`,[output.user_id,parentHash,profile]);
   await db.exec(await load('publication-optimizer-file-labels.sql'));
+  await db.exec(await load('dashboard-file-titles.sql'));
+  const dashboardList=()=>first("select public.sma_publication_files_v1('list', '{\"dashboard_labels\":true}') value");
   const catalog=async(platform)=>first("select public.sma_publication_files_v1('list',$1) value",[JSON.stringify(platform?{platform}:{})]);
   assert.ok((await catalog()).files.every(f=>!('display' in f)));
   await db.exec('begin');
@@ -49,6 +51,24 @@ export async function checkProductContext({db,load,first}) {
   assert.equal(list.find(f=>f.id===cover).display.variant,'cover');
   assert.equal(list.find(f=>f.id===cover).display.product,'Hotelgriff');
   assert.equal((await catalog('instagram')).files.find(f=>f.id===output.id).display.draft_title,undefined);
+  const dashboardFiles=(await dashboardList()).files;
+  const clip=dashboardFiles.find(f=>f.id===output.id);
+  assert.deepEqual(clip.display,{variant:'clip',source_name:'unlabelled.mp4'});
+  assert.equal(clip.assignments.find(a=>a.platform==='youtube').title,'Ein kurzer Test');
+  assert.equal(dashboardFiles.find(f=>f.id===cover).display.variant,'cover');
+  assert((await catalog()).files.every(f=>f.assignments.every(a=>!('title' in a))));
+  await db.exec('insert into public.sma_kunden(id,user_id) values(200,gen_random_uuid())');
+  for(const change of [
+    "update sma_private.publication_previews_v1 set status='failed'",
+    "update sma_private.publication_assignments_v1 set asset_revision='stale'",
+    "update sma_private.publication_assignments_v1 set preview_revision=preview_revision+1",
+    "update sma_private.publication_previews_v1 set user_id=gen_random_uuid()",
+    "update sma_private.publication_previews_v1 set customer_id=200"
+  ]){
+    await db.exec('savepoint check_binding');await db.exec(change);
+    assert((await dashboardList()).files.every(f=>f.assignments.every(a=>!('title' in a))));
+    await db.exec('rollback to savepoint check_binding');
+  }
   await db.query('update sma_private.publication_files_v1 set size_bytes=size_bytes+1 where id=$1',[cover]);
   assert.equal((await catalog('youtube')).files.find(f=>f.id===cover).display.variant,undefined);
   await db.exec('rollback');

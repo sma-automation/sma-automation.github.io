@@ -16,8 +16,8 @@ import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=31';
 import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=5';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
-import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=6';
+import {filterDashboardFiles,dashboardFileDescription} from './assets/dashboard-file-search.mjs?v=2';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=7';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=3';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -45,7 +45,7 @@ function openOptimizer(portal,trigger,restoring=false){
  let preview=[...(optimizerFrames?.children||[])].find(el=>el.dataset.key===frameKey);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','45');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','46');if(selectedFileId)url.searchParams.set('asset',selectedFileId);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -368,11 +368,11 @@ frame.addEventListener('load',()=>{
     getFiles:()=>fileView?.getFiles()||[],
     getFileStatus:()=>fileView?.getCatalogState()||'loading',
     onNavigate:navigateDashboardArea,
-    onOpenFile:id=>{
+    onOpenFile:(id,portal)=>{
       if(signedOut||dashboardOwnerId!==ownerId||!fileView?.getFiles().some(f=>f.id===id))return false;
       const nav=findAreaNavigation('publishing');if(!nav)return false;
       nav.click();dashboardChapters?.controllers.get('publishing')?.select('files');
-      return fileView.openFile(id)===true;
+      return fileView.openFile(id,portal)===true;
     }
   }):null;
   dashboardMobileNav=ownerId&&fileView?mountDashboardMobileNav({
@@ -398,7 +398,7 @@ function attachFileList(doc,page){
  const galleryStyle=doc.createElement('style');galleryStyle.textContent=`.sma-file-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.sma-file-grid .sma-file-row{min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:8px;border:0;padding:0}.sma-file-grid .sma-gallery-select{width:100%;padding:0;margin:0;overflow:hidden;border:2px solid transparent;border-radius:12px;text-align:left;background:#eef1f8}.sma-file-grid .sma-gallery-select[aria-pressed=true]{border-color:#4065d8;background:#eef1f8;color:#3157cd;box-shadow:0 0 0 2px #dbe3ff}.sma-gallery-visual{display:grid;place-items:center;width:100%;aspect-ratio:3/4;overflow:hidden;background:#e7ebf3;color:#65718a;font-size:32px}.sma-gallery-visual img{display:block;width:100%;height:100%;object-fit:cover}.sma-gallery-label{display:block;padding:10px;font-size:13px;overflow-wrap:anywhere}.sma-file-row details{font-size:12px;min-width:0;overflow-wrap:anywhere}.sma-file-row summary{cursor:pointer;color:#65718a}.sma-file-row details strong{font-size:12px;font-weight:400;margin-top:8px}@media(max-width:1050px){.sma-file-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:650px){.sma-file-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}`;doc.head.append(galleryStyle);
  const thumbnails=createMediaThumbnailLoader(async()=>{const {data,error}=await supabase.auth.getSession();if(signedOut||error||!data?.session)throw Error('AUTH_REQUIRED');return data.session.access_token;});
  const toolbar=doc.createElement('div');toolbar.className='sma-file-toolbar';
-  const finder=doc.createElement('input');finder.type='search';finder.id='smaFileSearch';finder.placeholder='Datei suchen …';finder.setAttribute('aria-label','Datei nach Namen suchen');finder.autocomplete='off';finder.style.cssText='min-width:180px;flex:1 1 220px;max-width:460px;border:1px solid #9baac5;border-radius:9px;padding:11px 13px;background:white;color:#17233b;font:500 14px Arial,sans-serif';
+  const finder=doc.createElement('input');finder.type='search';finder.id='smaFileSearch';finder.placeholder='Dateiname oder Beitragstitel …';finder.setAttribute('aria-label','Datei nach Namen oder Beitragstitel suchen');finder.autocomplete='off';finder.style.cssText='min-width:180px;flex:1 1 220px;max-width:460px;border:1px solid #9baac5;border-radius:9px;padding:11px 13px;background:white;color:#17233b;font:500 14px Arial,sans-serif';
   const portalFilter=doc.createElement('select');portalFilter.id='smaFilePortalFilter';portalFilter.setAttribute('aria-label','Portalfilter');portalFilter.style.cssText='border:1px solid #9baac5;border-radius:9px;padding:10px;background:white;color:#17233b';
   for(const [id,label] of [['all','Alle Portale'],['youtube','YouTube'],['tiktok','TikTok'],['instagram','Instagram'],['facebook','Facebook']]){const option=doc.createElement('option');option.value=id;option.textContent=label;portalFilter.append(option);}
   const refresh=doc.createElement('button');refresh.textContent='Dateien aktualisieren';refresh.type='button';const message=doc.createElement('span');message.setAttribute('role','status');message.style.fontSize='13px';toolbar.append(finder,portalFilter,refresh,message);
@@ -412,27 +412,29 @@ function attachFileList(doc,page){
  function draw(){thumbnails.reset();list.replaceChildren();pages.replaceChildren();const matches=filterDashboardFiles(files,finder.value,portalFilter.value);selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':'Noch keine Bild- oder Videodateien im zugeordneten Kundenordner.';
   if(!matches.length){if(files.length)selection.textContent='Keine Treffer. Versuche einen kürzeren Namen oder „Alle Portale“.';return;}
   pageNumber=Math.min(pageNumber,Math.max(0,Math.ceil(matches.length/10)-1));
-  for(const f of matches.slice(pageNumber*10,pageNumber*10+10)){const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+f.name+(selectedFileId===f.id?' · Ausgewählt':'');label.title=f.name;choose.textContent='';choose.className='sma-gallery-select';choose.setAttribute('aria-label','Datei auswählen: '+f.name);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.setAttribute('aria-label','Datei im Portal öffnen: '+f.name);
-    open.addEventListener('click',()=>{if(disposed||signedOut||owner!==dashboardOwnerId)return;selectedFileId=f.id;const assigned=(f.assignments||[]).find(a=>a.status==='assigned'&&portalNames[a.platform]);const portal=portalNames[portalFilter.value]?portalFilter.value:assigned?.platform||'youtube';const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);if(trigger)openOptimizer(portal,trigger);else{draw();say('Bitte oben das gewünschte Portal auswählen.');}});
+  for(const f of matches.slice(pageNumber*10,pageNumber*10+10)){
+    const description=dashboardFileDescription(f,finder.value,portalFilter.value);
+    const caption=[description.title,description.version].filter(Boolean).join(' · ');
+    const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+caption+(selectedFileId===f.id?' · Ausgewählt':'');label.title=caption;choose.textContent='';choose.className='sma-gallery-select';choose.setAttribute('aria-label','Datei auswählen: '+caption);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.setAttribute('aria-label','Datei im Portal öffnen: '+caption);
+    open.addEventListener('click',()=>{if(disposed||signedOut||owner!==dashboardOwnerId)return;selectedFileId=f.id;const portal=description.portal;const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);if(trigger)openOptimizer(portal,trigger);else{draw();say('Bitte oben das gewünschte Portal auswählen.');}});
     row.append(choose,open,info);list.append(row);thumbnails.observe(visual,f);}
   if(matches.length>10){const back=doc.createElement('button');back.textContent='Zurück';back.disabled=pageNumber===0;back.addEventListener('click',()=>{pageNumber--;draw();});const next=doc.createElement('button');next.textContent='Weiter';next.disabled=(pageNumber+1)*10>=matches.length;next.addEventListener('click',()=>{pageNumber++;draw();});const count=doc.createElement('span');count.textContent='Seite '+(pageNumber+1)+' von '+Math.ceil(matches.length/10);pages.append(back,count,next);}
  }
  finder.addEventListener('input',()=>{pageNumber=0;draw();});portalFilter.addEventListener('change',()=>{pageNumber=0;draw();});
  async function load(sync=false){if(loading||disposed)return;loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();try{
   if(sync){say('Kundenordner wird geprüft …');const {data,error}=await supabase.auth.getSession();if(error||!data?.session)throw Error('Bitte melde dich erneut an.');const res=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1',{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});const body=await res.json();if(!res.ok||!body.ok){if(!['FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING'].includes(body.code))throw Error(body.code==='FOLDER_UNAVAILABLE'?'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.':'Die Dateien konnten noch nicht aktualisiert werden. Bitte erneut versuchen.');}else lastSync=Date.now();}
-  const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list'});if(error||!data?.ok)throw Error('Die Dateiliste konnte nicht geladen werden.');if(disposed||signedOut||owner!==dashboardOwnerId)return;files=data.files||[];catalogState='ready';wakeMusic();if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;draw();say(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.');
+  const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}});if(error||!data?.ok)throw Error('Die Dateiliste konnte nicht geladen werden.');if(disposed||signedOut||owner!==dashboardOwnerId)return;files=data.files||[];catalogState='ready';wakeMusic();if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;draw();say(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.');
  }catch(e){catalogState='error';say(e.message);}finally{loading=false;refresh.disabled=false;dashboardQuickFind?.refresh();}}
  refresh.addEventListener('click',()=>load(true));
  for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))button.addEventListener('click',()=>load(Date.now()-lastSync>60000));
  load(false);return {load,
     getFiles(){return disposed||signedOut||owner!==dashboardOwnerId?[]:files.slice();},
     getCatalogState(){return disposed||signedOut||owner!==dashboardOwnerId?'error':catalogState;},
-    openFile(id){
+    openFile(id,portal){
       if(disposed||signedOut||owner!==dashboardOwnerId)return false;
       const item=files.find(f=>f.id===id);if(!item)return false;
       selectedFileId=id;
-      const assigned=(item.assignments||[]).find(a=>a.status==='assigned'&&portalNames[a.platform]);
-      const portal=assigned?.platform||'youtube';
+      if(!Object.hasOwn(portalNames,portal))portal=dashboardFileDescription(item).portal;
       const trigger=[...page.querySelectorAll('.sma-optimize')].find(b=>b.dataset.portal===portal);
       if(!trigger)return false;
       openOptimizer(portal,trigger);return true;

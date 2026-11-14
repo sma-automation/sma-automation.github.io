@@ -38,6 +38,22 @@ test('filter ignores invalid catalog entries, never reads token or unrelated dat
  assert.equal(f(null,'anything').length,0);
  assert.deepEqual(f(injected,'','youtube').map(x=>x.id),['a']);
 });
+test('a saved title finds the correct version and portal, including a second portal on the same file',async()=>{
+ const {filterDashboardFiles:search,dashboardFileDescription:describe}=await modulePromise;
+ const saved={...fixtures[0],duration_ms:3000,display:{variant:'export',source_name:'Reisetasche.mp4'},assignments:[
+  {platform:'tiktok',status:'assigned',title:'Der Türgriff'},
+  {platform:'youtube',status:'assigned',title:'SMA Privattest 02'},
+  {platform:'facebook',status:'changed',title:'Überholter Titel'}]};
+ const own=[saved,{...fixtures[1],name:'SMA_Privattest_02.mp4',display:{}}];
+ assert.deepEqual(search(own,'sma PRIVATTEST 02'),own);
+ assert.deepEqual(search(own,'Privattest bearbeitet'),[saved]);
+ assert.deepEqual(search(own,'Reisetasche'),[saved]);
+ assert.deepEqual(search(own,'Privattest','tiktok'),[own[1]]);
+ assert.deepEqual(search(own,'Überholter Titel'),[]);
+ assert.deepEqual(search(own,'Türgriff Privattest'),[]);
+ assert.deepEqual(describe(saved,'Privattest'),{title:'SMA Privattest 02',version:'Bearbeitetes Video · 3 Sek.',portal:'youtube'});
+ assert.equal(describe(saved,'turgriff').portal,'tiktok');
+});
 test('search results paginate after filtering, not before',async()=>{
  const {filterDashboardFiles:f,searchFilePage:page}=await modulePromise;
  const many=Array.from({length:27},(_,i)=>({
@@ -74,7 +90,7 @@ test('search is client-side only: no new API, upload or approval path',async()=>
 
 test('gallery receives the global query, resets the portal and opens the first filtered page',async()=>{
  const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
- const {filterDashboardFiles}=await modulePromise;
+ const {filterDashboardFiles,dashboardFileDescription}=await modulePromise;
  const html=readFileSync('app/dashboard.html','utf8');
  const source=html.slice(html.indexOf('function attachFileList('),html.indexOf('let pending;'));
  const {document,window}=parseHTML('<html><head></head><body><main><div id="publishingFilesSlot"></div></main></body></html>');
@@ -83,7 +99,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  files.push({id:'other',name:'Sommer.png',media_kind:'image',assignments:[]});
  const calls=[];
  const env={dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
-  portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,
+  portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
   supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);

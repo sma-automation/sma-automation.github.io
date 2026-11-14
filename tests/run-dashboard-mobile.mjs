@@ -182,7 +182,7 @@ async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
   }
   const args=request.postDataJSON();
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='list'){
-   return reply(args.p_input?.platform==='youtube'?readPortalFiles():{ok:true,files:dashboardFiles});
+   return reply(args.p_input?.platform==='youtube'?readPortalFiles():{ok:true,files:args.p_input?.dashboard_labels===true?dashboardFiles:[]});
   }
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_preview_v1'&&args.p_action==='latest'){
    assert.equal(args.p_input.platform,'youtube');return reply({ok:true,status:'empty'});
@@ -253,20 +253,20 @@ async function checkFilesShortcut(page,frame,heading,width){
  const mobile=width<=700;
  const files=frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Dateien'});
  const shortcut=mobile?files:frame.getByRole('button',{name:'Kundendateien suchen'});
- const finder=frame.getByRole('searchbox',{name:'Datei nach Namen suchen'});
+ const finder=frame.getByRole('searchbox',{name:'Datei nach Namen oder Beitragstitel suchen'});
  await page.waitForURL(dashboard+'#optimieren/youtube/vorschau');
  if(mobile)await shortcut.tap();else await shortcut.click();
  await page.waitForURL(dashboard);
  await fits(finder,width);
  assert(await finder.evaluate(el=>el.ownerDocument.activeElement===el));
  if(mobile)assert.equal(await files.getAttribute('aria-current'),'page');
- await finder.fill('Testclip');
- await frame.getByRole('button',{name:'Datei auswählen: '+file.name,exact:true}).waitFor();
+ await finder.fill(draft.title);
+ await frame.getByRole('button',{name:'Datei auswählen: '+draft.title+' · Bearbeitetes Video · 3 Sek.',exact:true}).waitFor();
  await page.goBack();await page.waitForURL(dashboard+'#optimieren/youtube/vorschau');
  await heading.waitFor();
  if(mobile)assert.equal(await files.getAttribute('aria-current'),null);
  await page.goForward();await page.waitForURL(dashboard);
- await fits(finder,width);assert.equal(await finder.inputValue(),'Testclip');
+ await fits(finder,width);assert.equal(await finder.inputValue(),draft.title);
  assert(await finder.evaluate(el=>el.ownerDocument.activeElement===el));
  if(mobile)assert.equal(await files.getAttribute('aria-current'),'page');
  console.log(width+'px: file shortcut focused search, browser back restored the YouTube draft, forward retained the filter');
@@ -277,7 +277,7 @@ async function checkDashboardPreview(browser,width,height){
  const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
  const errors=[];
  try{
-  await context.route('**/*',route=>firstPostRoute(route,()=>({ok:true,files:[file]}),[file]).catch(async e=>{errors.push(e.message);await route.abort();}));
+  await context.route('**/*',route=>firstPostRoute(route,()=>({ok:true,files:[file]}),[{...file,display:{variant:'export'},assignments:[{...file.assignments[0],title:draft.title}]}]).catch(async e=>{errors.push(e.message);await route.abort();}));
   const page=await context.newPage();page.setDefaultTimeout(8000);
   page.on('pageerror',e=>errors.push(e.message));
   const readCount=await mockOriginalVideo(page);

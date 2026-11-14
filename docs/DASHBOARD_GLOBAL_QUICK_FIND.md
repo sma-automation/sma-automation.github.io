@@ -1,6 +1,6 @@
 # SMA – Globale Schnellnavigation und Dateisuche
 
-Stand: 11. November 2026. Zweiter Dashboard-Navigationsschritt nach PR #235.
+Stand 14. November 2026.
 
 ## Kundensicht
 
@@ -13,18 +13,19 @@ Gesucht werden:
 - die vorhandenen, für das Konto tatsächlich sichtbaren Bereiche, darunter
   Übersicht, Veröffentlichung, Dateien, History, Social Media, Content,
   Musikbibliothek, Shop, Webseite und Einstellungen;
-- die **bereits geladenen** Kundendateien nach Dateinamen, sobald mindestens
-  zwei Zeichen eingegeben wurden.
+- die **bereits geladenen** Kundendateien nach Dateinamen, aktuellen Beitragstiteln und Fassungen,
+  sobald mindestens zwei Zeichen eingegeben wurden.
 
 Ein Treffer für einen Bereich verwendet die **originale Sidebar-Navigation**.
 Ein Treffer für Dateien öffnet den vorhandenen Optimierer mit genau der bereits
-berechtigten Datei. Alle Schritte bleiben im selben Dashboard.
+berechtigten Datei. Bei einem passenden Beitragstitel öffnet sich das zugehörige Portal.
+Die Dateigalerie verwendet denselben Filter. Der technische Dateiname steht in den Dateidetails.
 
 ## Sicherheit und Grenzen
 
 Die Suche arbeitet ausschließlich mit den momentan sichtbaren
 Navigationspunkten und der bestehenden, nutzerspezifischen Dateiliste
-von `sma_publication_files_v1('list')`. Sie lädt keine Daten einer
+von `sma_publication_files_v1('list', '{"dashboard_labels":true}')`. Sie lädt keine Daten einer
 anderen Person und öffnet keine neuen Backend-Endpunkte. Nicht
 verfügbare oder gesperrte Paketbereiche werden nicht als Ziel
 angeboten, wenn deren Navigation nicht vorhanden ist.
@@ -32,7 +33,7 @@ angeboten, wenn deren Navigation nicht vorhanden ist.
 Es gibt **keine** automatische Veröffentlichung, keine Freigabe, keinen
 Provideraufruf, keine Musik-Credit-Abbuchung und keine neuen Kosten.
 
-Die Suche umfasst in dieser Stufe **Bereichsnamen und Dateinamen**,
+Die Suche umfasst in dieser Stufe **Bereichsnamen, Dateinamen, Dateifassungen und gespeicherte Beitragstitel**,
 nicht die Inhalte sämtlicher Bestellungen, Aufträge, Texte oder
 Supportnachrichten. Eine echte übergreifende Inhaltsuche benötigt später
 eigene serverseitige, kundengebundene Suchfunktionen und Rechteprüfungen.
