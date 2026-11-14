@@ -162,15 +162,15 @@ async function selectedRow(frame,width){
 const newCustomerShell=`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}.page:not(.active){display:none}@media(max-width:650px){aside{display:none}}main{padding:16px}</style>
 <body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"></div></header>
-<aside><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button></aside><main>
+<aside><p>Arbeitsbereich</p><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button></aside><main>
 <section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid">
 <div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
 <section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
 <div class="card"><div class="platform-card"><span class="platform-info"><strong>YouTube</strong></span></div></div>
 <div id="publishingFilesSlot"></div></section></main>
-<script>document.querySelector('aside').onclick=e=>{for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+e.target.dataset.page)}</script></body></html>`;
+<script>document.querySelector('aside').onclick=e=>{const nav=e.target.closest('[data-page]');if(nav)for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+nav.dataset.page)}</script></body></html>`;
 
-async function firstPostRoute(route,readPortalFiles){
+async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
  const request=route.request();
  if(request.method()==='GET')return serve(route);
  const url=new URL(request.url());
@@ -182,7 +182,7 @@ async function firstPostRoute(route,readPortalFiles){
   }
   const args=request.postDataJSON();
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='list'){
-   return reply(args.p_input?.platform==='youtube'?readPortalFiles():{ok:true,files:[]});
+   return reply(args.p_input?.platform==='youtube'?readPortalFiles():{ok:true,files:dashboardFiles});
   }
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_preview_v1'&&args.p_action==='latest'){
    assert.equal(args.p_input.platform,'youtube');return reply({ok:true,status:'empty'});
@@ -249,11 +249,34 @@ async function firstPost(browser,width,height,{failFirstRead=false}={}){
  }catch(error){throw Error(width+'px first post: '+error.message+'; '+errors.join(', '),{cause:error});}
  finally{await context.close();}
 }
-async function checkDashboardPlayback(browser){
- const context=await browser.newContext({viewport:{width:1024,height:768},locale:'de-AT',serviceWorkers:'block'});
+async function checkFilesShortcut(page,frame,heading,width){
+ const mobile=width<=700;
+ const files=frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Dateien'});
+ const shortcut=mobile?files:frame.getByRole('button',{name:'Kundendateien suchen'});
+ const finder=frame.getByRole('searchbox',{name:'Datei nach Namen suchen'});
+ await page.waitForURL(dashboard+'#optimieren/youtube/vorschau');
+ if(mobile)await shortcut.tap();else await shortcut.click();
+ await page.waitForURL(dashboard);
+ await fits(finder,width);
+ assert(await finder.evaluate(el=>el.ownerDocument.activeElement===el));
+ if(mobile)assert.equal(await files.getAttribute('aria-current'),'page');
+ await finder.fill('Testclip');
+ await frame.getByRole('button',{name:'Datei auswählen: '+file.name,exact:true}).waitFor();
+ await page.goBack();await page.waitForURL(dashboard+'#optimieren/youtube/vorschau');
+ await heading.waitFor();
+ if(mobile)assert.equal(await files.getAttribute('aria-current'),null);
+ await page.goForward();await page.waitForURL(dashboard);
+ await fits(finder,width);assert.equal(await finder.inputValue(),'Testclip');
+ if(mobile)assert.equal(await files.getAttribute('aria-current'),'page');
+ console.log(width+'px: file shortcut focused search, browser back restored the YouTube draft, forward retained the filter');
+}
+
+async function checkDashboardPreview(browser,width,height){
+ const mobile=width<=700;
+ const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
  const errors=[];
  try{
-  await context.route('**/*',route=>firstPostRoute(route,()=>({ok:true,files:[file]})).catch(async e=>{errors.push(e.message);await route.abort();}));
+  await context.route('**/*',route=>firstPostRoute(route,()=>({ok:true,files:[file]}),[file]).catch(async e=>{errors.push(e.message);await route.abort();}));
   const page=await context.newPage();page.setDefaultTimeout(8000);
   page.on('pageerror',e=>errors.push(e.message));
   const readCount=await mockOriginalVideo(page);
@@ -265,25 +288,30 @@ async function checkDashboardPlayback(browser){
   await editor.getByRole('button',{name:/Beitragsvorschau öffnen/}).click();
   const heading=editor.getByRole('heading',{name:draft.title});
   await heading.waitFor();
-  await editor.getByRole('button',{name:'Originalvideo laden'}).click();
-  const video=editor.locator('#originalVideoPreview video');
-  const playerFrame=page.frames().find(f=>f.url().startsWith(site+'/app/publication-preview.html'));
-  const state=expression=>playerFrame.waitForFunction(expression);
-  await state(()=>document.querySelector('#originalVideoPreview video')?.readyState>=2);
-  await video.press('Space');
-  await state(()=>{const v=document.querySelector('#originalVideoPreview video');return !v.paused&&v.currentTime>0;});
-  await sidebar.getByRole('button',{name:'Übersicht'}).click();
-  await frame.getByRole('heading',{name:'Übersicht'}).waitFor();
-  await playerFrame.waitForFunction(()=>document.querySelector('#originalVideoPreview video').paused,null,{polling:50});
-  const pauseTime=await video.evaluate(v=>v.ended?null:v.currentTime);
-  assert(pauseTime>0&&pauseTime<file.duration_ms/1000,'hidden preview must pause mid-clip');
-  await sidebar.getByRole('button',{name:'Veröffentlichung'}).click();
-  await heading.waitFor();
-  assert.deepEqual(await video.evaluate(v=>[v.paused,v.currentTime]),[true,pauseTime]);
-  await video.press('Space');
-  await state(()=>document.querySelector('#originalVideoPreview video').ended);
-  assert.equal(readCount(),1);assert.deepEqual(errors,[]);
-  console.log('Dashboard: hidden YouTube preview paused, returned to the same position and resumed without reloading');
+  if(!mobile){
+   await editor.getByRole('button',{name:'Originalvideo laden'}).click();
+   const video=editor.locator('#originalVideoPreview video');
+   const playerFrame=page.frames().find(f=>f.url().startsWith(site+'/app/publication-preview.html'));
+   const state=expression=>playerFrame.waitForFunction(expression);
+   await state(()=>document.querySelector('#originalVideoPreview video')?.readyState>=2);
+   await video.press('Space');
+   await state(()=>{const v=document.querySelector('#originalVideoPreview video');return !v.paused&&v.currentTime>0;});
+   await sidebar.getByRole('button',{name:'Übersicht'}).click();
+   await frame.getByRole('heading',{name:'Übersicht'}).waitFor();
+   await playerFrame.waitForFunction(()=>document.querySelector('#originalVideoPreview video').paused,null,{polling:50});
+   const pauseTime=await video.evaluate(v=>v.ended?null:v.currentTime);
+   assert(pauseTime>0&&pauseTime<file.duration_ms/1000,'hidden preview must pause mid-clip');
+   await sidebar.getByRole('button',{name:'Veröffentlichung'}).click();
+   await heading.waitFor();
+   assert.deepEqual(await video.evaluate(v=>[v.paused,v.currentTime]),[true,pauseTime]);
+   await video.press('Space');
+   await state(()=>document.querySelector('#originalVideoPreview video').ended);
+   assert.equal(readCount(),1);
+   console.log('Dashboard: hidden YouTube preview paused, returned to the same position and resumed without reloading');
+  }
+  await checkFilesShortcut(page,frame,heading,width);
+  assert.equal(readCount(),mobile?0:1);
+  assert.deepEqual(errors,[]);
  }catch(e){throw Error('Dashboard playback: '+e.message+'; '+errors.join(', '),{cause:e});}
  finally{await context.close();}
 }
@@ -319,5 +347,5 @@ try{
  }
  for(const [width,height] of [[320,568],[390,844]])await firstPost(browser,width,height);
  await firstPost(browser,320,568,{failFirstRead:true});
- await checkDashboardPlayback(browser);
+ for(const [width,height] of [[320,568],[1024,768]])await checkDashboardPreview(browser,width,height);
 }finally{await browser.close();}

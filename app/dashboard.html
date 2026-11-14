@@ -18,7 +18,7 @@ import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=5';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles} from './assets/dashboard-file-search.mjs?v=1';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=6';
-import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=2';
+import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=3';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -297,16 +297,7 @@ frame.addEventListener('load',()=>{
     const find=doc.createElement('button');find.type='button';find.id='smaFindFiles';find.textContent='⌕  Dateien suchen';
     find.setAttribute('aria-label','Kundendateien suchen');
     find.style.cssText='display:block;width:calc(100% - 24px);margin:8px 12px;padding:11px;border:1px solid #566279;border-radius:9px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:600 13px Inter,Arial,sans-serif';
-    find.addEventListener('click',()=>{
-      if(signedOut||dashboardOwnerId!==ownerId)return;
-      const nav=[...doc.querySelectorAll('aside button,aside a,.sidebar button,.sidebar a')].find(el=>el!==find&&(
-        el.dataset?.page==='publishing'||el.dataset?.target==='publishing'||
-        ['#publishing','#page-publishing'].includes(el.getAttribute('href'))||
-        /^(Veröffentlichung|Publishing)$/i.test((el.textContent||'').trim())));
-      if(!nav)return;
-      nav.click();dashboardChapters?.controllers.get('publishing')?.select('files');
-      fileView?.focusSearch();
-    });
+    find.addEventListener('click',()=>navigateDashboardArea('files'));
     cloudButton.after(find);fileFindShortcut=find;
   }
   // Search visible dashboard areas and the already loaded own-file catalog.
@@ -384,13 +375,7 @@ frame.addEventListener('load',()=>{
     doc,
     available:key=>key==='search'?Boolean(dashboardQuickFind):Boolean(findAreaNavigation(key)),
     onNavigate:key=>{
-      if(signedOut||dashboardOwnerId!==ownerId)return false;
-      const nav=findAreaNavigation(key);if(!nav)return false;
-      nav.click();
-      if(key==='files'){
-        dashboardChapters?.controllers.get('publishing')?.select('files');
-        fileView?.focusSearch();
-      }
+      if(!navigateDashboardArea(key))return false;
       if(key==='history')doc.getElementById('sma-history-tab-orders')?.click();
       return true;
     },

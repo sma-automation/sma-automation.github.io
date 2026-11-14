@@ -57,7 +57,7 @@ test('dashboard search is in the existing publishing file area and opens the opt
  assert.match(html,/id='smaFileSearch'/);
  assert.match(html,/id='smaFilePortalFilter'/);
  assert.match(html,/id='smaFindFiles'/);
- assert.match(html,/fileView\?\.focusSearch\(\)/);
+ assert.match(html,/find\.addEventListener\('click',\(\)=>navigateDashboardArea\('files'\)\)/);
  assert.match(html,/dashboardChapters\?\.controllers\.get\('publishing'\)\?\.select\('files'\)/);
  assert.match(html,/const matches=filterDashboardFiles\(files,finder.value,portalFilter.value\)/);
  assert.match(html,/for\(const f of matches\.slice\(pageNumber\*10,pageNumber\*10\+10\)\)/);

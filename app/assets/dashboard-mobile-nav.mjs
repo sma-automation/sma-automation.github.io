@@ -60,7 +60,7 @@ export function mountDashboardMobileNav({doc,available,onNavigate,onSearch}){
   const page=active?.id.slice(5);
   const filesTab=doc.getElementById('sma-publishing-tab-files');
   const current=page==='overview'?'overview':page==='history'?'history':page==='shop'?'shop':
-   page==='publishing'&&filesTab?.getAttribute('aria-selected')==='true'?'files':null;
+   page==='publishing'&&!active.classList.contains('sma-optimizing')&&filesTab?.getAttribute('aria-selected')==='true'?'files':null;
   for(const button of nav.querySelectorAll('button[data-sma-mobile-target]')){
    if(button.dataset.smaMobileTarget===current)button.setAttribute('aria-current','page');
    else button.removeAttribute('aria-current');

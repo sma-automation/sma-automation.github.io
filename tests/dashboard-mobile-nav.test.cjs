@@ -59,6 +59,17 @@ test('mobile quick bar follows the actual dashboard page after sidebar or global
  assert.equal(f.get('shop').getAttribute('aria-current'),'page');
  f.view.destroy();
 });
+test('Dateien is current only while the file gallery is visible, including browser back',async()=>{
+ const f=await fixture({initialPage:'publishing'});
+ const page=f.doc.getElementById('page-publishing');
+ f.doc.getElementById('sma-publishing-tab-files').setAttribute('aria-selected','true');
+ await tick();assert.equal(f.get('files').getAttribute('aria-current'),'page');
+ page.classList.add('sma-optimizing');await tick();
+ assert.equal(f.get('files').getAttribute('aria-current'),null);
+ page.classList.remove('sma-optimizing');await tick();
+ assert.equal(f.get('files').getAttribute('aria-current'),'page');
+ f.view.destroy();
+});
 test('unavailable package pages are never displayed as active navigation items',async()=>{
  const f=await fixture({visible:['overview','files','search']});
  assert.equal(f.doc.querySelectorAll('#smaMobileQuickNav button').length,3);
@@ -77,8 +88,8 @@ test('mobile navigation reuses authenticated dashboard routes, no new endpoints 
  const html=readFileSync('app/dashboard.html','utf8');
  const module=readFileSync('app/assets/dashboard-mobile-nav.mjs','utf8');
  assert.match(html,/mountDashboardMobileNav/);
- assert.match(html,/dashboard-mobile-nav\.mjs\?v=2/,'Updated mobile navigation must use a fresh module URL');
- assert.match(html,/dashboardChapters\?\.controllers\.get\('publishing'\)\?\.select\('files'\)/);
+ assert.match(html,/dashboard-mobile-nav\.mjs\?v=3/,'Updated mobile navigation must use a fresh module URL');
+ assert.match(html,/if\(!navigateDashboardArea\(key\)\)return false/);
  assert.match(html,/dashboardQuickFind\.show\(\)/);
  assert.match(html,/dashboardMobileNav\?\.destroy\(\)/);
  assert.doesNotMatch(module,/\bfetch\(|XMLHttpRequest|\.rpc\(|location\.assign|window\.open|localStorage|sessionStorage/);
