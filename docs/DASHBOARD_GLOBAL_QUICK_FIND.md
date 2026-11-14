@@ -142,3 +142,18 @@ Der Klick öffnet die jeweilige Ansicht im angemeldeten Konto. Eine Freigabe wir
 dadurch weder erteilt noch verlängert. Beim Wechsel zu den Aufträgen wird ein
 alter Suchfilter im Auftragsfenster geleert. Das ausgewählte Kapitel „Portale“
 öffnet sich auch dann, wenn zuletzt „Dateien“ oder der Optimierer aktiv war.
+
+## Mehrseitiger Kundenordner
+
+Der Drive-Abgleich liest alle Folgeseiten vor dem Speichern. Bricht eine Seite
+ab, bleiben Dateien und Zeitpunkt des letzten vollständigen Katalogs erhalten.
+Die Suche bietet „Ordnerabgleich wiederholen“ an. Läuft bereits ein Abgleich,
+liest „Abgleichstatus prüfen“ den aktuellen Stand. Die gespeicherten Treffer
+lassen sich währenddessen öffnen. Nach F5 prüft das Dashboard Kundenkonto
+und Dateiverfügbarkeit erneut. Der Rückweg führt über den Suchtreffer in
+das ursprüngliche Kapitel der Übersicht.
+
+Die Prüfung mit 1.001 synthetischen Dateien, zwei Kundenkonten und einer
+unterbrochenen zweiten Drive-Seite läuft lokal mit
+`node tests/run-export-probe-sql.mjs --catalog-browser`. Über `CHROME_BIN`
+lässt sich ein vorhandenes Chromium auswählen.

@@ -31,14 +31,99 @@ code('Ordner prüfen',core+"\nreturn [{json:verifiedFolders($input.all().map(x=>
 for index,name in enumerate(['Uploadordner lesen','Verarbeitungsordner lesen']):
  node(name,'httpRequest',{'url':"={{ 'https://www.googleapis.com/drive/v3/files/'+$('Ordner prüfen').first().json.folders["+str(index)+"] }}",'authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'queryParameters':{'parameters':[{'name':'fields','value':'id,mimeType,trashed,capabilities(canListChildren)'},{'name':'supportsAllDrives','value':'true'}]},'options':opts},1540+index*220,-220,v=4.5,credentials=drive,onError='continueRegularOutput')
 code('Ordnerzugriff bestätigen',core+"\nreturn [{json:accessibleFolders([$('Uploadordner lesen').first().json,$('Verarbeitungsordner lesen').first().json],$('Ordner prüfen').first().json)}];",1980,-220,onError='continueErrorOutput')
-node('Dateimetadaten aus Drive lesen','httpRequest',{'url':'https://www.googleapis.com/drive/v3/files','authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'queryParameters':{'parameters':[{'name':'q','value':'={{ $json.q }}'},{'name':'pageSize','value':'1000'},{'name':'fields','value':'nextPageToken,incompleteSearch,files(id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis))'},{'name':'spaces','value':'drive'}]},'options':opts},1540,v=4.5,credentials=drive,onError='continueErrorOutput')
-code('Dateien prüfen',core+"\nconst c=$('Eigene Dateiliste reservieren').first().json;return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_files:catalogFiles($input.first().json,$('Ordner prüfen').first().json.folders)}}];",1760,onError='continueErrorOutput')
-node('Dateiliste speichern','httpRequest',{**http,'url':'https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_finish_v1','authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth','jsonBody':'={{ $json }}'},1980,v=4.5,credentials=cred,onError='continueErrorOutput')
-code('Dateifehler zuordnen',"const c=$('Eigene Dateiliste reservieren').first().json;const r=$input.first().json;const msg=String(r.message||r.error?.message||r.error||'');const known=['FOLDER_UNAVAILABLE','FILE_CATALOG_TOO_LARGE','FILE_METADATA_INVALID'];return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_error:known.find(x=>msg.includes(x))||'FILE_SYNC_UNAVAILABLE'}}];",1540,320)
+# Carry only request state around the loop. Each validated page stays in its own node run.
+code('Drive-Seite vorbereiten',"""
+const state = $input.first().json;
+const tokens = state.tokens || [];
+const query = {
+  q: $('Ordner prüfen').first().json.q,
+  spaces: 'drive',
+  pageSize: 1000,
+  fields: 'nextPageToken,incompleteSearch,files(id,name,mimeType,parents,trashed,version,modifiedTime,size,md5Checksum,sha256Checksum,imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis))'
+};
+if (tokens.length) query.pageToken = tokens[tokens.length - 1];
+return [{json: {query, tokens, bytes: state.bytes || 0}}];
+""",2200,-220,onError='continueErrorOutput')
+node('Dateimetadaten aus Drive lesen','httpRequest',{'url':'https://www.googleapis.com/drive/v3/files','authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'specifyQuery':'json','jsonQuery':'={{ $json.query }}','options':opts},2420,-220,v=4.5,credentials=drive,onError='continueErrorOutput')
+code('Drive-Seite prüfen',core+"""
+const response = $input.first().json;
+const request = $('Drive-Seite vorbereiten').first(0, $runIndex).json;
+const folders = $('Ordner prüfen').first().json.folders;
+const {nextPageToken, ...page} = response;
+if (page.incompleteSearch !== undefined && typeof page.incompleteSearch !== 'boolean')
+  throw Error('FILE_METADATA_INVALID');
+const files = catalogFiles(page, folders);
+const tokens = request.tokens.slice();
+if (nextPageToken !== undefined) {
+  if (typeof nextPageToken !== 'string' || !nextPageToken.trim() || tokens.includes(nextPageToken))
+    throw Error('FILE_METADATA_INVALID');
+  tokens.push(nextPageToken);
+}
+const bytes = request.bytes + Buffer.byteLength(JSON.stringify(files));
+if (bytes > 4000000) throw Error('FILE_CATALOG_TOO_LARGE');
+return [{json: {files, tokens, bytes, more: nextPageToken !== undefined}}];
+""",2640,-220,onError='continueErrorOutput')
+cond('Weitere Drive-Seite?', '={{ $json.more === true }}',2860)
+code('Dateien prüfen',"""
+const last = $input.first().json;
+if (last.more !== false) throw Error('FILE_METADATA_INVALID');
+const files = [];
+const ids = new Set();
+for (let run = 0; run <= last.tokens.length; run++) {
+  const page = $('Drive-Seite prüfen').first(0, run).json;
+  for (const file of page.files) {
+    if (ids.has(file.drive_file_id)) throw Error('FILE_METADATA_INVALID');
+    ids.add(file.drive_file_id);
+    files.push(file);
+  }
+}
+const lease = $('Eigene Dateiliste reservieren').first().json;
+return [{json: {p_user_id: lease.user_id, p_lease_id: lease.lease_id, p_files: files}}];
+""",3080,onError='continueErrorOutput')
+node('Dateiliste speichern','httpRequest',{**http,'url':'https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_finish_v1','authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth','jsonBody':'={{ $json }}'},3300,v=4.5,credentials=cred,onError='continueErrorOutput')
+cond('Dateiliste gespeichert?', '={{ $json.ok === true }}',3520)
+code('Dateifehler zuordnen',"const c=$('Eigene Dateiliste reservieren').first().json;const r=$input.first().json;const msg=String(r.code||r.message||r.error?.message||r.error||'');const known=['FOLDER_UNAVAILABLE','FILE_CATALOG_TOO_LARGE','FILE_METADATA_INVALID'];return [{json:{p_user_id:c.user_id,p_lease_id:c.lease_id,p_error:known.find(x=>msg.includes(x))||'FILE_SYNC_UNAVAILABLE'}}];",1540,320)
 node('Dateifehler speichern','httpRequest',{**http,'url':'https://bnvnmdxosbnuzedokqgh.supabase.co/rest/v1/rpc/sma_publication_files_finish_v1','authentication':'genericCredentialType','genericAuthType':'httpHeaderAuth','jsonBody':'={{ $json }}'},1760,320,4.5,credentials=cred,onError='continueErrorOutput')
 code('Sichere Dateifehlermeldung',"return [{json:{ok:false,code:'FILE_SYNC_UNAVAILABLE'}}];",1980,500)
 code('Dateiantwort bereinigen',"const r=$input.first().json;return [{json:{ok:r.ok===true,...(r.ok===true?{count:r.count}:{code:['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE','FOLDER_UNAVAILABLE','FILE_CATALOG_TOO_LARGE','FILE_METADATA_INVALID','FILE_SYNC_RUNNING','FILE_SYNC_RATE_LIMITED'].includes(r.code)?r.code:'FILE_SYNC_UNAVAILABLE'})}}];",2200,100)
 node('Dateiantwort','respondToWebhook',{'respondWith':'json','responseBody':'={{ $json }}','options':{'responseCode':200,'responseHeaders':{'entries':[{'name':'Cache-Control','value':'no-store'},{'name':'Access-Control-Allow-Origin','value':'https://sma-automation.com'},{'name':'Vary','value':'Origin'}]}}},2420,100,1.5)
-for a,b,p in [('Dateien abgleichen','Anfrage prüfen',0),('Anfrage prüfen','Anmeldung vorhanden?',0),('Anmeldung vorhanden?','Eigene Dateiliste reservieren',0),('Anmeldung vorhanden?','Dateiantwort bereinigen',1),('Eigene Dateiliste reservieren','Konto freigegeben?',0),('Eigene Dateiliste reservieren','Sichere Dateifehlermeldung',1),('Konto freigegeben?','Kundenordner zuordnen',0),('Konto freigegeben?','Dateiantwort bereinigen',1),('Kundenordner zuordnen','Ordner prüfen',0),('Kundenordner zuordnen','Dateifehler zuordnen',1),('Ordner prüfen','Uploadordner lesen',0),('Uploadordner lesen','Verarbeitungsordner lesen',0),('Verarbeitungsordner lesen','Ordnerzugriff bestätigen',0),('Ordnerzugriff bestätigen','Dateimetadaten aus Drive lesen',0),('Ordnerzugriff bestätigen','Dateifehler zuordnen',1),('Ordner prüfen','Dateifehler zuordnen',1),('Dateimetadaten aus Drive lesen','Dateien prüfen',0),('Dateimetadaten aus Drive lesen','Dateifehler zuordnen',1),('Dateien prüfen','Dateiliste speichern',0),('Dateien prüfen','Dateifehler zuordnen',1),('Dateiliste speichern','Dateiantwort bereinigen',0),('Dateiliste speichern','Sichere Dateifehlermeldung',1),('Dateifehler zuordnen','Dateifehler speichern',0),('Dateifehler speichern','Dateiantwort bereinigen',0),('Dateifehler speichern','Sichere Dateifehlermeldung',1),('Sichere Dateifehlermeldung','Dateiantwort bereinigen',0),('Dateiantwort bereinigen','Dateiantwort',0)]:edge(a,b,p)
+for a,b,p in [
+ ('Dateien abgleichen', 'Anfrage prüfen', 0),
+ ('Anfrage prüfen', 'Anmeldung vorhanden?', 0),
+ ('Anmeldung vorhanden?', 'Eigene Dateiliste reservieren', 0),
+ ('Anmeldung vorhanden?', 'Dateiantwort bereinigen', 1),
+ ('Eigene Dateiliste reservieren', 'Konto freigegeben?', 0),
+ ('Eigene Dateiliste reservieren', 'Sichere Dateifehlermeldung', 1),
+ ('Konto freigegeben?', 'Kundenordner zuordnen', 0),
+ ('Konto freigegeben?', 'Dateiantwort bereinigen', 1),
+ ('Kundenordner zuordnen', 'Ordner prüfen', 0),
+ ('Kundenordner zuordnen', 'Dateifehler zuordnen', 1),
+ ('Ordner prüfen', 'Uploadordner lesen', 0),
+ ('Uploadordner lesen', 'Verarbeitungsordner lesen', 0),
+ ('Verarbeitungsordner lesen', 'Ordnerzugriff bestätigen', 0),
+ ('Ordnerzugriff bestätigen', 'Drive-Seite vorbereiten', 0),
+ ('Drive-Seite vorbereiten', 'Dateimetadaten aus Drive lesen', 0),
+ ('Drive-Seite vorbereiten', 'Dateifehler zuordnen', 1),
+ ('Ordnerzugriff bestätigen', 'Dateifehler zuordnen', 1),
+ ('Ordner prüfen', 'Dateifehler zuordnen', 1),
+ ('Dateimetadaten aus Drive lesen', 'Drive-Seite prüfen', 0),
+ ('Drive-Seite prüfen', 'Weitere Drive-Seite?', 0),
+ ('Drive-Seite prüfen', 'Dateifehler zuordnen', 1),
+ ('Weitere Drive-Seite?', 'Drive-Seite vorbereiten', 0),
+ ('Weitere Drive-Seite?', 'Dateien prüfen', 1),
+ ('Dateimetadaten aus Drive lesen', 'Dateifehler zuordnen', 1),
+ ('Dateien prüfen', 'Dateiliste speichern', 0),
+ ('Dateien prüfen', 'Dateifehler zuordnen', 1),
+ ('Dateiliste speichern', 'Dateiliste gespeichert?', 0),
+ ('Dateiliste gespeichert?', 'Dateiantwort bereinigen', 0),
+ ('Dateiliste gespeichert?', 'Dateifehler zuordnen', 1),
+ ('Dateiliste speichern', 'Dateifehler zuordnen', 1),
+ ('Dateifehler zuordnen', 'Dateifehler speichern', 0),
+ ('Dateifehler speichern', 'Dateiantwort bereinigen', 0),
+ ('Dateifehler speichern', 'Sichere Dateifehlermeldung', 1),
+ ('Sichere Dateifehlermeldung', 'Dateiantwort bereinigen', 0),
+ ('Dateiantwort bereinigen', 'Dateiantwort', 0),
+]:
+ edge(a,b,p)
 w={'name':'SMA – Dateizuordnung – Kundenordner V1','nodes':nodes,'connections':connections,'pinData':{},'settings':{'executionOrder':'v1','saveDataErrorExecution':'none','saveDataSuccessExecution':'none','saveManualExecutions':False,'saveExecutionProgress':False,'executionTimeout':120,'callerPolicy':'workflowsFromSameOwner','availableInMCP':False},'active':False}
 Path('n8n/publishing/file-catalog-workflow.json').write_text(json.dumps(w,ensure_ascii=False,indent=2));print(len(nodes),'nodes')

@@ -88,9 +88,9 @@ test('mobile navigation reuses authenticated dashboard routes, no new endpoints 
  const html=readFileSync('app/dashboard.html','utf8');
  const module=readFileSync('app/assets/dashboard-mobile-nav.mjs','utf8');
  assert.match(html,/mountDashboardMobileNav/);
- assert.match(html,/dashboard-mobile-nav\.mjs\?v=3/,'Updated mobile navigation must use a fresh module URL');
+ assert.match(html,/dashboard-mobile-nav\.mjs\?v=4/,'Updated mobile navigation must use a fresh module URL');
  assert.match(html,/if\(!navigateDashboardArea\(key\)\)return false/);
- assert.match(html,/dashboardQuickFind\.show\(\)/);
+ assert.match(html,/dashboardQuickFind\.show\(launcher\)/);
  assert.match(html,/dashboardMobileNav\?\.destroy\(\)/);
  assert.doesNotMatch(module,/\bfetch\(|XMLHttpRequest|\.rpc\(|location\.assign|window\.open|localStorage|sessionStorage/);
  assert.match(module,/nav\.mobile-nav,\[data-mobile-navigation\]/);

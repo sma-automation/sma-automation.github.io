@@ -41,7 +41,7 @@ export function mountDashboardMobileNav({doc,available,onNavigate,onSearch}){
   button.append(icon,caption);
   const click=()=>{
    let ok=false;
-   try{ok=item.key==='search'?onSearch()===true:onNavigate(item.key)===true;}catch{return;}
+   try{ok=item.key==='search'?onSearch(button)===true:onNavigate(item.key)===true;}catch{return;}
    if(!ok)return;
    // Mark only the page the original dashboard actually shows.
    // A successful click handler is not proof of a completed page change.
