@@ -267,6 +267,7 @@ async function checkFilesShortcut(page,frame,heading,width){
  if(mobile)assert.equal(await files.getAttribute('aria-current'),null);
  await page.goForward();await page.waitForURL(dashboard);
  await fits(finder,width);assert.equal(await finder.inputValue(),'Testclip');
+ assert(await finder.evaluate(el=>el.ownerDocument.activeElement===el));
  if(mobile)assert.equal(await files.getAttribute('aria-current'),'page');
  console.log(width+'px: file shortcut focused search, browser back restored the YouTube draft, forward retained the filter');
 }
