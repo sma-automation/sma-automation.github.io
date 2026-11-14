@@ -72,7 +72,10 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const selected = $('filePickerList')?.querySelector('.gallery-select[aria-pressed="true"]:not(:disabled)');
     (selected || firstUploadEntry() || buttons.files).focus();
   }
-  const previewBack = button('workspacePreviewBack', '← Zu den Dateien', () => {
+  let fromSearch = Boolean(options.fromSearch);
+  const backText = () => fromSearch ? '← Zurück zu den Suchergebnissen' : '← Zu den Dateien';
+  const previewBack = button('workspacePreviewBack', backText(), () => {
+    if (fromSearch) { options.onSearchReturn(); return; }
     show('files');
     focusGalleryEntry();
   });
@@ -337,6 +340,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   show('files');
   return {
     show,
+    setSearchReturn(value) { fromSearch = value; previewBack.textContent = backText(); },
     restoreView(requestedView) {
       let view = requestedView;
       if (view === 'preview' && !selectedFile) {

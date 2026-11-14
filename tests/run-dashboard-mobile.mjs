@@ -272,6 +272,39 @@ async function checkFilesShortcut(page,frame,heading,width){
  console.log(width+'px: file shortcut focused search, browser back restored the YouTube draft, forward retained the filter');
 }
 
+async function checkSearchReturn(page,frame,width){
+ const finder=frame.getByRole('searchbox',{name:'Datei nach Namen oder Beitragstitel suchen'});
+ const filter=frame.getByRole('combobox',{name:'Portalfilter'});
+ const caption=draft.title+' · Bearbeitetes Video · 3 Sek.';
+ const hit=frame.getByRole('button',{name:'Datei im Portal öffnen: '+caption,exact:true});
+ const previewURL=dashboard+'#optimieren/youtube/vorschau';
+ const portal=frame.frameLocator('iframe[data-portal="youtube"]:visible');
+ const back=portal.getByRole('button',{name:/Zurück zu den Suchergebnissen/});
+ const focused=locator=>locator.evaluate(el=>el===el.ownerDocument.activeElement);
+ await filter.selectOption('youtube');
+ await hit.click();await page.waitForURL(previewURL);
+ await portal.getByRole('heading',{name:draft.title}).waitFor();
+ await back.click();await page.waitForURL(dashboard);
+ assert.equal(await finder.inputValue(),draft.title);assert.equal(await filter.inputValue(),'youtube');
+ assert(await focused(hit),'the file action should regain focus');
+ await page.goForward();await page.waitForURL(previewURL);await back.waitFor();
+ await page.goBack();await page.waitForURL(dashboard);assert(await focused(hit));
+
+ const quick=width<=700?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
+ await quick.click();
+ const dialog=frame.getByRole('dialog',{name:'SMA durchsuchen'});
+ const globalQuery=dialog.getByRole('searchbox');await globalQuery.fill('bearbeitet');
+ const globalHit=dialog.getByRole('button',{name:/Bearbeitetes Video/});
+ await globalHit.click();await page.waitForURL(previewURL);
+ await back.click();await dialog.waitFor();
+ assert.equal(await globalQuery.inputValue(),'bearbeitet');assert(await focused(globalHit));
+ await page.goForward();await page.waitForURL(previewURL);
+ assert.equal(await dialog.isVisible(),false);await back.waitFor();
+ await page.goBack();await dialog.waitFor();
+ assert(await focused(globalHit));assert.equal(await globalQuery.inputValue(),'bearbeitet');
+ console.log(width+'px: gallery and global search restored query, selected result and keyboard focus in one step');
+}
+
 async function checkDashboardPreview(browser,width,height){
  const mobile=width<=700;
  const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
@@ -311,6 +344,7 @@ async function checkDashboardPreview(browser,width,height){
    console.log('Dashboard: hidden YouTube preview paused, returned to the same position and resumed without reloading');
   }
   await checkFilesShortcut(page,frame,heading,width);
+  await checkSearchReturn(page,frame,width);
   assert.equal(readCount(),mobile?0:1);
   assert.deepEqual(errors,[]);
  }catch(e){throw Error('Dashboard playback: '+e.message+'; '+errors.join(', '),{cause:e});}

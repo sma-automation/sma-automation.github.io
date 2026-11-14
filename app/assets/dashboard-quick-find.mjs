@@ -38,7 +38,7 @@ export function quickFindMatches(query,areas,files){
   fileCount:matchedFiles.length
  };
 }
-export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',onNavigate,onOpenFile}){
+export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=> 'ready',onNavigate,onOpenFile,onDismiss}){
  if(!doc||[getAreas,getFiles,onNavigate,onOpenFile].some(fn=>typeof fn!=='function')||
    doc.getElementById('smaGlobalQuickFind'))return null;
  const header=[...doc.querySelectorAll('header,[role="banner"],.topbar,.top-bar')]
@@ -80,23 +80,26 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  panel.append(head,input,status,results);overlay.append(panel);doc.body.append(overlay);
  let disposed=false;
  function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)button.focus();}
+ function dismiss(){hide();onDismiss?.();}
  function item(title,subtitle,handler,restoreFocus=true){
   const el=create('button');el.type='button';el.className='sma-qf-item';
   el.append(create('strong',title),create('small',subtitle));el.addEventListener('click',async()=>{
    if(disposed)return;
    try{if(await handler()===true)hide(restoreFocus);else status.textContent='Bereich derzeit nicht verfügbar.';}
    catch{status.textContent='Der Bereich konnte nicht geöffnet werden.';}
-  });results.append(el);
+  });results.append(el);return el;
  }
  function render(){
   if(disposed||overlay.hidden)return;
+  const focusedFile=doc.activeElement?.dataset?.quickFile;
   results.replaceChildren();
   const query=input.value.trim(),areas=getAreas();
   const found=quickFindMatches(query,areas,getFiles());
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page);
   for(const file of found.files){
    const label=dashboardFileDescription(file,query);
-   item(label.title,label.version||'Kundendatei · im Portal öffnen',()=>onOpenFile(file.id,label.portal),false);
+   const hit=item(label.title,label.version||'Kundendatei · im Portal öffnen',()=>onOpenFile(file.id,label.portal,input.value),false);
+   hit.dataset.quickFile=file.id;
   }
   if(found.fileCount>found.files.length&&Array.isArray(areas)&&areas.some(a=>a.key==='files')){
    item('Alle '+found.fileCount+' Dateien anzeigen','Gefilterte Galerie öffnen',()=>onNavigate('files',query),false);
@@ -123,22 +126,31 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   else
    status.textContent=prefix||(deepActions?'Keine direkten Treffer. Suche in Aufträgen oder Bestellungen.':'Keine Treffer. Versuche einen kürzeren Begriff.');
   status.setAttribute('aria-busy',fileStatus==='loading'?'true':'false');
+  if(focusedFile)focusFile(focusedFile);
  }
- function show(){if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value='';render();input.focus();}
+ function focusFile(id){
+  const hit=[...results.children].find(el=>el.dataset.quickFile===id);
+  (hit||input).focus();
+ }
+ function restore(query,id){
+  if(disposed)return;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render();
+  focusFile(id);
+ }
+ function show(){restore('',null);}
  const keydown=e=>{
   if(disposed)return;
-  if(e.key==='Escape'&&!overlay.hidden){e.preventDefault();hide();return;}
-  if((e.ctrlKey||e.metaKey)&&e.key?.toLowerCase()==='k'){e.preventDefault();overlay.hidden?show():hide();}
+  if(e.key==='Escape'&&!overlay.hidden){e.preventDefault();dismiss();return;}
+  if((e.ctrlKey||e.metaKey)&&e.key?.toLowerCase()==='k'){e.preventDefault();overlay.hidden?show():dismiss();}
  };
- const backdrop=e=>{if(e.target===overlay)hide();};
+ const backdrop=e=>{if(e.target===overlay)dismiss();};
  const inputHandler=()=>render();
- button.addEventListener('click',show);close.addEventListener('click',hide);
+ button.addEventListener('click',show);close.addEventListener('click',dismiss);
  overlay.addEventListener('click',backdrop);input.addEventListener('input',inputHandler);
  doc.addEventListener('keydown',keydown);
- return {button,show,hide,refresh:render,destroy(){
+ return {button,show,hide,restore,refresh:render,destroy(){
   if(disposed)return;disposed=true;doc.removeEventListener('keydown',keydown);
   input.removeEventListener('input',inputHandler);overlay.removeEventListener('click',backdrop);
-  button.removeEventListener('click',show);close.removeEventListener('click',hide);
+  button.removeEventListener('click',show);close.removeEventListener('click',dismiss);
   button.remove();overlay.remove();style.remove();
  }};
 }

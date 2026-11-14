@@ -11,7 +11,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=24';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=25';
 import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=26';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
@@ -54,6 +54,8 @@ if(selectedPortal){
 }
 
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
+ fromSearch:window.parent!==window&&params.get('fromSearch')==='1',
+ onSearchReturn:()=>window.top.postMessage({type:'sma-publication-search-return'},location.origin),
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
  getPreview:()=>{
@@ -75,7 +77,13 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  },
 }):null;
 if(workspace){
- window.addEventListener('message',event=>{if(!signedOut&&event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(event.data.view))workspace.restoreView(event.data.view);});
+ window.addEventListener('message',event=>{
+  if(signedOut||event.origin!==location.origin||event.source!==window.top)return;
+  const data=event.data;
+  if(data?.type==='sma-publication-search-context')workspace.setSearchReturn(data.fromSearch===true);
+  if(data?.type==='sma-publication-open-search-file'&&data.assetId===params.get('asset'))void requestFileSelection(data.assetId);
+  if(data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(data.view))workspace.restoreView(data.view);
+ });
  let heightQueued=false;
  const sendHeight=()=>{if(heightQueued)return;heightQueued=true;requestAnimationFrame(()=>{heightQueued=false;window.top.postMessage({type:'sma-publication-preview-height',height:Math.max(300,Math.ceil(document.querySelector('main').getBoundingClientRect().height)+20)},location.origin);});};
  new ResizeObserver(sendHeight).observe(document.querySelector('main'));sendHeight();
@@ -1721,7 +1729,9 @@ try{
   await loadHistoryPreview();
  }else{
   let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}
-  if(ready&&workspace&&selectedAsset?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
+  if(ready&&workspace&&selectedAsset&&(selectedAsset.media_kind==='video'||params.get('fromSearch')==='1')){
+   loadingVideoDraft=selectedAsset.media_kind==='video';workspace.show('preview');
+  }
   if(ready)await loadLatest();
  }
 }catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}

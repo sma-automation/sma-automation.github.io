@@ -208,7 +208,7 @@ test('dashboard integration routes through existing sidebar and preserves sessio
  assert.match(src,/mountDashboardQuickFind,sectionCatalog/);
  assert.match(src,/fileView\?\.getFiles\(\)/);
  assert.match(src,/dashboardChapters\?\.controllers\.get\('publishing'\)\?\.select\('files'\)/);
- assert.match(src,/return fileView\.openFile\(id,portal\)===true/);
+ assert.match(src,/return fileView\.openFile\(id,portal,\{global:true,query,id\}\)===true/);
  assert.match(src,/dashboardQuickFind\?\.destroy\(\)/);
  assert.match(src,/const nav=findAreaNavigation\(target\)/);
  assert.match(src,/key==='history-search'/);
