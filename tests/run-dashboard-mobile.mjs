@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {chromium} from './dom-runtime/node_modules/playwright-core/index.mjs';
 
@@ -16,8 +17,12 @@ const rows=Array.from({length:6},(_,i)=>({
 }));
 const history={ok:true,version:3,month:'2026-11',timezone:'Europe/Vienna',entries:rows,
  summary:{orders:rows.length,public_confirmed:0,platforms:['youtube']},months:[{month:'2026-11',orders:rows.length}],has_more:false,next:null};
+// Three seconds of generated test patterns, H.264 at 12 fps, with no audio.
+const original=await readFile(new URL('./fixtures/original-video.mp4',import.meta.url));
+const checksum=createHash('sha256').update(original).digest('hex');
 const file={id:asset,media_kind:'video',mime_type:'video/mp4',name:'Testclip.mp4',duration_ms:3000,
- width_px:720,height_px:1280,revision:'current',assignments:[{platform:'youtube',revision:2,status:'assigned'}]};
+ width_px:160,height_px:90,size_bytes:original.length,revision:'sha256:'+checksum+':1',
+ assignments:[{platform:'youtube',revision:2,status:'assigned'}]};
 const draft={platform:'youtube',title:'Aktueller mobiler Entwurf',body:'Testtext für die aktuelle Dateiversion.',
  hashtags:[],review_notes:[],caption:'Testtext für die aktuelle Dateiversion.'};
 const saved={ok:true,status:'completed',id:uuid(20),revision:1,assignment_revision:2,
@@ -96,6 +101,44 @@ async function fits(locator,width){
  assert(rect.scroll<=rect.width+1&&rect.left>=-1&&rect.right<=rect.width+1,JSON.stringify(rect));
  const box=await locator.boundingBox();
  assert(box&&box.x>=-1&&box.x+box.width<=width+1,JSON.stringify(box));
+}
+async function checkOriginalPlayback(page,width,{failFirstRead}){
+ // Only this explicit playback scenario accepts an original-file request.
+ const sourceURL='https://johnmusic.app.n8n.cloud/webhook/sma-publication-editor-source-v1';
+ let reads=0;
+ await page.route(sourceURL,async route=>{
+  const request=route.request();
+  assert.equal(request.method(),'POST');
+  assert.deepEqual(request.postDataJSON(),{asset_id:file.id,asset_revision:file.revision});
+  reads++;
+  await route.fulfill({json:{ok:true,can_publish:false,asset_id:file.id,asset_revision:file.revision,
+   mime_type:file.mime_type,size_bytes:original.length,sha256:failFirstRead&&reads===1?'0'.repeat(64):checksum,
+   data_base64:original.toString('base64')},headers:{'Access-Control-Allow-Origin':'*'}});
+ });
+ const load=page.getByRole('button',{name:'Originalvideo laden'});
+ const video=page.locator('#originalVideoPreview video');
+ await fits(load,width);await load.tap();
+ if(failFirstRead){
+  await page.getByText('Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.').waitFor();
+  assert.equal(await video.isVisible(),false);
+  await load.tap();
+ }
+ await fits(video,width);
+ await page.waitForFunction(()=>document.querySelector('#originalVideoPreview video')?.readyState>=2);
+ assert.deepEqual(await video.evaluate(v=>[v.videoWidth,v.videoHeight,v.duration,v.paused]),
+  [file.width_px,file.height_px,file.duration_ms/1000,true]);
+ await video.press('Space');
+ await page.waitForFunction(()=>{const v=document.querySelector('#originalVideoPreview video');return !v.paused&&v.currentTime>0;});
+ await page.locator('#workspaceDetailTab').tap();
+ const [paused,ended,pausedAt]=await video.evaluate(v=>[v.paused,v.ended,v.currentTime]);
+ assert(paused&&!ended,'switching to file details must pause mid-clip');
+ await page.locator('#workspacePostTab').tap();
+ assert.deepEqual(await video.evaluate(v=>[v.paused,v.currentTime]),[true,pausedAt]);
+ await video.press('Space');
+ await page.waitForFunction(()=>document.querySelector('#originalVideoPreview video')?.ended);
+ assert.deepEqual(await video.evaluate(v=>[v.error?.code??null,v.currentTime]),[null,file.duration_ms/1000]);
+ assert.equal(reads,failFirstRead?2:1,'returning to the preview must reuse the verified file');
+ console.log(width+'px: original MP4 verified, paused on details and played to end'+(failFirstRead?' after checksum retry':''));
 }
 async function selectedRow(frame,width){
  const row=frame.locator('.sma-history-list details[open] summary');
@@ -223,6 +266,7 @@ try{
     const link=frame.getByRole('link',{name:'Aktuellen Beitrag öffnen'});await fits(link,width);await link.tap();
     const current=page.getByRole('button',{name:'Aktuelle Dateiversion öffnen'});await fits(current,width);await current.tap();
     await fits(page.getByRole('heading',{name:draft.title}),width);
+    if(width===320||width===390)await checkOriginalPlayback(page,width,{failFirstRead:width===390});
     const back=page.getByRole('link',{name:/Zurück zum Auftrag/});await fits(back,width);await back.tap();
     await selectedRow(frame,width);assert.equal(page.url(),originURL);
     assert.deepEqual(errors,[]);console.log(width+' × '+height+': touch search, reload, current draft and return to page 2 passed');
