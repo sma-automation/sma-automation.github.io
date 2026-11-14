@@ -26,7 +26,7 @@ jobs:
           node tests/run-optimizer-layout.mjs
           node tests/run-website-preparation-chromium.mjs
           node tests/run-shop-catalog-mobile.mjs
-          node tests/run-publication-history-mobile.mjs
+          node tests/run-dashboard-mobile.mjs
           node tests/run-publication-tab-reload.mjs
           node tests/run-dashboard-chapters-dom.mjs
           node tests/run-wordpress-dom.mjs

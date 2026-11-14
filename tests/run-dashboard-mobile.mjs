@@ -92,8 +92,10 @@ async function fits(locator,width){
   const r=el.getBoundingClientRect(),root=el.ownerDocument.documentElement;
   return {left:r.left,right:r.right,width:root.clientWidth,scroll:root.scrollWidth};
  });
- assert.equal(rect.width,width,JSON.stringify(rect));
- assert(rect.scroll<=width+1&&rect.left>=-1&&rect.right<=width+1,JSON.stringify(rect));
+ assert(rect.width>0&&rect.width<=width+1,JSON.stringify(rect));
+ assert(rect.scroll<=rect.width+1&&rect.left>=-1&&rect.right<=rect.width+1,JSON.stringify(rect));
+ const box=await locator.boundingBox();
+ assert(box&&box.x>=-1&&box.x+box.width<=width+1,JSON.stringify(box));
 }
 async function selectedRow(frame,width){
  const row=frame.locator('.sma-history-list details[open] summary');
@@ -107,6 +109,72 @@ async function selectedRow(frame,width){
     el.contains(doc.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
  });
  assert(visible,'Selected row should be focused, visible and reachable above the mobile navigation');
+}
+// First visit with an empty gallery. The shell provides only the customer's
+// existing dashboard elements. Production code builds the navigation and preview.
+const newCustomerShell=`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}aside,.page:not(.active){display:none}main{padding:16px}</style>
+<body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"></div></header>
+<aside><button data-page="publishing">Veröffentlichung</button></aside><main>
+<section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid">
+<div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
+<section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
+<div class="card"><div class="platform-card"><span class="platform-info"><strong>YouTube</strong></span></div></div>
+<div id="publishingFilesSlot"></div></section></main>
+<script>document.querySelector('aside button').onclick=()=>{document.querySelector('#page-overview').classList.remove('active');document.querySelector('#page-publishing').classList.add('active')}</script></body></html>`;
+
+async function firstPostRoute(route){
+ const request=route.request();
+ if(request.method()==='GET')return serve(route);
+ const url=new URL(request.url());
+ const reply=data=>route.fulfill({json:data,headers:{'Access-Control-Allow-Origin':'*'}});
+ if(request.method()==='POST'){
+  if(url.origin==='https://johnmusic.app.n8n.cloud'){
+   if(url.pathname==='/webhook/sma-dashboard-session')return reply({html:newCustomerShell});
+   if(url.pathname==='/webhook/sma-publication-files-v1')return reply({ok:true});
+  }
+  const args=request.postDataJSON();
+  if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='list')return reply({ok:true,files:[]});
+  if(url.origin===site&&url.pathname==='/fixture/sma_publication_preview_v1'&&args.p_action==='latest'){
+   assert.equal(args.p_input.platform,'youtube');return reply({ok:true,status:'empty'});
+  }
+  if(url.origin==='https://bnvnmdxosbnuzedokqgh.supabase.co'&&url.pathname==='/rest/v1/rpc/sma_gallery_music_v1'&&args.p_action==='claim')return reply({ok:true,state:'idle'});
+ }
+ throw Error('Unexpected first-post request '+request.method()+' '+url.pathname);
+}
+
+async function firstPost(browser,width,height){
+ const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true,locale:'de-AT',serviceWorkers:'block'});
+ const errors=[];
+ try{
+  await context.route('**/*',route=>firstPostRoute(route).catch(async error=>{errors.push(error.message);await route.abort();}));
+  const page=await context.newPage();page.setDefaultTimeout(8000);
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(dashboard);
+  const frame=page.frameLocator('#dashboard');
+  const start=frame.getByRole('button',{name:'Beitrag vorbereiten'});
+  await fits(start,width);
+  assert(await start.evaluate(el=>el.getBoundingClientRect().height>=44));
+  await start.tap();
+  const platforms=frame.getByRole('tab',{name:'Portale',selected:true});
+  assert(await platforms.evaluate(el=>el===el.ownerDocument.activeElement));
+  await frame.getByRole('button',{name:'Optimieren'}).tap();
+  const editor=frame.frameLocator('iframe[data-portal="youtube"]');
+  const empty=editor.getByRole('button',{name:'Leere Dateivorschau für den ersten Upload öffnen'});
+  await fits(empty,width);await empty.tap();
+  await fits(editor.getByRole('heading',{name:'Datei für YouTube vorbereiten'}),width);
+  const add=editor.getByRole('button',{name:'Datei hinzufügen',exact:true});
+  await fits(add,width);
+  // Open the native picker without supplying a file or starting a transfer.
+  const [picker]=await Promise.all([page.waitForEvent('filechooser'),add.tap()]);
+  assert.equal(await picker.element().getAttribute('accept'),'video/*');
+  await picker.setFiles([]);
+  await editor.getByRole('button',{name:/Zu den Dateien/}).tap();
+  await fits(empty,width);
+  assert.deepEqual(errors,[]);
+  console.log(width+' × '+height+': first post, empty YouTube preview, device picker and gallery return passed');
+ }catch(error){throw Error(width+'px first post: '+error.message+'; '+errors.join(', '),{cause:error});}
+ finally{await context.close();}
 }
 const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
 try{
@@ -137,4 +205,5 @@ try{
    }catch(e){throw Error(width+'px: '+e.message+'; '+errors.join(', '),{cause:e});}
   }finally{await context.close();}
  }
+ for(const [width,height] of [[320,568],[390,844]])await firstPost(browser,width,height);
 }finally{await browser.close();}
