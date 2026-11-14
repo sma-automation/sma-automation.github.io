@@ -227,6 +227,52 @@ test('file browser refresh loads newly catalogued files through the existing aut
  const call=p.calls.find(c=>c.url);assert.match(call.url,/sma-publication-files-v1$/);assert.match(call.options.headers.Authorization,/^Bearer /);
 });
 
+test('an unavailable gallery retries the catalog read and only offers the first upload after a confirmed empty list',async()=>{
+ let listReads=0,initialRows;
+ const p=await boot({portal:'youtube',wide:true,formTracksDom:true,
+  beforeClientReady:({get})=>{initialRows=get('filePickerList').children.length;},
+  filesRpc:async()=>++listReads===1?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:listReads===2?{ok:true}:{ok:true,files:[]}});
+ assert.equal(initialRows,0);
+ const retry=p.get('refreshFiles'),rows=p.get('filePickerList');
+ for(let i=0;i<2;i++){
+  assert.equal(rows.children.length,0);
+  assert.doesNotMatch(p.get('filePickerCount').textContent,/Noch keine|Keine Datei/);
+  assert.match(p.get('portalStatus').textContent,/Dateiliste/);
+  assert.equal(retry.textContent,'Dateiliste erneut laden');
+  await retry.click();
+ }
+ assert.equal(listReads,3);assert.equal(retry.textContent,'Dateien aktualisieren');
+ assert.equal(rows.children[0].className,'workspace-first-upload');
+ assert.equal(p.calls.some(call=>call.url),false,'Retry must not start a folder sync or transfer');
+});
+test('a failed refresh retains the last known files and requires a successful list before offering the first upload',async()=>{
+ let syncs=0,reads=0;
+ const p=await boot({portal:'youtube',wide:true,filesRpc:async()=>{
+  if(++reads===2)throw new Error('network request failed');
+  return {ok:true,files:reads===1?[photo]:[]};
+ },fetchResponse:async()=>{syncs++;return {ok:true};}});
+ const rows=p.get('filePickerList'),action=p.get('refreshFiles');
+ assert.equal(rows.children.length,2);
+ await action.click();
+ assert.equal(rows.children.length,1);
+ assert.match(rows.children[0].querySelector('button')['aria-label'],/Nicht auswählbar/);
+ assert.match(p.get('portalStatus').textContent,/Dateiliste konnte nicht/);
+ await action.click();
+ assert.equal(syncs,1);assert.equal(reads,3);assert.equal(rows.children.length,1);
+ assert.equal(rows.children[0].className,'workspace-first-upload');
+});
+test('retrying a deep-linked video reads the requested asset instead of the generic portal template',async()=>{
+ let fails=true;
+ const p=await boot({portal:'youtube',asset:ownFile.id,wide:true,formTracksDom:true,filesRpc:async args=>{
+  if(args.p_action==='list')return fails?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:{ok:true,files:[ownFile]};
+  return args.p_action==='get'?{...result,assignment_revision:1}:{ok:true,status:'empty'};
+ }});
+ fails=false;await p.get('refreshFiles').click();
+ assert.match(p.get('selectedFileName').textContent,/Meine Datei A/);
+ assert.ok(p.views.includes('preview'));
+ assert.ok(p.calls.some(c=>c.p_action==='get'&&c.p_input.asset_id===ownFile.id));
+ assert.ok(p.calls.every(c=>c.p_action!=='latest'&&!c.url));
+});
 test('a delayed catalog response after sign-out cannot reopen or refill customer file controls',async()=>{
  let defer=false,release;const p=await boot({portal:'instagram',filesRpc:async a=>a.p_action==='list'?(defer?new Promise(r=>release=r):{ok:true,files:[]}):{ok:true,status:'empty'},fetchResponse:async()=>({ok:true})});
  p.get('browseFiles').events.click();defer=true;const refreshing=p.get('pickerRefresh').events.click();await new Promise(r=>setImmediate(r));
