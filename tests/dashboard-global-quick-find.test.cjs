@@ -25,16 +25,16 @@ async function fixture({areas=['overview','files','publishing'],fileState='ready
  const {parseHTML}=await parser;
  const {document:doc,window}=parseHTML('<html><head></head><body><header class="topbar"><div class="topbar-title">Dashboard</div><div class="topbar-actions"><span id="profile">Profil</span><button id="logout">Abmelden</button></div></header><main><div id="page-overview"></div><div id="page-publishing"></div></main></body></html>');
  window.HTMLElement.prototype.focus=function(){};
- const calls=[];let fileStatus=fileState,fileList=files;
+ const calls=[],openedFiles=[];let fileStatus=fileState,fileList=files;
  const module=await imported;
  const view=module.mountDashboardQuickFind({
   doc,getAreas:()=>module.sectionCatalog.filter(s=>areas.includes(s.key)),
   getFiles:()=>fileList,
   getFileStatus:()=>fileStatus,
   onNavigate:(key,query)=>{calls.push('section:'+key+(query===undefined?'':':'+query));return true;},
-  onOpenFile:id=>{calls.push('file:'+id);return true;}
+  onOpenFile:(id,portal)=>{calls.push('file:'+id);openedFiles.push({id,portal});return true;}
  });
- return {doc,window,view,calls,get:id=>doc.getElementById(id),setFileStatus:s=>{fileStatus=s;},setFiles:f=>{fileList=f;}};
+ return {doc,window,view,calls,openedFiles,get:id=>doc.getElementById(id),setFileStatus:s=>{fileStatus=s;},setFiles:f=>{fileList=f;}};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
 test('task names point to their available chapters and never offer hidden history views',async()=>{
@@ -77,6 +77,21 @@ test('global search opens in same dashboard and finds a file via typed filename'
  f.view.destroy();
  assert.equal(f.get('smaQuickFindDialog'),null);
  assert.equal(f.get('smaGlobalQuickFind'),null);
+});
+test('global title search labels the edited video and opens the matching portal assignment',async()=>{
+ const f=await fixture();
+ f.setFiles([{...files[0],display:{variant:'export'},duration_ms:3000,assignments:[
+  {platform:'tiktok',status:'assigned',title:'Kurzer Clip'},
+  {platform:'youtube',status:'assigned',title:'SMA Privattest 02'}]}]);
+ f.view.show();
+ const input=f.get('smaQuickFindInput');input.value='Privattest';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ const hit=f.get('smaQuickFindResults').querySelector('button');
+ assert.equal(hit.querySelector('strong').textContent,'SMA Privattest 02');
+ assert.equal(hit.querySelector('small').textContent,'Bearbeitetes Video · 3 Sek.');
+ hit.click();await tick();
+ assert.deepEqual(f.openedFiles,[{id:'a',portal:'youtube'}]);
+ f.view.destroy();
 });
 test('all file results use the same query, count every file and keep the dialog compact',async()=>{
  const f=await fixture({areas:['files','history','shop']});
@@ -193,7 +208,7 @@ test('dashboard integration routes through existing sidebar and preserves sessio
  assert.match(src,/mountDashboardQuickFind,sectionCatalog/);
  assert.match(src,/fileView\?\.getFiles\(\)/);
  assert.match(src,/dashboardChapters\?\.controllers\.get\('publishing'\)\?\.select\('files'\)/);
- assert.match(src,/return fileView\.openFile\(id\)===true/);
+ assert.match(src,/return fileView\.openFile\(id,portal\)===true/);
  assert.match(src,/dashboardQuickFind\?\.destroy\(\)/);
  assert.match(src,/const nav=findAreaNavigation\(target\)/);
  assert.match(src,/key==='history-search'/);

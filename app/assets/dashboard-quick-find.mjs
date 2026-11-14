@@ -1,6 +1,6 @@
 // One small dashboard-wide finder over already loaded, owner-bound data.
 // No network, credentials, new search endpoint, persistence or publishing.
-import {filterDashboardFiles} from './dashboard-file-search.mjs';
+import {filterDashboardFiles,dashboardFileDescription} from './dashboard-file-search.mjs?v=2';
 const normalize=x=>String(x??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('de').trim();
 export const sectionCatalog=Object.freeze([
  {key:'overview',label:'Übersicht',hint:'Dashboard Start'},
@@ -94,7 +94,10 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   const query=input.value.trim(),areas=getAreas();
   const found=quickFindMatches(query,areas,getFiles());
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page);
-  for(const f of found.files)item(f.name,'Kundendatei · im Portal öffnen',()=>onOpenFile(f.id));
+  for(const file of found.files){
+   const label=dashboardFileDescription(file,query);
+   item(label.title,label.version||'Kundendatei · im Portal öffnen',()=>onOpenFile(file.id,label.portal),false);
+  }
   if(found.fileCount>found.files.length&&Array.isArray(areas)&&areas.some(a=>a.key==='files')){
    item('Alle '+found.fileCount+' Dateien anzeigen','Gefilterte Galerie öffnen',()=>onNavigate('files',query),false);
   }
