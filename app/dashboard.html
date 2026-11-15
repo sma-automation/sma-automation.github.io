@@ -957,6 +957,11 @@ async function logout(){galleryReload.clear();signedOut=true;cancelDashboardRead
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
+  // Only the visible workspace may navigate; hidden editors retain their drafts.
+  if(['sma-publication-preview-close','sma-publication-search-return','sma-publication-order-open','sma-publication-workspace-view'].includes(event.data?.type)){
+    const source=[...(optimizerFrames?.children||[])].find(el=>el.contentWindow===event.source);
+    if(event.origin!==window.location.origin||signedOut||frame.hidden||!publishingPage?.classList.contains('active')||!optimizerPage||optimizerPage.hidden||!source||source.hidden)return;
+  }
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-search-return'){
     const active=[...(optimizerFrames?.children||[])].find(el=>!el.hidden&&el.contentWindow===event.source);
     if(active&&!optimizerPage.hidden&&fileSearchReturns.has(history.state?.searchKey))closeOptimizer();
