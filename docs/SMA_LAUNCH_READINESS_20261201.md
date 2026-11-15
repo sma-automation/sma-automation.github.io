@@ -126,7 +126,11 @@ bleibt das Paket bis zur Klärung der Zahlung festgelegt.
 Die Vormerkung bleibt unverbindlich. Erst der Klick auf „Zahlungspflichtig buchen“
 speichert den Auftrag und fordert einen Zahlungslink für das festgelegte Paket an.
 Bei einer Unterbrechung kann der Kunde den Zahlungsstand erneut abrufen.
-Die Rückkehr von Mollie führt über die reguläre Zugangsprüfung ins Dashboard.
+Nach der Rückkehr von Mollie sieht der angemeldete Kunde den gespeicherten
+Status seiner Buchung. Solange die Seite sichtbar ist, prüft sie diesen Stand
+bis zu viermal automatisch. Weitere Abfragen sind per Button möglich. Sobald
+der Zugang aktiv ist, öffnet die Seite das reguläre Dashboard. Die Rückkehr
+und jede Statusabfrage sind rein lesend.
 
 Die Edge Function `sma-package-payment` verwendet den privaten n8n-Dienst
 `8v2wcz5lh0yUf3sw`. Er nutzt vorhandene Verbindungen zum SMA-Händlerkonto

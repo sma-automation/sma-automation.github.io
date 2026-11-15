@@ -94,7 +94,7 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
       }else{
         eligibleTime(o.first_started,now);
         p=await bridge('first',{order:id,body:{customerId:o.merchant_customer,amount,sequenceType:'first',
-          description:'SMA '+o.plan.toUpperCase()+' – Monatsabo',redirectUrl:site+'/app/dashboard.html',
+          description:'SMA '+o.plan.toUpperCase()+' – Monatsabo',redirectUrl:site+'/app/paketwahl.html?buchung='+id,
           webhookUrl:hook.href,metadata}});
       }
       const receipt=projectPayment(p,o);

@@ -30,7 +30,7 @@ async function fixture(){
    if(fail[op]){delete fail[op];throw Error('simulated interruption')}
    if(op==='account')return {...row};
    if(op==='customer')return {id:p.customerId,email,metadata:{order:id}};
-   if(op==='first'){assert.deepEqual(data.body.metadata,p.metadata);assert.equal(data.body.sequenceType,'first');assert.deepEqual(data.body.amount,p.amount);assert.equal(new URL(data.body.webhookUrl).searchParams.get('order'),id);}
+   if(op==='first'){assert.equal(data.body.redirectUrl,'https://sma-automation.com/app/paketwahl.html?buchung='+id);assert.deepEqual(data.body.metadata,p.metadata);assert.equal(data.body.sequenceType,'first');assert.deepEqual(data.body.amount,p.amount);assert.equal(new URL(data.body.webhookUrl).searchParams.get('order'),id);}
    if(op==='payment')assert.equal(data.payment,p.id);
    if(op==='payment'||op==='first')return {...p};
    if(op==='subscribe'){assert.equal(data.customer,p.customerId);sub={...data.body,id:'sub_one',status:'active'};}

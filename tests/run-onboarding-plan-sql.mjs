@@ -31,6 +31,8 @@ try {
   await db.exec(await readFile('supabase/migrations/'+bookingMigration,'utf8'));
   const [automationMigration]=(await readdir('supabase/migrations')).filter(name=>name.endsWith('_onboarding_payment_automation_v1.sql'));
   await db.exec(await readFile('supabase/migrations/'+automationMigration,'utf8'));
+  const statusMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_payment_status_v1.sql'));
+  await db.exec(await readFile('supabase/migrations/'+statusMigration,'utf8'));
   const baseline=(await one('select jsonb_agg(to_jsonb(c) order by id) as customers from public.sma_kunden c')).customers;
   await db.exec('set role authenticated');await session(first);
   assert.deepEqual(await call(first),{ok:true,plan:null});
@@ -205,6 +207,18 @@ try {
   assert.notEqual(booked.id,virtual.id);assert.equal(booked.state,'booked');assert.equal(booked.automated,true);
   assert.deepEqual((await booking(second,virtual.id,'delta')).offer,booked);
   await db.exec('reset role');assert.equal(await bookingsForSecond(),1);
+  const status=async order=>(await one('select public.sma_onboarding_payment_status_v1($1) as state',[order])).state;
+  const readAsCustomer=async(id)=> {
+    await db.exec('begin read only');await db.exec('set local role authenticated');await session(id);
+    try {return await status(booked.id);} finally {await db.exec('rollback');}
+  };
+  assert.equal(await readAsCustomer(second),'booked');
+  assert.equal(await readAsCustomer(first),'unavailable');
+  for(const role of ['anon','service_role']){
+    await db.exec('set role '+role);await assert.rejects(status(booked.id),/permission denied/);await db.exec('reset role');
+  }
+  await db.exec('begin');await db.query("update sma_private.onboarding_package_bookings_v1 set state='closed' where id=$1",[booked.id]);
+  await db.exec('set local role authenticated');await session(second);assert.equal(await status(booked.id),'closed');await db.exec('rollback');
   const lease='60700000-0000-4000-8000-000000000001';
   const work=async(action,data={})=>(await one('select public.sma_package_worker_v1($1,$2,$3,$4) as r',[booked.id,lease,action,data])).r;
   const ticket=async(id,job)=>(await one('select public.sma_package_ticket_v1($1,$2) as r',[id,job])).r;
@@ -222,14 +236,22 @@ try {
   assert.equal((await work('begin_subscription')).error,'INVALID_TRANSITION');
   const paidAuto={...automatic,status:'paid',paid_at:new Date(Date.now()+1000).toISOString()};
   assert.deepEqual(await work('receipt',{receipt:paidAuto}),{state:'PAID'});
+  assert.equal(await readAsCustomer(second),'paid');
   assert.ok((await work('begin_subscription')).sub_started);
   await work('subscription',{id:'sub_auto'});
   const rowAuto={...activeRow,id:124,kunde_id:beta.n8n_ref,kunde_email:address,paket:'delta',mollie_customer_id:'cst_auto',mollie_subscription_id:'sub_auto'};
   assert.equal((await work('receipt',{receipt:paidAuto,row:{...rowAuto,mollie_subscription_id:'sub_foreign'}})).error,'SUBSCRIPTION_CONFLICT');
   assert.deepEqual(await work('receipt',{receipt:paidAuto,row:rowAuto}),{state:'ACTIVE'});
+  assert.equal(await readAsCustomer(second),'active');
+  await db.exec('reset role');await db.exec('begin');
+  await db.query("update public.sma_kunden set aktiv=false where user_id=$1",[second]);
+  await db.exec('set local role authenticated');await session(second);assert.equal(await status(booked.id),'unavailable');
+  await db.exec('rollback');await db.exec('set role service_role');
   assert.deepEqual(await work('release'),{ok:true});assert.equal((await work('lock')).state,'active');
   assert.deepEqual(await work('receipt',{receipt:{...paidAuto,reversed:true}}),{state:'REVERSED'});
   await db.exec('reset role');assert.equal((await profile(second)).aktiv,false);
+  assert.equal(await readAsCustomer(second),'reversed');
+  console.log('Zahlungsrückkehr mit eigenen und fremden Buchungen sowie allen Status in lesenden Transaktionen geprüft.');
   console.log('Automatische Buchung, Einmalaufträge, Wiederholungen, Erstzahlung, Abo, Freischaltung und Rückbuchung in PostgreSQL geprüft.');
   console.log('Paketbuchung: ausdrücklicher Auftrag, Kontentrennung, Erstzahlung, n8n-Nachweis, Wiederholung und Rückbuchung geprüft.');
   console.log('Kontozuordnung: Berechtigungen, eindeutige Nachweise, Adresswechsel, Wiederholung, konkurrierende Zuordnung und unveränderte Zugangssperren geprüft.');
