@@ -154,8 +154,15 @@ test('landing page entry links open the matching form and registration only subm
  assert.match(field('status').textContent,/Postfach/);
  assert.equal(calls.length,2);
  assert.equal(calls[1].options.emailRedirectTo,'https://sma-automation.com/app/');
- outcome='immediate';await submit();
- assert.deepEqual(redirects,['dashboard.html']);
+ assert.equal(field('forgotEmail').value,'erstkunde@example.invalid');
+ assert.equal(field('password').value,'');
+ await submit();assert.equal(calls.length,2);
+ outcome='immediate';
+ const immediate=await openLogin(register.search,auth);
+ immediate.document.getElementById('email').value='erstkunde@example.invalid';
+ immediate.document.getElementById('password').value='Beispiel909!';
+ await immediate.submit();
+ assert.deepEqual(immediate.redirects,['dashboard.html']);
 });
 
 test('recovery takes priority over a registration link and a verified session returns to the selected dashboard',async()=>{

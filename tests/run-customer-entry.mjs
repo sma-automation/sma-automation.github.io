@@ -12,7 +12,15 @@ const authModule = `export function createClient() {
     onAuthStateChange() {},
     async getSession() { return {data: {session: null}}; },
     async signUp() { window.authCalls.push('signUp'); return {data: {session: null}}; },
-    async signInWithPassword() { window.authCalls.push('signIn'); return {error: {message: 'Testanmeldung'}}; }
+    async signInWithPassword() { window.authCalls.push('signIn'); return {error: {message: 'Testanmeldung',code:window.loginCode}}; },
+    async resend(args) {
+      window.authCalls.push(args);
+      if(window.resendResult==='pending') return new Promise(resolve => {window.finishResend=()=>resolve({error:null});});
+      if(window.resendResult==='offline') throw Error('offline');
+      if(window.resendResult==='limited') return {error:{status:429}};
+      return {error:null};
+    },
+    async resetPasswordForEmail(email, options) {window.authCalls.push({reset:email,options});return {error:null};}
   }};
 }`;
 
@@ -56,7 +64,53 @@ try {
       else await password.press('Enter');
       await page.getByText(registering ? /prüfe dein Postfach/ : 'Testanmeldung').waitFor();
       assert.deepEqual(await page.evaluate(() => window.authCalls), [registering ? 'signUp' : 'signIn']);
+      if (registering) {
+        const resend = page.getByRole('button',{name:'Bestätigungsmail erneut anfordern'});
+        const address = page.getByLabel('E-Mail-Adresse deines SMA-Kontos');
+        assert.equal(await address.inputValue(),'erstkunde@example.invalid');
+        assert.equal(await password.isVisible(),false);
+        await page.evaluate(()=>{window.resendResult='pending';});
+        if (mobile) await resend.tap(); else await resend.press('Enter');
+        await page.waitForFunction(()=>typeof window.finishResend==='function');
+        assert.equal(await resend.isDisabled(),true);
+        await page.locator('#forgotForm').dispatchEvent('submit');
+        await page.evaluate(()=>window.finishResend());
+        await page.getByText(/Falls die Bestätigung/).waitFor();
+        assert.deepEqual(await page.evaluate(()=>window.authCalls),['signUp',{
+          type:'signup',email:'erstkunde@example.invalid',options:{emailRedirectTo:'https://sma-automation.com/app/'}
+        }]);
+      }
     }
+
+    // Returning customers may arrive from an expired link without a link type.
+    await page.goto(site);
+    await page.goto(site+'/app/index.html#error=access_denied&error_code=otp_expired');
+    await page.getByText(/Dieser Link ist abgelaufen/).waitFor();
+    assert.deepEqual(await page.evaluate(()=>window.authCalls),[]);
+    await page.getByRole('button',{name:'Bestätigungsmail fehlt?'}).click();
+    const mail=page.getByLabel('E-Mail-Adresse deines SMA-Kontos');
+    const send=page.getByRole('button',{name:'Bestätigungsmail erneut anfordern'});
+    await mail.fill('weiter@example.invalid');
+    for (const [result,message] of [['limited',/warte einen Moment/],['offline',/nicht angefordert werden/],['ok',/Falls die Bestätigung/]]) {
+      await page.evaluate(value=>{window.resendResult=value;},result);
+      await send.click();await page.getByText(message).waitFor();
+      assert.equal(await send.isEnabled(),true);
+    }
+    await page.getByRole('button',{name:'Zur Anmeldung'}).click();
+    assert.equal(await page.getByLabel('E-Mail-Adresse',{exact:true}).inputValue(),'weiter@example.invalid');
+    await page.evaluate(()=>{window.loginCode='email_not_confirmed';});
+    await page.getByLabel('Passwort',{exact:true}).fill('alt');
+    await page.getByRole('button',{name:'Anmelden',exact:true}).click();
+    await page.getByText('Bitte bestätige zuerst deine E-Mail-Adresse.').waitFor();
+    assert.equal(await mail.inputValue(),'weiter@example.invalid');
+    assert.equal(await page.evaluate(()=>window.authCalls.length),4);
+
+    await page.goto(site+'/app/index.html?type=recovery&error_code=otp_expired');
+    await page.getByText(/Dieser Link ist abgelaufen/).waitFor();
+    await mail.fill('reset@example.invalid');
+    await page.getByRole('button',{name:'Wiederherstellungslink senden'}).click();
+    await page.getByText(/Link zum Zurücksetzen/).waitFor();
+    assert.deepEqual(await page.evaluate(()=>window.authCalls),[{reset:'reset@example.invalid',options:{redirectTo:'https://sma-automation.com/app/'}}]);
     assert.deepEqual(unexpected, []);
     console.log(mobile ? 'Kundeneinstieg auf dem Handy bestanden.' : 'Kundeneinstieg per Tastatur bestanden.');
     await context.close();
