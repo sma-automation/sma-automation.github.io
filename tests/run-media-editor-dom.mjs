@@ -172,9 +172,16 @@ await test('standbild uses the exported title layout at every format and positio
    assert.deepEqual([layer.width,layer.height],[plan.width,plan.height]);
    assert.equal(layer.getAttribute('aria-label'),caption);assert.equal(layer.hidden,false);assert.equal(f.$('#overlay').textContent,'');
    assert.deepEqual(preview.events,expected.events);
-   if(format==='9:16'&&position==='top'){assert.deepEqual(preview.events[0],['box',36,64,648,116]);assert.equal(preview.events.length,3);}
+   if(format==='9:16'&&position==='top'){
+    assert.deepEqual(preview.events[0],['box',36,64,648,116]);
+    assert.deepEqual(preview.events.slice(1).map(event=>event[1]),['SMA Hochformat – Vorschau und Export','im Vergleich']);
+   }
   }
  }
+ f.set('format','9:16');
+ const longWord='a'.repeat(37)+'e\u0301'+'b'.repeat(9);
+ f.set('overlay_text','Zwei  Worte '+longWord);
+ assert.deepEqual(preview.events.slice(1).map(event=>event[1]),['Zwei  Worte','a'.repeat(37),'e\u0301'+'b'.repeat(9)]);
  f.set('overlay_text','');assert.equal(layer.hidden,true);assert.equal(layer.hasAttribute('aria-label'),false);
  f.set('overlay_text',caption);f.owner('other');assert.equal(layer.hidden,true);assert.equal(layer.width,0);assert.equal(layer.hasAttribute('aria-label'),false);
  f.view.destroy();

@@ -1,4 +1,4 @@
-import {drawMediaOverlay} from './media-text-overlay.mjs?v=1';
+import {drawMediaOverlay} from './media-text-overlay.mjs?v=2';
 import {verifyMusicBytes,verifyMusicProbe} from './media-music-model.mjs?v=1';
 import {exportPlan,exportArguments,verifyMediaProbe,EXPORT_MAX_BYTES,sha256} from './media-export-model.mjs?v=3';
 const coreBase='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/';
