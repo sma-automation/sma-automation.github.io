@@ -33,15 +33,31 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  function release(){onReadyChange?.(false);stop();video.removeAttribute('src');try{video.load();}catch{}video.hidden=true;if(url)revokeURL(url);url=null;thumbnailHost.style.display='';}
  function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.disabled=false;button.hidden=false;status.textContent='';}
  const current=g=>!disposed&&g===generation;
- async function owner(g){if(!current(g))return false;if(await getOwnerId()!==expectedOwnerId){if(current(g)){reset();file=null;key='';box.hidden=true;}return false;}return current(g);}
+ async function owner(g,read){if(!current(g))return false;if(await read(()=>getOwnerId())!==expectedOwnerId){if(current(g)){reset();file=null;key='';box.hidden=true;}return false;}return current(g);}
  button.addEventListener('click',async()=>{
-  if(disposed||controller||!originalVideoSupported(file))return;const g=generation,selected=file;controller=new AbortController();const signal=controller.signal;button.disabled=true;status.textContent='Originalvideo wird geprüft und geladen …';
+  if(disposed||controller||!originalVideoSupported(file))return;
+  const g=generation,selected=file,attempt=new AbortController(),signal=attempt.signal;
+  controller=attempt;button.disabled=true;status.textContent='Originalvideo wird geprüft und geladen …';
+  let timedOut=false;
+  // Preserve the existing source allowance, shared by both owner checks and bytes.
+  const deadline=setTimeout(()=>{timedOut=true;attempt.abort();},180000);
+  // Auth and custom source promises may ignore abort. Consume late replies without
+  // continuing a cancelled load or releasing a later attempt's controls.
+  const read=start=>new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(callback,value)=>{if(settled)return;settled=true;signal.removeEventListener('abort',cancel);callback(value);};
+   const cancel=()=>finish(reject,Error('ORIGINAL_READ_ABORTED'));
+   if(signal.aborted)return cancel();
+   signal.addEventListener('abort',cancel,{once:true});
+   Promise.resolve().then(()=>{signal.throwIfAborted();return start();})
+    .then(value=>finish(resolve,value),error=>finish(reject,error));
+  });
   try{
-   if(!await owner(g))return;const blob=await source(selected,signal);signal.throwIfAborted();if(!await owner(g))return;
+   if(!await owner(g,read))return;const blob=await read(()=>source(selected,signal));signal.throwIfAborted();if(!await owner(g,read))return;
    if(!(blob instanceof Blob)||blob.type!=='video/mp4'||blob.size!==selected.size_bytes)throw Error('SOURCE_UNAVAILABLE');
    release();url=createURL(blob);video.src=url;video.hidden=false;thumbnailHost.style.display='none';button.hidden=true;status.textContent=loadedText;
-  }catch(e){if(current(g)&&!signal.aborted){release();status.textContent=e.message==='FILE_CHANGED'?'Die Datei wurde geändert. Bitte aktualisiere die Dateiliste.':'Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.';}}
-  finally{if(current(g)){controller=null;button.disabled=false;}}
+  }catch(e){if(current(g)&&controller===attempt&&(timedOut||!signal.aborted)){release();status.textContent=timedOut?'Das Laden des Originalvideos dauert gerade zu lange. Bitte versuche es erneut.':e?.message==='FILE_CHANGED'?'Die Datei wurde geändert. Bitte aktualisiere die Dateiliste.':'Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.';}}
+  finally{clearTimeout(deadline);if(current(g)&&controller===attempt){controller=null;button.disabled=false;}}
  });
  video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=false;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});
  video.addEventListener('loadeddata',()=>{if(url&&!disposed&&!video.hidden)onReadyChange?.(true);});
