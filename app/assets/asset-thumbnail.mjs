@@ -3,10 +3,8 @@ import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
 // One deadline covers even non-abortable auth, transport and response-body reads.
 // Late replies are consumed, never allowed to resume a cancelled view.
 function thumbnailReadScope(parent){
- const controller=new AbortController(),signal=controller.signal;
- const cancel=()=>controller.abort();
- if(parent?.aborted)cancel();else parent?.addEventListener('abort',cancel,{once:true});
- const deadline=setTimeout(cancel,45000);
+ const controller=new AbortController();
+ const signal=AbortSignal.any([controller.signal,...(parent?[parent]:[]),AbortSignal.timeout(45000)]);
  function read(start){
   return new Promise((resolve,reject)=>{
    let settled=false;
@@ -14,11 +12,11 @@ function thumbnailReadScope(parent){
    const abort=()=>finish(reject,Error('PREVIEW_ABORTED'));
    if(signal.aborted)return abort();
    signal.addEventListener('abort',abort,{once:true});
-   Promise.resolve().then(()=>{signal.throwIfAborted();return start();})
-    .then(value=>finish(resolve,value),error=>finish(reject,error));
+   try{Promise.resolve(start()).then(value=>finish(resolve,value),error=>finish(reject,error));}
+   catch(error){finish(reject,error);}
   });
  }
- return {controller,signal,read,close(){clearTimeout(deadline);parent?.removeEventListener('abort',cancel);}};
+ return {controller,signal,read,close(){controller.abort();}};
 }
 export async function fetchAssetThumbnail(file,token,signal,request=fetch){
  signal?.throwIfAborted();
