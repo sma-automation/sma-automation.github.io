@@ -806,7 +806,8 @@ async function dashboardHtml(){
  if(signedOut)throw Error('Bitte melde dich bei SMA an.');
  const pilotRequested=new URLSearchParams(location.search).get('kundenmedien')==='pilot';
  if(!session?.user?.id){
-  window.location.replace(pilotRequested?'index.html?kundenmedien=pilot':'index.html');
+  // A cached version of the login page may predate support for returning to the pilot.
+  window.location.replace(pilotRequested?'index.html?kundenmedien=pilot&v=291':'index.html');
   throw Error('Bitte melde dich bei SMA an.');
  }
  const owner=session.user.id;

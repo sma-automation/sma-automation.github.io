@@ -61,7 +61,7 @@ test('only the verified pilot in an opted-in tab selects the combined media rout
 
 test('signed-out dashboard hands just the explicit pilot selection to the login page',async()=>{
  for(const [search,login] of [
-  ['?kundenmedien=pilot&portal=youtube','index.html?kundenmedien=pilot'],
+  ['?kundenmedien=pilot&portal=youtube','index.html?kundenmedien=pilot&v=291'],
   ['?kundenmedien=anderer-wert','index.html'],
   ['?portal=youtube','index.html']
  ]){
@@ -79,7 +79,7 @@ test('login returns to the selected dashboard after sign-in or session reuse; re
  const regularHref=parseHTML(html).document.getElementById('regularDashboard').getAttribute('href');
  assert.equal(regularHref,'dashboard.html');
  for(const [search,hasSession,expected] of [
-  ['?kundenmedien=pilot',false,'dashboard.html?kundenmedien=pilot'],
+  ['?kundenmedien=pilot&v=291',false,'dashboard.html?kundenmedien=pilot'],
   ['?kundenmedien=pilot&portal=youtube',true,'dashboard.html?kundenmedien=pilot'],
   ['',false,regularHref],['?kundenmedien=anderer-wert',true,regularHref],
   ['?type=recovery&kundenmedien=pilot',true,null]
