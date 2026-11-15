@@ -52,12 +52,30 @@ await test('time preview loads exact original on demand and seeks only inside th
  assert.equal(reads.length,1);assert.equal(reads[0].file.id,videoFile.id);assert.equal(reads[0].file.revision,videoFile.revision);
  assert.equal(player.hidden,false);assert.equal(f.$('#stillPreview').style.display,'none');
  player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(show.hidden,false);
- show.click();assert.match(f.$('#coverNote').textContent,/innerhalb/);assert.equal(leave(f).defaultPrevented,false);
+ show.click();assert.match(f.$('#timePreviewNote').textContent,/innerhalb/);assert.equal(leave(f).defaultPrevented,false);
  f.set('start_ms','1');f.set('end_ms','3');f.set('cover_ms','3');show.click();assert.equal(player.currentTime,0);
- f.set('cover_ms','1.5');const before=pauses;show.click();assert.equal(player.currentTime,1.5);assert.ok(pauses>before);assert.equal(f.$('#coverNote').textContent,'');
+ f.set('cover_ms','1.5');const before=pauses;show.click();assert.equal(player.currentTime,1.5);assert.ok(pauses>before);assert.equal(f.$('#timePreviewNote').textContent,'');
  f.tab('Text');assert.equal(f.$('#originalVideoPreview').hidden,true);assert.equal(player.hasAttribute('src'),false);assert.equal(f.$('#stillPreview').style.display,'');
  assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('[name=cover_ms]').value,'1.5');
  f.view.destroy();
+});
+await test('trim preview plays from the entered start, pauses at the end, and never writes a draft',async()=>{
+ const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],size_bytes:12}]}),source:()=>new Blob([new Uint8Array(12)],{type:'video/mp4'})});
+ await tick();f.tab('Schnitt & Cover');
+ const player=f.$('#editorOriginal video'),play=f.$('#playCut'),status=f.$('#originalVideoPreview p');
+ let plays=0;player.pause=()=>{player.paused=true;};player.play=async()=>{plays++;player.paused=false;};
+ player.load=()=>{};player.duration=10;player.readyState=4;player.currentTime=0;player.playbackRate=1;
+ assert.equal(play.hidden,true);f.$('#editorOriginal button').click();await tick();
+ player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(play.hidden,false);
+ f.set('start_ms','0.5');f.set('end_ms','2');f.set('cover_ms','9');play.click();
+ assert.equal(plays,1);assert.equal(player.currentTime,.5);
+ player.currentTime=2.02;player.dispatchEvent(new f.window.Event('timeupdate'));assert.equal(player.paused,true);assert.equal(player.currentTime,2);assert.match(status.textContent,/Ausschnitt beendet/);
+ play.click();assert.equal(player.currentTime,.5);assert.equal(plays,2);
+ f.set('end_ms','0.25');assert.equal(player.paused,true);play.click();assert.equal(plays,2);assert.match(f.$('#timePreviewNote').textContent,/gültigen Beginn/);
+ f.set('end_ms','');play.click();player.currentTime=10;player.dispatchEvent(new f.window.Event('ended'));assert.equal(player.currentTime,10);assert.match(status.textContent,/bis 10 Sekunden/);
+ play.click();f.set('cover_ms','1');f.$('#showCover').click();assert.equal(player.paused,true);assert.equal(player.currentTime,1);
+ play.click();f.tab('Ton');assert.equal(player.hasAttribute('src'),false);
+ assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();
 });
 await test('file or account changes discard an in-flight original and images only show the still preview',async()=>{
  for(const action of ['select','owner','tab']){

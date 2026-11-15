@@ -6,7 +6,30 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  video.controls=true;video.playsInline=true;video.preload='metadata';video.hidden=true;video.setAttribute('aria-label','Originalvideo der ausgewählten Datei');video.style.cssText='display:block;width:100%;max-height:var(--original-video-max-height,500px);object-fit:contain;background:#111827';
  status.className='note';status.setAttribute('role','status');status.setAttribute('aria-live','polite');box.append(button,video,status);host.append(box);
  let file=null,key='',generation=0,controller=null,url=null,disposed=false;
- const stop=()=>{try{video.pause();}catch{}};
+ let range=null,endTimer=null;
+ function stop(){
+  if(range){range=null;clearTimeout(endTimer);status.textContent=loadedText;}
+  try{video.pause();}catch{}
+ }
+ function stopRange(){if(range)stop();}
+ function checkRange(){
+  if(!range)return;
+  clearTimeout(endTimer);
+  if(video.seeking)return;
+  const {start,end}=range;
+  if(video.ended||video.currentTime>=end){
+   stop();
+   if(video.currentTime!==end)video.currentTime=end;
+   status.textContent='Ausschnitt beendet · '+start.toLocaleString('de-AT')+' bis '+end.toLocaleString('de-AT')+' Sekunden.';
+   return;
+  }
+  if(video.currentTime<start){video.currentTime=start;return;}
+  if(!video.paused&&video.readyState>=3&&video.playbackRate>0){
+   const remaining=(end-video.currentTime)*1000/video.playbackRate;
+   endTimer=setTimeout(checkRange,Math.max(16,remaining));
+  }
+ }
+ for(const event of ['playing','timeupdate','seeked','ratechange','pause','ended'])video.addEventListener(event,checkRange);
  function release(){onReadyChange?.(false);stop();video.removeAttribute('src');try{video.load();}catch{}video.hidden=true;if(url)revokeURL(url);url=null;thumbnailHost.style.display='';}
  function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.disabled=false;button.hidden=false;status.textContent='';}
  const current=g=>!disposed&&g===generation;
@@ -24,12 +47,25 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  video.addEventListener('loadeddata',()=>{if(url&&!disposed&&!video.hidden)onReadyChange?.(true);});
  function seekTo(seconds){
   if(disposed||!url||video.hidden||video.readyState<2||!Number.isFinite(seconds)||seconds<0||!Number.isFinite(video.duration)||seconds>=video.duration)return false;
-  try{video.pause();video.currentTime=seconds;return true;}catch{return false;}
+  try{stop();video.currentTime=seconds;return true;}catch{return false;}
+ }
+ function playRange(start,requestedEnd){
+  const end=requestedEnd??video.duration;
+  if(!Number.isFinite(end)||end<=start||end>video.duration||!seekTo(start))return false;
+  const selected={start,end};range=selected;
+  status.textContent='Ausschnitt wird abgespielt …';
+  try{
+   video.play().catch(()=>{
+    if(range!==selected)return;
+    stop();status.textContent='Der Ausschnitt konnte nicht abgespielt werden. Bitte versuche es erneut.';
+   });
+  }catch{stop();return false;}
+  return true;
  }
  function invalidateOwner(id){if(id!==expectedOwnerId){reset();file=null;key='';box.hidden=true;}}
  function setPoster(selected,poster){
   if(disposed||!file||selected?.id!==file.id||selected.revision!==file.revision)return;
   if(poster)video.setAttribute('poster',poster);else video.removeAttribute('poster');
  }
- return {seekTo,setPoster,setContext(next){const nextKey=next?JSON.stringify([next.id,next.revision,next.media_kind,next.mime_type,next.size_bytes,next.duration_ms]):'';if(disposed||nextKey===key)return;reset();file=next?{...next}:null;key=nextKey;box.hidden=!originalVideoSupported(file);},invalidateOwner,stop,destroy(){if(disposed)return;reset();disposed=true;file=null;key='';box.hidden=true;}};
+ return {seekTo,playRange,stopRange,setPoster,setContext(next){const nextKey=next?JSON.stringify([next.id,next.revision,next.media_kind,next.mime_type,next.size_bytes,next.duration_ms]):'';if(disposed||nextKey===key)return;reset();file=next?{...next}:null;key=nextKey;box.hidden=!originalVideoSupported(file);},invalidateOwner,stop,destroy(){if(disposed)return;reset();disposed=true;file=null;key='';box.hidden=true;}};
 }
