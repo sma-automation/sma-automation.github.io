@@ -8,7 +8,10 @@ const fakeClient = `export function createClient(){return {
  auth:{getSession:async()=>({data:{session:sessionStorage.signedOut?null:{user:{id:'fixture'},access_token:'fixture'}}}),
    onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},
    signInWithPassword:async()=>{sessionStorage.removeItem('signedOut');return {data:{session:{user:{id:'fixture'}}}};} },
- functions:{invoke:async(name,options)=>({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)})).json()})},
+ functions:{invoke:async(name,options)=>{
+  const response=await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)});
+  return response.ok?{data:await response.json()}:{error:{status:response.status}};
+ }},
  rpc: async(name,params) => ({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params)})).json()})
 };}`;
 const browser = await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
@@ -54,6 +57,7 @@ try {
         assert.deepEqual(req.postDataJSON(),{owner:'fixture',order:offer.id});
         assert.ok(['actual-booking','retry-booking'].includes(offer.id));
         paymentCalls++;
+        if(offer.state==='paid') return route.fulfill({status:503,json:{code:'RETRY'}});
         if(closeOnRefresh){
           closeOnRefresh=false;
           offer={...offer,id:'next-offer',state:'offered',checkout:null};
@@ -124,6 +128,7 @@ try {
     assert.equal(await book.isHidden(),true);assert.equal(await page.locator('#checkout').isHidden(),true);
     paymentState='paid';await page.clock.fastForward(3001);
     await page.getByText(/Deine Zahlung ist bestätigt/).waitFor();
+    assert.equal(await page.getByRole('link',{name:'Zur bezahlten Buchung'}).getAttribute('href'),'paketwahl.html');
     paymentState='active';await page.clock.fastForward(7001);
     await page.frameLocator('#dashboard').getByText('Mein Kundenbereich').waitFor();
     assert.equal(statusReads,3);
@@ -174,6 +179,15 @@ try {
     assert.equal(await pay.isHidden(),true);assert.equal(await book.isVisible(),true);
     assert.equal(bookings,countsBeforeReturn.bookings+1);
     console.log((mobile?'Handy':'Desktop')+': Offene Buchung fortgesetzt, veraltetes Angebot abgewiesen und neuen Zahlungsversuch einmal gebucht.');
+    offer={id:'retry-booking',state:'paid',plan:saved,terms:'2026-11-15-v1',automated:true,checkout:null};
+    await page.reload();await page.getByText(/Deine Zahlung ist bestätigt/).waitFor();
+    const done=page.waitForResponse(r=>r.url()===site+'/fixture/sma-package-payment' && r.status()===503);
+    await page.getByRole('button',{name:'Zahlungsstand erneut abrufen'}).click();await done;
+    await page.waitForFunction(()=>!document.querySelector('#booking').hidden);
+    assert.match(await page.locator('#status').innerText(),/Deine Zahlung ist bestätigt/);
+    assert.equal(await pay.isHidden(),true);assert.equal(await book.isHidden(),true);
+    assert.equal(bookings,countsBeforeReturn.bookings+1);
+    console.log((mobile?'Handy':'Desktop')+': Bestätigte Zahlung bleibt bei unterbrochener Abo-Prüfung sichtbar.');
     assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Desktop')+': Mollie-Rückkehr, verspätete und sofortige Freischaltung, Abbruch, Wiederanmeldung und begrenzte Statusabfragen bestanden.');
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');

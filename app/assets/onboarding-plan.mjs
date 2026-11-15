@@ -126,7 +126,7 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       if (current.error) throw current.error;
       displayOffer(current.data);
     }
-    if (paymentWaiting && offer?.automated) status.textContent = 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.';
+    if (paymentWaiting && offer?.automated && offer.state === 'booked') status.textContent = 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.';
     if (paymentClosed && offer?.state === 'offered') status.textContent = 'Die vorherige Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du das Paket erneut buchen.';
     if (changedOffer) status.textContent = 'Dein Zahlungsangebot hat sich geändert. Prüfe den aktuellen Stand.';
   } catch {

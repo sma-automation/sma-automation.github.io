@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {checkScheduledSubscription} from './check-onboarding-subscription.mjs';
 import {spawnSync} from 'node:child_process';
 import {readFile, readdir} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
@@ -268,6 +269,12 @@ try {
   const paidAuto={...automatic,status:'paid',paid_at:new Date(Date.now()+1000).toISOString()};
   assert.deepEqual(await work('receipt',{receipt:paidAuto}),{state:'PAID'});
   assert.equal(await readAsCustomer(second),'paid');
+  await db.exec('begin');
+  assert.deepEqual(await work('release'),{ok:true});
+  await checkScheduledSubscription({db,order:booked.id,receipt:paidAuto,account:{id:124,kunde_id:beta.n8n_ref,kunde_email:address}});
+  await db.exec('set local role authenticated');await session(second);assert.equal(await status(booked.id),'active');
+  await db.exec('rollback');
+  console.log('Terminierte Folgezahlung im Zusammenspiel von Edge Function, n8n-Antwort und SQL geprüft.');
   assert.ok((await work('begin_subscription')).sub_started);
   await work('subscription',{id:'sub_auto'});
   const rowAuto={...activeRow,id:124,kunde_id:beta.n8n_ref,kunde_email:address,paket:'delta',mollie_customer_id:'cst_auto',mollie_subscription_id:'sub_auto'};

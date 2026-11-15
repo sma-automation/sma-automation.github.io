@@ -39,7 +39,7 @@ if(op==='account'){
  return [{json:{ok:true,value:vals}}];
 }
 if(op==='activate'||op==='disable')return [{json:{ok:true,value:{}}}];
-const vals={};for(const k of ['id','metadata','email','mode','sequenceType','customerId','amount','status','interval','paidAt','expiresAt','amountRefunded','amountChargedBack'])if(k in r)vals[k]=r[k];
+const vals={};for(const k of ['id','metadata','email','mode','sequenceType','customerId','amount','status','interval','startDate','nextPaymentDate','paidAt','expiresAt','amountRefunded','amountChargedBack'])if(k in r)vals[k]=r[k];
 if(r._links?.checkout?.href)vals._links={checkout:{href:r._links.checkout.href}};
 return [{json:{ok:true,value:vals}}];`},1330,0);
   edge(short,answer);
