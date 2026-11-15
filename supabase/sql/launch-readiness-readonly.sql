@@ -35,6 +35,24 @@ WITH snapshot AS (
   (SELECT count(*) FROM sma_private.publication_provider_events_v1) AS provider_events,
   (SELECT count(*) FROM sma_private.publication_gallery_technical_v1) AS gallery_technical_records,
   (SELECT count(*) FROM sma_private.gallery_music_v1) AS gallery_music_jobs,
+  (SELECT count(*) FROM sma_private.gallery_music_v1 WHERE state='completed') AS gallery_completed_jobs,
+  (SELECT count(*) FROM sma_private.gallery_music_v1 WHERE state='pending') AS gallery_pending_jobs,
+  -- Due is a scheduling fact, not eligibility, a failure, or permission to render.
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND next_attempt<=now()) AS gallery_pending_due_jobs,
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND next_attempt>now()) AS gallery_pending_scheduled_jobs,
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND next_attempt IS NULL) AS gallery_pending_unscheduled_jobs,
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state IS DISTINCT FROM 'pending' AND state IS DISTINCT FROM 'completed') AS gallery_other_jobs,
+  -- A matching historical record is not proof that the current file revision is verified.
+  (SELECT count(*) FROM sma_private.gallery_music_v1 g
+    WHERE g.state='completed' AND NOT EXISTS (
+      SELECT 1 FROM sma_private.publication_gallery_technical_v1 e WHERE e.gallery_job_id=g.id
+    )) AS gallery_completed_without_record,
+  -- Listing alone does not prove playable bytes, licensing, AAC readiness, or customer access.
+  (SELECT count(*) FROM sma_private.music_catalog_v1 WHERE listed IS TRUE) AS music_listed_tracks,
   (SELECT count(*) FROM sma_private.customer_websites_v1
     WHERE published_at IS NOT NULL) AS published_customer_websites,
   (SELECT count(*) FROM sma_private.website_provider_connections_v1) AS website_connections,
@@ -45,7 +63,7 @@ WITH snapshot AS (
     WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
 )
 SELECT jsonb_build_object(
- 'version',2,
+ 'version',3,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
@@ -65,6 +83,14 @@ SELECT jsonb_build_object(
  'media',jsonb_build_object(
   'files_available',available_files,'files_verified_last_15m',recently_verified_files,
   'gallery_music_jobs',gallery_music_jobs,
+  'gallery_completed_jobs',gallery_completed_jobs,
+  'gallery_pending_jobs',gallery_pending_jobs,
+  'gallery_pending_due_jobs',gallery_pending_due_jobs,
+  'gallery_pending_scheduled_jobs',gallery_pending_scheduled_jobs,
+  'gallery_pending_unscheduled_jobs',gallery_pending_unscheduled_jobs,
+  'gallery_other_jobs',gallery_other_jobs,
+  'gallery_completed_without_record',gallery_completed_without_record,
+  'music_listed_tracks',music_listed_tracks,
   'gallery_technical_records',gallery_technical_records,
   'state',CASE
     WHEN available_files=0 THEN 'NO_AVAILABLE_FILES'
