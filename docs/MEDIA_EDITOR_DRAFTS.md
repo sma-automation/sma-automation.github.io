@@ -25,7 +25,7 @@ weiterhin über Veröffentlichung hinzugefügt/aktualisiert.
 | Kapitel | Verfügbar | Grenze |
 | --- | --- | --- |
 | Format & Ausschnitt | Original, 9:16, 1:1, 16:9; Einpassen/Ausfüllen; horizontale/vertikale Position | Standbild-Vorschau, keine neue Mediendatei |
-| Schnitt & Cover | Beginn, Ende, Cover-Zeitpunkt in Sekunden | Nur für Videos mit bekannter Dauer; vorgemerkte Zeitpunkte, kein Schnitt-/Cover-Rendering |
+| Schnitt & Cover | Beginn, Ende und Cover-Zeitpunkt in Sekunden. Mit **Originalvideo laden** lässt sich die Datei abspielen. **Cover-Zeitpunkt ansehen** pausiert am eingetragenen Zeitpunkt. | Originalvorschau für MP4 bis 24 MB und 60 Sekunden. Schnitt und Gestaltung werden beim Export angewendet. |
 | Text | Bis 160 Unicode-Zeichen, oben/Mitte/unten, sichtbare Einblendung | Vorschau und gespeicherter Entwurf |
 | Ton | Originalton 0–100 % | Vorgemerkt; keine Hörprobe oder zusätzliche Musik |
 
