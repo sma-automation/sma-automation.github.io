@@ -36,18 +36,58 @@ n8n-Kundenzugang mit eigenem Zugangstoken.
 
 Nach einer 403-Antwort im regulären Dashboard prüft SMA, ob das angemeldete
 Konto für eine erste Paketvormerkung berechtigt ist. Nur ein eindeutig
-zugeordnetes, E-Mail-bestätigtes und bisher unverbundenes Neuprofil ohne
-Zugang oder Paket erhält die Auswahl. Alpha, Beta und Delta lassen sich
+zugeordnetes und E-Mail-bestätigtes Neuprofil ohne Zugang oder Paket erhält
+die Auswahl. Sie bleibt nach der geprüften Erstzuordnung erreichbar. Alpha, Beta und Delta lassen sich
 unverbindlich vormerken und beim nächsten Besuch ändern. Die Vormerkung
 wird getrennt vom Kundenpaket gespeichert. Bei Änderungen in zwei Fenstern
 zeigt SMA die aktuelle Auswahl an. Die Tests verwenden ausschließlich
 synthetische Konten und simulierte Dienstantworten.
 
-**Noch offen für den bezahlten Start** sind die Zuordnung dieses Website-Kontos
-zum n8n-Kunden, die ausdrückliche Buchung und die Übernahme einer von Mollie
-bestätigten Zahlung in den Website-Zugang. Die Vormerkung allein aktiviert
-keinen dieser Schritte. Die Datenbankmigration heißt
-`20261115144202_onboarding_plan_choice_v1.sql`.
+### Erste Kontozuordnung im Pilotbetrieb
+
+Jede Vormerkung erhält eine eigene dauerhafte n8n-Kundenkennung. Der Betreiber
+ordnet das bestätigte Website-Konto einmalig in der vorhandenen Datentabelle
+`SMA_Kunden` zu. Dafür genügen die private n8n-Tabellenansicht und der
+Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
+„Dein SMA-Kundenkonto ist zugeordnet“ und kann seine Auswahl weiter ändern.
+
+1. Offene Vormerkungen im SQL-Editor abrufen. Ein leeres Ergebnis beendet den Durchlauf.
+
+   ```sql
+   select n8n_ref, kunde_email from sma_private.onboarding_n8n_accounts_v1
+   where n8n_row_id is null order by customer_id;
+   ```
+
+2. In `SMA_Kunden` nach der Kennung und separat nach der E-Mail-Adresse suchen.
+   Auch abweichende Großschreibung und Leerzeichen bei der Adresse prüfen.
+   Die Zuordnung je Vormerkung von einer Person bearbeiten. Bei null Treffern
+   genau eine Zeile mit der reservierten Kennung und der exakt angegebenen
+   E-Mail-Adresse anlegen. `zugang_aktiv`, `demo_delta_aktiv` und
+   `zahlung_bestaetigt` auf **AUS** setzen. Paket, Zugangstoken, Zugangslink
+   und Dienstzugänge leer lassen. Bei einer Unterbrechung wieder mit der Suche
+   beginnen. Ein vorhandenes Konto mit anderer Kennung oder Adresse oder mehrere
+   Treffer erfordern einen manuellen Abgleich.
+3. Die gespeicherte n8n-Zeile erneut öffnen. Die interne numerische `id`, die
+   Kennung, die E-Mail-Adresse und die vier Statusfelder direkt aus dieser
+   Ansicht ablesen. Im Projektverzeichnis den folgenden lokalen Befehl starten
+   und die Werte eingeben. Das Hilfsprogramm gibt den fertigen SQL-Aufruf aus
+   und baut E-Mail-Adressen mit Sonderzeichen korrekt ein.
+
+   ```sh
+   node n8n/confirm-onboarding-row.cjs
+   ```
+
+   Den ausgegebenen Aufruf im privaten Supabase-SQL-Editor ausführen. Er enthält
+   die abgelesenen Angaben. Die Datenbank gleicht diese mit der Vormerkung ab.
+
+4. `LINKED` bestätigt die erste Zuordnung, `ALREADY_LINKED` die Wiederholung
+   mit derselben Zeile. Bei allen anderen Ergebnissen Kennung, Adresse,
+   Eindeutigkeit und Status erneut prüfen. Beide Konten bleiben inaktiv.
+   Bei einem späteren Adresswechsel müssen Website und n8n erneut abgeglichen werden.
+
+**Noch offen für den bezahlten Start** sind der erste Durchlauf mit einer
+echten Vormerkung, die ausdrückliche Buchung und die Übernahme der von Mollie
+bestätigten Zahlung in den Website-Zugang.
 
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 

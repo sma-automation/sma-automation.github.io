@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
+import {readFile, readdir} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 
 const db = new PGlite();
@@ -24,6 +25,8 @@ try {
     await db.query('insert into public.sma_kunden(id,user_id,kunde_email) values ($1,$2,$3)',[index+1,id,email]);
   }
   await db.exec(await readFile('supabase/migrations/20261115144202_onboarding_plan_choice_v1.sql','utf8'));
+  const [linkMigration] = (await readdir('supabase/migrations')).filter(name => name.endsWith('_onboarding_n8n_link_v1.sql'));
+  await db.exec(await readFile('supabase/migrations/' + linkMigration, 'utf8'));
   const baseline=(await one('select jsonb_agg(to_jsonb(c) order by id) as customers from public.sma_kunden c')).customers;
   await db.exec('set role authenticated');await session(first);
   assert.deepEqual(await call(first),{ok:true,plan:null});
@@ -54,5 +57,84 @@ try {
   }
   await db.exec('set role authenticated');await session(second);
   assert.deepEqual(await call(second,'delta'),{ok:true,plan:'delta'});
+  await db.exec('reset role');
+  const queue = async () => (await db.query('select * from sma_private.onboarding_n8n_accounts_v1 order by customer_id')).rows;
+  const [alpha, beta] = await queue();
+  assert.notEqual(alpha.n8n_ref, beta.n8n_ref);
+  const evidence = (account, id) => ({
+    id, kunde_id:account.n8n_ref, kunde_email:account.kunde_email,
+    paket:null, zugang_aktiv:false, demo_delta_aktiv:false, zahlung_bestaetigt:false
+  });
+  const confirm = async (ref, rows) => (await one(
+    'select sma_private.confirm_onboarding_n8n_v1($1,$2::jsonb) as state', [ref, JSON.stringify(rows)]
+  )).state;
+  const entry = evidence(alpha, 123);
+  for (const role of ['anon','authenticated','service_role']) {
+    await db.exec('set role '+role);
+    await assert.rejects(confirm(alpha.n8n_ref,[entry]), /permission denied/);
+    await assert.rejects(queue(), /permission denied/);
+    await db.exec('reset role');
+  }
+  assert.equal(await confirm(alpha.n8n_ref, []), 'MATCH_NOT_UNIQUE');
+  assert.equal(await confirm(alpha.n8n_ref, [entry,entry]), 'MATCH_NOT_UNIQUE');
+  assert.equal(await confirm(beta.n8n_ref, [entry]), 'INVALID_EVIDENCE');
+  assert.equal(await confirm(alpha.n8n_ref, [{...entry,kunde_email:beta.kunde_email}]), 'ACCOUNT_UNAVAILABLE');
+  for (const invalid of [
+    {...entry,id:0}, {...entry,id:'123'}, {...entry,zugang_aktiv:true}, {...entry,demo_delta_aktiv:true},
+    {...entry,zahlung_bestaetigt:true}, {...entry,paket:'alpha'}, {...entry,zugang_aktiv:null},
+    {...entry,demo_delta_aktiv:undefined}, {...entry,unexpected:'extra'}, null
+  ]) assert.equal(await confirm(alpha.n8n_ref, [invalid]), 'INVALID_EVIDENCE');
+  for (const sql of [
+    "update auth.users set email_confirmed_at=null where id=$1",
+    "update auth.users set email='changed@example.invalid' where id=$1",
+    "update public.sma_kunden set kunde_email='changed@example.invalid' where user_id=$1",
+    "update public.sma_kunden set aktiv=true where user_id=$1",
+    "update public.sma_kunden set demo_delta_aktiv=true where user_id=$1",
+    "update public.sma_kunden set zahlung_bestaetigt=true where user_id=$1",
+    "update public.sma_kunden set paket='delta' where user_id=$1",
+    "update public.sma_kunden set n8n_kunde_id='existing' where user_id=$1",
+    "update public.sma_kunden set kunde_email='KUNDE0@example.invalid' where user_id<>$1"
+  ]) {
+    await db.exec('begin');
+    await db.query(sql,[first]);
+    assert.equal(await confirm(alpha.n8n_ref,[entry]),'ACCOUNT_UNAVAILABLE');
+    await db.exec('rollback');
+  }
+  const profile = async id => (await one('select to_jsonb(c) as profile from public.sma_kunden c where user_id=$1',[id])).profile;
+  const original = await profile(first), untouched = await profile(second);
+  assert.equal(await confirm(alpha.n8n_ref, [entry]), 'LINKED');
+  assert.equal(await confirm(alpha.n8n_ref, [entry]), 'ALREADY_LINKED');
+  assert.equal(await confirm(alpha.n8n_ref, [{...entry,id:124}]), 'LINK_CONFLICT');
+  assert.equal(await confirm(beta.n8n_ref, [evidence(beta,123)]), 'LINK_CONFLICT');
+  assert.deepEqual(await profile(first), {...original,n8n_kunde_id:alpha.n8n_ref});
+  assert.deepEqual(await profile(second), untouched);
+  assert.deepEqual((await queue()).map(c=>c.n8n_row_id),[123,null]);
+  await db.exec('set role authenticated'); await session(first);
+  assert.deepEqual(await call(first), {ok:true,plan:'beta',linked:true});
+  assert.deepEqual(await call(first,'alpha','beta'), {ok:true,plan:'alpha',linked:true});
+  await db.exec('reset role');
+  assert.equal(await confirm(alpha.n8n_ref,[entry]), 'ALREADY_LINKED');
+  await db.exec('begin');
+  await db.query("update auth.users set email='updated@example.invalid' where id=$1",[first]);
+  await db.query("update public.sma_kunden set kunde_email='updated@example.invalid' where user_id=$1",[first]);
+  assert.equal(await confirm(alpha.n8n_ref,[{...entry,kunde_email:'updated@example.invalid'}]), 'ACCOUNT_UNAVAILABLE');
+  await db.exec('set local role authenticated');
+  assert.equal((await call(first)).code, 'ACCOUNT_UNAVAILABLE');
+  await db.exec('rollback');
+  // Run the operator's real entry point. A quoted address remains data in the SQL editor.
+  const address = "o'brien+pilot@example.invalid";
+  await db.query('update public.sma_kunden set kunde_email=$1 where user_id=$2',[address,second]);
+  await db.query('update auth.users set email=$1 where id=$2',[address,second]);
+  const prepare = state => spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
+    input: [beta.n8n_ref,'124',beta.n8n_ref,address,'',state,'AUS','AUS'].join('\n')+'\n', encoding:'utf8'
+  });
+  const denied = prepare('EIN');
+  assert.equal(denied.status,1); assert.equal(denied.stdout,'');
+  const checked = prepare('AUS');
+  assert.equal(checked.status,0,checked.stderr);
+  assert.equal(checked.stdout.includes(address),false);
+  assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'LINKED');
+  assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'ALREADY_LINKED');
+  console.log('Kontozuordnung: Berechtigungen, eindeutige Nachweise, Adresswechsel, Wiederholung, konkurrierende Zuordnung und unveränderte Zugangssperren geprüft.');
   console.log('Paketvormerkung: Neuzugang, drei Paketoptionen, Wiederholung, Konflikt, Kontentrennung und Zugangssperren geprüft.');
 } finally {await db.close();}

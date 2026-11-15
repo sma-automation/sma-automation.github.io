@@ -6,7 +6,9 @@ on:
       - supabase/sql/launch-readiness-readonly.sql
       - tests/run-launch-readiness-sql.mjs
       - supabase/migrations/*_onboarding_plan_choice_v1.sql
+      - supabase/migrations/*_onboarding_n8n_link_v1.sql
       - tests/run-onboarding-plan-sql.mjs
+      - n8n/confirm-onboarding-row.cjs
       - tests/launch-readiness-readonly.test.cjs
       - app/assets/original-video-preview.mjs
       - tests/run-original-video-preview-dom.mjs
@@ -197,7 +199,7 @@ on:
       - .github/workflows/publication-history-tests.yml
   pull_request:
     branches: [website-v1]
-    paths: ['app/**', 'supabase/**', 'tests/**', '.github/workflows/publication-history-tests.yml']
+    paths: ['app/**', 'supabase/**', 'tests/**', 'n8n/confirm-onboarding-row.cjs', '.github/workflows/publication-history-tests.yml']
 permissions: {}
 jobs:
   test:

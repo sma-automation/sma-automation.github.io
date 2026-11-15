@@ -14,7 +14,7 @@ try {
     const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
     const page=await context.newPage();
     const errors=[];
-    let saved=null, writes=0, sessionReads=0;
+    let saved=null, writes=0, sessionReads=0, linked=false;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -32,7 +32,7 @@ try {
         if (p_plan && p_expected_plan!==saved && p_plan!==saved)
           return route.fulfill({json:{ok:false,code:'CONFLICT',plan:saved}});
         if (p_plan) {saved=p_plan;writes++;}
-        return route.fulfill({json:{ok:true,plan:saved}});
+        return route.fulfill({json:{ok:true,plan:saved,linked}});
       }
       errors.push(req.method()+' '+url.pathname);return route.abort();
     });
@@ -54,6 +54,10 @@ try {
     await page.getByText('Beta ist für dein Konto vorgemerkt.').waitFor();
     assert.equal(await beta.isChecked(),true);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    linked=true;
+    await page.reload();
+    await page.getByText('Beta ist für dein Konto vorgemerkt. Dein SMA-Kundenkonto ist zugeordnet.').waitFor();
+    assert.equal(await beta.isChecked(),true);
     saved='delta'; // A second tab saved a newer preference.
     await page.getByRole('radio',{name:/Alpha 100/}).check();await save.click();
     await page.getByText(/zwischenzeitlich geändert/).waitFor();
