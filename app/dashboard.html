@@ -343,7 +343,7 @@ frame.addEventListener('load',async()=>{
     #page-publishing .sma-optimize:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
     @media(max-width:520px){#page-publishing .platform-card{grid-template-columns:40px minmax(0,1fr)}#page-publishing .sma-optimize{grid-column:2;grid-row:2;justify-self:start;padding:9px 14px}}
   `;doc.head.append(style);
-  const editorUrl=new URL('./media-editor.html?v=12',location.href);
+  const editorUrl=new URL('./media-editor.html?v=13',location.href);
   if(document.documentElement.dataset.smaCustomerMedia==='pilot')editorUrl.searchParams.set('kundenmedien','pilot');
   fileView?.clear();fileView=attachFileList(doc,page,editorUrl.href);attachOptimizerPage(doc,page);
   for(const card of page.querySelectorAll('.platform-card')){

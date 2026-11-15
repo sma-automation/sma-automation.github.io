@@ -2,4 +2,4 @@
 
 #exportPanel{max-width:780px}#exportVideo,#exportImage{max-width:100%;max-height:480px;border-radius:10px;display:block;margin:16px 0;background:#edf0f7}#exportCover{max-width:160px;max-height:200px;margin:12px 0}#exportPanel [hidden]{display:none!important}#exportHistory>div{padding:12px 0;border-bottom:1px solid #dde2ef}#exportHistory .actions{margin-top:8px}#exportStatus[data-error="true"]{color:#a52b38}.workspace:has(#exportPanel:not([hidden])){grid-template-columns:1fr}
 
-#editorOriginal video{border-radius:10px}#editorOriginal .note:empty,#coverNote:empty{display:none}
+#editorOriginal video{border-radius:10px}#editorOriginal .note:empty,#timePreviewNote:empty{display:none}

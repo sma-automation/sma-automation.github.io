@@ -1,4 +1,4 @@
-import {mountOriginalVideo} from './original-video-preview.mjs?v=4';
+import {mountOriginalVideo} from './original-video-preview.mjs?v=5';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountMediaMusic} from './media-music-view.mjs?v=4';
 import {mountMediaExport} from './media-export-view.mjs?v=4';
@@ -14,7 +14,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  const original=source?mountOriginalVideo({
   doc,host:$('editorOriginal'),thumbnailHost:$('stillPreview'),getOwnerId,expectedOwnerId,source,createURL,revokeURL,
   loadedText:'Originalvideo geladen.',
-  onReadyChange:ready=>{$('showCover').hidden=!ready;$('coverNote').textContent='';}
+  onReadyChange:ready=>{$('showCover').hidden=!ready;$('playCut').hidden=!ready;$('timePreviewNote').textContent='';}
  }):null;
  function syncOriginal(){
   const active=!$('timePanel').hidden&&saved&&!fileStale&&!invalidOwner;
@@ -37,11 +37,23 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   if(value==='')return key==='start_ms'?NaN:null;
   return Math.round(Number(value)*1000);
  }
+ function previewTimes(cover=null){
+  return readEditorSettings({...editorDefaults,start_ms:timeValue('start_ms'),end_ms:timeValue('end_ms'),cover_ms:cover},file);
+ }
+ function previewCut(){
+  if(!original||!file||fileStale||!saved)return;
+  const note=$('timePreviewNote');
+  try{
+   const {start_ms,end_ms}=previewTimes();
+   note.textContent=original.playRange(start_ms/1000,end_ms===null?null:end_ms/1000)?'':'Der gewählte Ausschnitt ist im geladenen Video nicht erreichbar.';
+  }catch{note.textContent='Gib einen gültigen Beginn und ein späteres Ende innerhalb des Videos ein.';}
+ }
+ $('playCut').addEventListener('click',previewCut);
  function previewCover(){
   if(!original||!file||fileStale||!saved)return;
-  const note=$('coverNote');
+  const note=$('timePreviewNote');
   try{
-   const times=readEditorSettings({...editorDefaults,start_ms:timeValue('start_ms'),end_ms:timeValue('end_ms'),cover_ms:timeValue('cover_ms')},file);
+   const times=previewTimes(timeValue('cover_ms'));
    if(times.cover_ms===null)throw Error('MISSING_COVER');
    note.textContent=original.seekTo(times.cover_ms/1000)?'':'Der Zeitpunkt ist im geladenen Video nicht erreichbar.';
   }catch{note.textContent='Gib einen Cover-Zeitpunkt innerhalb des gewählten Schnitts ein.';}
@@ -137,7 +149,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   try{if(!await owner(g))return;const response=await request('save',input);if(!current(g)||!await owner(g))return;const result=readEditorState(response,file);fill(result);say(result.changed?'Entwurf gespeichert. Die Änderung steht jetzt in der History.':result.revision?'Gespeicherter Stand bestätigt. Es wurde kein doppelter Verlaufseintrag angelegt.':'Keine geänderten Einstellungen vorhanden.');}
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
  }
- const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);paint();say('Ungespeicherte Änderungen.');};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',save);
+ const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;if(['start_ms','end_ms'].includes(event.target.name))original?.stopRange();if(event.target.name.endsWith('_ms'))$('timePreviewNote').textContent='';setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);paint();say('Ungespeicherte Änderungen.');};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',save);
  const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}useLinkedFile=false;void loadFile($('asset').value);};$('asset').addEventListener('change',choose);
  const reload=()=>{if(busy||!file)return;if(dirty){showDiscard('reload');return;}void loadFile(file.id);};$('reload').addEventListener('click',reload);
  const leave=event=>{if(event.defaultPrevented||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||disposed||invalidOwner||!dirty)return;event.preventDefault();if(busy){say('Bitte warte, bis der laufende Vorgang abgeschlossen ist.',true);return;}showDiscard('leave');};$('backDashboard').addEventListener('click',leave);
@@ -147,5 +159,5 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  doc.addEventListener('visibilitychange',visibility);ownerWindow.addEventListener('focus',visibility);
  if(exportDependencies)exportView=mountMediaExport({doc,...exportDependencies,getOwnerId,expectedOwnerId,uuid,createURL,revokeURL,setBusy:lock,onAuthLost:()=>unavailable(errors.AUTH_REQUIRED),musicSource:(m,signal)=>music.getSource(m,signal),getDraft:(f)=>request('get',{asset_id:f.id,asset_revision:f.revision})});
  void loadFiles();
- return {invalidateOwner(id){if(id!==expectedOwnerId&&!disposed)unavailable(errors.AUTH_REQUIRED);},destroy(){if(disposed)return;clearDiscard();$('backDashboard').removeEventListener('click',leave);setDirty(false);disposed=true;generation++;metadataController?.abort();$('refreshMetadata').removeEventListener('click',refreshFileMetadata);exportView?.destroy();original?.destroy();$('showCover').removeEventListener('click',previewCover);music.destroy();releasePreview();tabs.destroy();$('editorForm').removeEventListener('input',change);$('editorForm').removeEventListener('change',change);$('editorForm').removeEventListener('submit',save);$('asset').removeEventListener('change',choose);$('reload').removeEventListener('click',reload);$('confirmDiscard').removeEventListener('click',discard);$('keepEditing').removeEventListener('click',keep);$('refreshFiles').removeEventListener('click',loadFiles);$('retry').removeEventListener('click',loadFiles);doc.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('focus',visibility);$('app').hidden=true;}};
+ return {invalidateOwner(id){if(id!==expectedOwnerId&&!disposed)unavailable(errors.AUTH_REQUIRED);},destroy(){if(disposed)return;clearDiscard();$('backDashboard').removeEventListener('click',leave);setDirty(false);disposed=true;generation++;metadataController?.abort();$('refreshMetadata').removeEventListener('click',refreshFileMetadata);exportView?.destroy();original?.destroy();$('playCut').removeEventListener('click',previewCut);$('showCover').removeEventListener('click',previewCover);music.destroy();releasePreview();tabs.destroy();$('editorForm').removeEventListener('input',change);$('editorForm').removeEventListener('change',change);$('editorForm').removeEventListener('submit',save);$('asset').removeEventListener('change',choose);$('reload').removeEventListener('click',reload);$('confirmDiscard').removeEventListener('click',discard);$('keepEditing').removeEventListener('click',keep);$('refreshFiles').removeEventListener('click',loadFiles);$('retry').removeEventListener('click',loadFiles);doc.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('focus',visibility);$('app').hidden=true;}};
 }

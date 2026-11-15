@@ -38,4 +38,15 @@ for(const bad of [new Blob([new Uint8Array(12)],{type:'image/png'}),new Blob([ne
 {
  const t=fixture();t.view.setContext({...file,mime_type:'video/quicktime'});await t.button.handlers.click();eq(t.pending,[]);eq(t.box.hidden,true);
 }
+{
+ const t=fixture(),load=t.button.handlers.click();await tick();t.pending[0].resolve(blob());await load;
+ const v=t.video;Object.assign(v,{duration:3,readyState:4,currentTime:0,playbackRate:1});
+ let failPlay;v.play=()=>new Promise((_resolve,reject)=>failPlay=reject);
+ eq(t.view.playRange(.5,4),false);eq(t.view.playRange(2,1),false);
+ eq(t.view.playRange(.5,2),true);const oldFail=failPlay;
+ eq(t.view.playRange(1,2.5),true);oldFail(Error('superseded'));await tick();eq(v.currentTime,1);eq(t.status.textContent.includes('wird abgespielt'),true);
+ failPlay(Error('playback blocked'));await tick();eq(t.status.textContent.includes('nicht abgespielt'),true);
+ eq(t.view.playRange(.5,2),true);t.view.setContext(null);failPlay(Error('aborted'));await tick();
+ eq(t.status.textContent,'');eq(t.revoked.length,1);
+}
 console.log(n+' original-video DOM checks passed. No network requests or approvals.');
