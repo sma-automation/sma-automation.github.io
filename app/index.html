@@ -227,7 +227,10 @@ button.link-button:hover {
 }
 
 .link-row {
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 14px;
   margin-top: 8px;
 }
 
@@ -280,7 +283,7 @@ button.link-button:hover {
 <main>
   <div class="login-card">
 
-    <h1 id="viewTitle">Kundenbereich</h1>
+    <h1 id="viewTitle" tabindex="-1">Kundenbereich</h1>
 
     <div id="viewIntro" class="intro">
       Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.
@@ -336,6 +339,9 @@ button.link-button:hover {
         </div>
 
         <div class="link-row" id="forgotLinkRow">
+          <button id="confirmationButton" class="link-button" type="button">
+            Bestätigungsmail fehlt?
+          </button>
           <button
             id="forgotButton"
             class="link-button"
@@ -554,6 +560,9 @@ function setBusy(busy) {
   authSubmit.disabled = busy;
   sendResetButton.disabled = busy;
   savePasswordButton.disabled = busy;
+  for (const id of ['forgotButton', 'confirmationButton', 'backToLoginButton', 'forgotEmail']) {
+    document.getElementById(id).disabled = busy;
+  }
 }
 
 // ANSICHT WECHSELN
@@ -567,7 +576,11 @@ function showView(view) {
     view !== 'login' && view !== 'register';
 
   document.getElementById('forgotView').hidden =
-    view !== 'forgot';
+    view !== 'forgot' && view !== 'confirm';
+
+  sendResetButton.textContent = view === 'confirm'
+    ? 'Bestätigungsmail erneut anfordern'
+    : 'Wiederherstellungslink senden';
 
   document.getElementById('resetView').hidden =
     view !== 'reset';
@@ -596,6 +609,10 @@ function showView(view) {
     register: [
       'SMA-Konto erstellen',
       'Registriere dich mit deiner E-Mail-Adresse und einem neuen Passwort.'
+    ],
+    confirm: [
+      'E-Mail-Adresse bestätigen',
+      'Hier kannst du einen neuen Bestätigungslink für deine Registrierung anfordern.'
     ],
     forgot: [
       'Passwort vergessen?',
@@ -687,7 +704,15 @@ supabase.auth.onAuthStateChange((event) => {
 
 });
 
-if (recoveryMode) {
+const expiredLink = [urlHash, urlQuery].some(params => params.get('error_code') === 'otp_expired');
+if (expiredLink) {
+  const signup = [urlHash, urlQuery].some(params => params.get('type') === 'signup');
+  showView(recoveryMode ? 'forgot' : signup ? 'confirm' : 'login');
+  recoveryMode = false;
+  setStatus(currentView === 'login'
+    ? 'Dieser Link ist abgelaufen. Wähle „Bestätigungsmail fehlt?“ für die Registrierung oder „Passwort vergessen?“ für ein neues Passwort.'
+    : 'Dieser Link ist abgelaufen. Du kannst einen neuen Link anfordern.', 'error');
+} else if (recoveryMode) {
 
   showView('reset');
 
@@ -718,7 +743,7 @@ if (sessionError && recoveryMode) {
 
 }
 
-if (sessionData?.session && !recoveryMode) {
+if (sessionData?.session && !recoveryMode && !expiredLink) {
 
   openDashboard();
 
@@ -750,10 +775,16 @@ form.addEventListener('submit', async (event) => {
       ? await supabase.auth.signUp({ ...credentials, options: { emailRedirectTo: APP_URL } })
       : await supabase.auth.signInWithPassword(credentials);
     if (error) {
+      if (!registering && error.code === 'email_not_confirmed') {
+        openLinkForm('confirm', email);
+        setStatus('Bitte bestätige zuerst deine E-Mail-Adresse.');
+        return;
+      }
       setStatus(error.message, 'error');
       return;
     }
     if (registering && !data?.session) {
+      openLinkForm('confirm', email);
       setStatus('Bitte prüfe dein Postfach für die Bestätigung deiner E-Mail-Adresse.', 'success');
       return;
     }
@@ -767,17 +798,15 @@ form.addEventListener('submit', async (event) => {
 });
 authSubmit.disabled = false;
 
-// PASSWORT VERGESSEN ANZEIGEN
+function openLinkForm(view, email) {
+  showView(view);
+  forgotEmail.value = email;
+  passwordInput.value = '';
+  document.getElementById('viewTitle').focus();
+}
 
-document.getElementById('forgotButton')
-  .addEventListener('click', () => {
-
-    showView('forgot');
-
-    forgotEmail.value =
-      emailInput.value.trim();
-
-  });
+document.getElementById('forgotButton').addEventListener('click', () => openLinkForm('forgot', emailInput.value.trim()));
+document.getElementById('confirmationButton').addEventListener('click', () => openLinkForm('confirm', emailInput.value.trim()));
 
 // ZURÜCK ZUM LOGIN
 
@@ -785,49 +814,44 @@ document.getElementById('backToLoginButton')
   .addEventListener('click', () => {
 
     showView('login');
+    emailInput.value = forgotEmail.value.trim();
+    emailInput.focus();
 
   });
 
-// WIEDERHERSTELLUNGSLINK SENDEN
+// BESTÄTIGUNG ODER WIEDERHERSTELLUNG
 
 document.getElementById('forgotForm')
   .addEventListener('submit', async (event) => {
-
     event.preventDefault();
-
+    if (sendResetButton.disabled || !['confirm', 'forgot'].includes(currentView)) return;
+    const view = currentView;
+    const confirm = view === 'confirm';
+    const email = forgotEmail.value.trim();
     setBusy(true);
-
-    setStatus(
-      'Wiederherstellungslink wird angefordert ...'
-    );
-
-    const { error } =
-      await supabase.auth.resetPasswordForEmail(
-        forgotEmail.value.trim(),
-        {
-          redirectTo: APP_URL
-        }
-      );
-
-    if (error) {
-
+    setStatus('Link wird angefordert …');
+    try {
+      const { error } = confirm
+        ? await supabase.auth.resend({type: 'signup', email, options: {emailRedirectTo: APP_URL}})
+        : await supabase.auth.resetPasswordForEmail(email, {redirectTo: APP_URL});
+      if (currentView !== view) return;
+      if (error?.status === 429 || error?.code === 'over_email_send_rate_limit') {
+        setStatus('Es wurden bereits mehrere Links angefordert. Bitte warte einen Moment und versuche es erneut.', 'error');
+        return;
+      }
+      if (error && !(confirm && ['user_not_found', 'email_exists', 'user_already_exists'].includes(error.code))) {
+        throw error;
+      }
       setStatus(
-        'Link konnte nicht angefordert werden: ' +
-        error.message,
-        'error'
-      );
-
-    } else {
-
-      setStatus(
-        'Falls für diese E-Mail-Adresse ein SMA-Konto existiert, erhältst du einen Link zum Zurücksetzen des Passworts. Bitte prüfe auch den Spam-Ordner.',
-        'success'
-      );
-
+        confirm
+          ? 'Falls die Bestätigung für diese Adresse noch aussteht, erhältst du eine E-Mail. Prüfe auch den Spam-Ordner.'
+          : 'Falls für diese E-Mail-Adresse ein SMA-Konto existiert, erhältst du einen Link zum Zurücksetzen des Passworts. Bitte prüfe auch den Spam-Ordner.',
+        'success');
+    } catch {
+      if (currentView === view) setStatus('Der Link konnte gerade nicht angefordert werden. Bitte versuche es erneut.', 'error');
+    } finally {
+      setBusy(false);
     }
-
-    setBusy(false);
-
   });
 
 // NEUES PASSWORT SPEICHERN

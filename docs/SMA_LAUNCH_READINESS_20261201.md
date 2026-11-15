@@ -19,6 +19,14 @@ einen erfolgreich veröffentlichten Beitrag.**
 
 ## Einstieg nach der E-Mail-Bestätigung (15.11.2026)
 
+Bei ausstehender E-Mail-Bestätigung kann der Kunde auf der Anmeldeseite über
+„Bestätigungsmail fehlt?“ einen neuen Link anfordern. Nach einer Registrierung
+oder einem Anmeldeversuch mit unbestätigter Adresse ist diese bereits
+eingetragen. Bei einem abgelaufenen Link ohne erkennbaren Zweck stehen
+Registrierungsbestätigung und Passwort-Wiederherstellung zur Auswahl.
+Der vorhandene Browser-Test `tests/run-customer-entry.mjs` prüft beide Wege
+mit simuliertem Mailversand.
+
 Der veröffentlichte Website-Workflow `JHkHPTTL2ttfCMMg` (Version
 `971b74ee-6ef0-4fff-8eaf-0f22876dfbba`) gibt für ein neues bestätigtes
 Profil HTTP 403 zurück. Der Registrierungs-Trigger legt es ohne Paket,
