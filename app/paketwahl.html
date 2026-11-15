@@ -25,7 +25,7 @@
   <header>SMA</header>
   <main>
     <h1>Dein SMA-Paket vormerken</h1>
-    <p>Deine Vormerkung ist unverbindlich. Sobald dein Zahlungsangebot vorliegt, kannst du das vorgemerkte Paket separat buchen.</p>
+    <p id="plan-intro">Deine Vormerkung ist unverbindlich. Sobald dein Zahlungsangebot vorliegt, kannst du das vorgemerkte Paket separat buchen.</p>
     <form id="choice" hidden>
       <fieldset><legend>Paket auswählen</legend><div class="plans">
         <label><input type="radio" name="plan" value="alpha" required><strong>Alpha</strong><span>100 € / Monat</span><small>Social-Media-Posting und Portalverbindungen</small></label>
@@ -45,6 +45,9 @@
     <button id="retry" hidden>Erneut laden</button>
     <nav><a href="dashboard.html">Dashboard-Zugang prüfen</a><button id="logout">Abmelden</button></nav>
   </main>
-  <script type="module" src="./assets/onboarding-plan.mjs?v=4"></script>
+  <script type="module">
+    if (new URLSearchParams(location.search).has('buchung')) await import('./assets/onboarding-payment-return.mjs?v=1');
+    else await import('./assets/onboarding-plan.mjs?v=4');
+  </script>
 </body>
 </html>

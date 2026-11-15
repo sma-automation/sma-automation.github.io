@@ -725,7 +725,12 @@ if (expiredLink) {
 // BESTEHENDE SESSION PRÜFEN
 
 function openDashboard() {
-  const pilot = new URLSearchParams(window.location.search).get('kundenmedien') === 'pilot';
+  const order = urlQuery.get('buchung');
+  if (/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(order)) {
+    window.location.replace('paketwahl.html?buchung=' + order);
+    return;
+  }
+  const pilot = urlQuery.get('kundenmedien') === 'pilot';
   window.location.replace(pilot ? 'dashboard.html?kundenmedien=pilot' : 'dashboard.html');
 }
 

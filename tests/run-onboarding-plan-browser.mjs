@@ -5,7 +5,9 @@ import {chromium} from './dom-runtime/node_modules/playwright-core/index.mjs';
 
 const site = 'https://sma.test';
 const fakeClient = `export function createClient(){return {
- auth:{getSession:async()=>({data:{session:{user:{id:'fixture'},access_token:'fixture'}}}),onAuthStateChange(){}},
+ auth:{getSession:async()=>({data:{session:sessionStorage.signedOut?null:{user:{id:'fixture'},access_token:'fixture'}}}),
+   onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},
+   signInWithPassword:async()=>{sessionStorage.removeItem('signedOut');return {data:{session:{user:{id:'fixture'}}}};} },
  functions:{invoke:async(name,options)=>({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)})).json()})},
  rpc: async(name,params) => ({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params)})).json()})
 };}`;
@@ -16,15 +18,19 @@ try {
     const page=await context.newPage();
     const errors=[];
     let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0, paymentCalls=0;
+    const order='80000000-0000-4000-8000-000000000001';
+    const returnUrl=site+'/app/paketwahl.html?buchung='+order;
+    let paymentState='booked',statusReads=0;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
-      if (req.method()==='GET' && url.origin===site && /^\/app\/(dashboard\.html|paketwahl\.html|assets\/[\w.-]+\.m?js)$/.test(url.pathname))
+      if (req.method()==='GET' && url.origin===site && /^\/app\/(dashboard\.html|index\.html|paketwahl\.html|assets\/[\w.-]+\.m?js)$/.test(url.pathname))
         return route.fulfill({contentType:url.pathname.endsWith('.html')?'text/html; charset=utf-8':'text/javascript',body:await readFile(new URL('..'+url.pathname,import.meta.url))});
       if (req.method()==='GET' && url.origin==='https://esm.sh' && /^\/@supabase\/supabase-js@2(?:\.57\.4)?$/.test(url.pathname))
         return route.fulfill({contentType:'text/javascript',body:fakeClient});
       if (req.method()==='POST' && url.href==='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session') {
         sessionReads++;
+        if(paymentState==='active') return route.fulfill({json:{html:'<body data-sma-customer-id="fixture"><p>Mein Kundenbereich</p></body>'}});
         return route.fulfill({status:403,json:{error:'Zugang nicht freigeschaltet oder Anmeldung abgelaufen.'}});
       }
       if (req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_plan_choice_v1') {
@@ -48,6 +54,11 @@ try {
         paymentCalls++;
         offer={...offer,checkout:'https://www.mollie.com/checkout/fixture'};
         return route.fulfill({json:{code:'BOOKED'}});
+      }
+      if(req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_payment_status_v1'){
+        assert.deepEqual(req.postDataJSON(),{p_order:order});statusReads++;
+        if(paymentState==='offline') return route.fulfill({status:503,body:'unavailable'});
+        return route.fulfill({body:JSON.stringify(paymentState),contentType:'application/json'});
       }
       errors.push(req.method()+' '+url.pathname);return route.abort();
     });
@@ -100,7 +111,43 @@ try {
     await page.reload();const refresh=page.getByRole('button',{name:'Zahlungsstand erneut abrufen'});
     await refresh.waitFor();assert.equal(paymentCalls,1);await refresh.click();
     await page.getByRole('link',{name:'Bei Mollie bezahlen'}).waitFor();assert.equal(paymentCalls,2);assert.equal(bookings,2);
+    const countsBeforeReturn={bookings,paymentCalls,writes};
+    await page.clock.install();
+    await page.goto(returnUrl);await page.getByText(/warten auf die Zahlungsbestätigung/).waitFor();
+    assert.equal(await book.isHidden(),true);assert.equal(await page.locator('#checkout').isHidden(),true);
+    paymentState='paid';await page.clock.fastForward(3001);
+    await page.getByText(/Deine Zahlung ist bestätigt/).waitFor();
+    paymentState='active';await page.clock.fastForward(7001);
+    await page.frameLocator('#dashboard').getByText('Mein Kundenbereich').waitFor();
+    assert.equal(statusReads,3);
+    await page.goto(returnUrl);await page.frameLocator('#dashboard').getByText('Mein Kundenbereich').waitFor();
+    assert.equal(statusReads,4);
+    paymentState='booked';await page.goto(returnUrl);
+    await page.getByText(/warten auf die Zahlungsbestätigung/).waitFor();
+    for(const delay of [3000,7000,15000,30000]){
+      const next=page.waitForResponse(r=>r.url().endsWith('/fixture/sma_onboarding_payment_status_v1'));
+      await page.clock.fastForward(delay+1);await next;
+      await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).waitFor({state:'visible'});
+      await page.waitForFunction(()=>!document.querySelector('#retry').disabled);
+    }
+    await page.getByText(/Du kannst den Stand erneut prüfen/).waitFor();
+    const lastRead=statusReads;await page.clock.fastForward(120000);assert.equal(statusReads,lastRead);
+    paymentState='closed';await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
+    await page.getByText('Diese Zahlung wurde nicht abgeschlossen.').waitFor();
+    assert.equal(await page.getByRole('link',{name:'Zur Paketwahl'}).getAttribute('href'),'paketwahl.html');
+    paymentState='offline';await page.goto(returnUrl);await page.getByText(/konnte gerade nicht geladen werden/).waitFor();
+    paymentState='unavailable';await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
+    await page.getByText('Diese Buchung ist für dein Konto nicht verfügbar.').waitFor();
+    const validReads=statusReads;await page.goto(site+'/app/paketwahl.html?buchung=falsch');
+    await page.getByText('Dieser Zahlungslink ist ungültig.').waitFor();assert.equal(statusReads,validReads);
+    await page.evaluate(()=>{sessionStorage.signedOut='1';});paymentState='reversed';
+    await page.goto(returnUrl);await page.waitForURL(site+'/app/index.html?buchung='+order);
+    await page.locator('#email').fill('test@example.invalid');await page.locator('#password').fill('SMA-Testpasswort-12345!');
+    await page.getByRole('button',{name:'Anmelden',exact:true}).click();
+    await page.getByText(/Zugang aus dieser Buchung ist gesperrt/).waitFor();
+    assert.equal(page.url(),returnUrl);assert.deepEqual({bookings,paymentCalls,writes},countsBeforeReturn);
     assert.deepEqual(errors,[]);
+    console.log((mobile?'Handy':'Desktop')+': Mollie-Rückkehr, verspätete und sofortige Freischaltung, Abbruch, Wiederanmeldung und begrenzte Statusabfragen bestanden.');
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');
     await context.close();
   }
