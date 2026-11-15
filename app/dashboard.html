@@ -343,7 +343,9 @@ frame.addEventListener('load',async()=>{
     #page-publishing .sma-optimize:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
     @media(max-width:520px){#page-publishing .platform-card{grid-template-columns:40px minmax(0,1fr)}#page-publishing .sma-optimize{grid-column:2;grid-row:2;justify-self:start;padding:9px 14px}}
   `;doc.head.append(style);
-  fileView?.clear();fileView=attachFileList(doc,page);attachOptimizerPage(doc,page);
+  const editorUrl=new URL('./media-editor.html?v=10',location.href);
+  if(document.documentElement.dataset.smaCustomerMedia==='pilot')editorUrl.searchParams.set('kundenmedien','pilot');
+  fileView?.clear();fileView=attachFileList(doc,page,editorUrl.href);attachOptimizerPage(doc,page);
   for(const card of page.querySelectorAll('.platform-card')){
     const portal=Object.keys(portalNames).find(key=>portalNames[key]===card.querySelector('.platform-info strong')?.textContent.trim());
     if(!portal||card.querySelector('.sma-optimize'))continue;
@@ -489,7 +491,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
-  mediaEditorEntry=mountMediaEditorEntry({doc,href:new URL('./media-editor.html?v=8',location.href).href});
+  mediaEditorEntry=mountMediaEditorEntry({doc,href:editorUrl.href});
   const saved=startupView;
   if(saved?.kind==='preview'&&fileView){
    await reopenSearchPreview(saved,fileView,doc,page,ownerId);
@@ -525,7 +527,7 @@ async function reopenSearchPreview(saved,list,doc,page,ownerId){
   }
  }finally{controller.abort();if(startupView===saved)startupView=null;}
 }
-function attachFileList(doc,page){
+function attachFileList(doc,page,editorHref){
  let disposed=false;const owner=dashboardOwnerId;
  const slot=doc.getElementById('publishingFilesSlot');if(!slot)return null;
  const style=doc.createElement('style');style.textContent=`#publishingFilesSlot{display:block;min-height:0;padding:16px;text-align:left}.sma-file-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.sma-file-toolbar button,.sma-file-row button,.sma-file-pages button{border:1px solid #c7d3f8;border-radius:9px;background:#edf2ff;color:#3157cd;padding:9px 13px;font:700 14px Arial,sans-serif;cursor:pointer}.sma-file-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-top:1px solid #e2e6ee}.sma-file-row>div{min-width:0}.sma-file-row strong{display:block;overflow-wrap:anywhere}.sma-file-row small{display:block;color:#65718a;margin-top:6px;line-height:1.5}.sma-file-row button[aria-pressed=true]{background:#4065d8;color:white}.sma-file-pages{display:flex;align-items:center;gap:12px;margin-top:12px}.sma-file-pages button:disabled{opacity:.45;cursor:default}.sma-file-row .sma-file-open{width:100%;padding:9px 10px;font-size:13px;text-align:center}`;doc.head.append(style);
@@ -659,6 +661,13 @@ function attachFileList(doc,page){
       say('Bitte oben das gewünschte Portal auswählen.');
      }
     });
+    if(f.id&&f.revision){
+     const edit=doc.createElement('a');
+     edit.setAttribute('href',editorHref+'#asset='+encodeURIComponent(f.id)+'&revision='+encodeURIComponent(f.revision));
+     edit.target='_blank';edit.rel='noopener';edit.textContent='Im Medieneditor öffnen';
+     edit.style.cssText='display:inline-block;margin-top:10px;color:#3157cd;text-decoration:underline';
+     info.append(edit);
+    }
     row.append(choose,open,info);list.append(row);thumbnails.observe(visual,f);}
   if(focusedId)focusResult(focusedId,focusedControl);
  }

@@ -15,6 +15,9 @@ unveränderliches Änderungsjournal; sie behauptet keinen fertigen Medienexport.
 
 Dashboard → **Content** → **Content Optimizer** → **Bearbeitungsentwurf öffnen**.
 Die separate Seite nutzt die bestehende Anmeldung und den eigenen Dateikatalog.
+Eine einzelne Fassung lässt sich über **Veröffentlichung → Dateien → Dateidetails → Im Medieneditor öffnen** öffnen.
+Der Editor lädt die angeklickte Datei und prüft ihre Version. Fehlt sie inzwischen oder hat sich die Version geändert, kann der Kunde eine Datei aus seinem aktuellen Katalog wählen.
+Das ursprüngliche Fenster behält die Galeriesuche. Beim Aufruf aus dem Kundenmedien-Pilot prüft der Editor den Pilotzugang im neuen Fenster erneut. Der Dashboard-Link führt dann zurück in den Pilot.
 Das Laden der Dateiliste liest gespeicherte Katalogdaten; neue Dateien werden
 weiterhin über Veröffentlichung hinzugefügt/aktualisiert.
 

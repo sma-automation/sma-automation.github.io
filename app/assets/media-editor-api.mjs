@@ -15,6 +15,7 @@ async function rpc(name,body,owner,signal){const s=await session(owner);const re
 export const galleryMusicRequest=(action,input,owner,signal)=>rpc('sma_gallery_music_v1',{p_action:action,p_input:input},owner,signal);
 export const editorRequest=(action,input,owner)=>rpc('sma_publication_editor_v1',{p_action:action,p_input:input},owner);
 export const editorFiles=owner=>rpc('sma_publication_files_v1',{p_action:'list'},owner);
+export const editorPilotAccess=owner=>rpc('sma_customer_media_pilot_v1',{p_route:'eligible'},owner);
 export async function editorRefreshFiles(owner,signal){await refreshMediaCatalog({getSession:()=>session(owner),owner,signal});signal?.throwIfAborted();const result=await editorFiles(owner);await session(owner);signal?.throwIfAborted();return result;}
 export async function editorThumbnail(file,signal,owner){return fetchAssetThumbnail(file,(await session(owner)).access_token,signal);}
 export const exportRequest=(action,input,owner)=>rpc('sma_publication_editor_export_v1',{p_action:action,p_input:input},owner);
