@@ -34,6 +34,21 @@ def patch(source):
  w=m.Builder(source['name'],Path('/nonexistent/sma-cover-builder.json'))
  w.nodes=copy.deepcopy(source['nodes']);w.edges=copy.deepcopy(source['connections'])
  nodes={n['name']:n for n in w.nodes}
+
+ # PR #57 embeds this strict helper in four Code nodes. The AIGC flag must
+ # travel from immutable customer choices to TikTok, never from a guess.
+ old_keys="['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle']"
+ new_keys="['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle','is_aigc']"
+ old_body='brand_organic_toggle:choices.brand_organic_toggle}'
+ new_body='brand_organic_toggle:choices.brand_organic_toggle,is_aigc:choices.is_aigc}'
+ patched=0
+ for n in w.nodes:
+  js=n.get('parameters',{}).get('jsCode','')
+  if 'function providerUploadPlan(' not in js:continue
+  if js.count(old_keys)!=1 or js.count(old_body)!=1 or 'is_aigc' in js:raise ValueError('TIKTOK_AIGC_PROVIDER_BASELINE_CHANGED')
+  n['parameters']['jsCode']=js.replace(old_keys,new_keys).replace(old_body,new_body)
+  patched+=1
+ if patched!=4:raise ValueError('TIKTOK_AIGC_NODE_COUNT_CHANGED')
  for name in ('Providerauftrag lesen','Provideranfrage atomar reservieren'):
   nodes[name]['parameters']['url']=m.BASE+'sma_publication_provider_cover_v1'
  nodes['Provideranfrage atomar reservieren']['parameters']['jsonBody']=nodes['Provideranfrage atomar reservieren']['parameters']['jsonBody'].replace("p_action:'begin'","p_action:'provider_begin'")
