@@ -71,11 +71,24 @@ test('signed-out dashboard hands just the explicit pilot selection to the login 
  }
 });
 
-test('login returns to the selected dashboard after sign-in or session reuse; recovery stays on the login page',async()=>{
+async function openLogin(search,auth,hash=''){
  const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
  const loginHtml=readFileSync('app/index.html','utf8');
  const source=loginHtml.split('<script type="module">')[1].split('</script>')[0];
  const script=source.slice(source.indexOf('const SUPABASE_URL'));
+ const {document,window}=parseHTML(loginHtml);
+ const redirects=[];
+ const location={search,hash,replace:href=>redirects.push(href)};
+ await vm.runInNewContext('(async()=>{'+script+'})()',{document,window:{location},URLSearchParams,createClient:()=>({auth})});
+ async function submit(){
+  document.getElementById('authForm').dispatchEvent(new window.Event('submit',{cancelable:true}));
+  await new Promise(resolve=>setImmediate(resolve));
+ }
+ return {document,redirects,submit};
+}
+
+test('login returns to the selected dashboard after sign-in or session reuse; recovery stays on the login page',async()=>{
+ const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
  const regularHref=parseHTML(html).document.getElementById('regularDashboard').getAttribute('href');
  assert.equal(regularHref,'dashboard.html');
  for(const [search,hasSession,expected] of [
@@ -84,18 +97,75 @@ test('login returns to the selected dashboard after sign-in or session reuse; re
   ['',false,regularHref],['?kundenmedien=anderer-wert',true,regularHref],
   ['?type=recovery&kundenmedien=pilot',true,null]
  ]){
-  const {document,window}=parseHTML(loginHtml);
-  const redirects=[];
   const auth={onAuthStateChange(){},getSession:async()=>({data:{session:hasSession?{}:null}}),
    signInWithPassword:async()=>({error:null})};
-  const location={search,hash:'',replace:href=>redirects.push(href)};
-  await vm.runInNewContext('(async()=>{'+script+'})()',{document,window:{location},URLSearchParams,createClient:()=>({auth})});
+  const {document,redirects,submit}=await openLogin(search,auth);
   if(!hasSession){
    assert.deepEqual(redirects,[]);
-   document.getElementById('authForm').dispatchEvent(new window.Event('submit',{cancelable:true}));
-   await new Promise(resolve=>setImmediate(resolve));
+   await submit();
   }
   assert.deepEqual(redirects,expected?[expected]:[]);
   if(expected===null)assert.equal(document.getElementById('resetView').hidden,false);
  }
+});
+
+
+test('landing page entry links open the matching form and registration only submits on request',async()=>{
+ const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
+ const home=parseHTML(readFileSync('index.html','utf8')).document;
+ const entry=name=>new URL([...home.querySelectorAll('#login a')].find(a=>a.textContent.trim()===name).getAttribute('href'),'https://sma.test/');
+ const login=entry('Login'),register=entry('Registrieren');
+ assert.equal(login.pathname,'/app/index.html');
+ assert.equal(login.search,'');
+ assert.equal(register.pathname,login.pathname);
+ assert.equal(register.search,'?ansicht=registrieren');
+ assert.equal(new URL(home.querySelector('header a.btn').getAttribute('href'),login.origin).href,login.href);
+
+ const calls=[];
+ let outcome='confirm';
+ const auth={onAuthStateChange(){},getSession:async()=>({data:{session:null}}),
+  signUp:async args=>{
+   calls.push(args);
+   if(outcome==='offline')throw Error('offline');
+   return {data:{session:outcome==='immediate'?{}:null}};
+  },
+  signInWithPassword:async()=>{calls.push('unexpected-sign-in');return {error:{message:'unexpected sign-in'}};}
+ };
+ const {document,redirects,submit}=await openLogin(register.search,auth);
+ const field=id=>document.getElementById(id);
+ assert.equal(field('authSubmit').textContent,'Konto erstellen');
+ assert.equal(field('authSubmit').getAttribute('type'),'submit');
+ assert.equal(field('password').getAttribute('autocomplete'),'new-password');
+ assert.equal(field('authModeLink').getAttribute('href'),'index.html');
+ assert.equal(field('registrationPasswordHint').hidden,false);
+ assert.equal(calls.length,0);
+ field('email').value='erstkunde@example.invalid';field('password').value='kurz';
+ await submit();
+ assert.equal(calls.length,0);
+ assert.match(field('status').textContent,/10 Zeichen/);
+ field('password').value='Beispiel909!';
+ outcome='offline';await submit();
+ assert.match(field('status').textContent,/erneut/);
+ assert.equal(field('authSubmit').disabled,false);
+ outcome='confirm';await submit();
+ assert.deepEqual(redirects,[]);
+ assert.match(field('status').textContent,/Postfach/);
+ assert.equal(calls.length,2);
+ assert.equal(calls[1].options.emailRedirectTo,'https://sma-automation.com/app/');
+ outcome='immediate';await submit();
+ assert.deepEqual(redirects,['dashboard.html']);
+});
+
+test('recovery takes priority over a registration link and a verified session returns to the selected dashboard',async()=>{
+ let submissions=0;
+ const auth={onAuthStateChange(){},getSession:async()=>({data:{session:{}}}),signUp:async()=>{submissions++;}};
+ const query='?ansicht=registrieren&kundenmedien=pilot';
+ const recovery=await openLogin(query,auth,'#type=recovery');
+ assert.equal(recovery.document.getElementById('resetView').hidden,false);
+ await recovery.submit();
+ assert.equal(submissions,0);
+ assert.deepEqual(recovery.redirects,[]);
+ const existing=await openLogin(query,auth);
+ assert.deepEqual(existing.redirects,['dashboard.html?kundenmedien=pilot']);
+ assert.equal(existing.document.getElementById('authModeLink').getAttribute('href'),'index.html?kundenmedien=pilot');
 });
