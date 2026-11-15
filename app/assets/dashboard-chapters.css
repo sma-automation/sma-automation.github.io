@@ -15,6 +15,18 @@
 }
 .sma-chapter-panel>.sma-prepare-post:hover{background:#2444ab}
 .sma-chapter-panel>.sma-prepare-post:focus-visible{outline:3px solid #769aff;outline-offset:3px}
+.sma-portal-summary{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+.sma-portal-summary>.card-title{grid-area:1/1;align-self:center;margin:0}
+.sma-portal-summary>:is(.big-value,.muted){grid-column:1/-1}
+.sma-portal-summary>.sma-open-portals{
+ grid-area:1/2;position:static;align-self:center;display:inline-flex;align-items:center;gap:6px;
+ border:0;background:transparent;color:#3157cd;cursor:pointer;padding:0;margin:0;
+ font:600 14px/1.4 Inter,Arial,sans-serif;
+}
+.sma-open-portals::before{content:"";position:absolute;inset:0;border-radius:inherit}
+.sma-open-portals::after{content:"";width:6px;height:6px;border:solid currentColor;border-width:1.5px 1.5px 0 0;transform:rotate(45deg)}
+.sma-portal-summary:has(.sma-open-portals:hover){border-color:#94a9eb}
+.sma-portal-summary:has(.sma-open-portals:focus-visible){outline:3px solid #769aff;outline-offset:2px}
 .sma-chapter-panel>.card,.sma-chapter-panel>.company-profile-overview{margin-top:0}
 .sma-chapter-panel>.card+.card{margin-top:20px}
 [data-sma-chapters]>.grid:empty,[data-sma-chapters]>.platform-list:empty{display:none!important}
