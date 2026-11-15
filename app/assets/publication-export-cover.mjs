@@ -10,36 +10,54 @@ export function exportCoverNote(portal){
  if(portal==='tiktok')return 'Bei einer freigegebenen Veröffentlichung erhält TikTok den gewählten Bildzeitpunkt im fertigen Video. TikTok erzeugt daraus das Cover.';
  return 'Dein Cover bleibt beim Export gespeichert. Für dieses Portal ist die automatische Cover-Übertragung noch nicht angebunden.';
 }
+// The existing original-image allowance also bounds ownership and cover lookup.
+// Abort settles the UI even if an adapter ignores its signal; late replies are consumed.
+function coverReadScope(){
+ const controller=new AbortController(),signal=AbortSignal.any([controller.signal,AbortSignal.timeout(180000)]);
+ function read(start){
+  return new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(callback,value)=>{if(settled)return;settled=true;signal.removeEventListener('abort',abort);callback(value);};
+   const abort=()=>finish(reject,Error('COVER_UNAVAILABLE'));
+   if(signal.aborted)return abort();
+   signal.addEventListener('abort',abort,{once:true});
+   try{Promise.resolve(start()).then(value=>finish(resolve,value),error=>finish(reject,error));}
+   catch(error){finish(reject,error);}
+  });
+ }
+ return {controller,signal,read,close(){controller.abort();}};
+}
 export function mountExportCover({doc,request,getOwnerId,expectedOwnerId,loadImage,portal,createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL}){
  const $=id=>doc.getElementById(id);let generation=0,controller=null,url=null,disposed=false;
  if($('exportCoverNote'))$('exportCoverNote').textContent=exportCoverNote(portal);
  function clear(){generation++;controller?.abort();controller=null;if(url)revokeURL(url);url=null;$('exportCoverImage').removeAttribute('src');$('exportCoverImage').hidden=true;$('exportCoverPanel').hidden=true;$('exportCoverPanel').open=false;$('exportCoverStatus').textContent='';}
  const active=g=>!disposed&&g===generation;
- async function owned(g){
-  try{return active(g)&&await getOwnerId()===expectedOwnerId&&active(g);}catch{return false;}
+ async function owned(g,scope){
+  return active(g)&&await scope.read(getOwnerId)===expectedOwnerId&&active(g);
  }
  async function setContext(file){
   clear();
   if(disposed||file?.media_kind!=='video')return null;
-  const g=generation;controller=new AbortController();const signal=controller.signal;
+  const g=generation,scope=coverReadScope();controller=scope.controller;const {signal}=scope;
   try{
-   if(!await owned(g))return {unavailable:true};
-   const cover=readExportCover(await request(file),file);
-   if(!await owned(g))return {unavailable:true};
+   if(!await owned(g,scope))return {unavailable:true};
+   const cover=readExportCover(await scope.read(()=>request(file,signal)),file);
+   if(!await owned(g,scope))return {unavailable:true};
    if(!cover)return null;
    $('exportCoverPanel').hidden=false;$('exportCoverStatus').textContent='Cover wird geladen …';
-   const blob=await loadImage(cover,signal);
-   if(!await owned(g)||signal.aborted){if(active(g))clear();return {unavailable:true};}
+   const blob=await scope.read(()=>loadImage(cover,signal));
+   if(!await owned(g,scope)||signal.aborted){if(active(g))clear();return {unavailable:true};}
    url=createURL(blob);$('exportCoverImage').src=url;$('exportCoverImage').hidden=false;
    $('exportCoverStatus').textContent='Cover aus deinem Export · bei '+(cover.position_ms/1000).toLocaleString('de-AT')+' Sek.';
    return {cover,blob};
   }catch{
-   if(active(g)&&!signal.aborted&&await owned(g)){
+   // Fixed public wording only: never start another unbounded auth read in recovery.
+   if(active(g)&&!scope.controller.signal.aborted){
     $('exportCoverPanel').hidden=false;
     $('exportCoverStatus').textContent='Das Cover ist gerade nicht verfügbar. Bitte aktualisiere die Dateien.';
    }
    return {unavailable:true};
-  }
+  }finally{scope.close();if(controller===scope.controller)controller=null;}
  }
  return {setContext,clear,destroy(){clear();disposed=true;}};
 }
