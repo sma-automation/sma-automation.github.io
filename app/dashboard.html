@@ -16,10 +16,10 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=31';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=5';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=6';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=12';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=13';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=2';
 import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=3';
@@ -349,7 +349,7 @@ frame.addEventListener('load',async()=>{
   for(const card of page.querySelectorAll('.platform-card')){
     const portal=Object.keys(portalNames).find(key=>portalNames[key]===card.querySelector('.platform-info strong')?.textContent.trim());
     if(!portal||card.querySelector('.sma-optimize'))continue;
-    const button=doc.createElement('button');button.type='button';button.className='sma-optimize';button.textContent='Optimieren';button.dataset.portal=portal;button.setAttribute('aria-controls','smaOptimizationPage');
+    const button=doc.createElement('button');button.type='button';button.className='sma-optimize';button.dataset.de='Optimieren';button.dataset.en='Optimize';button.textContent=/^en/i.test(doc.documentElement.lang)?button.dataset.en:button.dataset.de;button.dataset.portal=portal;button.setAttribute('aria-controls','smaOptimizationPage');
     button.addEventListener('click',event=>{event.stopPropagation();openOptimizer(portal,button);});card.append(button);
   }
   // A single top-level cloud entry point beside the language setting.
@@ -371,7 +371,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=4',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=5',location.href).href,
     onPreparePost:ownerId&&page.querySelector('.sma-optimize')&&findAreaNavigation('publishing')
       ?()=>navigateDashboardArea('portals'):null
   });
