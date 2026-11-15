@@ -11,7 +11,7 @@ kann der Kunde die Suche ebenfalls öffnen; **Esc** schließt sie wieder.
 
 Gesucht werden:
 - die vorhandenen, für das Konto tatsächlich sichtbaren Bereiche, darunter
-  Übersicht, Veröffentlichung, Dateien, History, Social Media, Content,
+  Übersicht, Veröffentlichung, Dateien, History, Portale (Social-Media-Verbindungen), Content,
   Musikbibliothek, Shop, Webseite und Einstellungen;
 - die **bereits geladenen** Kundendateien nach Dateinamen, aktuellen Beitragstiteln und Fassungen,
   sobald mindestens zwei Zeichen eingegeben wurden.

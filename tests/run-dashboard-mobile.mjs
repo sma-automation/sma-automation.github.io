@@ -160,15 +160,21 @@ async function selectedRow(frame,width){
 }
 // First visit with an empty gallery. The shell provides only the customer's
 // existing dashboard elements. Production code builds the navigation and preview.
+const platformNames=['YouTube','TikTok','Instagram','Facebook'];
+const platformInfo=name=>'<div class="platform-icon"></div><div class="platform-info"><strong>'+name+'</strong></div>';
+const connectionAction=name=>name==='YouTube'||name==='TikTok'
+ ? '<a class="button" target="_blank" href="/connect/'+name+'">'+(name==='YouTube'?'Neu verbinden':'Verbinden')+'</a>'
+ : '<button class="button" disabled>Meta-Freigabe offen</button>';
 const newCustomerShell=`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}.page:not(.active){display:none}@media(max-width:650px){aside{display:none}}main{padding:16px}</style>
+<style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}.page:not(.active){display:none}@media(max-width:650px){aside{display:none}}main{padding:16px}.platform-card{display:grid;gap:14px;padding:16px}.card{padding:12px}</style>
 <body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"></div></header>
-<aside><p>Arbeitsbereich</p><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button></aside><main>
+<aside><p>Arbeitsbereich</p><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button><button data-page="social">Social Media</button></aside><main>
 <section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid">
 <div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
 <section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
-<div class="card"><div class="platform-card"><span class="platform-info"><strong>YouTube</strong></span></div></div>
-<div id="publishingFilesSlot"></div></section></main>
+<div class="card"><div class="platform-list">${platformNames.map(name=>'<article class="platform-card">'+platformInfo(name)+'</article>').join('')}</div></div>
+<div id="publishingFilesSlot"></div></section>
+<section class="page" id="page-social"><div class="platform-list">${platformNames.map(name=>'<article class="platform-card">'+platformInfo(name)+'<div class="platform-action">'+connectionAction(name)+'</div></article>').join('')}</div></section></main>
 <script>document.querySelector('aside').onclick=e=>{const nav=e.target.closest('[data-page]');if(nav)for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+nav.dataset.page)}</script></body></html>`;
 
 async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
@@ -216,7 +222,7 @@ async function firstPost(browser,width,height,{failFirstRead=false}={}){
   await start.tap();
   const platforms=frame.getByRole('tab',{name:'Portale',selected:true});
   assert(await platforms.evaluate(el=>el===el.ownerDocument.activeElement));
-  await frame.getByRole('button',{name:'Optimieren'}).tap();
+  await frame.locator('.sma-optimize[data-portal=youtube]').tap();
   const editor=frame.frameLocator('iframe[data-portal="youtube"]');
   const empty=editor.getByRole('button',{name:'Leere Dateivorschau für den ersten Upload öffnen'});
   if(failFirstRead){
@@ -319,7 +325,20 @@ async function checkDashboardPreview(browser,width,height){
   await page.goto(dashboard);
   const frame=page.frameLocator('#dashboard'),sidebar=frame.locator('aside');
   await frame.getByRole('button',{name:'Beitrag vorbereiten'}).click();
-  await frame.getByRole('button',{name:'Optimieren'}).click();
+  assert.equal(await frame.locator('[data-page=social]').isVisible(),false);
+  const panel=frame.getByRole('tabpanel',{name:'Portale'});
+  for(const name of platformNames){
+   const group=panel.locator('.platform-card').filter({hasText:name});
+   const optimize=group.getByRole('button',{name:'Optimieren'});
+   const connect=group.locator('.platform-action :is(a,button)');
+   await fits(optimize,width);await fits(connect,width);
+   const first=await optimize.boundingBox(),next=await connect.boundingBox();
+   assert(first&&next&&first.x+first.width<=next.x+1&&Math.abs(first.y+first.height/2-next.y-next.height/2)<2);
+   assert(first.height>=44&&next.height>=44);
+   if(name==='YouTube'||name==='TikTok')assert.equal(await connect.getAttribute('href'),'/connect/'+name);
+   else assert(await connect.isDisabled());
+  }
+  await panel.locator('.sma-optimize[data-portal=youtube]').click();
   const editor=frame.frameLocator('iframe[data-portal="youtube"]');
   await editor.getByRole('button',{name:/Beitragsvorschau öffnen/}).click();
   const heading=editor.getByRole('heading',{name:draft.title});

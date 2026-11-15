@@ -39,7 +39,7 @@ async function fixture({areas=['overview','files','publishing'],fileState='ready
 const tick=()=>new Promise(r=>setImmediate(r));
 test('task names point to their available chapters and never offer hidden history views',async()=>{
  const {quickFindMatches,sectionCatalog}=await imported;
- for(const [query,key] of [['Freigabe','approval-status'],['Portaltexte','saved-texts'],['Textvarianten','saved-texts'],['Portale','portals']]){
+ for(const [query,key] of [['Freigabe','approval-status'],['Portaltexte','saved-texts'],['Textvarianten','saved-texts'],['Portale','portals'],['Social Media','portals'],['verbinden','portals'],['TikTok','portals']]){
   const matches=quickFindMatches(query,sectionCatalog,[]).areas;
   assert.deepEqual(matches.map(area=>area.key),[key]);
   const f=await fixture({areas:[key]});

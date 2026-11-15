@@ -90,6 +90,35 @@ await test('keyboard navigation has one focusable tab and matching accessible pa
  key('ArrowLeft');assert.equal(tabs.selected,'facebook');assert.equal(focused,'facebook');key('Home');assert.equal(tabs.selected,'youtube');key('ArrowRight');assert.equal(tabs.selected,'tiktok');key('End');assert.equal(tabs.selected,'facebook');
  for(const entry of tabs.entries){assert.equal(entry.button.getAttribute('tabindex'),entry.key==='facebook'?'0':'-1');assert.equal(entry.button.getAttribute('aria-controls'),entry.panel.id);assert.equal(entry.panel.getAttribute('aria-labelledby'),entry.button.id);}f.destroy();
 });
+await test('publication moves the original connection controls by platform and restores them on teardown',()=>{
+ const portal=name=>'<article class="platform-card"><div class="platform-info"><strong>'+name+'</strong></div>';
+ const link='<a href="/connect/test" target="_blank" rel="noopener" data-en="Reconnect">Neu verbinden</a>';
+ const blocked='<button disabled data-en="Meta approval pending">Meta-Freigabe offen</button>';
+ const names=['YouTube','Instagram'];
+ const publishing=names.map(name=>portal(name)+'<button class="sma-optimize">Optimieren</button></article>').join('');
+ const social=names.slice().reverse().map(name=>portal(name)+'<div class="platform-action">'+(name==='YouTube'?link:blocked)+'</div></article>').join('');
+ const {document:doc}=parseHTML('<html><head></head><body><nav><button data-page="publishing">Veröffentlichung</button><button data-page="social">Social Media</button></nav>'+
+  page('publishing',card('portals',publishing)+'<div id="publishingFilesSlot"></div>')+page('social',social)+'</body></html>');
+ const source=doc.getElementById('page-social'),nav=doc.querySelector('[data-page="social"]');
+ const controls=[source.querySelector('a'),source.querySelector('button')];
+ const cards=[...doc.querySelectorAll('#portals .platform-card')],optimizers=cards.map(c=>c.querySelector('button'));
+ const parents=controls.map(c=>c.parentElement.parentElement);let clicked=0;
+ controls[0].addEventListener('click',e=>{e.preventDefault();clicked++;});
+ for(let n=0;n<2;n++){
+  const view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css'});
+  assert(source.hidden&&nav.hidden);assert(!view.controllers.has('social'));
+  cards.forEach((c,i)=>{
+   const actions=c.querySelector('.sma-portal-actions');
+   assert.equal(actions.firstElementChild,optimizers[i]);
+   assert.equal(actions.lastElementChild.firstElementChild,controls[i]);
+  });
+  assert.equal(controls[0].getAttribute('target'),'_blank');assert.equal(controls[1].disabled,true);
+  controls[0].click();assert.equal(clicked,n+1);
+  view.destroy();assert(!source.hidden&&!nav.hidden);
+  controls.forEach((el,i)=>assert.equal(el.parentElement.parentElement,parents[i]));
+  assert.equal(doc.querySelector('.sma-portal-actions'),null);
+ }
+});
 await test('publication keeps its portal rows and file gallery, with optimizer outside chapter panels',()=>{
  const f=fixture(),tabs=f.view.controllers.get('publishing'),optimizer=f.$('#smaOptimizationPage');assert.equal(optimizer.parentNode,f.$('#page-publishing'));assert.equal(optimizer.closest('.sma-chapter-panel'),null);assert.equal(optimizer.hidden,true);
  tabs.select('files');f.$('#file-query').value='Video';tabs.select('portals');assert.equal(f.$('#portals').hidden,false);tabs.select('files');assert.equal(f.$('#file-query').value,'Video');f.destroy();

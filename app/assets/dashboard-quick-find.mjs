@@ -7,7 +7,6 @@ export const sectionCatalog=Object.freeze([
  {key:'publishing',label:'Veröffentlichung',hint:'Beiträge vorbereiten'},
  {key:'files',label:'Meine Dateien',hint:'Dateien suchen und bearbeiten'},
  {key:'history',label:'History & Aufträge',hint:'Aufträge Bearbeiten Analyse'},
- {key:'social',label:'Social Media',hint:'YouTube TikTok Instagram Facebook'},
  {key:'content',label:'Content',hint:'Magic Effect Texte'},
  {key:'music',label:'Musikbibliothek',hint:'Tracks Playlists'},
  {key:'shop',label:'Shop',hint:'Produkte Bestellungen'},
@@ -16,7 +15,7 @@ export const sectionCatalog=Object.freeze([
  {key:'tutorials',label:'Tutorials',hint:'Hilfe Anleitungen'},
  {key:'seller',label:'Verkäufer',hint:'Verkauf Beratung'},
  {key:'assistant',label:'Assistent',hint:'24/7 Assistent'},
- {key:'portals',label:'Portale',hint:'Veröffentlichung · Portal auswählen',page:'publishing'},
+ {key:'portals',label:'Portale',hint:'Veröffentlichung · Social Media verbinden · YouTube, TikTok, Instagram und Facebook',page:'publishing'},
  {key:'approval-status',label:'Freigabestatus der Aufträge',hint:'History · Gespeicherte Kundenfreigabe und Auftragsstatus ansehen',page:'history',historyView:'orders'},
  {key:'saved-texts',label:'Gespeicherte Beitragstexte',hint:'History · Portaltexte und frühere Textvarianten ansehen',page:'history',historyView:'texts'}
 ]);
