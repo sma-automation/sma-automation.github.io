@@ -39,8 +39,23 @@ try {
   await db.exec(await readFile('supabase/migrations/'+retryMigration,'utf8'));
   const renewalMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_subscription_renewal_v1.sql'));
   await db.exec(await readFile('supabase/migrations/'+renewalMigration,'utf8'));
+  // The scheduler and HTTP transport are captured locally; the application SQL runs unmodified.
+  await db.exec(`create schema cron; create schema net;
+    create table cron.jobs(name text primary key, schedule text, command text);
+    create function cron.schedule(text,text,text) returns bigint language sql as $$
+      insert into cron.jobs values ($1,$2,$3) returning 1::bigint $$;
+    create table net.requests(id bigint generated always as identity, url text, headers jsonb, body jsonb, timeout_ms integer);
+    create function net.http_post(url text,body jsonb,params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 5000)
+      returns bigint language sql as $$insert into net.requests(url,body,headers,timeout_ms) values ($1,$2,$4,$5) returning id$$;`);
+  const dueMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_renewal_schedule_v1.sql'));
+  await db.exec(await readFile('supabase/migrations/'+dueMigration,'utf8'));
+  assert.deepEqual(await one('select * from cron.jobs'),{name:'sma-package-renewal-due-v1',schedule:'*/5 * * * *',command:'select sma_private.package_renewal_tick_v1()'});
+  assert.equal((await one('select sma_private.package_renewal_tick_v1() as sent')).sent,0);
+  assert.equal((await one('select count(*)::int as n from net.requests')).n,0);
   for(const role of ['anon','authenticated']){
     await db.exec('set role '+role);
+    for(const sql of ["select public.sma_package_schedule_claim_v1(null)","select public.sma_package_schedule_result_v1(null,null,'ACTIVE',null)",
+      "select sma_private.package_renewal_tick_v1()"])await assert.rejects(db.query(sql),/permission denied/);
     await assert.rejects(db.query("select public.sma_package_renewal_v1(null,null,'restore','{}')"),/permission denied/);
     await db.exec('reset role');
   }

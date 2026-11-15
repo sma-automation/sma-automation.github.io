@@ -16,6 +16,11 @@ Deno.serve(createPaymentHandler({
    const r=await rpc('sma_onboarding_booking_v1',anon,auth,{p_owner:owner});
    return r?.ok===true && r.offer?.automated===true && r.offer.id===order && ['booked','paid'].includes(r.offer.state);
  },
+ schedule:{
+   claim:(ticket:string)=>internal('sma_package_schedule_claim_v1',{p_ticket:ticket}),
+   record:(id:string,lease:string,code:string,checkOn:string|null)=>internal('sma_package_schedule_result_v1',
+     {p_id:id,p_lease:lease,p_result:code,p_check_on:checkOn})
+ },
  renewal:(id:string,lease:string,action:string,data:unknown)=>internal('sma_package_renewal_v1',{p_id:id,p_lease:lease,p_action:action,p_data:data}),
  consumeRenewal:async(ticket:string)=>{
    const result=await post('https://johnmusic.app.n8n.cloud/webhook/sma-paket-folge-dienst-v1',{}, {ticket},25000);

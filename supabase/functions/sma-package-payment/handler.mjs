@@ -1,4 +1,4 @@
-import {renewalDecision} from './renewal.mjs';
+import {assessRenewal} from './renewal.mjs';
 const prices={alpha:'100.00',beta:'300.00',delta:'500.00'};
 const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 const pid=/^tr_[A-Za-z0-9]{1,64}$/, cid=/^cst_[A-Za-z0-9]{1,64}$/, sid=/^sub_[A-Za-z0-9]{1,64}$/;
@@ -45,7 +45,7 @@ function matchingSub(sub,o){
     sub.amount?.value===prices[o.plan] && sub.amount?.currency==='EUR' && sub.interval==='1 month';
 }
 
-export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRenewal,signature,callback,now=Date.now,newId=()=>crypto.randomUUID()}){
+export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRenewal,schedule,signature,callback,now=Date.now,newId=()=>crypto.randomUUID()}){
   const response=(status,code)=>new Response(JSON.stringify({code}),{status,headers});
   return async request=>{
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
@@ -53,15 +53,24 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
     const url=new URL(request.url);let id,lease,locked=false;
     try{
       let event=null;
-      const cycle=url.searchParams.get('cycle')==='1';
-      if(cycle&&!url.searchParams.has('order'))return response(403,'DENIED');
-      if(url.searchParams.has('order')){
+      const scheduled=url.searchParams.has('scheduled');
+      const cycle=scheduled||url.searchParams.get('cycle')==='1';
+      if(scheduled){
+        if(url.search!=='?scheduled=1'||!request.headers.get('content-type')?.startsWith('application/json'))return response(400,'INVALID');
+        const input=await request.text();
+        if(input.length>100)return response(400,'INVALID');
+        let body;try{body=JSON.parse(input);}catch{return response(400,'INVALID');}
+        if(typeof body?.ticket!=='string'||!uuid.test(body.ticket)||Object.keys(body).length!==1)return response(400,'INVALID');
+        id=await schedule.claim(body.ticket);
+        if(typeof id!=='string'||!uuid.test(id))return response(403,'DENIED');
+      }else if(url.searchParams.has('order')){
         id=url.searchParams.get('order');
         if(!uuid.test(id)||url.searchParams.get('proof')!==await signature(cycle?'renewal/'+id:id))return response(403,'DENIED');
         if(!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded'))return response(400,'INVALID');
         const body=await request.text();if(body.length>150)return response(400,'INVALID');
         event=new URLSearchParams(body).get('id');if(!pid.test(event))return response(400,'INVALID');
       }else{
+        if(cycle)return response(403,'DENIED');
         const auth=request.headers.get('authorization');
         if(!/^Bearer \S+$/.test(auth||''))return response(401,'AUTH');
         const body=await request.json();id=body?.order;
@@ -73,6 +82,12 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
       };
       let o=await write('lock');locked=true;
       requireValue(o.id===id&&Object.hasOwn(prices,o.plan)&&o.automated===true);
+      if(scheduled && (!['active','paid','reversed'].includes(o.state)||!o.payment_id||!o.merchant_customer||!o.subscription_id))return response(409,'INELIGIBLE');
+      let checkOn=null;
+      const finish=async(code)=>{
+        requireValue(await schedule.record(id,lease,code,checkOn));
+        return response(200,code);
+      };
       if(o.state==='closed')return response(200,'CLOSED');
       if(cycle && (!o.payment_id||!o.subscription_id))return response(503,'RETRY');
       if(!cycle && event && o.payment_id && event!==o.payment_id)return response(409,'MISMATCH');
@@ -114,6 +129,7 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         if(activated(row,o))await bridge('disable',{row:o.n8n_row_id,ref:o.n8n_ref,email:o.email,customer:o.merchant_customer,subscription:o.subscription_id,plan:o.plan});
         const after=await account();
         requireValue(sameAccount(after,o)&&after.zugang_aktiv===false&&after.zahlung_bestaetigt===false);
+        if(o.subscription_id)return await finish('REVERSED');
         return response(200,'REVERSED');
       }
       if(state==='BOOKED'||state==='CLOSED'||(state==='ACTIVE'&&!cycle))return response(200,state);
@@ -122,15 +138,17 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         const call=async(action,data)=>{
           const result=await renewal(id,lease,action,data);requireValue(result && !result.error);return result;
         };
-        const decision=await renewalDecision({order:o,sub,event:notification,today,readPage:async cursor=>{
+        const assessment=await assessRenewal({order:o,sub,event:notification,today,readPage:async cursor=>{
           const {ticket}=await call('renewals',{cursor});requireValue(uuid.test(ticket));return consumeRenewal(ticket);
         }});
+        const {decision}=assessment;checkOn=assessment.checkOn;
         if(state!=='ACTIVE')return decision;
         if(['WAIT','REVIEW'].includes(decision)&&!o.renewal_suspended)return decision;
         const row=await account();
         const action=decision==='ACTIVE'?'restore':'suspend';
         let result=await call(action,{row});
-        if(result.state==='REVIEW'||result.state==='ACTIVE')return result.state;
+        if(result.state==='REVIEW'){checkOn=null;return 'REVIEW';}
+        if(result.state==='ACTIVE')return 'ACTIVE';
         if(result.state==='RESTORE'){
           requireValue(uuid.test(result.ticket));await consumeRenewal(result.ticket);
           const after=await account();requireValue(activated(after,o));
@@ -147,7 +165,7 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         requireValue(receipt.status==='paid'&&!receipt.reversed&&typeof receipt.paid_at==='string');
         const sub=await bridge('subscription',{customer:o.merchant_customer,subscription:o.subscription_id});
         requireValue(matchingSub(sub,o)&&sub.id===o.subscription_id&&sub.startDate===nextMonth(receipt.paid_at));
-        return response(200,await reconcile(sub,event));
+        return await finish(await reconcile(sub,event));
       }
       requireValue(state==='PAID' && receipt.status==='paid' && !receipt.reversed && typeof receipt.paid_at==='string');
       const startDate=nextMonth(receipt.paid_at);
@@ -170,10 +188,11 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
       const sub=await bridge('subscription',{customer:o.merchant_customer,subscription:o.subscription_id});
       requireValue(matchingSub(sub,o) && sub.id===o.subscription_id && sub.startDate===startDate);
       const firstMonthPaid=startDate>today;
-      const scheduled=sub.status==='pending' && sub.nextPaymentDate===startDate;
-      if(firstMonthPaid && cycle)await reconcile(sub,event);
-      if(firstMonthPaid ? (sub.status!=='active' && !scheduled) : (await reconcile(sub,cycle?event:null)!=='ACTIVE')){
+      const startConfirmed=sub.status==='pending' && sub.nextPaymentDate===startDate;
+      if(firstMonthPaid && cycle && event)await reconcile(sub,event);
+      if(firstMonthPaid ? (sub.status!=='active' && !startConfirmed) : (await reconcile(sub,cycle?event:null)!=='ACTIVE')){
         // Let Mollie retry while an authenticated customer sees their confirmed payment.
+        if(scheduled){checkOn=null;return await finish('PAID');}
         return event ? response(503,'RETRY') : response(200,'PAID');
       }
       if(!activated(row,o)){
@@ -183,7 +202,9 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
       }
       requireValue(activated(row,o));
       const final=await write('receipt',{receipt,row});
-      requireValue(final.state==='ACTIVE');return response(200,'ACTIVE');
+      requireValue(final.state==='ACTIVE');
+      if(firstMonthPaid)checkOn=startDate;
+      return await finish('ACTIVE');
     }catch{return response(503,'RETRY');}
     finally{if(locked){try{await worker(id,lease,'release',{});}catch{/* An abandoned lease expires. */}}}
   };
