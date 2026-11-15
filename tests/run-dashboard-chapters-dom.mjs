@@ -10,7 +10,7 @@ const grid=(...cards)=>`<div class="grid">${cards.join('')}</div>`;
 const head=name=>`<div class="page-head"><h1>${name}</h1><p>Introduction</p></div>`;
 const page=(name,body)=>`<section id="page-${name}">${head(name)}${body}</section>`;
 const feature='<div class="interface-list package-feature-list">Existing features</div>';
-function fixture(){
+function fixture(onPreparePost){
  const html=[
   page('overview',grid(...['social-summary','content-summary','account-summary','plan-summary'].map(id=>card(id)))),
   page('publishing',card('portals','<button id="optimize">Optimieren</button>')+head('Dateien')+'<div id="publishingFilesSlot"><input id="file-query"></div><section id="smaOptimizationPage" hidden>Native optimizer</section>'),
@@ -41,7 +41,7 @@ function fixture(){
  }
  replaceShop();
  const original=[...doc.querySelectorAll('[id]')].map(el=>[el,el.parentNode]);
- const view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css',websiteView});
+ const view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css',websiteView,onPreparePost});
  return {doc,window,$,view,calls,input,historyTabs,websiteView,original,frame,shopLoads,replaceShop,get shopDoc(){return shopDoc;},get actions(){return actions;},destroy(){view.destroy();historyTabs.destroy();websiteView.destroy();}};
 }
 await test('all twelve dashboard areas have tabs directly after their original heading',()=>{
@@ -49,6 +49,20 @@ await test('all twelve dashboard areas have tabs directly after their original h
  for(const root of f.doc.querySelectorAll('[data-sma-chapters]')){const nav=root.querySelector('.sma-chapters');assert.equal(nav.previousElementSibling.tagName,'H1');assert.equal(nav.querySelectorAll('[aria-selected=true]').length,1);}
  for(const [name,tabs] of f.view.controllers){for(const entry of tabs.entries){entry.button.click();assert.equal(tabs.selected,entry.key);if(entry.panel){assert.equal(entry.panel.hidden,false);assert.equal(tabs.entries.filter(e=>e.panel&&!e.panel.hidden).length,1);}}}
  f.destroy();
+});
+await test('workspace starts post preparation and the account panel has no duplicate entry',()=>{
+ let starts=0;
+ const f=fixture(()=>starts++);
+ const panel=f.$('#sma-overview-panel-work'),button=panel.firstElementChild;
+ assert.equal(button.tagName,'BUTTON');
+ assert.equal(button.type,'button');
+ assert.equal(button.textContent,'Beitrag vorbereiten');
+ assert.equal(button.dataset.en,'Prepare a post');
+ assert.equal(f.$('#sma-overview-panel-account .sma-prepare-post'),null);
+ button.click();assert.equal(starts,1);
+ f.view.controllers.get('overview').select('account');assert.equal(panel.hidden,true);
+ f.destroy();button.click();assert.equal(starts,1);
+ const unavailable=fixture();assert.equal(unavailable.$('.sma-prepare-post'),null);unavailable.destroy();
 });
 await test('keeps the large content heading ahead of the tabs when the shell title changes',async()=>{
  const f=fixture(), title=f.$('.topbar-title');
@@ -76,6 +90,69 @@ await test('keyboard navigation has one focusable tab and matching accessible pa
  key('ArrowLeft');assert.equal(tabs.selected,'facebook');assert.equal(focused,'facebook');key('Home');assert.equal(tabs.selected,'youtube');key('ArrowRight');assert.equal(tabs.selected,'tiktok');key('End');assert.equal(tabs.selected,'facebook');
  for(const entry of tabs.entries){assert.equal(entry.button.getAttribute('tabindex'),entry.key==='facebook'?'0':'-1');assert.equal(entry.button.getAttribute('aria-controls'),entry.panel.id);assert.equal(entry.panel.getAttribute('aria-labelledby'),entry.button.id);}f.destroy();
 });
+await test('connection cards preserve the delegated OAuth click, native status refresh and the original optimizers',async()=>{
+ const portal=name=>'<article class="platform-card" data-sma-platform="'+name+'"><div class="platform-info"><strong>'+name+'</strong></div>';
+ const link='<a href="/connect/test" target="_blank" rel="noopener" data-en="Connect">Verbinden</a>';
+ const blocked='<button disabled data-en="Meta approval pending">Meta-Freigabe offen</button>';
+ const names=['YouTube','Instagram'];
+ const publishing=names.map(name=>portal(name)+'<button class="sma-optimize" data-portal="'+name.toLowerCase()+'">Optimieren</button></article>').join('');
+ const sourceRows=names.slice().reverse().map(name=>portal(name)+'<div class="platform-action">'+(name==='YouTube'?link:blocked)+'</div></article>').join('');
+ const list=html=>'<div class="platform-list">'+html+'</div>';
+ const {document:doc}=parseHTML('<html><head></head><body><nav><button data-page="publishing">Veröffentlichung</button><button data-page="social">Social Media</button></nav>'+
+  page('publishing',card('portals',list(publishing))+'<div id="publishingFilesSlot"></div>')+page('social',list(sourceRows))+'</body></html>');
+ const source=doc.getElementById('page-social'),nav=doc.querySelector('[data-page="social"]'),home=source.parentElement;
+ const pub=doc.querySelector('#page-publishing .platform-list'),native=source.querySelector('.platform-list');
+ const originals=[...pub.querySelectorAll('button')];
+ let pending='';
+ doc.addEventListener('click',event=>{
+  const clicked=event.target.closest('#page-social .platform-action a[href]');
+  if(clicked){event.preventDefault();pending=clicked.closest('[data-sma-platform]').dataset.smaPlatform;}
+ },true);
+ for(let n=0;n<2;n++){
+  const connect=source.querySelector('a'),view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css'});
+  assert(nav.hidden&&pub.hidden);assert(!view.controllers.has('social'));
+  assert(doc.getElementById('sma-publishing-panel-portals').contains(connect));
+  assert.equal(doc.querySelector('#page-publishing .platform-list'),pub);
+  assert.deepEqual([...native.children].map(c=>c.dataset.smaPlatform),names);
+  assert.equal(connect.previousElementSibling,originals[0]);assert.equal(connect.target,'_blank');
+  connect.click();assert.equal(pending,'YouTube');
+  // The session shell replaces both lists after verifying the customer's fresh response.
+  native.innerHTML=sourceRows.replace('>Verbinden<','>Neu verbinden<').replace('href="/connect/test"','href="/connect/fresh"');
+  pub.innerHTML=names.map(name=>portal(name)+'</article>').join('');
+  await tick();
+  assert.deepEqual([...native.querySelectorAll('.sma-optimize')],originals);
+  assert.equal(native.querySelector('a').textContent,'Neu verbinden');
+  assert.equal(native.querySelector('a').getAttribute('href'),'/connect/fresh');
+  assert(native.querySelector('button[disabled]').disabled);
+  view.destroy();assert(!nav.hidden&&!pub.hidden);assert.equal(source.parentElement,home);
+  assert.deepEqual([...pub.querySelectorAll('.sma-optimize')],originals);
+  assert.equal(doc.querySelector('.sma-portal-actions'),null);
+ }
+});
+await test('the overview counter opens the portal chapter and preserves native status updates',()=>{
+ const overview=page('overview',grid(card('summary','<div class="card-title">Social Media</div><div class="big-value"><span data-sma-social-count>0/4</span></div><div id="caption" class="muted">verbundene Plattformen</div>'),card('content'),card('account')));
+ const list=content=>'<div class="platform-list"><article class="platform-card"><div class="platform-info"><strong>YouTube</strong></div>'+content+'</article></div>';
+ const publishing=page('publishing',card('portals',list('<button class="sma-optimize">Optimieren</button>'))+'<div id="publishingFilesSlot"></div>');
+ const social=page('social',list('<div class="platform-action"><a href="/fixture">Verbinden</a></div>'));
+ const {document:doc}=parseHTML('<html lang="en"><head></head><body>'+overview+publishing+social+'</body></html>');
+ const count=doc.querySelector('[data-sma-social-count]'),summary=doc.getElementById('summary');
+ let opens=0;
+ const mount=()=>mountDashboardChapters({doc,stylesheetUrl:'/chapters.css',onPreparePost:()=>opens++});
+ for(let n=0;n<2;n++){
+  const view=mount(),button=summary.querySelector('button');
+  assert.equal(button.textContent,'Open platforms');assert.equal(button.dataset.de,'Portale öffnen');
+  assert.equal(button.getAttribute('aria-controls'),doc.getElementById('sma-publishing-panel-portals').id);
+  assert.deepEqual(button.getAttribute('aria-describedby').split(' ').map(id=>doc.getElementById(id)),[count,doc.getElementById('caption')]);
+  count.textContent='2/4';button.click();assert.equal(opens,n+1);
+  assert.equal(summary.querySelector('[data-sma-social-count]'),count);
+  view.destroy();button.click();assert.equal(opens,n+1);assert.equal(summary.querySelector('button'),null);
+  assert(!count.id);assert.equal(doc.getElementById('caption').id,'caption');
+ }
+ const existing=doc.createElement('a');existing.href='/other';summary.append(existing);
+ const guarded=mount();assert.equal(summary.querySelector('button'),null);guarded.destroy();existing.remove();
+ doc.getElementById('page-social').remove();const unavailable=mount();
+ assert.equal(summary.querySelector('button'),null);unavailable.destroy();
+});
 await test('publication keeps its portal rows and file gallery, with optimizer outside chapter panels',()=>{
  const f=fixture(),tabs=f.view.controllers.get('publishing'),optimizer=f.$('#smaOptimizationPage');assert.equal(optimizer.parentNode,f.$('#page-publishing'));assert.equal(optimizer.closest('.sma-chapter-panel'),null);assert.equal(optimizer.hidden,true);
  tabs.select('files');f.$('#file-query').value='Video';tabs.select('portals');assert.equal(f.$('#portals').hidden,false);tabs.select('files');assert.equal(f.$('#file-query').value,'Video');f.destroy();
@@ -85,6 +162,18 @@ await test('Shop delegates to original iframe controls, retains order page and r
  tabs.select('orders');assert.equal(first.getElementById('bestellungen').hidden,false);assert.equal(f.$('#smaProductDetails').hidden,true);tabs.select('products');tabs.select('orders');assert.equal(first.getElementById('order-page').textContent,'2');
  const second=f.replaceShop();assert.notEqual(first,second);assert.equal(first.querySelector('.shop-sections').style.display,'');assert.equal(second.getElementById('bestellungen').hidden,false);second.getElementById('showProducts').click();assert.equal(tabs.selected,'products');
  f.destroy();assert.equal(f.frame.style.height,'900px');assert.equal(second.querySelector('.shop-sections').style.display,'');assert.equal(f.$('#smaProductDetails').hidden,false);
+});
+await test('website preparation loads and unlocks fields even if host does not mark the page active',async()=>{
+ const f=fixture(),page=f.$('#page-website'),fields=f.$('#smaWebsitePreparation fieldset');
+ assert.equal(page.classList.contains('active'),false,'Real chapter navigation can show a page without the legacy active class');
+ await tick();await tick();
+ assert.deepEqual(f.calls,['get'],'The saved preparation must load when the dashboard chapter is mounted');
+ assert.equal(fields.disabled,false,'The customer must be able to edit the existing website URL');
+ assert.equal(f.$('[name="website_url"]').disabled,false,'The website URL should be editable after successful load');
+ assert.equal(f.$('#smaWebsitePreparation [type="submit"]').disabled,false,'Saving must be available after initial load');
+ page.classList.add('active');await tick();
+ assert.deepEqual(f.calls,['get'],'A subsequent navigation event must not repeat the initial load');
+ f.destroy();
 });
 await test('Website chapters and existing shortcuts remain synchronized without losing unsaved input',async()=>{
  const f=fixture(),root=f.$('#page-website'),tabs=f.view.controllers.get('website');root.classList.add('active');await tick();await tick();assert.deepEqual(f.calls,['get']);

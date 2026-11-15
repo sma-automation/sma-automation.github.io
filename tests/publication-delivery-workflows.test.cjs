@@ -34,7 +34,14 @@ test('provider HTTP edges require account validation and an atomic journal inten
 test('authenticated checked orders resume one provider operation without changing the API response',()=>{
  const w=load('publication-order-api'),n=Object.fromEntries(w.nodes.map(x=>[x.name,x]));
  const expr=n['Geprüften Providerauftrag fortsetzen?'].parameters.conditions.conditions[0].leftValue.slice(3,-2);
- const eligible=(state,action,ok=true)=>vm.runInNewContext(expr,{$json:{id:'test-id',state,ok},$:()=>({first:()=>({json:{action}})})});
+ // This request node has a separate error output. n8n can infer that
+ // empty output at the downstream IF unless its success output is explicit.
+ const eligible=(state,action,ok=true)=>vm.runInNewContext(expr,{
+  $json:{id:'test-id',state,ok},
+  $:name=>{assert.equal(name,'Dashboard-Anfrage prüfen');return {
+   first:output=>output===0?{json:{action}}:undefined,
+  };},
+ });
  for(const state of ['preparing','prepared','approved','blocked','cancelled','failed'])for(const action of ['prepare','approve','get','account'])assert.equal(eligible(state,action),false);
  assert.equal(eligible('checked','get'),true);assert.equal(eligible('checked','approve'),true);assert.equal(eligible('checked','prepare'),false);assert.equal(eligible('checked','get',false),false);
  const kickoff=n['Providerweg im Hintergrund'];assert.equal(kickoff.parameters.options.waitForSubWorkflow,true);assert.equal(kickoff.parameters.workflowId.value,'JaidX5YeKl6ZTqjQ'); // Installed 47-node provider + cover copy

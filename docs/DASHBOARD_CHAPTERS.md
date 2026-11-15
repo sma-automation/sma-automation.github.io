@@ -1,15 +1,14 @@
 # Dashboard-Kapitel
 
-Stand: 06.11.2026. Zielbranch: `website-v1`.
+Stand: 15.11.2026. Zielbranch: `website-v1`.
 
-Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf alle zwölf Dashboard-Bereiche übertragen: feine graue Grundlinie, blaue aktive Unterstreichung, graue inaktive Reiter, ein sichtbares Kapitel. Die Reiter stehen unmittelbar unter der Bereichsüberschrift. Bestehende Inhalte, Formulare, Aktionen und Ereignis-Handler bleiben erhalten.
+Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf die Dashboard-Bereiche übertragen: feine graue Grundlinie, blaue aktive Unterstreichung, graue inaktive Reiter, ein sichtbares Kapitel. Die Reiter stehen unmittelbar unter der Bereichsüberschrift. Bestehende Inhalte, Formulare, Aktionen und Ereignis-Handler bleiben erhalten.
 
 | Bereich | Kapitel |
 | --- | --- |
 | Übersicht | Arbeitsbereich · Konto & Paket |
 | Veröffentlichung | Portale · Dateien |
 | Portaloptimierung | Datei · Inhalt und Ziel (bestehender Ablauf) |
-| Social Media | YouTube · TikTok · Instagram · Facebook |
 | Content | Meine Dateien · Content Optimizer · Magic Effect |
 | Musikbibliothek | Tracks · Meine Playlist |
 | History | Aufträge · Bearbeiten · Analyse |
@@ -19,6 +18,10 @@ Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf alle zwöl
 | Shop | Produkte · Bestellungen |
 | Kundenassistent | Einrichtung · Assistenz |
 | Webseite & Domain | Webseite · Firmendaten · Shop-Button · Domain · WordPress |
+
+Unter **Übersicht → Arbeitsbereich** führt die Kachel mit dem Zähler verbundener Plattformen über **Portale öffnen** zu den Verbindungen.
+
+Die Portalkacheln unter **Veröffentlichung → Portale** zeigen den Verbindungsstatus. Neben **Optimieren** steht die vorhandene Verbindungsaktion des jeweiligen Anbieters. Die ursprüngliche Verbindungsliste verarbeitet die Rückmeldung des Anbieters auch in dieser Ansicht. Beim Aktualisieren der Liste werden die Optimieren-Schaltflächen wieder zugeordnet. Ein Neuladen im selben Konto und Tab stellt die zuletzt fokussierte Portalaktion wieder her.
 
 ## Umsetzung
 

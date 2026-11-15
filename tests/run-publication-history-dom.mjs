@@ -6,16 +6,19 @@ const uid='ab660000-0000-4000-8000-000000000091',tick=()=>new Promise(r=>setImme
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const entry=(n=1,extra={})=>({id:'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),platform:'youtube',title:'Fixture title',target_name:'Fixture channel',status:'blocked',created_at:'2026-11-06T12:00:00Z',updated_at:'2026-11-06T12:01:00Z',cover:{status:'not_recorded',updated_at:null},...extra});
 const result=(entries=[entry()],next=null,extra={})=>({ok:true,version:3,month:'2026-11',timezone:'Europe/Vienna',summary:{orders:next?21:entries.length,public_confirmed:0,platforms:entries.length?['youtube']:[]},months:entries.length?[{month:'2026-11',orders:next?21:entries.length}]:[],entries,has_more:!!next,next,...extra});
-function fixture({active=true,hash='',requestOrderPage,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors,requestAnalyses}={}){
+function fixture({active=true,hash='',requestOrderPage,requestFind,request=()=>result(),getOwnerId,requestTexts,requestAssignments,requestEditors,requestAnalyses}={}){
  const {document:doc,window}=parseHTML('<html><head></head><body><section id="page-history" class="'+(active?'active':'')+'"><div class="grid">'+Array.from({length:3},()=>'<div class="card"><div class="card-title">Old metric</div><div class="big-value">–</div><div class="muted">Old detail</div></div>').join('')+'</div><div class="card"><div class="card-title">Aktivitätsverlauf</div><p>Old intro</p><div id="historyActivitySlot" class="empty-state"></div></div><div class="card"><div class="card-title">Monatsarchiv</div><p>Old archive</p><div id="historyMonthSlot" style="display:flex"></div></div></section></body></html>');
  Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});let owner=uid,callback,unsubscribed=0;const calls=[];
  const route={hash,pathname:'/app/dashboard.html',search:''};
  Object.defineProperty(window,'location',{value:route,configurable:true});
- Object.defineProperty(window,'history',{value:{replaceState(){route.hash='';}},configurable:true});
+ Object.defineProperty(window,'history',{value:{state:null,replaceState(state,_,url){
+  const next=new URL(url,'https://sma.test'+route.pathname+route.search+route.hash);
+  Object.assign(route,{pathname:next.pathname,search:next.search,hash:next.hash});this.state=state;
+ }},configurable:true});
  const historyNav=doc.createElement('button');historyNav.dataset.page='history';
  historyNav.addEventListener('click',()=>doc.getElementById('page-history').classList.add('active'));
  doc.body.prepend(historyNav);
- const view=mountPublicationHistory({doc,requestOrderPage,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
+ const view=mountPublicationHistory({doc,requestOrderPage,requestFind,ownerWindow:window,expectedOwnerId:uid,stylesheetUrl:'/history.css',requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId:getOwnerId||(async()=>owner),watchOwner:cb=>{callback=cb;return {unsubscribe(){unsubscribed++;}};},request:input=>{calls.push(input);return request(input);}});
  const page=doc.getElementById('page-history');
  return {doc,window,page,view,calls,$:s=>page.querySelector(s),owner(id,notify=true){owner=id;if(notify)callback(id);},focus(){window.dispatchEvent(new window.Event('focus'));},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));},get unsubscribed(){return unsubscribed;}};
 }
@@ -188,7 +191,23 @@ const assignments=(entries=[assignmentEntry()],extra={})=>({ok:true,version:1,mo
 await test('file assignments in Edit show truthful baseline, literal saved text and independent totals',async()=>{
  const f=fixture({requestTexts:()=>texts(),requestAssignments:()=>assignments([assignmentEntry(1,{file_name:'<img src=x onerror=alert(1)>',body:'<script>alert(1)</script>'})])});await tick();
  assert.equal(f.page.querySelectorAll('[role=tab]').length,2);await openEditHistory(f,'assignments');const card=f.$('#historyAssignmentCard');assert.equal(card.hidden,false);assert.ok(f.$('#historyTextCard').closest('[hidden]'));assert.equal(f.$('#historyOrderCard').hidden,true);
- assert.match(card.textContent,/Übernommener Stand/);assert.match(card.textContent,/Frühere Änderungen sind nicht enthalten/);assert.match(card.textContent,/Zuletzt gespeichert: 04.10.2026/);assert.match(card.textContent,/<script>/);assert.equal(card.querySelector('script,img,a'),null);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyAssignmentCard'),null);
+ assert.match(card.textContent,/Übernommener Stand/);assert.match(card.textContent,/Frühere Änderungen sind nicht enthalten/);assert.match(card.textContent,/Zuletzt gespeichert: 04.10.2026/);assert.match(card.textContent,/<script>/);assert.equal(card.querySelector('script,img'),null);const link=card.querySelector('a.sma-history-preview-link');assert.equal(link?.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&asset='+assignmentEntry().asset_id);assert.equal(link?.getAttribute('target'),'_top');assert.match(link.textContent,/Aktuellen Beitrag bearbeiten/);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyAssignmentCard'),null);
+});
+await test('all four portal history rows link to the selected CURRENT file in the guarded editor',async()=>{
+ const platforms=['youtube','tiktok','instagram','facebook'];
+ const rows=platforms.map((platform,i)=>assignmentEntry(i+1,{platform,asset_id:entry(i+100).id,file_name:platform+' clip.mp4',event_kind:'assigned'}));
+ const f=fixture({requestAssignments:()=>assignments(rows)});await openEditHistory(f,'assignments');
+ const links=[...f.$('#historyAssignmentCard').querySelectorAll('a.sma-history-preview-link')];
+ assert.equal(links.length,4);
+ for(let i=0;i<links.length;i++){
+  const href='/app/publication-preview.html?wide=1&portal='+platforms[i]+'&asset='+rows[i].asset_id;
+  assert.equal(links[i].getAttribute('href'),href);
+  assert.equal(links[i].getAttribute('target'),'_top');
+  assert.match(links[i].textContent,/Aktuellen Beitrag bearbeiten/);
+ }
+ assert.equal(f.$('#historyAssignmentCard').querySelector('script,img'),null);
+ f.owner('other');assert.equal(f.$('#historyAssignmentCard a'),null);
+ f.view.destroy();
 });
 await test('file pages buffer twenty, display five and preserve their page when switching chapters',async()=>{
  const rows=Array.from({length:20},(_,i)=>assignmentEntry(i)),next={before_at:rows.at(-1).recorded_at,before_id:rows.at(-1).id},calls=[];
@@ -357,6 +376,31 @@ await test('active preparation links to the same order and falls back to preview
   assert.deepEqual(f.calls,[{}]);
  }finally{f.view.destroy();mock.timers.reset();}
 });
+await test('checked orders link to their recorded order without dispatching on open',async()=>{
+ const row=entry(1,{status:'checked',platform:'youtube'});
+ const f=fixture({request:()=>result([row])});
+ try{
+  await tick();const link=f.$('ol a');
+  assert.equal(link.textContent,'Geprüften Auftrag öffnen');
+  assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+row.id+'&view=transfer&resume=1');
+  assert.deepEqual(f.calls,[{}]);
+ }finally{f.view.destroy();}
+});
+await test('a private YouTube upload can reopen only its pending cover from history',async()=>{
+ for(const coverStatus of ['pending','complete','permission_required','uncertain']){
+  const row=entry(1,{status:'private_complete',cover:{status:coverStatus,updated_at:'2026-11-06T12:02:00Z'}});
+  const f=fixture({request:()=>result([row])});
+  try{
+   await tick();
+   const link=f.$('ol a');
+   if(coverStatus==='pending'){
+    assert.equal(link.textContent,'Ausstehendes Cover öffnen');
+    assert.equal(link.getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+row.id+'&view=transfer&resume=1');
+   }else assert.equal(link,null);
+   assert.deepEqual(f.calls,[{}]);
+  }finally{f.view.destroy();}
+ }
+});
 await test('a TikTok account recheck switches to the current post link when its deadline passes',async()=>{
  const now=Date.now();mock.timers.enable({apis:['Date','setTimeout'],now});
  const row=entry(1,{platform:'tiktok',status:'prepared',approval_window:{status:'recheck',expires_at:new Date(now+1000).toISOString()}});
@@ -380,4 +424,146 @@ await test('unfinished order links to its saved preparation until the server dea
   assert.deepEqual(f.calls,[{}]);
  }finally{f.view.destroy();mock.timers.reset();}
 });
+await test('History searches the full owner archive and opens the saved order without a new tab',async()=>{
+ const selected=entry(3,{title:'Hotel-Türgriff Demo',status:'uncertain'});
+ const found={ok:true,version:1,entries:[{id:selected.id,title:selected.title,platform:'youtube',status:selected.status,created_at:selected.created_at}],has_more:false,can_upload:false,can_publish:false};
+ const terms=[],lookups=[];
+ mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+ const f=fixture({
+  requestFind:async term=>{terms.push(term);return found;},
+  requestOrderPage:async(id,page)=>{lookups.push([id,page]);return result([selected],null,{order_page:1});}
+ });
+ try{
+  await tick();
+  const input=f.$('#smaHistorySearch');assert(input);
+  input.value='Hotel';input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+  assert.equal(f.$('.sma-history-list').hidden,true);
+  mock.timers.tick(351);await tick();await tick();
+  assert.deepEqual(terms,['Hotel']);
+  const buttons=[...f.$('.sma-history-find-results').querySelectorAll('button')];
+  assert.equal(buttons.length,1);
+  assert.match(buttons[0].textContent,/Hotel-Türgriff Demo/);
+  const description=f.doc.getElementById(buttons[0].getAttribute('aria-describedby'));
+  assert.match(description.textContent,/YouTube · Ergebnis unklar/);
+  buttons[0].click();await tick();await tick();
+  assert.deepEqual(lookups,[[selected.id,null]]);
+  assert.equal(input.value,'');
+  assert.equal(f.window.location.hash,'#auftrag/'+selected.id);
+  assert.equal(f.$('.sma-history-list').hidden,false);
+  assert.match(f.$('.sma-history-list').textContent,/Hotel-Türgriff Demo/);
+  assert.match(f.$('.sma-history-list').textContent,/Ergebnis unklar/);
+  assert.equal(f.doc.querySelectorAll('a[target="_blank"]').length,0);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+await test('selecting a same-title order replaces the previous return address and survives reload',async()=>{
+ const first=entry(1),second=entry(2),rows=[first,second];
+ const orderPage=()=>result(rows,null,{order_page:1});
+ const found=rows.map(({id,title,platform,status,created_at})=>({id,title,platform,status,created_at}));
+ mock.timers.enable({apis:['setTimeout']});
+ const f=fixture({hash:'#auftrag/'+first.id,requestOrderPage:orderPage,
+  requestFind:()=>({ok:true,version:1,entries:found,has_more:false,can_upload:false,can_publish:false})});
+ try{
+  await tick();
+  const field=f.$('#smaHistorySearch');
+  field.value=second.title;field.dispatchEvent(new f.window.Event('input'));
+  mock.timers.tick(351);await tick();
+  f.window.location.search='?lang=de';
+  const focused=[];
+  const proto=f.window.HTMLElement.prototype,original=proto.focus;
+  try{
+   proto.focus=function(){if(!this.closest('[hidden]'))focused.push(this);};
+   f.$('.sma-history-find-results').querySelectorAll('button')[1].click();await tick();
+  }finally{proto.focus=original;}
+  assert.equal(f.window.location.hash,'#auftrag/'+second.id);
+  assert.equal(f.window.location.search,'?lang=de');
+  const selected=f.$('.sma-history-list').querySelectorAll('details')[1];
+  assert.equal(selected.open,true);
+  assert.equal(focused.at(-1),selected.querySelector('summary'));
+  const savedHash=f.window.location.hash;
+  button(f,'Aktueller Monat').click();await tick();
+  assert.equal(f.window.location.hash,'');
+  assert.equal(f.window.location.search,'?lang=de');
+  const reloaded=fixture({hash:savedHash,requestOrderPage:id=>{
+   assert.equal(id,second.id);return orderPage();
+  }});
+  try{
+   await tick();const details=reloaded.$('.sma-history-list').querySelectorAll('details');
+   assert.equal(details[1].open,true);assert.ok(!details[0].open);
+  }finally{reloaded.view.destroy();}
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+await test('search results and the order list share deadlines and expire without another request',async()=>{
+ const now=Date.now();mock.timers.enable({apis:['Date','setTimeout'],now});
+ const deadline=new Date(now+6000).toISOString();
+ const rows=[entry(1,{status:'prepared',approval_window:{status:'active',expires_at:deadline}}),
+  entry(2,{status:'prepared',approval_window:{status:'recheck',expires_at:deadline}}),
+  entry(3,{status:'preparing',preparation_window:{status:'expired',expires_at:new Date(now-1000).toISOString()}})];
+ const searchRows=rows.map(({id,title,created_at,platform,status,approval_window,preparation_window})=>
+  ({id,title,created_at,platform,status,window:approval_window||preparation_window}));
+ let requests=0;
+ const f=fixture({request:()=>result(rows),requestFind:()=>{requests++;return {ok:true,version:1,entries:searchRows,has_more:false,can_publish:false,can_upload:false};}});
+ try{
+  await tick();
+  const field=f.$('#smaHistorySearch');
+  field.value='Test';field.dispatchEvent(new f.window.Event('input'));mock.timers.tick(351);await tick();
+  const labels=()=>[...f.page.querySelectorAll('.sma-history-find-results small')].map(c=>c.textContent.split(' · ')[1]);
+  const listLabels=()=>[...f.page.querySelectorAll('.sma-history-list .sma-history-status')].map(n=>n.textContent);
+  assert.deepEqual(labels(),['Freigabe ausstehend','Kontoprüfung erforderlich','Vorbereitung abgelaufen']);
+  assert.deepEqual(labels(),listLabels());
+  mock.timers.tick(6001);
+  assert.deepEqual(labels(),Array(3).fill('Vorbereitung abgelaufen'));
+  assert.deepEqual(labels(),listLabels());
+  assert.equal(requests,1);assert.deepEqual(f.calls,[{}]);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+await test('History search rejects late results after losing the current owner',async()=>{
+ const pending=deferred(),calls=[];
+ mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+ const f=fixture({requestFind:term=>{calls.push(term);return pending.promise;}});
+ try{
+  await tick();const input=f.$('#smaHistorySearch');input.value='Hotel';
+  input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+  mock.timers.tick(351);await tick();
+  assert.deepEqual(calls,['Hotel']);
+  f.owner('other');pending.resolve({ok:true,version:1,entries:[{id:entry().id,title:'INTERNAL_OTHER_ORDER',platform:'youtube',status:'prepared',created_at:entry().created_at}],has_more:false,can_upload:false,can_publish:false});
+  await tick();await tick();
+  assert.equal(f.$('.sma-history-find-results').children.length,0);
+  assert.equal(input.disabled,true);
+  assert.doesNotMatch(f.page.textContent,/INTERNAL_OTHER_ORDER/);
+ }finally{f.view.destroy();mock.timers.reset();}
+});
+
+await test('search opens saved texts directly and returns to unfiltered order statuses',async()=>{
+ const calls=[];
+ const f=fixture({requestFind:()=>{throw Error('unexpected search');},requestTexts:()=>{calls.push('texts');return texts();},requestEditors:()=>{throw Error('unexpected editor read');}});
+ await tick();
+ assert.equal(f.view.hasSearchView('texts'),true);
+ assert.equal(f.view.openSearchView('texts'),true);await tick();
+ assert.equal(f.$('#sma-history-tab-edits').getAttribute('aria-selected'),'true');
+ assert.equal(f.$('#historyEditType').value,'texts');
+ assert.equal(f.$('#historyTextCard').closest('[hidden]'),null);
+ assert.equal(f.$('#historyTextCard li')!==null,true);
+ assert.deepEqual(calls,['texts']);
+ const field=f.$('#smaHistorySearch');
+ field.value='Alter Filter';field.dispatchEvent(new f.window.Event('input'));
+ assert.equal(f.view.openSearchView('orders'),true);
+ assert.equal(f.$('#sma-history-tab-orders').getAttribute('aria-selected'),'true');
+ assert.equal(field.value,'');
+ assert.equal(f.$('#historyActivitySlot ol.sma-history-list').hidden,false);
+ assert.match(f.$('#historyActivitySlot ol.sma-history-list').textContent,/Blockiert/);
+ f.owner('other');
+ assert.equal(f.view.hasSearchView('texts'),false);
+ assert.equal(f.view.openSearchView('orders'),false);
+ f.view.destroy();
+});
+await test('missing or inactive history views cannot be opened by global search',async()=>{
+ const f=fixture({active:false});
+ assert.equal(f.view.hasSearchView('texts'),false);
+ assert.equal(f.view.openSearchView('texts'),false);
+ assert.equal(f.view.openSearchView('orders'),false);
+ f.page.classList.add('active');await tick();
+ assert.equal(f.view.openSearchView('orders'),true);
+ f.view.destroy();assert.equal(f.view.hasSearchView('orders'),false);
+});
+
 console.log(`${passed} history DOM scenarios passed.`);

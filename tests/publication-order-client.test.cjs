@@ -28,7 +28,7 @@ test('a new target gets a new request ID after a lost preparation response',asyn
 });
 test('final approval requires explicit confirmation and sends only bound token and ID',async()=>{
  const {client,requests}=await setup(body=>ok(body.input.id,{state:'blocked'}));
- const order={id,state:'prepared',target:{id:'target'},approval_token:'token',binding,choices,approval_policy:policy};
+ const order={id,state:'prepared',target:{id:'target'},approval_token:'token',binding,choices,approval_policy:policy,approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}};
  for(const value of [false,undefined,'true'])assert.throws(()=>client.approve(order,value));
  for(const state of ['approved','cancelled'])assert.throws(()=>client.approve({...order,state},true));assert.equal(requests.length,0);
  assert.throws(()=>client.approve(order,true));

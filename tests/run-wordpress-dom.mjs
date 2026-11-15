@@ -17,5 +17,57 @@ assert.equal(page.querySelector('[data-website-view="website"]').hidden,true);
 assert.equal(page.querySelector('[data-wp-start]').disabled,true,'no target cannot start a connection');
 assert.equal(calls,0,'inactive dashboard must not load customer data');
 page.querySelector('[data-website-back]').click();assert.equal(page.querySelector('[data-website-overview]').hidden,false);
+page.querySelector('[data-website-open="website"]').click();
+page.querySelector('[data-existing-route] [data-website-open="shop"]').click();
+assert.equal(page.querySelector('[data-website-view="shop"]').hidden,false);
+assert.equal(page.querySelector('[data-shop-actions]').hidden,true,'no unverified shop link');
+assert.equal(calls,0);
 view.destroy();assert(page.querySelector('.package-module-slot'));assert.equal(page.querySelector('[data-wordpress-panel]'),null);
 console.log('WordPress dashboard DOM checks passed: compact overview, separate view, disabled missing target, teardown');
+
+const shop='https://sma-automation.com/app/shop.html?shop=mein-shop';
+const wordpressCalls=[];
+const preparationCalls=[];
+const written=[];
+const clipboard={writeText:async value=>written.push(value)};
+const testWindow=Object.create(window);
+Object.defineProperty(testWindow,'navigator',{value:{clipboard}});
+Object.defineProperty(document,'defaultView',{value:testWindow});
+const active=mountWebsitePreparation({
+ page,chapterNavigation:true,getOwnerId:async()=>'owner',stylesheetUrl:'/style.css',
+ request:async(action)=>{
+  preparationCalls.push(action);
+  return {ok:true,state:'preparation',revision:0,draft:null,shop_url:shop,can_publish:false};
+ },
+ wordpressRequest:async(action)=>{wordpressCalls.push(action);throw Error('unexpected request');}
+});
+await new Promise(resolve=>setTimeout(resolve,0));
+const panel=page.querySelector('[data-website-view="shop"]');
+const status=panel.querySelector('[data-shop-status]');
+let selected=false;
+const shopField=panel.querySelector('[data-shop-url]');
+shopField.select=()=>{selected=true;};
+page.querySelector('[data-existing-route] [data-website-open="shop"]').click();
+assert.equal(panel.hidden,false);
+assert.equal(panel.querySelector('[data-shop-actions]').hidden,false);
+assert.equal(shopField.value,shop);
+assert.equal(panel.querySelector('[data-shop-open]').getAttribute('href'),shop);
+assert.match(panel.textContent,/Block „Buttons“/);
+assert.equal(panel.querySelector('[data-copy]').disabled,false);
+panel.querySelector('[data-copy]').click();
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.deepEqual(written,[shop]);
+assert.equal(status.textContent,'Shop-Link kopiert.');
+active.openChapter('connection');
+page.querySelector('[data-website-view="connection"] [data-website-open="shop"]').click();
+assert.equal(panel.hidden,false);
+assert.equal(status.textContent,'');
+clipboard.writeText=async()=>{throw Error('clipboard unavailable');};
+panel.querySelector('[data-copy]').click();
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(selected,true);
+assert.match(status.textContent,/Strg\+C/);
+assert.deepEqual(preparationCalls,['get']);
+assert.deepEqual(wordpressCalls,[]);
+active.destroy();
+console.log('Shop-Link ohne Plugin: beide Einstiege, zugeordneter Shop, Kopieren und manueller Fallback bestanden.');

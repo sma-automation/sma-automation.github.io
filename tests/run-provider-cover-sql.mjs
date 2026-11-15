@@ -1,3 +1,4 @@
+import {verifyPermissionRetry} from './sql-runtime/provider-cover-permission-retry.mjs';
 import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 const db=new PGlite();let n=0;const eq=(a,b)=>{assert.deepEqual(a,b);n++;},id=k=>'ab660000-0000-4000-9000-'+String(k).padStart(12,'0'),uid=id(91),other=id(92),hash='a'.repeat(64),rev='sha256:'+hash+':2',src=f=>readFile(new URL('../supabase/sql/'+f,import.meta.url),'utf8');
 try{
@@ -54,6 +55,7 @@ try{
   eq((await run('cover_finish',{state:'complete',code:'COVER_ACCEPTED'},id(99))).code,'INVALID_LEASE');eq((await run('cover_finish',{state:'complete',code:'COVER_ACCEPTED',token:'secret'},sent.lease_id)).code,'INVALID_RESULT');
   const codes={complete:'COVER_ACCEPTED',failed:'COVER_REJECTED',uncertain:'COVER_RESPONSE_UNCERTAIN'};eq((await run('cover_finish',{state,code:codes[state]},sent.lease_id)).cover_state,state);eq((await run('cover_finish',{state,code:codes[state]},sent.lease_id)).code,'INVALID_LEASE');eq((await run('cover_begin',proof())).code,'COVER_NOT_READY');eq((await run('provider_begin',data())).code,'COVER_OPERATION_REQUIRED');eq((await db.query('select state from sma_private.publication_provider_attempts_v1')).rows[0].state,'complete');await db.exec('rollback');
  }
+ await verifyPermissionRetry({db,src,run,proof,id,target,rev,eq});
  const sent=await run('cover_begin',proof());await db.exec("update sma_private.publication_provider_covers_v1 set sent_at=now()-interval '4 minutes'");eq((await run('context')).cover_state,'uncertain');eq((await run('cover_begin',proof())).code,'COVER_NOT_READY');eq((await run('cover_finish',{state:'complete',code:'COVER_ACCEPTED'},sent.lease_id)).cover_state,'complete');
  // Existing attempts never acquire a cover; absence at new init also stays frozen.
  await db.exec('begin');await db.exec('delete from sma_private.publication_provider_covers_v1');eq((await run('context')).cover,null);eq((await run('cover_begin',proof())).code,'COVER_NOT_READY');eq((await run('provider_begin',data())).cover,null);eq(await count('publication_provider_covers_v1'),0);await db.exec('rollback');

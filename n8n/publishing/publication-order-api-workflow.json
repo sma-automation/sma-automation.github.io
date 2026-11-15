@@ -664,7 +664,7 @@
           "conditions": [
             {
               "id": "07676b16-e31d-4433-9b2e-0e25492ed225",
-              "leftValue": "={{ $json.ok === true && !!$json.id && $json.state === 'checked' && ['approve','get'].includes($('Dashboard-Anfrage prüfen').first().json.action) }}",
+              "leftValue": "={{ $json.ok === true && !!$json.id && $json.state === 'checked' && ['approve','get'].includes($('Dashboard-Anfrage prüfen').first(0).json.action) }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",

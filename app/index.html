@@ -667,6 +667,11 @@ if (recoveryMode) {
 
 // BESTEHENDE SESSION PRÜFEN
 
+function openDashboard() {
+  const pilot = new URLSearchParams(window.location.search).get('kundenmedien') === 'pilot';
+  window.location.replace(pilot ? 'dashboard.html?kundenmedien=pilot' : 'dashboard.html');
+}
+
 const {
   data: sessionData,
   error: sessionError
@@ -683,7 +688,7 @@ if (sessionError && recoveryMode) {
 
 if (sessionData?.session && !recoveryMode) {
 
-  window.location.replace('dashboard.html');
+  openDashboard();
 
 }
 
@@ -718,7 +723,7 @@ form.addEventListener('submit', async (event) => {
     'success'
   );
 
-  window.location.replace('dashboard.html');
+  openDashboard();
 
 });
 

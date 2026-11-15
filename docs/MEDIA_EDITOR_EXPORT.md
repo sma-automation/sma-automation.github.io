@@ -107,6 +107,37 @@ reproduziert den Fehler auf dem unveränderten Vorgängerstand. Er prüft den ec
 Editor-Aufrufweg mit verzögerten Testdaten; kein Provider- oder Kundenexport wurde
 dafür ausgeführt. Der Test ist in die bestehenden GitHub-Prüfungen aufgenommen.
 
+## Browserexport im Kundenmedien-Pilot am 15.11.2026
+
+Im angemeldeten SMA-Testkonto wurde die bearbeitete Fassung eines vorhandenen
+Dreisekundenvideos über die Dateisuche im Medieneditor geöffnet. Gespeichert
+wurden Schnittbeginn bei 0,5 Sekunden, Schnittende bei 2 Sekunden und der
+Cover-Zeitpunkt bei 1,5 Sekunden. Im Kapitel **Export** erzeugte **Vorschau
+erzeugen** die MP4 und das PNG im Browser. Die Vorschau spielte bis zum Ende.
+
+Beide Download-Schaltflächen lieferten die Dateien. FFmpeg dekodierte die MP4
+vollständig. Sie enthielt 45 H.264-Bilder bei 30 Bildern pro Sekunde, war
+exakt 1,5 Sekunden lang und hatte eine Auflösung von 1280 × 720 Pixeln.
+Das PNG hatte dieselbe Auflösung. Am erwarteten Zeitpunkt von 1,0 Sekunden
+im geschnittenen Video betrug die maximale Abweichung zwischen PNG und
+dekodiertem Einzelbild zwei Stufen je RGB-Kanal auf einer Skala von 0 bis 255.
+
+Das Video und das Cover wurden ausschließlich lokal geprüft. Der Kundenordner
+erhielt keine neue Datei. Nach dem Test wurden die ursprünglichen Zeitfelder
+wiederhergestellt und erneut geladen. Im Entwurfsverlauf stehen der Test
+als Version 1 und die Rückstellung als Version 2.
+
+## Vorschau abbrechen und erneut starten (15.11.2026)
+
+**Abbrechen** gibt **Vorschau erzeugen** sofort wieder frei, auch wenn die
+Entwurfsversion noch geprüft wird. Ein neuer Versuch verwendet ein eigenes
+Abbruchsignal. Eine verspätete Antwort oder Fortschrittsmeldung des ersten
+Versuchs kann die neue Vorschau weder ersetzen noch deren Bedienung freigeben.
+
+## Texteinblendung in der Standbildvorschau
+
+Die Standbildvorschau zeichnet den Text in den Pixelmaßen des gewählten Ausgabeformats und skaliert ihn mit dem Bild. Vorschau und Export nutzen dieselbe Berechnung für Schriftgröße, Zeilenumbruch, Hintergrund und Position. Das gilt für Originalformat, Hochformat, Quadrat und Querformat.
+
 ## Nächster Schritt
 
 Zusätzliche Musik und die Cover-Zuordnung zur Portalvorbereitung sind implementiert;

@@ -1,19 +1,12 @@
+import {drawMediaOverlay} from './media-text-overlay.mjs?v=2';
 import {verifyMusicBytes,verifyMusicProbe} from './media-music-model.mjs?v=1';
-import {exportPlan,exportArguments,verifyMediaProbe,EXPORT_MAX_BYTES,sha256} from './media-export-model.mjs?v=2';
+import {exportPlan,exportArguments,verifyMediaProbe,EXPORT_MAX_BYTES,sha256} from './media-export-model.mjs?v=3';
 const coreBase='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/';
 const coreFiles=[['ffmpeg-core.js','text/javascript',111804,'67a48f11645f85439f3fde4f2119042c16b374b910206b7a7a24f342e28dcae3'],['ffmpeg-core.wasm','application/wasm',32232419,'9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7']];
 async function checkedCoreFile(entry,signal){const [name,type,size,hash]=entry,response=await fetch(coreBase+name,{credentials:'omit',referrerPolicy:'no-referrer',signal});if(!response.ok)throw Error('RENDERER_UNAVAILABLE');const data=await response.arrayBuffer();if(data.byteLength!==size||await sha256(data)!==hash)throw Error('RENDERER_UNAVAILABLE');return URL.createObjectURL(new Blob([data],{type}));}
 export async function overlayPNG(doc,plan){
- const canvas=doc.createElement('canvas');canvas.width=plan.width;canvas.height=plan.height;const ctx=canvas.getContext('2d');if(!ctx)throw Error('RENDERER_UNAVAILABLE');
- const text=plan.settings.overlay_text;
- if(text){
-  const fontSize=Math.max(16,Math.round(plan.width/25)),pad=Math.round(plan.width*.025),left=Math.round(plan.width*.05),max=plan.width-left*2-pad*2,lines=[];let line='';
-  ctx.font=`500 ${fontSize}px Arial, sans-serif`;ctx.textBaseline='middle';ctx.textAlign='center';
-  for(const ch of Array.from(text)){if(line&&ctx.measureText(line+ch).width>max){lines.push(line);line='';}line+=ch;}if(line)lines.push(line);
-  const lineHeight=Math.ceil(fontSize*1.35),height=lines.length*lineHeight+2*pad,position=plan.settings.overlay_position;
-  const top=Math.max(0,position==='top'?Math.round(plan.height*.05):position==='center'?Math.round((plan.height-height)/2):Math.round(plan.height*.95-height));
-  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(left,top,plan.width-left*2,height);ctx.fillStyle='white';lines.forEach((line,n)=>ctx.fillText(line,plan.width/2,top+pad+lineHeight*(n+.5)));
- }
+ const canvas=doc.createElement('canvas');
+ if(!drawMediaOverlay(canvas,plan.width,plan.height,plan.settings.overlay_text,plan.settings.overlay_position))throw Error('RENDERER_UNAVAILABLE');
  return new Uint8Array(await (await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('RENDERER_UNAVAILABLE')),'image/png'))).arrayBuffer());
 }
 export async function withMediaEngine(signal,action){

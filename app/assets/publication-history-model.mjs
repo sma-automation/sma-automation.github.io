@@ -19,6 +19,14 @@ export const historyStatuses=Object.freeze({
  limited_complete:['Eingeschränkt sichtbar','Der Beitrag ist für den gewählten eingeschränkten Personenkreis abgeschlossen.'],
  unknown:['Status unbekannt','Für diesen Auftrag liegt kein eindeutiger Status vor.']
 });
+export function historyStatusLabel(status,window){
+ if(window){
+  if(window.status==='expired'||Date.parse(window.expires_at)<=Date.now())return 'Vorbereitung abgelaufen';
+  if(window.status==='recheck')return 'Kontoprüfung erforderlich';
+  if(status==='prepared')return 'Freigabe ausstehend';
+ }
+ return historyStatuses[status][0];
+}
 export const historyPlatforms=Object.freeze({youtube:'YouTube',tiktok:'TikTok',instagram:'Instagram',facebook:'Facebook',unknown:'Portal unbekannt'});
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v);

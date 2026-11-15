@@ -3,6 +3,9 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - supabase/sql/launch-readiness-readonly.sql
+      - tests/run-launch-readiness-sql.mjs
+      - tests/launch-readiness-readonly.test.cjs
       - app/assets/original-video-preview.mjs
       - tests/run-original-video-preview-dom.mjs
       - app/assets/publication-order.mjs
@@ -20,9 +23,22 @@ on:
       - app/assets/publication-tab-draft.mjs
       - app/assets/publication-draft-conflict.mjs
       - app/assets/publication-preview.js
+      - app/assets/dashboard-cloud-upload.*
+      - tests/run-dashboard-cloud-upload-dom.mjs
       - n8n/publishing/prepare-preview.cjs
       - n8n/publishing/preview-workflow.json
       - supabase/sql/publication-shop-invitation.sql
+      - supabase/sql/publication-media-profiles.sql
+      - supabase/migrations/*_publication_instagram_verified_video_precheck_v1.sql
+      - supabase/migrations/*_publication_instagram_audio_video_bitrate_evidence_v1.sql
+      - tests/publication-video-magic.sql
+      - tests/publication-media-profiles.sql
+      - tests/run-publication-video-sql.mjs
+      - supabase/sql/publication-assignment-stale-file-reason.sql
+      - supabase/migrations/*_publication_verified_file_metadata_v1.sql
+      - supabase/migrations/*_publication_content_bound_metadata_v1.sql
+      - tests/run-publication-file-metadata-sql.mjs
+      - tests/run-publication-assignment-freshness-sql.mjs
       - tests/run-publication-shop-invitation-sql.mjs
       - app/publication-preview.html
       - tests/*publication-text-edits*
@@ -71,8 +87,22 @@ on:
       - supabase/sql/publication-preview-cover-plan.sql
       - supabase/migrations/*_publication_preview_cover_plan_v1.sql
       - supabase/sql/publication-provider-cover.sql
+      - supabase/sql/publication-cover-permission-retry.sql
+      - supabase/migrations/*_publication_cover_permission_retry_v1.sql
+      - tests/sql-runtime/provider-cover-permission-retry.mjs
       - supabase/migrations/*_publication_provider_cover_v1.sql
       - n8n/publishing/*gallery-soundtrack*
+      - n8n/publishing/gallery-private-evidence-worker.mjs
+      - n8n/publishing/gallery-private-transport-adapters.mjs
+      - n8n/publishing/gallery-private-server-transport.mjs
+      - n8n/publishing/gallery-private-google-refresh.mjs
+      - n8n/publishing/gallery-private-server-runner.mjs
+      - n8n/publishing/gallery-private-server-readiness.mjs
+      - tests/gallery-private-server-readiness.test.cjs
+      - n8n/private-gallery-runtime/**
+      - tests/gallery-private-server-transport.test.cjs
+      - tests/gallery-private-transport-adapters.test.cjs
+      - tests/gallery-private-evidence-worker.test.cjs
       - n8n/publishing/prepare-gallery-audio.py
       - n8n/publishing/fixtures/gallery-music-probe.json
       - tests/*gallery-background*
@@ -84,6 +114,11 @@ on:
       - app/assets/gallery-music*
       - tests/*gallery-music*
       - supabase/sql/gallery-music*.sql
+      - supabase/sql/publication-gallery-technical.sql
+      - tests/run-publication-gallery-technical-sql.mjs
+      - supabase/sql/gallery-worker-private-snapshot.sql
+      - supabase/sql/gallery-worker-dormant-account.sql
+      - tests/run-gallery-worker-snapshot-sql.mjs
       - supabase/migrations/*_gallery_music_receipt_v1.sql
       - supabase/migrations/*_gallery_automatic_music_v1.sql
       - app/assets/music-catalog.mjs
@@ -143,6 +178,15 @@ on:
       - supabase/migrations/*_publication_text_history_v1.sql
       - tests/*publication-text-history*
       - supabase/sql/publication-history.sql
+      - supabase/sql/publication-history-find.sql
+      - supabase/sql/publication-history-find-invoker-wrapper.sql
+      - supabase/sql/publication-history-find-window.sql
+      - supabase/migrations/*_publication_history_find_window_v1.sql
+      - supabase/sql/publication-history-find-status.sql
+      - supabase/migrations/*_publication_history_find_status_v1.sql
+      - tests/run-publication-history-find-sql.mjs
+      - app/assets/publication-history-find.mjs
+      - tests/publication-history-find.test.cjs
       - supabase/sql/publication-history-months.sql
       - supabase/migrations/*_publication_history_v1.sql
       - supabase/migrations/*_publication_history_months_v1.sql
@@ -169,10 +213,43 @@ jobs:
           npm ci --prefix tests/sql-runtime --ignore-scripts
           npm ci --prefix tests/dom-runtime --ignore-scripts
           npm ci --prefix tests/media-runtime --ignore-scripts
+          npm ci --prefix n8n/private-gallery-runtime --ignore-scripts
+      - name: Ensure FFmpeg and FFprobe for the saved-video sound check
+        run: |
+          # Hosted runners may not include either binary, and Ubuntu apt
+          # mirrors can be unreachable. Use pinned, npm-hosted test binaries
+          # instead of an unbounded apt retry; never skip media decoding.
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            tools_dir="$RUNNER_TEMP/sma-ci-media-tools"
+            bin_dir="$RUNNER_TEMP/sma-ci-media-bin"
+            mkdir -p "$tools_dir" "$bin_dir"
+            npm install --prefix "$tools_dir" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
+              @ffmpeg-installer/ffmpeg@1.1.0 @ffprobe-installer/ffprobe@2.1.2
+            ffmpeg_path="$(node -p "require('$tools_dir/node_modules/@ffmpeg-installer/ffmpeg').path")"
+            ffprobe_path="$(node -p "require('$tools_dir/node_modules/@ffprobe-installer/ffprobe').path")"
+            # npm's ignore-scripts can skip binary executable-bit setup.
+            # The packages are pinned and downloaded only for CI fixtures.
+            chmod u+x "$ffmpeg_path" "$ffprobe_path"
+            test -x "$ffmpeg_path" && test -x "$ffprobe_path"
+            ln -s "$ffmpeg_path" "$bin_dir/ffmpeg"
+            ln -s "$ffprobe_path" "$bin_dir/ffprobe"
+            echo "$bin_dir" >> "$GITHUB_PATH"
+            export PATH="$bin_dir:$PATH"
+          fi
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
       - name: Test histories, editor drafts and regressions
+        env:
+          SMA_REQUIRE_FFMPEG: '1'
         run: |
           node --test tests/*.test.cjs
+          node tests/run-launch-readiness-sql.mjs
           node tests/run-publication-comparison-sql.mjs
+          node tests/run-publication-video-sql.mjs
+          node tests/run-publication-file-metadata-sql.mjs
+          node tests/run-publication-assignment-freshness-sql.mjs
+          node tests/run-publication-gallery-technical-sql.mjs
+          node tests/run-gallery-worker-snapshot-sql.mjs
           node tests/run-publication-delivery-sql.mjs
           node tests/run-publication-manual-review-sql.mjs
           node tests/run-publication-tiktok-aigc-sql.mjs
@@ -183,8 +260,10 @@ jobs:
           node tests/run-publication-draft-product-links-sql.mjs
           node tests/run-publication-text-edits-dom.mjs
           node tests/run-publication-history-sql.mjs
+          node tests/run-publication-history-find-sql.mjs
           node tests/run-publication-history-months-sql.mjs
           node tests/run-publication-history-dom.mjs
+          node tests/run-dashboard-cloud-upload-dom.mjs
           node tests/run-publication-text-history-sql.mjs
           node tests/run-publication-text-history-hashtags-sql.mjs
           node tests/run-publication-assignment-history-sql.mjs

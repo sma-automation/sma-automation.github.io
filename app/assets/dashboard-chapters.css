@@ -8,6 +8,25 @@
 .sma-chapters>button:focus-visible{outline:3px solid #a5b8fa;outline-offset:3px}
 .sma-chapter-panel[hidden],[role=tabpanel][hidden]{display:none!important}
 .sma-chapter-panel{min-width:0;outline:none}
+.sma-chapter-panel>.sma-prepare-post{
+ display:inline-block;max-width:100%;min-height:44px;margin:0 0 16px;padding:10px 18px;
+ border:0;border-radius:9px;background:#3157cd;color:#fff;cursor:pointer;
+ font:600 15px/1.45 Inter,ui-sans-serif,system-ui,Arial,sans-serif;
+}
+.sma-chapter-panel>.sma-prepare-post:hover{background:#2444ab}
+.sma-chapter-panel>.sma-prepare-post:focus-visible{outline:3px solid #769aff;outline-offset:3px}
+.sma-portal-summary{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+.sma-portal-summary>.card-title{grid-area:1/1;align-self:center;margin:0}
+.sma-portal-summary>:is(.big-value,.muted){grid-column:1/-1}
+.sma-portal-summary>.sma-open-portals{
+ grid-area:1/2;position:static;align-self:center;display:inline-flex;align-items:center;gap:6px;
+ border:0;background:transparent;color:#3157cd;cursor:pointer;padding:0;margin:0;
+ font:600 14px/1.4 Inter,Arial,sans-serif;
+}
+.sma-open-portals::before{content:"";position:absolute;inset:0;border-radius:inherit}
+.sma-open-portals::after{content:"";width:6px;height:6px;border:solid currentColor;border-width:1.5px 1.5px 0 0;transform:rotate(45deg)}
+.sma-portal-summary:has(.sma-open-portals:hover){border-color:#94a9eb}
+.sma-portal-summary:has(.sma-open-portals:focus-visible){outline:3px solid #769aff;outline-offset:2px}
 .sma-chapter-panel>.card,.sma-chapter-panel>.company-profile-overview{margin-top:0}
 .sma-chapter-panel>.card+.card{margin-top:20px}
 [data-sma-chapters]>.grid:empty,[data-sma-chapters]>.platform-list:empty{display:none!important}
@@ -19,6 +38,21 @@
 [data-sma-chapters]>.page-head>.sma-chapters+p{margin-top:0}
 #page-publishing.sma-optimizing .sma-chapters{display:none!important}
 #page-publishing [data-chapter=files]>.page-head h1{font-size:20px}
+[data-page="social"][hidden],#page-publishing .platform-list[hidden],.sma-portal-connections>:not(.platform-list){display:none!important}
+#page-social.sma-portal-connections{display:block;margin:0;padding:0}
+#page-publishing .sma-portal-actions{
+ display:flex;align-items:center;gap:8px;grid-column:3;grid-row:1;min-width:0;max-width:100%;
+}
+#page-publishing .sma-portal-actions :is(.sma-optimize,.button){
+ display:inline-flex;align-items:center;justify-content:center;min-width:0;max-width:100%;min-height:44px;
+ margin:0;padding:8px 14px;font:600 14px/1.25 Inter,Arial,sans-serif;text-align:center;white-space:normal;
+}
+#page-publishing .sma-portal-actions :is(a,button):focus-visible{outline:3px solid #769aff;outline-offset:2px}
+@media(max-width:740px){
+ #page-publishing .platform-card:has(.sma-portal-actions){grid-template-columns:40px minmax(0,1fr)}
+ #page-publishing .sma-portal-actions{grid-column:1/-1;grid-row:2;justify-self:start}
+ #page-publishing .sma-portal-actions :is(.sma-optimize,.button){padding:8px 10px}
+}
 #page-social .sma-chapter-panel .platform-card{max-width:960px}
 #page-website[data-sma-chapters] .package-module-status.unlocked,#page-shop[data-sma-chapters] .package-module-status.unlocked,#page-seller[data-sma-chapters] .package-module-status.unlocked,#page-assistant[data-sma-chapters] .package-module-status.unlocked{display:none}
 #page-website[data-sma-chapters] #smaWebsitePreparation{margin:0;padding:0;max-width:none;border:0;background:transparent}

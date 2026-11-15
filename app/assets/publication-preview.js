@@ -1,3 +1,5 @@
+import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
+import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
@@ -5,13 +7,15 @@ import {missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} 
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
-import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
+import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=2';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=23';
-import {installOrderReview} from './publication-order.mjs?v=24';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=25';
+import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=27';
+import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
+import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
 const $=id=>document.getElementById(id);
 const names={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
@@ -23,10 +27,15 @@ let pendingLink,refreshDraftLink,choosingLinkFor,uncertainSave=null;
 const tabDrafts=tabDraftStore(window);
 let startupDraft=null,tabRecord=null,comparisonBase=null;
 let reviewStatus=null,reloadChoice=null;
-let retryHistoryPreview=false;
+let retryHistoryPreview=false,currentHistoryAsset=null;
+let galleryConfirmed=false,catalogRetry=null;
 let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
+// Ignore a stale background Magic-Effect status read after file switch or user action.
+let magicLoadTicket=0;
+// Keep Magic unavailable until the owner's saved draft has finished loading.
+let loadingVideoDraft=false,magicPreparationError=null;
 let pendingProductFocus=null;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
 const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-video-magic-effect-v1';
@@ -34,7 +43,7 @@ const magicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-mag
 const reviewEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-content-review-v1';
 Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
 messages.INVALID_HASHTAGS=hashtagMessage;
-const fileEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1';
+
 Object.assign(messages,{FILE_UNAVAILABLE:'Diese Datei ist nicht mehr im zugeordneten Kundenordner verfügbar.',FILE_CHANGED:'Die Datei wurde geändert. Aktualisiere die Dateiliste und erstelle einen neuen passenden Text.',FILE_REFRESH_REQUIRED:'Bitte aktualisiere zuerst die Dateiliste.',ASSIGNMENT_CHANGED:'Der zugeordnete Text wurde außerhalb dieser Datei geändert. Bitte erstelle einen neuen Text für die Datei.',ASSIGNMENT_CONFLICT:'Die Zuordnung wurde inzwischen geändert. Lade den gespeicherten Text erneut.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.',FILE_SYNC_UNAVAILABLE:'Die Dateiliste konnte nicht aktualisiert werden. Bitte versuche es erneut.',FILE_SYNC_RUNNING:'Die Dateiliste wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_RATE_LIMITED:'Bitte warte kurz, bevor du die Dateien erneut aktualisierst.',FILE_CATALOG_TOO_LARGE:'Der Kundenordner enthält mehr Dateien als diese Ansicht vollständig laden kann.',FILE_METADATA_INVALID:'Die Dateiinformationen sind unvollständig. Bitte prüfe die Dateien im Kundenordner.',PORTAL_REQUIRES_VIDEO:'Für dieses Portal wird derzeit eine Videodatei benötigt.',TEXT_ALREADY_ASSIGNED:'Dieser Text gehört bereits zu einer anderen Datei. Bitte erstelle einen eigenen Text.',FILE_FORMAT_MISMATCH:'Die Textvorbereitung passt nicht zur ausgewählten Dateiart.'});
 const params=new URLSearchParams(location.search);
 const requestedPortal=params.get('portal');
@@ -46,6 +55,8 @@ if(selectedPortal){
 }
 
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
+ fromSearch:window.parent!==window&&params.get('fromSearch')==='1',
+ onSearchReturn:()=>window.top.postMessage({type:'sma-publication-search-return'},location.origin),
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
  getPreview:()=>{
@@ -58,10 +69,22 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
    facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
    draftStep,invalidHashtags,draftStatus:draftStep?.note||(draft?'Gespeicherter Entwurf':'')};
  },
- onView:view=>{if(view!=='source')choosingLinkFor=null;if(view!=='preview')originalVideo?.stop();if(window.parent!==window)window.top.postMessage({type:'sma-publication-workspace-view',view},location.origin);},
+ onView:(view,requestedView)=>{
+  if(view!=='source')choosingLinkFor=null;
+  if(view!=='preview')originalVideo?.stop();
+  if(window.parent!==window&&view!==requestedView){
+   window.top.postMessage({type:'sma-publication-workspace-view',view,previewUnavailable:requestedView==='preview'},location.origin);
+  }
+ },
 }):null;
 if(workspace){
- window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(event.data.view))workspace.show(event.data.view);});
+ window.addEventListener('message',event=>{
+  if(signedOut||event.origin!==location.origin||event.source!==window.top)return;
+  const data=event.data;
+  if(data?.type==='sma-publication-search-context')workspace.setSearchReturn(data.fromSearch===true);
+  if(data?.type==='sma-publication-open-search-file'&&data.assetId===params.get('asset'))void requestFileSelection(data.assetId);
+  if(data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(data.view))workspace.restoreView(data.view);
+ });
  let heightQueued=false;
  const sendHeight=()=>{if(heightQueued)return;heightQueued=true;requestAnimationFrame(()=>{heightQueued=false;window.top.postMessage({type:'sma-publication-preview-height',height:Math.max(300,Math.ceil(document.querySelector('main').getBoundingClientRect().height)+20)},location.origin);});};
  new ResizeObserver(sendHeight).observe(document.querySelector('main'));sendHeight();
@@ -70,7 +93,7 @@ if(workspace){
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
- if(workspace){$('workspaceDraftAction').disabled=value;$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
+ if(workspace){$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -227,7 +250,7 @@ function previewDraftStep(){
   // This only displays a button; recognition starts on an explicit click.
   if(!missingVideoMetadata(selectedAsset).length&&!magicHint(selectedAsset)){
    return {target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',
-    note:'Für diese Datei ist noch kein Portalbeitrag gespeichert. Magic Effect kann den Inhalt erkennen und einen Entwurf vorbereiten.'};
+    note:magicPreparationError?'Magic Effect ist noch nicht verfügbar. Lade die Dateivorschau erneut.':automaticMode!==null?'Magic Effect arbeitet bereits an deiner Datei …':loadingVideoDraft||busy?'Magic Effect wird vorbereitet … SMA prüft die Datei und den gespeicherten Beitrag. Danach wird der Button freigegeben.':'Magic Effect ist bereit. Du kannst jetzt den Beitragstext erstellen.'};
   }
   return {target:'source_text',label:'Zum Texteditor',note:'Für diese Datei ist noch kein Portalbeitrag gespeichert.'};
  }
@@ -239,7 +262,7 @@ function previewDraftStep(){
  return null;
 }
 async function runPreviewDraftAction(target){
- if(busy||signedOut)return;
+ if(busy||signedOut||magicPreparationError)return;
  const step=previewDraftStep();
  if(!step||step.target!==target){workspace.refreshPreview();return;}
  if(step.field){focusDraftCorrection(step);return;}
@@ -356,7 +379,7 @@ function assertFileContext(context){
 }
 async function syncFileCatalog(){
  const auth=await session();if(signedOut)throw fileError('AUTH_REQUIRED');
- const response=await fetch(fileEndpoint,{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});
+ const response=await fetch(customerMediaEndpoint('catalog'),{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(90000)});
  const data=await response.json();if(signedOut)throw fileError('AUTH_REQUIRED');if(!response.ok||!data?.ok)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
 }
 function catalogFileIsFresh(file){
@@ -370,7 +393,6 @@ async function ensureFreshFile(context,force=false){
  status('Die Datei wird automatisch im Kundenordner geprüft. Deine Eingaben bleiben erhalten …');
  await syncFileCatalog();assertFileContext(context);
  const catalog=await optimizerCatalog();assertFileContext(context);
- if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
  const latest=catalog.files.find(file=>file.id===context.asset_id);
  if(!latest)throw fileError('FILE_UNAVAILABLE');
  if(latest.revision!==context.asset_revision||latest.media_kind!==selectedAsset.media_kind)throw fileError('FILE_CHANGED');
@@ -446,27 +468,10 @@ function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
 }
-function readableFilename(name){
- const stem=(name||'').replace(/\.[a-z0-9]{1,8}$/i,'').trim();
- // Generated export IDs, digests, camera counters and opaque upload tokens are poor titles.
- if(!stem||/^[a-f\d]{24,}$|[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}|^(?:(?:IMG|VID|DSC|MOV)[-_ ]?)?\d{5,}$/i.test(stem))return '';
- if(/^[a-zA-Z0-9_+=-]{25,}$/.test(stem)&&/[a-z]/.test(stem)&&/[A-Z]/.test(stem)&&/\d/.test(stem)&&/[a-zA-Z0-9]{20}/.test(stem))return '';
- return stem.replace(/_/g,' ');
-}
-function describeFile(file){
- const video=file.media_kind==='video';
- const kind=video?'Video':'Bild';
- const variant={original:video?'Originalvideo':'Originalbild',clip:'Videoausschnitt',cover:'Titelbild',
-  soundtrack:'Video mit SMA-Musik',export:video?'Bearbeitetes Video':'Bearbeitetes Bild'}[file.display?.variant]||kind;
- const duration=video&&Number.isFinite(file.duration_ms)&&file.duration_ms>0
-  ? Math.max(0.1,Math.round(file.duration_ms/100)/10).toLocaleString('de-DE')+' Sek.' : '';
- const modified=new Date(file.modified_at);
- const fallback=Number.isFinite(modified.getTime())?kind+' vom '+modified.toLocaleDateString('de-AT')+' · '+modified.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):kind;
- const title=file.display?.product||file.display?.draft_title||readableFilename(file.display?.source_name)||readableFilename(file.name)||fallback;
- return {title,version:[variant,duration].filter(Boolean).join(' · ')};
-}
 async function optimizerCatalog(signal){
- return fileRpc('list',workspace?{platform:selectedPortal}:{},signal);
+ const catalog=await fileRpc('list',workspace?{platform:selectedPortal}:{},signal);
+ if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
+ return catalog;
 }
 function renderSelectedFile(refreshCover=false){
  showProductContext(null,null);
@@ -491,7 +496,12 @@ function renderFilePicker(){
  const pageSize=workspace?4:10;
  const count=Math.max(1,Math.ceil(visible.length/pageSize));filePickerPage=Math.min(filePickerPage,count-1);
  $('filePickerList').replaceChildren();
- $('filePickerCount').textContent=!assets.length?'Noch keine Dateien geladen. Klicke auf „Dateien aktualisieren“.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
+ if(currentHistoryAsset||signedOut||(!galleryConfirmed&&!assets.length)){
+  $('filePickerPages').hidden=true;
+  $('filePickerCount').textContent=!workspace&&catalogRetry&&!signedOut?'Die Dateiliste konnte nicht geladen werden.':'';
+  return;
+ }
+ $('filePickerCount').textContent=!assets.length?'Noch keine Dateien in deiner Galerie.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
  for(const file of visible.slice(filePickerPage*pageSize,(filePickerPage+1)*pageSize)){
   const description=describeFile(file);
   const row=document.createElement('li');row.className='file-picker-row';
@@ -518,7 +528,7 @@ function renderFilePicker(){
  // If a new customer has no media compatible with this portal, the empty
  // gallery must still lead into the large preview, where Add File now lives.
  // No upload, provider request, or file mutation occurs from this placeholder.
- if(workspace&&!assets.some(fileFitsPortal)&&filePickerPage===0&&!query){
+ if(workspace&&galleryConfirmed&&!assets.some(fileFitsPortal)&&filePickerPage===0&&!query){
   const row=document.createElement('li');row.className='workspace-first-upload';
   const open=document.createElement('button');open.type='button';open.className='workspace-first-upload-action';
   open.setAttribute('aria-label','Leere Dateivorschau für den ersten Upload öffnen');
@@ -542,11 +552,15 @@ async function requestFileSelection(id,discard=false){
  if(id&&(!file||!fileFitsPortal(file)))return;
  if((selectedAsset?.id||'')===id){if(workspace&&id)workspace.show('preview');else if(!workspace)$('filePicker').close();return;}
  if((hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
- pendingAssetId=null;$('fileSwitchNotice').hidden=true;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
- if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();await loadLatest();
+ pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
+ if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
+ // Show the file preview immediately, but keep Magic disabled until the
+ // bound draft and account have finished loading.
+ if(workspace&&file?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
+ await loadLatest();
  // The card click itself opens the preview after its matching saved draft is loaded.
  // Keep the existing unsaved-edits confirmation and never navigate a stale/foreign file.
- if(workspace&&file&&!signedOut&&selectedAsset?.id===file.id&&selectedAsset.revision===file.revision)workspace.show('preview');
+ if(workspace&&file&&file.media_kind!=='video'&&!signedOut&&selectedAsset?.id===file.id&&selectedAsset.revision===file.revision)workspace.show('preview');
 }
 const uploadEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-device-upload-v1';
 Object.assign(messages,{UPLOAD_FORMAT:'Bitte wähle eine Bild- oder Videodatei, zum Beispiel JPG, PNG, HEIC, MP4 oder MOV. Dokumentdateien wie PDF oder Word können über diesen Veröffentlichungsweg nicht gepostet werden.',UPLOAD_SIZE:'Bitte wähle eine nicht leere Datei bis 4 GB.',UPLOAD_RATE_LIMITED:'Das Uploadlimit ist erreicht (30 Dateien pro Stunde, 20 GB pro Tag). Bitte versuche es später erneut.',UPLOAD_UNAVAILABLE:'Der Upload ist momentan nicht erreichbar. Du kannst die Übertragung erneut versuchen.',UPLOAD_NETWORK:'Die Verbindung wurde unterbrochen. Klicke auf „Upload fortsetzen“.',UPLOAD_EXPIRED:'Die Uploadsitzung ist abgelaufen. Bitte wähle die Datei erneut über „Dateien durchsuchen“.',UPLOAD_INITIALIZING:'Der Upload wird noch vorbereitet. Bitte versuche „Upload fortsetzen“ in zwei Minuten erneut.',UPLOAD_INCOMPLETE:'Die hochgeladene Datei konnte noch nicht bestätigt werden. Bitte klicke auf „Upload fortsetzen“.',UPLOAD_CONFLICT:'Die Datei hat sich geändert. Bitte wähle sie erneut aus.'});
@@ -603,7 +617,23 @@ $('chooseGeneralTemplate').addEventListener('click',()=>requestFileSelection('')
 $('confirmFileSwitch').addEventListener('click',()=>pendingAssetId!==null?requestFileSelection(pendingAssetId,true):undefined);
 $('cancelFileSwitch').addEventListener('click',()=>{pendingAssetId=null;$('fileSwitchNotice').hidden=true;});
 async function loadFiles(preferredId=null){
- const r=await optimizerCatalog();if(signedOut)return;void galleryMusic?.wake();assets=r.files||[];const old=preferredId??selectedAsset?.id??'';
+ const old=preferredId??selectedAsset?.id??'';
+ let catalog;
+ try{
+  catalog=await optimizerCatalog(AbortSignal.timeout(20000));
+ }catch(error){
+  if(!signedOut){
+   galleryConfirmed=false;
+   catalogRetry={assetId:old};
+   for(const id of ['refreshFiles','pickerRefresh'])$(id).textContent='Dateiliste erneut laden';
+  }
+  throw error?.code&&Object.hasOwn(messages,error.code)?error:fileError('FILE_SYNC_UNAVAILABLE');
+ }
+ if(signedOut)return;
+ galleryConfirmed=true;
+ catalogRetry=null;
+ for(const id of ['refreshFiles','pickerRefresh'])$(id).textContent='Dateien aktualisieren';
+ void galleryMusic?.wake();assets=catalog.files;
  selectedAsset=assets.find(f=>f.id===old&&fileFitsPortal(f))||null;
  assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;renderSelectedFile(!!selectedAsset&&mediaViewKey===selectedAsset.id+':'+selectedAsset.revision);renderFilePicker();
  if(old&&!selectedAsset){clearDraft();resetMediaCheck(messages.FILE_UNAVAILABLE);throw Error(messages.FILE_UNAVAILABLE);}
@@ -663,13 +693,32 @@ $('reviewContent').addEventListener('click',async()=>{
  }catch(e){if(selectedAsset?.id===file.id){reviewStatus=null;$('contentReviewStatus').textContent=e.message;}}finally{lock(false);}
 });
 const orderUuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-if(workspace&&orderUuid.test(params.get('order'))){
+// The fragment is only a return address. Only the order query opens a stored order.
+const returnOrderId=params.get('order')??new URLSearchParams(location.hash?.slice(1)).get('returnOrder');
+if(workspace&&orderUuid.test(returnOrderId)){
  const back=$('back');
- back.href='dashboard.html#auftrag/'+params.get('order').toLowerCase();
+ back.href='dashboard.html#auftrag/'+returnOrderId.toLowerCase();
  back.textContent='← Zurück zum Auftrag';
 }
 const readStoredOrder=id=>storedOrderRequest('get',id);
 const cancelStoredOrder=id=>storedOrderRequest('cancel',id);
+async function readTransferStatus(id,platform){
+ if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
+ const {data,error}=await supabase.rpc('sma_publication_history_order_page_v1',{p_order_id:id})
+  .abortSignal(AbortSignal.timeout(15000));
+ if(error||signedOut||(await session()).user.id!==previewOwnerId)throw Error('HISTORY_UNAVAILABLE');
+ const entry=readPublicationCoverHistory(data).entries.find(row=>row.id===id&&row.platform===platform);
+ if(!entry)throw Error('HISTORY_UNAVAILABLE');
+ if(entry.status==='uncertain'){
+  const canContinue=data.can_reconcile_transfer===true;
+  return {canContinue,message:canContinue
+   ? 'Ergebnis unklar. Du kannst den bestehenden Vorgang mit dem Portal abgleichen.'
+   : 'Ergebnis unklar. Die Übertragung muss geprüft werden. Hier kannst du den gespeicherten Stand aktualisieren.'};
+ }
+ const message=entry.status==='checked'?'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.'
+  : historyStatuses[entry.status][0]+'. '+historyStatuses[entry.status][1];
+ return {message,canContinue:true};
+}
 async function storedOrderRequest(action,id){
  if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
  const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:action,p_input:{id}})
@@ -691,11 +740,12 @@ async function readHistoryOrder(id,currentPost=false){
      order.approved_at!==null||order.approval_token!==null||order.approval_review!=null||
      (order.state==='prepared'&&order.preparation_window!=null))throw Object.assign(Error(unavailable),{code:'ORDER_UNAVAILABLE'});
  }
- const allowedState=currentPost
+ const transferView=params.get('view')==='transfer';
+ const allowedState=transferView ? params.get('resume')==='1'&&checkedHistoryOrder(order) : currentPost
   ? order?.state==='cancelled'&&order.approved_at===null&&order.approval_token===null&&order.approval_review==null
     &&order.approval_window==null&&order.preparation_window==null&&['youtube','tiktok'].includes(selectedPortal)
   : ['preparing','prepared'].includes(order?.state);
- if(order?.ok!==true||order.id!==id||!allowedState||order.approved_at!=null||
+ if(order?.ok!==true||order.id!==id||!allowedState||(!transferView&&order.approved_at!=null)||
     order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!orderUuid.test(binding.asset_id)||
     !orderUuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Object.assign(Error(unavailable),{code:'ORDER_UNAVAILABLE'});
@@ -779,8 +829,15 @@ async function readAssignedPortalDraft(binding,signal){
 async function loadCurrentHistoryPost(order,owner){
  const {binding}=order,expired=expiredHistoryPreparation(order);
  // A newer text may invalidate the old assignment. Other failed checks still block this preview.
- if(expired&&order.check_error&&!['ORDER_CHANGED','ASSIGNMENT_CHANGED'].includes(order.check_error))throw fileError(order.check_error);
- const {catalog,file,saved}=await readAssignedPortalDraft(binding);
+ let assigned;
+ try{
+  if(expired&&order.check_error&&!['ORDER_CHANGED','ASSIGNMENT_CHANGED'].includes(order.check_error))throw fileError(order.check_error);
+  assigned=await readAssignedPortalDraft(binding);
+ }catch(error){
+  if(expired&&error.code==='FILE_CHANGED')error.currentAssetId=binding.asset_id;
+  throw error;
+ }
+ const {catalog,file,saved}=assigned;
  const draft=saved.preview.drafts[0];
  const repairLink=!!draft.product_id&&saved.product_link_available===false;
  const samePreparedPost=expired&&order.state==='prepared'&&!order.check_error&&sameHistoryDraft(order,saved,draft);
@@ -792,7 +849,7 @@ async function loadCurrentHistoryPost(order,owner){
 async function showHistoryPost({owner,catalog,file,saved,repairLink,previousOrder,resume=false,message}){
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  // Select only after the order, file and saved portal text have all been verified.
- assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
+ galleryConfirmed=true;assets=catalog.files;selectedAsset=file;assignmentRevision=saved.assignment_revision;
  renderSelectedFile();showProductContext(saved.product_context,file,savedProductSelection(saved));fillInput(saved.input);render(saved);
  const restored=restoreTabAttempt(saved,file);
  if(restored){
@@ -813,7 +870,7 @@ async function showHistoryPost({owner,catalog,file,saved,repairLink,previousOrde
 }
 
 async function loadHistoryPreview(){
- retryHistoryPreview=false;
+ retryHistoryPreview=false;currentHistoryAsset=null;
  lock(true);
  $('refreshFiles').textContent='Dateien aktualisieren';
  status('Beitragsvorschau wird geladen …');
@@ -833,6 +890,15 @@ async function loadHistoryPreview(){
  }
  catch(error){
   if(signedOut)return;
+  if(error.code==='FILE_CHANGED'&&orderUuid.test(error.currentAssetId)){
+   if((await session()).user.id!==previewOwnerId||signedOut)return;
+   currentHistoryAsset=error.currentAssetId;
+   renderFilePicker();
+   $('refreshFiles').textContent='Aktuelle Dateiversion öffnen';
+   $('refreshFiles').disabled=false;
+   status('Die Datei wurde seit diesem Auftrag geändert. Öffne die aktuelle Version und prüfe den Beitrag für '+names[selectedPortal]+'.',true);
+   return;
+  }
   const retryTabRead=startupDraft&&!['ORDER_UNAVAILABLE','FILE_CHANGED','FILE_UNAVAILABLE','AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE'].includes(error.code);
   if(retryTabRead||['FILE_REFRESH_REQUIRED','FILE_SYNC_RUNNING','FILE_SYNC_RATE_LIMITED','FILE_SYNC_UNAVAILABLE','FOLDER_UNAVAILABLE','ASSIGNMENT_CONFLICT'].includes(error.code)){
    retryHistoryPreview=true;
@@ -845,16 +911,50 @@ async function loadHistoryPreview(){
   }
  }
 }
-async function loadLatest(){const file=selectedAsset;lock(true);try{
- await loadMediaCheck();
- const data=selectedAsset?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal}):await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
- if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
- showProductContext(data.product_context,file,savedProductSelection(data));
- if(data.status==='empty'){clearDraft();if(!$('productChoiceField').hidden)$('sourcePanel').open=true;status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');return;}
- fillInput(data.input);const result=data.status==='processing'?await waitForResult(data.id):data;if(result.status==='failed')throw Error(errorText(result));render(result);status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
- }catch(e){if(selectedAsset)clearDraft();status(e.message,true);}finally{lock(false);syncMedia();await loadMagicEffect(true);}}
+async function loadLatest(){
+ const file=selectedAsset;
+ magicPreparationError=null;
+ loadingVideoDraft=!!(workspace&&file?.media_kind==='video');
+ lock(true);
+ try{
+  // Independent video review must not block the current portal draft read.
+  if(file?.media_kind==='video')void loadMediaCheck();else await loadMediaCheck();
+  const data=selectedAsset
+   ?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal},AbortSignal.timeout(20000))
+   :await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
+  if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
+  showProductContext(data.product_context,file,savedProductSelection(data));
+  if(data.status==='empty'){
+   clearDraft();
+   if(!$('productChoiceField').hidden)$('sourcePanel').open=true;
+   status(selectedAsset?'Für diese Datei und dieses Portal ist noch kein Text vorbereitet.':'Noch keine Textvorlage gespeichert.');
+   return;
+  }
+  fillInput(data.input);
+  const result=data.status==='processing'?await waitForResult(data.id):data;
+  if(result.status==='failed')throw Error(errorText(result));
+  render(result);
+  status(selectedAsset?'Zugeordneten Beitragstext geladen.':'Gespeicherte Textvorlage geladen.');
+ }catch(e){
+  if(signedOut||file?.id!==selectedAsset?.id||file?.revision!==selectedAsset?.revision)return;
+  if(file)clearDraft();
+  const outdated=file?.assignments?.some(a=>a.platform===selectedPortal&&a.status==='changed');
+  if(outdated&&e.rejected===true&&e.code==='FILE_CHANGED'){
+   status('Für die aktuelle Dateiversion fehlt ein passender Beitragstext. Erstelle einen neuen Text für '+names[selectedPortal]+'.');
+  }else{
+   magicPreparationError=e.message||'Die gespeicherten Angaben konnten nicht geladen werden.';
+   status(magicPreparationError,true);
+  }
+ }finally{
+  loadingVideoDraft=false;
+  lock(false);
+  syncMedia();
+  workspace?.refreshPreview();
+  if(file?.media_kind==='video')void loadMagicEffect(true);else await loadMagicEffect(true);
+ }
+}
 
-function resetMagic(){automaticInputSignature=null;pendingAutomatic=null;$('magicReplaceNotice').hidden=true;magicState=null;$('magicPanel').hidden=!selectedAsset||!['image','video'].includes(selectedAsset.media_kind);$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
+function resetMagic(){magicLoadTicket++;automaticInputSignature=null;pendingAutomatic=null;$('magicReplaceNotice').hidden=true;magicState=null;$('magicPanel').hidden=!selectedAsset||!['image','video'].includes(selectedAsset.media_kind);$('magicStatus').textContent='';$('magicSummary').textContent='';$('magicApplied').hidden=true;$('magicApplied').textContent='';$('applyMagic').hidden=true;syncMagicButton();}
 function magicPhotoHint(file=selectedAsset){
  if(!file||file.media_kind!=='image')return '';
  const formatUnsupported=file.mime_type&&!['image/jpeg','image/png','image/webp'].includes(file.mime_type);
@@ -900,17 +1000,22 @@ function showMagic(r,file){
 }
 async function magicRpc(file){const {data,error}=await supabase.rpc(file.media_kind==='video'?'sma_publication_video_magic_v1':'sma_publication_magic_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error('Die Erkennung ist gerade nicht verfügbar.');return data.analysis;}
 async function loadMagicEffect(autoStart=false){
- const file=selectedAsset;resetMagic();if(!file||!['image','video'].includes(file.media_kind))return;
+ const file=selectedAsset;resetMagic();const ticket=magicLoadTicket;if(!file||!['image','video'].includes(file.media_kind))return;
  const hint=magicHint(file);if(hint){$('magicStatus').textContent=hint;return;}
  try{
-  const r=await magicRpc(file);if(!showMagic(r,file))return;
-  if(autoStart&&(r.status==='processing'||(file.media_kind==='image'&&r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
- }catch(e){if(photoStillSelected(file))$('magicStatus').textContent=e.message;}
+  const r=await magicRpc(file);
+  if(ticket!==magicLoadTicket||busy||automaticMode!==null||!photoStillSelected(file))return;
+  if(!showMagic(r,file))return;
+  // Preserve automatic photo recognition, but do not auto-resume a processing
+  // video when opening its preview: that would lock the Magic controls. The explicit
+  // "Erkennungsstand laden" action remains available to the customer.
+  if(autoStart&&file.media_kind==='image'&&(r.status==='processing'||(r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
+ }catch(e){if(ticket===magicLoadTicket&&!busy&&photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto({withinAutomatic=false}={}){
  if(signedOut||(busy&&!withinAutomatic)||!selectedAsset||!['image','video'].includes(selectedAsset.media_kind)||magicState?.status==='completed')return;
  const hint=magicHint();if(hint){$('magicStatus').textContent=hint;return;}
- const file=selectedAsset,context=fileContext();lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
+ const file=selectedAsset,context=fileContext();magicLoadTicket++;lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
  try{
   await ensureFreshFile(context);
   if(magicState?.status!=='processing'){
@@ -945,23 +1050,53 @@ function magicActionHint(){
  return magicHint()||'';
 }
 
+function magicUiReadiness(){
+ if(!selectedAsset)return {state:'none',message:''};
+ if(signedOut)return {state:'error',message:'Magic Effect ist nicht verfügbar. Bitte melde dich erneut an.'};
+ if(magicPreparationError)return {state:'error',message:'Magic Effect konnte nicht vorbereitet werden. Bitte die Dateivorschau erneut laden.'};
+ if(automaticMode!==null)return {state:'working',message:'Magic Effect arbeitet … Videoanalyse und Texterstellung laufen.'};
+ if(loadingVideoDraft||busy)return {state:'loading',message:'Magic Effect wird vorbereitet … Datei und gespeicherter Beitrag werden geprüft.'};
+ const hint=magicHint();
+ if(hint)return {state:'unavailable',message:hint};
+ if(magicState?.status==='processing')return {state:'working',message:'Videoanalyse läuft noch. Du kannst den Erkennungsstand laden.'};
+ return {state:'ready',message:'Magic Effect ist bereit. Du kannst jetzt deinen Beitragstext erstellen.'};
+}
 function syncMagicActions(){
- const hint=magicActionHint();
- for(const id of ['magicSource','magicText'])$(id).disabled=busy||!!hint;
+ const hint=magicActionHint(),ready=magicUiReadiness();
+ for(const id of ['magicSource','magicText']){
+  const el=$(id);
+  el.disabled=busy||!!hint||!!magicPreparationError||signedOut;
+  el.dataset.magicState=ready.state;
+  el.setAttribute('aria-busy',String(['loading','working'].includes(ready.state)));
+  el.title=ready.message;
+ }
  $('magicSource').textContent=automaticMode==='source'?'✨ Inhalt wird vorbereitet …':'✨ Magic Effect';
  $('magicText').textContent=automaticMode==='text'?'✨ Text wird vorbereitet …':workspace?'✨ Magic Effect':'✨ Magic Effect · Text erstellen';
+ const indicator=$('magicReadiness');
+ indicator.hidden=ready.state==='none';
+ indicator.dataset.state=ready.state;
+ indicator.textContent=ready.message;
+ if(workspace){
+  const action=$('workspaceDraftAction'),notice=$('workspaceDraftNotice');
+  const magicStep=previewDraftStep()?.target==='magic_text';
+  action.dataset.magicState=magicStep?ready.state:'none';
+  action.setAttribute('aria-busy',String(magicStep&&['loading','working'].includes(ready.state)));
+  action.title=magicStep?ready.message:'';
+  notice.dataset.magicState=magicStep?ready.state:'none';
+ }
  $('magicSourceHint').textContent=hint||(selectedAsset?.media_kind==='video'?'Analysiert dein Video mit Bildfolge, lesbaren Aufschriften und vorhandener Sprache und trägt die Beschreibung ein.':'Erkennt dein Foto und trägt die Beschreibung automatisch ein.');
  $('magicTextHint').textContent=hint||(workspace?'Inhalt erkennen und passenden Beitragstext vorbereiten.':'Erkennt deine Datei, übernimmt den Inhalt und erstellt einen passenden Text für '+(names[selectedPortal]||'die gewählten Portale')+' mit Hashtags und Shop-Link. Du kannst den fertigen Entwurf anschließend prüfen und bearbeiten.');
 }
+
 async function runMagicAction(mode,replace=false){
- if(busy||signedOut||!['source','text'].includes(mode))return;
+ if(busy||signedOut||magicPreparationError||!['source','text'].includes(mode))return;
  const hint=magicActionHint();if(hint){status(hint,true);return;}
  if((hasDraftEdits()||(hasSourceEdits()&&automaticInputSignature!==JSON.stringify(sourceInput())))&&!replace){
   pendingAutomatic=mode;$('magicReplaceNotice').hidden=false;
   $('magicReplaceNotice').scrollIntoView({block:'nearest'});$('cancelMagicReplace').focus();return;
  }
  pendingAutomatic=null;$('magicReplaceNotice').hidden=true;
- const file=selectedAsset,context=fileContext();automaticMode=mode;lock(true);
+ const file=selectedAsset,context=fileContext();magicLoadTicket++;automaticMode=mode;lock(true);
  status(mode==='text'?'Magic Effect: Datei erkennen und Beitragstext vorbereiten …':'Magic Effect: Inhalt erkennen und übernehmen …');
  try{
   await ensureFreshFile(context);
@@ -970,6 +1105,19 @@ async function runMagicAction(mode,replace=false){
   if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
    $('source_text').value=product.visual;
   }else{
+   // A completed analysis belongs to the file bytes, not the social portal.
+   // Read its authenticated cached result before issuing any new n8n analysis.
+   // This also covers a quick click made before the background status read ends.
+   if(file.media_kind==='video'&&magicState?.status!=='completed'){
+    try{
+     const previous=await magicRpc(file);assertFileContext(context);
+     showMagic(previous,file);
+    }catch(error){
+     if(signedOut||!photoStillSelected(file))throw error;
+     // A failed status read grants no permission. The ordinary guarded
+     // analysis path below decides whether this file may be processed.
+    }
+   }
    if(magicState?.status!=='completed')await recognizePhoto({withinAutomatic:true});
    if(signedOut||!photoStillSelected(file))return;
    if(magicState?.status!=='completed')throw Error($('magicStatus').textContent||'Die Erkennung ist noch nicht abgeschlossen. Bitte versuche es erneut.');
@@ -989,7 +1137,24 @@ $('cancelMagicReplace').addEventListener('click',()=>{pendingAutomatic=null;$('m
 
 async function refreshFiles(){
  if(busy)return;if(hasDraftEdits()||hasSourceEdits()){const message='Bitte speichere zuerst deine Änderungen oder wähle eine Datei und bestätige das Verwerfen.';status(message,true);$('filePickerStatus').textContent=message;return;}
- lock(true);try{status('Dein Kundenordner wird geprüft …');$('filePickerStatus').textContent='Dein Kundenordner wird geprüft …';await syncFileCatalog();await loadFiles();fileChanged();await loadLatest();$('filePickerStatus').textContent='Dateiliste aktualisiert.';}catch(e){if(!signedOut){status(e.message,true);$('filePickerStatus').textContent=e.message;}}finally{lock(false);syncMedia();}
+ const retry=catalogRetry;
+ const reopenVideo=retry?.assetId&&!selectedAsset;
+ const message=retry?'Die Dateiliste wird geladen …':'Dein Kundenordner wird geprüft …';
+ galleryConfirmed=false;
+ lock(true);
+ try{
+  status(message);$('filePickerStatus').textContent=message;
+  if(!retry)await syncFileCatalog();
+  if(signedOut)return;
+  await loadFiles(selectedAsset?.id??retry?.assetId);
+  if(signedOut)return;
+  if(!retry)fileChanged();
+  if(reopenVideo&&workspace&&selectedAsset?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
+  await loadLatest();
+  if(!signedOut)$('filePickerStatus').textContent='Dateiliste aktualisiert.';
+ }catch(error){
+  if(!signedOut){status(error.message,true);$('filePickerStatus').textContent=error.message;}
+ }finally{lock(false);syncMedia();}
 }
 // A metadata-only Drive version bump should not strand a brand-new, empty
 // portal preparation. Never transfer a saved draft, edits, review or approval.
@@ -1027,7 +1192,15 @@ async function refreshVideoMetadata(){
  finally{lock(false);syncMedia();}
 }
 $('refreshVideoMetadata').addEventListener('click',refreshVideoMetadata);
-$('refreshFiles').addEventListener('click',()=>retryHistoryPreview&&!signedOut?loadHistoryPreview():refreshFiles());
+$('refreshFiles').addEventListener('click',()=>{
+ if(signedOut)return;
+ if(currentHistoryAsset){
+  const query=new URLSearchParams({wide:'1',portal:selectedPortal,asset:currentHistoryAsset});
+  location.assign('publication-preview.html?'+query+'#returnOrder='+params.get('order'));
+  return;
+ }
+ return retryHistoryPreview?loadHistoryPreview():refreshFiles();
+});
 $('pickerRefresh').addEventListener('click',refreshFiles);
 $('previewForm').addEventListener('input',()=>{attempt=null;});
 $('media_kind').addEventListener('change',syncMedia);
@@ -1518,7 +1691,7 @@ async function saveDraft(){
 }
 $('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
-if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
+if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
  getContext:()=>{
   if(signedOut)throw Error(messages.AUTH_REQUIRED);
   if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');
@@ -1538,25 +1711,28 @@ syncMedia();sourceBaseline=sourceFormKey();lock(true);status('Deine Dateien werd
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){tabDrafts.clearOwner(previewOwnerId);startupDraft=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
   galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:text=>{if(!signedOut)$('galleryMusicStatus').textContent=text;},
-   onComplete:async()=>{const list=await optimizerCatalog();if(!signedOut&&(await session()).user.id===coverOwner){assets=list.files||[];renderFilePicker();}}
+   onComplete:async()=>{const list=await optimizerCatalog();if(!signedOut&&(await session()).user.id===coverOwner&&galleryConfirmed){assets=list.files;renderFilePicker();}}
   });
  }
  coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
   if(!['youtube','tiktok'].includes(selectedPortal))return fetchAssetThumbnail(f,(await session()).access_token,signal);
-  const blob=await (await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner);
+  const blob=await (await import('./media-editor-api.mjs?v=7')).editorSource(f,signal,coverOwner);
   if(blob.type!=='image/png'||(f.size_bytes!=null&&blob.size!==f.size_bytes))throw Error('COVER_UNAVAILABLE');
   return blob;
  }});
- originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner)});
+ originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=7')).editorSource(f,signal,coverOwner)});
  if(params.has('order')||startupDraft){
   await loadHistoryPreview();
  }else{
   let ready=true;if(selectedPortal){try{await loadFiles(params.get('asset'));}catch(e){ready=false;lock(false);status(e.message,true);}}
+  if(ready&&workspace&&selectedAsset&&(selectedAsset.media_kind==='video'||params.get('fromSearch')==='1')){
+   loadingVideoDraft=selectedAsset.media_kind==='video';workspace.show('preview');
+  }
   if(ready)await loadLatest();
  }
 }catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}

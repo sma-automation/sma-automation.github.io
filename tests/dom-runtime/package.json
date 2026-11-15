@@ -3,5 +3,8 @@
     "linkedom": "0.18.15"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "playwright-core": "1.65.1"
+  }
 }

@@ -1,6 +1,7 @@
+import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
 import {createMusicLibraryAPI} from './music-library-api.mjs?v=3';
-import {refreshMediaCatalog} from './media-metadata.mjs?v=1';
-import {fetchAssetThumbnail} from './asset-thumbnail.mjs?v=1';
+import {refreshMediaCatalog} from './media-metadata.mjs?v=2';
+import {fetchAssetThumbnail} from './asset-thumbnail.mjs?v=2';
 import {transferDeviceFile} from './device-upload.mjs?v=1';
 import {sha256,EXPORT_MAX_BYTES} from './media-export-model.mjs?v=1';
 import {editorUUID} from './media-editor-model.mjs?v=2';
@@ -12,13 +13,14 @@ export async function getOwnerId(){try{return (await session()).user.id;}catch{r
 export async function watchOwner(callback){return (await auth()).auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription;}
 async function rpc(name,body,owner,signal){const s=await session(owner);const response=await fetch(origin+'/rest/v1/rpc/'+name,{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(15000)]),headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+s.access_token},body:JSON.stringify(body)});if(!response.ok)throw Error(response.status===401?'AUTH_REQUIRED':'UNAVAILABLE');return response.json();}
 export const galleryMusicRequest=(action,input,owner,signal)=>rpc('sma_gallery_music_v1',{p_action:action,p_input:input},owner,signal);
-export const editorRequest=(action,input,owner)=>rpc('sma_publication_editor_v1',{p_action:action,p_input:input},owner);
-export const editorFiles=owner=>rpc('sma_publication_files_v1',{p_action:'list'},owner);
+export const editorRequest=(action,input,owner,signal)=>rpc('sma_publication_editor_v1',{p_action:action,p_input:input},owner,signal);
+export const editorFiles=owner=>rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}},owner);
+export const editorPilotAccess=owner=>rpc('sma_customer_media_pilot_v1',{p_route:'eligible'},owner);
 export async function editorRefreshFiles(owner,signal){await refreshMediaCatalog({getSession:()=>session(owner),owner,signal});signal?.throwIfAborted();const result=await editorFiles(owner);await session(owner);signal?.throwIfAborted();return result;}
 export async function editorThumbnail(file,signal,owner){return fetchAssetThumbnail(file,(await session(owner)).access_token,signal);}
 export const exportRequest=(action,input,owner)=>rpc('sma_publication_editor_export_v1',{p_action:action,p_input:input},owner);
 export async function editorSource(file,signal,owner){
- const s=await session(owner),response=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-editor-source-v1',{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(180000)]),headers:{'Content-Type':'application/json',Authorization:'Bearer '+s.access_token},body:JSON.stringify({asset_id:file.id||file.asset_id,asset_revision:file.revision||file.asset_revision})});
+ const s=await session(owner),response=await fetch(customerMediaEndpoint('original'),{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(180000)]),headers:{'Content-Type':'application/json',Authorization:'Bearer '+s.access_token},body:JSON.stringify({asset_id:file.id||file.asset_id,asset_revision:file.revision||file.asset_revision})});
  if(!response.ok)throw Error('SOURCE_UNAVAILABLE');const r=await response.json();
  if(r?.ok!==true)throw Error(r?.code||'SOURCE_UNAVAILABLE');
  if(r.can_publish!==false||r.asset_id!==(file.id||file.asset_id)||r.asset_revision!==(file.revision||file.asset_revision)||!['video/mp4','image/jpeg','image/png','image/webp'].includes(r.mime_type)||file.mime_type&&r.mime_type!==file.mime_type||!Number.isInteger(r.size_bytes)||r.size_bytes<12||r.size_bytes>EXPORT_MAX_BYTES||typeof r.sha256!=='string'||!/^[a-f0-9]{64}$/.test(r.sha256)||typeof r.data_base64!=='string'||r.data_base64.length>32000000||!/^[A-Za-z0-9+/]+={0,2}$/.test(r.data_base64))throw Error('SOURCE_UNAVAILABLE');

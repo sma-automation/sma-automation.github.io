@@ -31,6 +31,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const buttons = {};
   let active = 'files';
   let selectedFile = null;
+  let lastPreviewWasEmpty = false;
   for (const [key, label] of [['files', 'Datei'], ['source', 'Inhalt und Ziel']]) {
     buttons[key] = button('workspaceTab-' + key, label, () => show(key));
     buttons[key].setAttribute('aria-controls', panels[key].id);
@@ -64,11 +65,19 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   pickerBody.prepend(search, $('fileSwitchNotice'));
   // Clicking a gallery tile opens the post preview directly; no extra action button.
 
-  const previewBack = button('workspacePreviewBack', '← Zu den Dateien', () => {
+  function firstUploadEntry() {
+    return $('filePickerList')?.querySelector('.workspace-first-upload-action:not(:disabled)');
+  }
+  function focusGalleryEntry() {
+    const selected = $('filePickerList')?.querySelector('.gallery-select[aria-pressed="true"]:not(:disabled)');
+    (selected || firstUploadEntry() || buttons.files).focus();
+  }
+  let fromSearch = Boolean(options.fromSearch);
+  const backText = () => fromSearch ? '← Zurück zu den Suchergebnissen' : '← Zu den Dateien';
+  const previewBack = button('workspacePreviewBack', backText(), () => {
+    if (fromSearch) { options.onSearchReturn(); return; }
     show('files');
-    // Return focus to the selected gallery tile, or to its chapter tab.
-    const selectedTile = $('filePickerList')?.querySelector('.gallery-select[aria-pressed="true"]');
-    (selectedTile || buttons.files).focus();
+    focusGalleryEntry();
   });
   const previewNav = make('nav', 'workspacePreviewNav');
   previewNav.setAttribute('aria-label', 'Vorschaunavigation');
@@ -291,7 +300,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   statusRow.append($('portalStatus'));
   main.append(toolbar, statusRow, $('magicReplaceNotice'), files, source, preview);
 
-  function show(key) {
+  function show(key, requestedView) {
     const firstUpload = key === 'upload';
     if (firstUpload) key = 'preview';
     if (key === 'text') key = 'source';
@@ -313,6 +322,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     empty.hidden = !$('result').hidden;
     if (key === 'preview') {
       const uploadOnly = !selectedFile;
+      lastPreviewWasEmpty = uploadOnly;
       previewActions.open = uploadOnly;
       previewPrimary.hidden = uploadOnly;
       uploadIntro.hidden = !uploadOnly;
@@ -325,11 +335,20 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       previewBack.focus();
     }
     if (changed && key === 'files') onGallery();
-    if (changed) options.onView?.(key);
+    if (changed || requestedView) options.onView?.(key, requestedView);
   }
   show('files');
   return {
     show,
+    setSearchReturn(value) { fromSearch = value; previewBack.textContent = backText(); },
+    restoreView(requestedView) {
+      let view = requestedView;
+      if (view === 'preview' && !selectedFile) {
+        view = lastPreviewWasEmpty && firstUploadEntry() ? 'upload' : 'files';
+      }
+      show(view, requestedView);
+      if (view === 'files') focusGalleryEntry();
+    },
     galleryVisible: () => active === 'files',
     openEmptyPreview() { if (!selectedFile) show('upload'); },
     refreshPreview(feedback) { if (active === 'preview') refreshPreview(feedback); },

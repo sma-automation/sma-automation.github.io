@@ -3,21 +3,21 @@ const source=fs.readFileSync('app/assets/publication-preview.js','utf8').replace
 const originalVideoSource=fs.readFileSync('app/assets/original-video-preview.mjs','utf8').replace(/^export /gm,'');
 const hashtagSource=fs.readFileSync('app/assets/publication-hashtags.mjs','utf8').replace(/^export /gm,'');
 class Element{constructor(tag='div'){this.tag=tag;this.style={};this.children=[];this.events={};this.dataset={};this.value='';this.hidden=false;this.disabled=false;this.textContent='';this.classList={add(){},toggle(){}};}setCustomValidity(value){this.validationMessage=value}setAttribute(k,v){this[k]=v}removeAttribute(k){delete this[k]}pause(){this.paused=true}load(){this.loaded=true}showModal(){this.open=true}close(){this.open=false;this.events.close?.()}click(){this.clicked=true;return this.events.click?.()}focus(){this.focused=true}scrollIntoView(){this.scrolledIntoView=true}append(...els){this.children.push(...els)}replaceChildren(...els){this.children=els}addEventListener(k,f){this.events[k]=f}querySelectorAll(sel){const all=this.children.flatMap(c=>[c,...c.querySelectorAll('*')]);return all.filter(c=>sel==='*'||(sel==='input,textarea'&&['input','textarea'].includes(c.tag))||(sel==='textarea'&&c.tag==='textarea')||sel===c.tag||sel==='[data-field='+c.dataset.field+']')}querySelector(sel){return this.querySelectorAll(sel)[0]}}
-const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
-const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').split('// Existing owner-scoped')[0].replaceAll('export function','function');
+const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace(/^import .*;$/gm,'').replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
+const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').split('// Existing owner-scoped')[0].replace(/^import .*;$/gm,'').replaceAll('export function','function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
 function savedTextReceipt(previous,input){
  const draft={...previous.preview.drafts[0],title:input.title,body:input.body,hashtags:input.hashtags};
  return {...previous,revision:previous.revision+1,assignment_revision:input.assignment_revision+1,preview:{...previous.preview,drafts:[draft]}};
 }
-async function boot({portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let stagedVariant=null,revealedVariantCount=0;const variantHistory=[],variantFeedbacks=[];let authChange,orderOptions,workspaceOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
+async function boot({onNavigate=()=>{},hash='',portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,transferView=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let stagedVariant=null,revealedVariantCount=0;const variantHistory=[],variantFeedbacks=[];let authChange,orderOptions,workspaceOptions;const win={sessionStorage,addEventListener(){},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:ownerId}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
  client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name,onGallery,opts)=>{workspaceOptions=opts;workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},setVariant(d){stagedVariant=d;variantHistory.push(d);},setVariantFeedback(message,error){variantFeedbacks.push({message,error});},revealVariant(){revealedVariantCount++;},lockVariant(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/customer-media-routes.mjs')),...(await import('../app/assets/file-description.mjs')),...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),checkedHistoryOrder:(await import('../app/assets/publication-order.mjs')).checkedHistoryOrder,installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name,onGallery,opts)=>{workspaceOptions=opts;workspaces.push(name);return {galleryVisible:()=>true,selection(){},textAvailable(){},refreshPreview(){},setVariant(d){stagedVariant=d;variantHistory.push(d);},setVariantFeedback(message,error){variantFeedbacks.push({message,error});},revealVariant(){revealedVariantCount++;},lockVariant(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{assign:onNavigate,hash,search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(transferView?'&view=transfer':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
  return {orderOptions,workspaceOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,variant:()=>stagedVariant,variantHistory,variantFeedbacks,reveals:()=>revealedVariantCount,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
@@ -167,9 +167,10 @@ test('wide gallery asks before discarding edits and then opens the chosen file p
  p.get('source_text').value='Diese noch nicht gespeicherten Angaben sollen nicht einfach überschrieben werden.';
  p.get('previewForm').events.input();
  const tile=p.get('filePickerList').children[1].querySelector('button');
+ const viewCountBeforeSwitch=p.views.length;
  await tile.events.click();
  assert.equal(p.get('fileSwitchNotice').hidden,false);
- assert.notEqual(p.views.at(-1),'preview','the confirmation must precede navigation');
+ assert.equal(p.views.length,viewCountBeforeSwitch,'the confirmation must precede navigation');
  assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+ownFile.name);
  await p.get('confirmFileSwitch').events.click();
  assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+other.name);
@@ -226,6 +227,52 @@ test('file browser refresh loads newly catalogued files through the existing aut
  const call=p.calls.find(c=>c.url);assert.match(call.url,/sma-publication-files-v1$/);assert.match(call.options.headers.Authorization,/^Bearer /);
 });
 
+test('an unavailable gallery retries the catalog read and only offers the first upload after a confirmed empty list',async()=>{
+ let listReads=0,initialRows;
+ const p=await boot({portal:'youtube',wide:true,formTracksDom:true,
+  beforeClientReady:({get})=>{initialRows=get('filePickerList').children.length;},
+  filesRpc:async()=>++listReads===1?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:listReads===2?{ok:true}:{ok:true,files:[]}});
+ assert.equal(initialRows,0);
+ const retry=p.get('refreshFiles'),rows=p.get('filePickerList');
+ for(let i=0;i<2;i++){
+  assert.equal(rows.children.length,0);
+  assert.doesNotMatch(p.get('filePickerCount').textContent,/Noch keine|Keine Datei/);
+  assert.match(p.get('portalStatus').textContent,/Dateiliste/);
+  assert.equal(retry.textContent,'Dateiliste erneut laden');
+  await retry.click();
+ }
+ assert.equal(listReads,3);assert.equal(retry.textContent,'Dateien aktualisieren');
+ assert.equal(rows.children[0].className,'workspace-first-upload');
+ assert.equal(p.calls.some(call=>call.url),false,'Retry must not start a folder sync or transfer');
+});
+test('a failed refresh retains the last known files and requires a successful list before offering the first upload',async()=>{
+ let syncs=0,reads=0;
+ const p=await boot({portal:'youtube',wide:true,filesRpc:async()=>{
+  if(++reads===2)throw new Error('network request failed');
+  return {ok:true,files:reads===1?[photo]:[]};
+ },fetchResponse:async()=>{syncs++;return {ok:true};}});
+ const rows=p.get('filePickerList'),action=p.get('refreshFiles');
+ assert.equal(rows.children.length,2);
+ await action.click();
+ assert.equal(rows.children.length,1);
+ assert.match(rows.children[0].querySelector('button')['aria-label'],/Nicht auswählbar/);
+ assert.match(p.get('portalStatus').textContent,/Dateiliste konnte nicht/);
+ await action.click();
+ assert.equal(syncs,1);assert.equal(reads,3);assert.equal(rows.children.length,1);
+ assert.equal(rows.children[0].className,'workspace-first-upload');
+});
+test('retrying a deep-linked video reads the requested asset instead of the generic portal template',async()=>{
+ let fails=true;
+ const p=await boot({portal:'youtube',asset:ownFile.id,wide:true,formTracksDom:true,filesRpc:async args=>{
+  if(args.p_action==='list')return fails?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:{ok:true,files:[ownFile]};
+  return args.p_action==='get'?{...result,assignment_revision:1}:{ok:true,status:'empty'};
+ }});
+ fails=false;await p.get('refreshFiles').click();
+ assert.match(p.get('selectedFileName').textContent,/Meine Datei A/);
+ assert.ok(p.views.includes('preview'));
+ assert.ok(p.calls.some(c=>c.p_action==='get'&&c.p_input.asset_id===ownFile.id));
+ assert.ok(p.calls.every(c=>c.p_action!=='latest'&&!c.url));
+});
 test('a delayed catalog response after sign-out cannot reopen or refill customer file controls',async()=>{
  let defer=false,release;const p=await boot({portal:'instagram',filesRpc:async a=>a.p_action==='list'?(defer?new Promise(r=>release=r):{ok:true,files:[]}):{ok:true,status:'empty'},fetchResponse:async()=>({ok:true})});
  p.get('browseFiles').events.click();defer=true;const refreshing=p.get('pickerRefresh').events.click();await new Promise(r=>setImmediate(r));
@@ -302,6 +349,86 @@ test('new YouTube video offers explicit Magic from preview, and one click saves 
  assert.equal(p.get('saveStatus').textContent.includes('zugeordnet'),true);
  assert.equal(p.calls.some(c=>c.name==='sma_publication_order_v1'),false);
  assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'cached recognition is reused');
+});
+
+test('video Magic visibly loads and cannot start until the saved draft check completes',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ let resolveRead;let requests=0;
+ const p=await boot({portal:'instagram',wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+    a.p_action==='get'?new Promise(resolve=>{resolveRead=resolve}):
+    a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis}),
+  fetchResponse:async url=>{if(url.endsWith('/sma-publication-preview-v1'))requests++;return instagramResult;}});
+ const click=p.get('filePickerList').children[0].querySelector('button').click();
+ for(let i=0;i<5&&!resolveRead;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(typeof resolveRead,'function');
+ assert.ok(p.views.includes('preview'),'selected video preview opens during the read');
+ assert.equal(p.get('workspaceDraftAction').disabled,true,'preview Magic remains disabled during loading');
+ assert.equal(p.get('magicText').disabled,true,'source Magic remains disabled during loading');
+ assert.equal(p.get('magicReadiness').dataset.state,'loading');
+ assert.match(p.get('magicReadiness').textContent,/wird vorbereitet/);
+ assert.equal(p.get('workspaceDraftAction').dataset.magicState,'loading');
+ assert.match(p.workspaceOptions.getPreview().draftStep.note,/wird vorbereitet/);
+ await p.workspaceOptions.onDraftAction('magic_text');
+ assert.equal(requests,0,'a premature event cannot start generation');
+ resolveRead({ok:true,status:'empty'});
+ await click;
+ assert.equal(p.get('workspaceDraftAction').disabled,false,'Magic becomes enabled after a verified empty draft');
+ assert.equal(p.get('magicText').disabled,false);
+ assert.equal(p.get('magicReadiness').dataset.state,'ready');
+ assert.match(p.get('magicReadiness').textContent,/ist bereit/);
+ await p.workspaceOptions.onDraftAction('magic_text');
+ assert.equal(requests,1,'one explicit ready click starts the existing guarded pipeline');
+ assert.equal(p.calls.filter(c=>c.p_action==='assign').length,1);
+ assert.equal(p.get('result').hidden,false);
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false,'reuse validated video recognition');
+});
+
+test('a saved video draft cannot be replaced by a click during loading',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ let resolveRead;
+ const p=await boot({portal:'instagram',wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+   a.p_action==='get'?new Promise(resolve=>{resolveRead=resolve}):{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
+ const click=p.get('filePickerList').children[0].querySelector('button').click();
+ for(let i=0;i<5&&!resolveRead;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(p.get('workspaceDraftAction').disabled,true);
+ await p.workspaceOptions.onDraftAction('magic_text');
+ resolveRead({...instagramResult,assignment_revision:1,input:{source_text:'Bereits geprüfte Fakten.',language:'de',media_kind:'video',platforms:['instagram']}});
+ await click;await new Promise(r=>setImmediate(r));
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-preview-v1')),false);
+ assert.equal(p.get('result').hidden,false);
+ assert.match(p.get('status').textContent,/Zugeordneten Beitragstext geladen/);
+});
+
+test('failed draft loading keeps Magic unavailable with a readable error instead of false readiness',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ const p=await boot({portal:'instagram',asset:file.id,wide:true,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+   a.p_action==='get'?Promise.reject(Error('NETWORK_UNAVAILABLE')):{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:videoAnalysis})});
+ assert.equal(p.get('magicText').disabled,true);
+ assert.equal(p.get('magicReadiness').dataset.state,'error');
+ assert.match(p.get('magicReadiness').textContent,/nicht vorbereitet/);
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-preview-v1')),false);
+});
+
+test('Magic uses an already completed video analysis even if background status read was late',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,verified_at:new Date().toISOString()};
+ let cached=false;
+ const p=await boot({portal:'instagram',asset:file.id,formTracksDom:true,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[file]}:
+   a.p_action==='assign'?{...instagramResult,assignment_revision:1}:{ok:true,status:'empty'},
+  magicResponse:async()=>({ok:true,analysis:cached?videoAnalysis:{...videoAnalysis,status:'unrecognized',result:null}}),
+  fetchResponse:async()=>instagramResult});
+ await new Promise(r=>setImmediate(r));
+ cached=true;
+ await p.get('magicText').click();
+ assert.equal(p.calls.some(c=>c.url?.endsWith('/sma-publication-video-magic-effect-v1')),false);
+ assert.equal(p.calls.filter(c=>c.url?.endsWith('/sma-publication-preview-v1')).length,1);
+ assert.equal(p.get('result').hidden,false);
 });
 
 test('preview Magic keeps user text until explicit replacement consent and offers manual fallback',async()=>{
@@ -732,6 +859,17 @@ test('history opens the specific prepared order directly as a saved post preview
  assert.equal(p.calls.some(c=>c.url||!['get','list','check'].includes(c.p_action)),false);
  assert.equal(p.orderOptions.getContext().binding.preview_id,historySaved.id);assert.equal(p.orderOptions.previousOrder.id,historyOrderId);
 });
+test('the checked history link opens the recorded order using reads only',async()=>{
+ const row={...historyOrder,state:'checked',approved_at:'2026-11-12T10:30:00Z',approval_token:null,
+  approval_review:{media_rights:true},target:{id:'channel',platform:'youtube'}};
+ const p=await historyView({order:row,resume:true,transferView:true});
+ assert.equal(p.orderOptions.resumeOrder.id,historyOrderId);
+ assert.ok(p.calls.every(c=>!c.url));
+ for(const patch of [{approved_at:null},{state:'prepared'},{approval_token:'token'},{can_upload:true}]){
+  const bad=await historyView({order:{...row,...patch},resume:true,transferView:true});
+  assert.equal(bad.orderOptions.resumeOrder,undefined);assert.deepEqual(bad.views,[]);
+ }
+});
 const cancelledOrder={...historyOrder,state:'cancelled',approval_token:null,approval_review:null,check_error:'ORDER_CHANGED'};
 const expiredWindow={status:'expired',expires_at:'2026-11-07T10:00:00Z'};
 test('expired preparations open the latest assigned text of the same file without resuming the old ID',async()=>{
@@ -778,6 +916,57 @@ test('expired history never applies the old video answers to a different caption
  }
  const replaced=await historyView({order,file:{...historyFile,revision:'other-version'}});
  assert.deepEqual(replaced.views,[]);assert.equal(replaced.get('result').hidden,true);
+});
+test('an expired order with a replaced file opens only its current asset and portal on explicit click',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const routes=[];
+  const order={...historyOrder,binding:{...historyOrder.binding,platform:portal},approval_token:null,approval_window:expiredWindow,check_error:'FILE_CHANGED'};
+  const p=await historyView({portal,order,resume:true,onNavigate:path=>routes.push(path),fetchResponse:async()=>({ok:true})});
+  const action=p.get('refreshFiles');
+  assert.equal(action.textContent,'Aktuelle Dateiversion öffnen');
+  assert.equal(action.disabled,false);
+  assert.equal(p.get('filePickerCount').textContent,'');
+  assert.equal(p.get('filePickerList').children.length,0);
+  assert.match(p.get('status').textContent,/Datei wurde seit diesem Auftrag geändert/);
+  assert.equal(p.get('result').hidden,true);
+  assert.equal(p.orderOptions.resumeOrder,undefined);assert.equal(p.orderOptions.previousOrder,undefined);
+  assert.deepEqual(routes,[]);
+  const count=p.calls.length;
+  await action.click();assert.equal(p.calls.length,count);
+  const url=new URL(routes[0],'https://sma-automation.com/app/');
+  assert.equal(url.pathname,'/app/publication-preview.html');
+  assert.deepEqual(Object.fromEntries(url.searchParams),{wide:'1',portal,asset:order.binding.asset_id});
+  assert.equal(url.hash,'#returnOrder='+order.id);
+
+  const draft={...historySaved.preview.drafts[0],platform:portal,title:'Aktueller Entwurf'};
+  const file={...historyFile,revision:'new-version',assignments:[{platform:portal,revision:5,status:'assigned'}]};
+  const saved={...historySaved,assignment_revision:5,preview:{...historySaved.preview,drafts:[draft]}};
+  const preview=await historyView({portal,orderId:null,asset:url.searchParams.get('asset'),hash:url.hash,file,saved});
+  assert.equal(preview.get('drafts').querySelector('[data-field=title]').value,draft.title);
+  assert.equal(preview.get('back').href,'dashboard.html#auftrag/'+order.id);
+  assert.equal(preview.get('back').textContent,'← Zurück zum Auftrag');
+  assert.equal(preview.orderOptions.previousOrder,undefined);
+  assert.equal(preview.orderOptions.resumeOrder,undefined);
+  assert.ok(preview.calls.every(c=>!c.url&&c.name!=='sma_publication_order_v1'&&['get','list','check'].includes(c.p_action)));
+  p.switchOwner();await action.click();assert.equal(routes.length,1);
+ }
+ const missing=await historyView({order:{...historyOrder,approval_token:null,approval_window:expiredWindow,check_error:'FILE_UNAVAILABLE'}});
+ assert.equal(missing.get('refreshFiles').disabled,true);
+});
+test('a replaced file can start a fresh text while other draft failures stay blocked',async()=>{
+ const file={...supportedVideo,width_px:720,height_px:1280,assignments:[{platform:'youtube',revision:4,status:'changed'}]};
+ for(const [status,code,canStart] of [['changed','FILE_CHANGED',true],['assigned','FILE_CHANGED',false],['changed','FILE_SYNC_UNAVAILABLE',false]]){
+  const selected={...file,assignments:[{...file.assignments[0],status}]};
+  const p=await boot({portal:'youtube',asset:selected.id,wide:true,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[selected]}:
+   a.p_action==='get'?{ok:false,code}:{ok:true,status:'empty'}});
+  const step=p.workspaceOptions.getPreview().draftStep;
+  assert.equal(p.get('result').hidden,true);
+  assert.equal(p.orderOptions.previousOrder,undefined);assert.equal(p.orderOptions.resumeOrder,undefined);
+  assert.equal(step.target,'magic_text');
+  assert.equal(p.get('workspaceDraftAction').disabled,!canStart);
+  if(canStart)assert.match(p.get('status').textContent,/neuen Text für YouTube/);
+  assert.ok(p.calls.every(c=>!c.url&&!['generate','assign','save','approve','prepare'].includes(c.p_action)));
+ }
 });
 test('an old date on the device cannot unlock a newer text while the server still reports active or recheck',async()=>{
  for(const status of ['active','recheck']){
@@ -868,6 +1057,12 @@ test('only a valid order preview links back to the same history order',async()=>
  const p=await historyView();assert.equal(p.get('back').href,'dashboard.html#auftrag/'+historyOrderId);assert.equal(p.get('back').textContent,'← Zurück zum Auftrag');
  const bad=await historyView({orderId:'invalid'});assert.doesNotMatch(bad.get('back').href||'',/#auftrag/);
  const normal=await boot({portal:'youtube',wide:true});assert.doesNotMatch(normal.get('back').href||'',/#auftrag/);
+});
+test('a return fragment accepts only an order UUID and cannot override an order preview',async()=>{
+ const bad=await boot({portal:'youtube',wide:true,hash:'#returnOrder=dashboard.html'});
+ assert.doesNotMatch(bad.get('back').href||'',/#auftrag/);
+ const history=await historyView({hash:'#returnOrder='+historySaved.id});
+ assert.equal(history.get('back').href,'dashboard.html#auftrag/'+historyOrderId);
 });
 test('unfinished history previews use only reads and reject inconsistent account evidence',async()=>{
  const pending={...historyOrder,state:'preparing',target:null,approval_token:null,preparation_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()}};

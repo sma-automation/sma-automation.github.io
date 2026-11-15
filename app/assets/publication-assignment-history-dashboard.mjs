@@ -2,11 +2,11 @@ import {historyPlatforms,formatHistoryMonth} from './publication-history-model.m
 import {readPublicationAssignmentHistory,assignmentEvents} from './publication-assignment-history-model.mjs?v=1';
 
 // Lifecycle and selected month belong to the parent History view. This reader
-// has independent pagination and never opens the editing or generation routes.
+// has independent pagination. Historical rows stay read-only; an explicit\n// link opens the current editor without publishing or restoring a past draft.
 export function mountPublicationAssignmentHistory({doc,after,request,getOwnerId,expectedOwnerId,isActive,onOwnerLost}){
  const create=(tag,text,className)=>{const e=doc.createElement(tag);if(text)e.textContent=text;if(className)e.className=className;return e;};
  const card=create('div',null,'card'),heading=create('div','Dateiverlauf','card-title');card.id='historyAssignmentCard';
- const intro=create('p','Dateizuordnungen und ihre Änderungen. Öffne einen Eintrag für den gespeicherten Text.');intro.className='muted';
+ const intro=create('p','Dateizuordnungen und frühere Textfassungen. Öffne einen Eintrag, um den gespeicherten Stand anzusehen oder den aktuellen Beitrag im geschützten Editor zu bearbeiten.');intro.className='muted';
  const slot=create('div',null,'sma-publication-history'),toolbar=create('div',null,'sma-history-toolbar'),refresh=create('button','Dateiverlauf aktualisieren'),message=create('p'),list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
  refresh.type=previous.type=more.type='button';refresh.disabled=true;nav.hidden=true;previous.setAttribute('aria-label','Vorherige Dateistände');more.setAttribute('aria-label','Weitere Dateistände');nav.setAttribute('aria-label','Dateiverlaufsseiten');nav.append(previous,more);message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  toolbar.append(refresh);slot.append(toolbar,message,list,nav);card.append(heading,intro,slot);after.after(card);
@@ -26,6 +26,14 @@ export function mountPublicationAssignmentHistory({doc,after,request,getOwnerId,
    details.append(summary,create('p',e.title||'Ohne Titel'),create('p',e.body,'sma-history-saved-text'));
    if(e.event_kind==='baseline')details.append(create('p','Ausgangsstand bei Einführung des Verlaufs. Frühere Änderungen sind nicht enthalten.','muted'));
    details.append(create('small','Zuordnung: Version '+e.assignment_revision+' · Text: Version '+e.preview_revision+' · Zuletzt gespeichert: '+format(e.source_updated_at)),create('p','Dateistand: '+e.asset_revision,'muted'));
+   // Historical snapshots are read-only. The direct link opens the owner's
+   // CURRENT file and portal in the existing editor, with fresh account,
+   // assignment and revision checks. It does not restore this archived text.
+   const currentEditor=create('a','Aktuellen Beitrag bearbeiten','sma-history-preview-link');
+   currentEditor.href='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(e.platform)+'&asset='+encodeURIComponent(e.asset_id);
+   currentEditor.target='_top';
+   currentEditor.setAttribute('aria-label','Aktuellen '+historyPlatforms[e.platform]+'-Beitrag zur Datei '+(e.file_name||'Datei')+' bearbeiten');
+   details.append(currentEditor,create('p','Öffnet den aktuellen Dateistand. Die gespeicherte Fassung oben bleibt unverändert.','muted'));
    row.append(details);list.append(row);
   }
   message.textContent=entries.length?(pageNumber*pageSize+1)+'–'+Math.min((pageNumber+1)*pageSize,entries.length)+' von '+total+' Dateiständen · Seite '+(pageNumber+1)+' von '+Math.ceil(total/pageSize)+' · '+formatHistoryMonth(month)+'.':'Keine gespeicherten Dateistände für '+formatHistoryMonth(month)+' vorhanden.';

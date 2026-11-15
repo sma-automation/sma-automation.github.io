@@ -1,6 +1,34 @@
 # TikTok: verbindliche Kennzeichnung von KI-generierten Videos
 
-## Aktueller offener Live-Nachweis – 10. November 2026
+## Kernabgleich vom 15. November 2026
+
+Der bestehende Entwurf wurde mit `website-v1` bei `c009e70` (PR #303)
+zusammengeführt. Die aktuellen Portal-Verbindungsbuttons, der direkte
+Übersichtslink, die Auftragsrückwege und die jüngsten Editor-/Kundenmedien-
+Änderungen sind erhalten. Die vier Konflikte betrafen Browser-Importe,
+Cacheversionen und zwei zugehörige Testassertionen. Der Client verwendet
+`publication-order.mjs?v=27` und `publication-preview.js?v=99`.
+
+Lokale Abnahme auf diesem zusammengeführten Stand:
+
+- 929 Node-Tests bestanden, keine Fehler.
+- 1030 synthetische Dialog-/Freigabeprüfungen bestanden.
+- 38 isolierte TikTok-AIGC-SQL-Prüfungen bestanden; Ja und Nein werden
+  als Boolean gespeichert und an den Auftragsfingerprint gebunden.
+- 149 isolierte Provider-/Cover-SQL-Prüfungen bestanden.
+- Quellenprüfung: `SOURCE_PREFLIGHT_OK; LIVE_EXPORT_NOT_VERIFIED; NO_DEPLOYMENT`.
+
+**Weiterhin Entwurf, keine Live-Umstellung.** Die folgenden Live-Beobachtungen
+stammen vom 10. November und wurden am 15. November nicht erneut bestätigt.
+Der nächste Schritt ist der frische authentifizierte Abgleich der tatsächlich
+veröffentlichten Provider-/Coverversion; danach die lesende Prüfung des
+aktuellen Datenbank-Funktionshashs und der bestehenden TikTok-Aufträge.
+Erst bei passender Basis kann die koordinierte Umstellung von Datenbank,
+Provider-/Coverkopie und Client erfolgen. Der Kundenmedien-Pilotworkflow
+`aEm2khRhdM6EUdoq` wurde nicht verändert. Kein Upload, keine Freigabe,
+kein Provideraufruf und keine Kostenänderung wurden ausgeführt.
+
+## Offener Live-Nachweis – Beobachtungen vom 10. November 2026
 
 Der bestehende Workflow `JaidX5YeKl6ZTqjQ` war in der Browser-UI als
 **Published** sichtbar. Ein erster DOM-Leselauf listete 46 Knotennamen und

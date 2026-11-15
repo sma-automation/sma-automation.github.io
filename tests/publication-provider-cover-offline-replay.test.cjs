@@ -28,7 +28,8 @@ function run(name,{json={},lookups={},data=null}={}){
  const node=nodes.get(name);
  assert.equal(node?.type,'n8n-nodes-base.code','Code node not present: '+name);
  const sandbox={
-  Buffer,URL,Date,$json:json,
+  Buffer,Date,$json:json,
+  helpers:{getBinaryDataBuffer:async()=>data,prepareBinaryData:async bytes=>({size:bytes.length})},
   require:moduleName=>{
    assert.equal(moduleName,'crypto','Offline test must not load network packages');
    return crypto;
@@ -40,7 +41,7 @@ function run(name,{json={},lookups={},data=null}={}){
   $input:{first:()=>({json,binary:{data:'SYNTHETIC_IN_MEMORY'}})}
  };
  const fn=vm.runInNewContext('(async function(){\n'+node.parameters.jsCode+'\n})',sandbox,{timeout:4000});
- return fn.call({helpers:{getBinaryDataBuffer:async()=>data}}).then(items=>{
+ return fn().then(items=>{
   assert.equal(items.length,1);
   return JSON.parse(JSON.stringify(items[0].json));
  });
@@ -87,6 +88,22 @@ test('generated cover copy stays internal with one upload node and no retry or r
  assert.match(finish.parameters.jsonBody,/p_lease:/);
 });
 
+test('each provider HTTP node serializes its headers and preserves the raw response body',()=>{
+ const names=['Provider-JSON-Anfrage','Provider-Dateitransfer','Provider-Statusanfrage','YouTube-Cover übertragen'];
+ const headers={Authorization:'Bearer synthetic-test-only','Content-Type':'video/mp4','Content-Length':'12'};
+ for(const name of names){
+  const params=nodes.get(name).parameters;
+  assert.equal(params.sendHeaders,true);
+  assert.equal(params.specifyHeaders,'json');
+  assert.deepEqual(params.options.response.response,{fullResponse:true,neverError:true,responseFormat:'text',outputPropertyName:'body'});
+  const expression=params.jsonHeaders.match(/^=\{\{ (.+) \}\}$/);
+  assert.ok(expression,name);
+  const value=vm.runInNewContext(expression[1],{$json:{request:{headers}}});
+  assert.equal(typeof value,'string',name);
+  assert.deepEqual(JSON.parse(value),headers,name);
+ }
+});
+
 test('actual n8n TikTok init node inserts only the reserved cover timestamp',async()=>{
  const result=await run('Provideranfrage erstellen',{lookups:refs(tiktokIntent)});
  assert.equal(result.request.url,'https://open.tiktokapis.com/v2/post/publish/video/init/');
@@ -104,6 +121,64 @@ test('actual n8n TikTok init node inserts only the reserved cover timestamp',asy
   await assert.rejects(run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,choices})}),/INVALID_CHOICES/);
  }
  await assert.rejects(run('Provideranfrage erstellen',{lookups:refs({...tiktokIntent,cover:{...cover,video_asset_id:id(99)}})}),/COVER_BINDING_INVALID/);
+});
+
+
+test('YouTube and TikTok init preserve exactly the saved owner shop CTA and product link',async()=>{
+ const ownerShop='https://sma-automation.com/app/shop.html?shop=fixture';
+ const ownerCaption='Kurzer sachlicher Beitrag über einen sichtbaren Testablauf.\n\n'+
+  'Schau doch mal in meinem Shop vorbei!\n\n#SMA #Test\n\n🛒 Zum Shop: '+ownerShop;
+ const youtube={...youtubeIntent,operation:'init',sequence:1,size_bytes:1347227,
+  draft:{title:'Synthetischer Test – Türgriff',caption:ownerCaption},
+  choices:{visibility:'private',made_for_kids:false,contains_synthetic_media:true}};
+ const yt=await run('Provideranfrage erstellen',{lookups:refs(youtube)});
+ assert.equal(yt.request.url,'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status');
+ assert.equal(yt.request.body.snippet.title,youtube.draft.title);
+ assert.equal(yt.request.body.snippet.description,ownerCaption);
+ assert.equal(yt.request.body.snippet.description.split(ownerShop).length-1,1);
+ assert.equal(yt.request.body.snippet.description.split('Schau doch mal').length-1,1);
+ assert.equal(yt.request.body.status.privacyStatus,'private');
+ assert.equal(yt.request.body.status.containsSyntheticMedia,true);
+ assert.equal(yt.request.headers.Authorization,'Bearer '+token);
+
+ const productCaption='A factual description of the test video.\n\n'+
+  'Feel free to visit my shop!\n\n#SMA #Test\n\n🛒 View product: '+
+  ownerShop+'&produkt=sku_01';
+ const tiktok={...tiktokIntent,draft:{title:'Synthetic test',caption:productCaption}};
+ const tt=await run('Provideranfrage erstellen',{lookups:refs(tiktok)});
+ assert.equal(tt.request.url,'https://open.tiktokapis.com/v2/post/publish/video/init/');
+ assert.equal(tt.request.body.post_info.title,productCaption);
+ assert.equal(tt.request.body.post_info.title.split(ownerShop).length-1,1);
+ assert.equal(tt.request.body.post_info.title.split('Feel free to visit my shop!').length-1,1);
+ assert.equal(tt.request.body.post_info.title.endsWith(ownerShop+'&produkt=sku_01'),true);
+ assert.equal(tt.request.body.post_info.privacy_level,'SELF_ONLY');
+ assert.equal(tt.request.body.post_info.video_cover_timestamp_ms,1000);
+ assert.equal(tt.request.headers.Authorization,'Bearer '+token);
+ // Offline result is an intended request only, never a provider receipt or post.
+ assert.equal(yt.request.body.status.privacyStatus,'private');
+ assert.equal(tt.request.body.source_info.source,'FILE_UPLOAD');
+});
+
+test('strict runner reads bound video bytes and preserves the resumable session',async()=>{
+ const bytes=Buffer.from('000000186674797000000000','hex');
+ const revision='sha256:'+crypto.createHash('sha256').update(bytes).digest('hex')+':10';
+ const session='https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=fixture';
+ const intent={...tiktokIntent,platform:'youtube',binding:{...binding,asset_revision:revision},
+  cover:null,operation:'upload',size_bytes:bytes.length,received_bytes:3,session_url:session,
+  session_expires_at:new Date(Date.now()+60000).toISOString()};
+ const lookups={...refs(intent),'Providerverbindung bestätigen':{json:{binding:intent.binding,token}},
+  'Provider-Dateistand bestätigen':{json:{size_bytes:bytes.length}}};
+ const verified=await run('Provider-Dateiprüfsumme bestätigen',{data:bytes,lookups});
+ assert.equal(verified.size_bytes,bytes.length);
+ await assert.rejects(run('Provider-Dateiprüfsumme bestätigen',{data:Buffer.alloc(bytes.length),lookups}),/FILE_CHANGED/);
+ const request=await run('Provideranfrage erstellen',{lookups});
+ assert.equal(request.request.url,session);
+ const remainder=await run('Provider-Dateirest auswählen',{data:bytes,lookups:{...lookups,
+  'Provider-Dateiprüfsumme bestätigen':{binary:{data:'fixture'}},'Provideranfrage erstellen':{json:request}}});
+ assert.equal(remainder.request.offset,3);
+ const observed=await run('Providerantwort auswerten',{json:{statusCode:200,headers:{location:session}},
+  lookups:refs({...intent,operation:'init'})});
+ assert.equal(observed.state,'session_ready');
 });
 
 test('actual n8n YouTube cover request uses only validated PNG and bound video ID',async()=>{

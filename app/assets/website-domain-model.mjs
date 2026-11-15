@@ -42,12 +42,22 @@ export function readWebsiteState(value){
  if((draft===null)!==(value.revision===0))fail('INVALID_RESPONSE');
  return {revision:value.revision,draft,updated_at:typeof value.updated_at==='string'?value.updated_at:null,shop_url:safeShopLink(value.shop_url)};
 }
+// An unresolved auth/session or network promise must not lock the customer form
+// forever. A timed-out save retains its request UUID for safe idempotent retry.
+// Late responses are ignored by Promise.race; no state is changed after timeout.
+function bounded(action,timeoutMs){
+ let timer;
+ return Promise.race([
+  Promise.resolve().then(action),
+  new Promise((_,reject)=>{timer=setTimeout(()=>reject(Object.assign(new Error('REQUEST_TIMEOUT'),{code:'REQUEST_TIMEOUT'})),timeoutMs);})
+ ]).finally(()=>clearTimeout(timer));
+}
 // request() accepts only action + the caller-owned draft; never an account ID.
 // A lost save response reuses its request UUID and expected revision.
-export function createWebsiteDraftClient({request,getOwnerId,uuid}){
+export function createWebsiteDraftClient({request,getOwnerId,uuid,timeoutMs=16000}){
  let owner=null,revision=0,lastRequest=null,busy=false;
  async function currentOwner(){
-  const value=await getOwnerId();
+  const value=await bounded(getOwnerId,timeoutMs);
   if(!value)fail('AUTH_REQUIRED');
   return value;
  }
@@ -55,7 +65,7 @@ export function createWebsiteDraftClient({request,getOwnerId,uuid}){
  return {
   load:()=>run(async()=>{
    const next=await currentOwner();
-   const result=readWebsiteState(await request('get',{}));
+   const result=readWebsiteState(await bounded(()=>request('get',{}),timeoutMs));
    if(await currentOwner()!==next)fail('AUTH_REQUIRED');
    owner=next;revision=result.revision;lastRequest=null;return result;
   }),
@@ -66,7 +76,7 @@ export function createWebsiteDraftClient({request,getOwnerId,uuid}){
     const request_id=uuid();if(!UUID.test(request_id))fail('INVALID_REQUEST');
     lastRequest={signature,input:{...draft,expected_revision:revision,request_id}};
    }
-   const result=readWebsiteState(await request('save',lastRequest.input));
+   const result=readWebsiteState(await bounded(()=>request('save',lastRequest.input),timeoutMs));
    if(await currentOwner()!==owner)fail('AUTH_REQUIRED');
    revision=result.revision;lastRequest=null;return result;
   })

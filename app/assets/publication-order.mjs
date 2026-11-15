@@ -32,6 +32,8 @@ function preparationWindow(order){
 }
 function preparationEnded(order) {
   const window=preparationWindow(order);
+  // A prepared order without a valid server-issued expiry is never approvable.
+  if(order?.state==='prepared')return window?.status!=='active'||!(Date.parse(window.expires_at)>Date.now());
   return window!=null&&(window.status!=='active'||!(Date.parse(window.expires_at)>Date.now()));
 }
 function pendingTarget(order){
@@ -40,6 +42,33 @@ function pendingTarget(order){
     order.approval_token===null&&order.approval_window==null&&
     ['active','expired'].includes(order.preparation_window?.status)&&Number.isFinite(Date.parse(order.preparation_window.expires_at));
 }
+/**
+ * Read-only guidance. A private YouTube test is still a real upload and
+ * requires separate operator authorization. Never grants upload permissions.
+ */
+export function privateYouTubeTestSteps(order,now=Date.now()) {
+  if(order?.state!=='prepared'||order.binding?.platform!=='youtube'||order.choices?.visibility!=='private')return null;
+  const expiry=Date.parse(order.approval_window?.expires_at);
+  const current=order.approval_window?.status==='active'&&Number.isFinite(expiry)&&expiry>now&&
+    !!order.target?.id&&order.account_check?.target_id===order.target.id;
+  const media=order.media_check;
+  const bound=media?.asset_id===order.binding.asset_id&&media?.asset_revision===order.binding.asset_revision;
+  const open=!bound||!Array.isArray(media.checks)||!media.checks.length||
+    media.checks.some(x=>x.status!=='pass'&&x.code!=='PUBLICATION_APPROVAL_PENDING');
+  const fileNote=order.check_error==='FILE_CHANGED'
+    ?'Datei geändert: Dateiliste aktualisieren und Vorbereitung erneut prüfen.'
+    :order.check_error?orderError(order.check_error)
+    :open?'Medien- und Inhaltsprüfungen sind für diesen Dateistand noch offen.'
+    :'Medienprüfungen dokumentiert; persönliche Rechteprüfung bleibt erforderlich.';
+  return [
+    current?'Zielkonto und Freigabefrist für diesen Auftrag aktuell.'
+      :'Zielkontoprüfung oder Freigabefrist nicht mehr gültig: Vorbereitung neu starten.',
+    fileNote,
+    'Persönliche Inhalts-, Medien- und Musikrechtebestätigung ist noch erforderlich.',
+    'Privat bedeutet trotzdem YouTube-Upload: Eine separate SMA-Betreiberfreigabe ist erforderlich.'
+  ];
+}
+
 export function humanReviewAvailable(order) {
   return order?.state==='prepared'&&!preparationEnded(order)&&!order.check_error&&['youtube','tiktok'].includes(order.binding?.platform)&&
     order.human_review_option?.policy_version===humanReviewPolicy&&/^[a-f0-9]{64}$/.test(order.human_review_option?.source_fingerprint||'');
@@ -80,9 +109,15 @@ function sameAccountTerms(saved,current){
 
 const orderIdPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 function recordedApproval(row){
-  return typeof row.id==='string'&&orderIdPattern.test(row.id)&&['approved','checking','checked','blocked'].includes(row.state)&&
+  return typeof row?.id==='string'&&orderIdPattern.test(row.id)&&['approved','checking','checked','blocked'].includes(row.state)&&
     typeof row.approved_at==='string'&&/^20\d{2}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d\d:\d\d)$/.test(row.approved_at)&&
     Number.isFinite(Date.parse(row.approved_at));
+}
+
+export function checkedHistoryOrder(row){
+  return row?.state==='checked'&&recordedApproval(row)&&row.can_upload===false&&row.can_publish===false&&
+    row.approval_token===null&&row.approval_review!=null&&!!row.target?.id&&
+    ['youtube','tiktok'].includes(row.target.platform)&&row.target.platform===row.binding?.platform;
 }
 
 function validatedOrder(result,id){
@@ -161,7 +196,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,readTransferStatus,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -294,6 +329,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);
     checkTarget.hidden=!pendingTarget(order)||locked;
     checkTarget.disabled=value||checkTarget.hidden||!!order?.check_error;
+    statusButton.textContent=!recovery&&recordedApproval(order)?'Auftrag prüfen und fortsetzen':'Status erneut laden';
     statusButton.disabled=value;approve.disabled=value||order?.state!=='prepared'||locked||!consent.checked||!reviewReady();
     if(locked){
       consent.checked=false;humanEnabled.checked=false;
@@ -316,6 +352,31 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function appendApprovalReceipt(row){
     const when=new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(row.approved_at));
     details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),historyLink(row.id,'Freigegebenen Auftrag in der History öffnen'));
+  }
+  function appendTransferStatus(row){
+    const message=make('p'),reload=make('button','Übertragungsstand aktualisieren');
+    message.setAttribute('role','status');
+    reload.type='button';reload.className='secondary';
+    details.append(message,reload);
+    async function load(){
+      if(reload.disabled||!dialog.open||order!==row||!message.isConnected)return;
+      reload.disabled=true;statusButton.hidden=true;
+      message.textContent='Der gespeicherte Übertragungsstand wird geladen …';
+      try{
+        const result=await readTransferStatus(row.id,row.binding.platform);
+        if(dialog.open&&order===row&&message.isConnected){
+          message.textContent=result.message;
+          statusButton.hidden=result.canContinue!==true;
+        }
+      }catch{
+        if(dialog.open&&order===row&&message.isConnected)message.textContent='Der Übertragungsstand konnte nicht geladen werden.';
+      }finally{
+        reload.disabled=false;
+      }
+    }
+    reload.addEventListener('click',load);
+    // A History resume opens the dialog immediately after rendering its contents.
+    void Promise.resolve().then(load);
   }
   function showDuplicate(row,targetId){
     // The journal identifies duplicate approvals by file version, platform and target.
@@ -353,6 +414,14 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     const visibilityLabels={private:'Privat',public:'Öffentlich',unlisted:'Nicht gelistet',SELF_ONLY:'Nur ich',PUBLIC_TO_EVERYONE:'Öffentlich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
     const decisions=make('ul');for(const [key,value] of Object.entries(r.choices||{}))if(decisionLabels[key])decisions.append(make('li',decisionLabels[key]+': '+(key==='visibility'?visibilityLabels[value]||value:value?'Ja':'Nein')));details.append(decisions);
     appendPost(r.draft);
+    const privateTestSteps=privateYouTubeTestSteps(r);
+    if(privateTestSteps){
+      const testStatus=make('section');testStatus.className='order-private-youtube-checklist';
+      testStatus.append(make('h3','Privater YouTube-Test · noch kein Upload'));
+      const checklist=make('ul');
+      for(const message of privateTestSteps)checklist.append(make('li',message));
+      testStatus.append(checklist);details.append(testStatus);
+    }
     const media=r.media_check;
     if(media?.human_review?.method==='customer_attestation')details.append(make('p','Persönliche Inhaltsprüfung für diesen Stand dokumentiert. Die automatische Video-Sicherheitsprüfung wurde dadurch nicht durchgeführt.'));
     if(media?.asset_id===context.binding.asset_id&&media?.asset_revision===context.binding.asset_revision&&Array.isArray(media.checks)){
@@ -361,7 +430,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
     if(r.check_error)details.append(make('p',orderError(r.check_error)));
     if(context.binding.platform==='tiktok')details.append(make('p','Nach einer späteren Veröffentlichung kann TikTok einige Minuten benötigen, bis der Beitrag im Profil sichtbar ist.'));
-    statusButton.hidden=r.state==='cancelled';
+    statusButton.hidden=r.state==='cancelled'||(r.state==='checked'&&recordedApproval(r));
     if(r.state==='cancelled')notice.textContent='Dieser Auftrag wurde storniert und kann nicht mehr freigegeben werden. Schließe dieses Fenster und bereite bei Bedarf einen neuen Auftrag vor.';
     else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
     else if(r.state==='checked')notice.textContent=(r.approved_at?'Deine Freigabe ist gespeichert. ':'')+'Die Auftragsprüfung ist abgeschlossen.';
@@ -369,17 +438,22 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     else if(pendingTarget(r))notice.textContent='Die Einstellungen sind gespeichert. Prüfe das Zielkonto, um diesen Auftrag weiter vorzubereiten.';
     else notice.textContent='Die Zielkontoprüfung ist noch nicht abgeschlossen.';
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
-    if(recordedApproval(r))appendApprovalReceipt(r);
+    if(recordedApproval(r)){
+      if(r.state==='checked'&&readTransferStatus)appendTransferStatus(r);
+      appendApprovalReceipt(r);
+    }
     if(r.state==='cancelled'&&r.approved_at===null&&orderIdPattern.test(r.id)){
       details.append(historyLink(r.id,'Abgebrochenen Auftrag in der History öffnen'));
     }
     approve.hidden=r.state!=='prepared';
   }
   function resumePrepared(previous){
-    if(previous.approved_at!==null||previous.check_error||preparationEnded(previous)||
-       previous.can_upload!==false||previous.can_publish!==false)return false;
-    if(!pendingTarget(previous)&&(previous.state!=='prepared'||previous.approval_window?.status!=='active'||
-       !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
+    if(previous.check_error||previous.can_upload!==false||previous.can_publish!==false)return false;
+    if(!checkedHistoryOrder(previous)){
+      if(previous.approved_at!==null||preparationEnded(previous))return false;
+      if(!pendingTarget(previous)&&(previous.state!=='prepared'||previous.approval_window?.status!=='active'||
+         !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
+    }
     context=getContext();
     if(!matchesPost(previous.draft))return false;
     showOrder(previous);

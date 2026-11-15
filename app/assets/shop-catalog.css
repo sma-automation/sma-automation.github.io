@@ -6,3 +6,11 @@ a,button{display:inline-flex;align-items:center;justify-content:center;min-heigh
 @media(max-width:500px){main{padding:16px}header{align-items:flex-start}h1{font-size:18px}header a{font-size:13px;padding:8px 10px}.product{grid-template-columns:72px minmax(0,1fr);gap:8px 14px}.photo{height:72px;grid-row:span 2}.product h2{font-size:14px}.price{grid-column:2;font-size:16px}.availability{margin-top:5px}.toolbar{align-items:flex-start}#refresh{font-size:13px;padding:8px 10px}nav button{font-size:13px;padding:8px 10px}}
 
 .product h2 a{display:inline;min-height:0;padding:0;border:0;background:none;color:#3157cd;text-decoration:underline;text-underline-offset:2px}
+
+@media (max-width:500px) {
+  .product h2 a {
+    display:flex;
+    justify-content:flex-start;
+    min-height:44px;
+  }
+}

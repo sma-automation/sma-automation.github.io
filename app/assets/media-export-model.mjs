@@ -2,11 +2,18 @@ import {readEditorSettings,editorUUID,editorTimestamp} from './media-editor-mode
 export const EXPORT_MAX_BYTES=24000000;
 export const EXPORT_RENDERER='sma-browser-export-v1';
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+export function exportFrameSize(format,sourceWidth,sourceHeight){
+ const preset=({'9:16':[720,1280],'1:1':[720,720],'16:9':[1280,720]})[format];
+ if(preset)return {width:preset[0],height:preset[1]};
+ if(!(sourceWidth>0&&sourceHeight>0))return {width:720,height:720};
+ const factor=Math.min(1,1280/Math.max(sourceWidth,sourceHeight));
+ const even=n=>Math.max(2,Math.floor(n*factor/2)*2);
+ return {width:even(sourceWidth),height:even(sourceHeight)};
+}
 export function exportPlan(file,settings){
  const s=readEditorSettings(settings,file),w=file.width_px,h=file.height_px;
  if(!['video/mp4','image/jpeg','image/png','image/webp'].includes(file.mime_type)||!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1||w>4096||h>4096||w*h>12000000||!Number.isInteger(file.size_bytes)||file.size_bytes<1||file.size_bytes>EXPORT_MAX_BYTES||file.media_kind==='video'&&(!Number.isInteger(file.duration_ms)||file.duration_ms<1||file.duration_ms>60000))throw Error('EXPORT_UNSUPPORTED');
- const even=n=>Math.max(2,Math.floor(n/2)*2),factor=Math.min(1,1280/Math.max(w,h));
- const [width,height]=({'9:16':[720,1280],'1:1':[720,720],'16:9':[1280,720]})[s.format]||[even(w*factor),even(h*factor)];
+ const {width,height}=exportFrameSize(s.format,w,h);
  const scale=s.fit==='contain'?Math.min(width/w,height/h):Math.max(width/w,height/h),round=s.fit==='contain'?Math.floor:Math.ceil;
  const scaledWidth=Math.max(2,round(w*scale/2)*2),scaledHeight=Math.max(2,round(h*scale/2)*2);
  const x=Math.max(0,Math.round(Math.abs(width-scaledWidth)*s.position_x/200)*2),y=Math.max(0,Math.round(Math.abs(height-scaledHeight)*s.position_y/200)*2);

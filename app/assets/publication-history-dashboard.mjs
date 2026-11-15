@@ -1,12 +1,13 @@
 import {mountPublicationAnalysisHistory} from './publication-analysis-history-dashboard.mjs?v=1';
 import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
-import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=1';
+import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=2';
 import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
-import {historyStatuses,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=4';
+import {historyStatuses,historyStatusLabel,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=5';
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
+import {readHistoryFind} from './publication-history-find.mjs?v=3';
 
-export function mountPublicationHistory({doc,request,requestOrderPage,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
+export function mountPublicationHistory({doc,request,requestOrderPage,requestFind,requestTexts,requestAssignments,requestEditors,requestAnalyses,getOwnerId,expectedOwnerId,watchOwner,ownerWindow=doc.defaultView,stylesheetUrl}){
  const page=doc.getElementById('page-history'),slot=page?.querySelector('#historyActivitySlot');
  if(!slot||!expectedOwnerId)return {destroy(){}};
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
@@ -20,7 +21,24 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  refresh.type='button';message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
  previous.type=more.type='button';previous.setAttribute('aria-label','Vorherige Aufträge');more.setAttribute('aria-label','Weitere Aufträge');nav.setAttribute('aria-label','Auftragsseiten');nav.hidden=true;nav.append(previous,more);
- toolbar.append(refresh);slot.replaceChildren(toolbar,message,list,nav);
+ const findInput=requestFind?create('input'):null,findResults=requestFind?create('ol',null,'sma-history-find-results'):null;
+ const findStatus=requestFind?create('p',null,'sma-history-find-status'):null;
+ let findTimer=null,findSerial=0;
+ const findExpiryTimers=[];
+ function cancelFind(){
+  findSerial++;
+  clearTimeout(findTimer);
+  findExpiryTimers.splice(0).forEach(timer=>clearTimeout(timer));
+ }
+ if(findInput){
+  findInput.id='smaHistorySearch';findInput.type='search';findInput.autocomplete='off';findInput.maxLength=80;
+  findInput.placeholder='Auftrag, Titel oder Portal suchen …';
+  findInput.setAttribute('aria-label','Alle eigenen Veröffentlichungsaufträge suchen');
+  findStatus.setAttribute('role','status');findStatus.setAttribute('aria-live','polite');
+  findResults.hidden=true;findStatus.hidden=true;toolbar.append(findInput);
+ }
+ toolbar.prepend(refresh);
+ slot.replaceChildren(toolbar,message,...(findInput?[findStatus,findResults]:[]),list,nav);
  const cards=[...page.querySelectorAll('.grid > .card')].slice(0,3);
  const metrics=[['Aufträge','Orders','orders'],['Davon öffentlich bestätigt','Publicly confirmed','public_confirmed'],['Portale in den Aufträgen','Platforms in orders','platforms']];
  cards.forEach((card,i)=>{translated(card.querySelector('.card-title'),metrics[i][0],metrics[i][1]);card.querySelector('.big-value')?.setAttribute('data-history-metric',metrics[i][2]);});
@@ -32,7 +50,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  let focusOnReturn=!!orderId;
  const chooseMonth=value=>{
   if(!active())return;
-  if(orderId&&ownerWindow.location?.hash===hash)ownerWindow.history.replaceState(ownerWindow.history.state,'',ownerWindow.location.pathname+ownerWindow.location.search);
+  if(orderId&&ownerWindow.location?.hash==='#auftrag/'+orderId)ownerWindow.history.replaceState(ownerWindow.history.state,'',ownerWindow.location.pathname+ownerWindow.location.search);
   orderId=null;focusOnReturn=false;selection=value;periodDisclosure?.removeAttribute('open');clear();load();};
  if(monthSlot){
   monthSlot.classList.add('sma-history-months');
@@ -81,11 +99,19 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
   }
   for(const view of editViews){editPanel.append(view.card);view.card.hidden=view.key!==editKey;}
  }
+ function selectEditView(key){
+  const view=editViews.find(entry=>entry.key===key);
+  if(!view)return false;
+  editKey=key;
+  if(editPicker){
+   const option=[...editPicker.options].find(item=>item.value===key);
+   if(option&&!option.selected)option.selected=true;
+  }
+  for(const entry of editViews)entry.card.hidden=entry!==view;
+  return true;
+ }
  function changeEditView(){
-  if(!editViews.some(view=>view.key===editPicker.value))return;
-  editKey=editPicker.value;
-  for(const view of editViews)view.card.hidden=view.key!==editKey;
-  if(chapterTabs?.selected==='edits')loadSelectedChapter();
+  if(selectEditView(editPicker.value)&&chapterTabs?.selected==='edits')loadSelectedChapter();
  }
  if(editPanel||analysisCard){
   activityCard.id='historyOrderCard';
@@ -121,7 +147,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
   monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
  }
- function invalidateOwner(){invalidOwner=true;clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
+ function invalidateOwner(){invalidOwner=true;cancelFind();if(findInput)findInput.disabled=true;findResults?.replaceChildren();clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
  const current=g=>g===generation&&active();
  const format=value=>new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(value));
  function render(result=lastResult){
@@ -134,9 +160,11 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
   if(periodHeading)periodHeading.textContent=label+' · Zeitraum ändern';
   if(monthButtons){monthButtons.replaceChildren();for(const m of result.months){const b=create('button',formatHistoryMonth(m.month)+' · '+m.orders);b.type='button';b.setAttribute('aria-pressed',String(selection===m.month));b.addEventListener('click',()=>chooseMonth(m.month));monthButtons.append(b);}}
   list.replaceChildren();
+  let selectedToggle;
   for(const entry of entries.slice(pageNumber*pageSize,(pageNumber+1)*pageSize)){
    const row=create('li'),heading=create('div',null,'sma-history-heading');
-   const name=create('strong',entry.title||'Beitrag'),status=create('span',historyStatuses[entry.status][0],'sma-history-status');
+   const window=entry.approval_window||entry.preparation_window;
+   const name=create('strong',entry.title||'Beitrag'),status=create('span',historyStatusLabel(entry.status,window),'sma-history-status');
    status.dataset.status=entry.status;heading.append(name,status);
    const meta=create('small',historyPlatforms[entry.platform]+' · '+format(entry.created_at));
    const cover=create('span','Cover: '+historyCoverStatuses[entry.cover.status][0],'sma-history-cover-status');
@@ -144,24 +172,27 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
    const details=create('details'),toggle=create('summary');toggle.append(heading,meta);
    const detail=create('p',historyStatuses[entry.status][1]);
    let previewLink;
-   const window=entry.approval_window||entry.preparation_window;
    const supportsCurrentPost=['youtube','tiktok'].includes(entry.platform);
    const currentPost=entry.status==='cancelled'&&supportsCurrentPost;
    const previewUrl='/app/publication-preview.html?wide=1&portal='+encodeURIComponent(entry.platform)+'&order='+encodeURIComponent(entry.id);
-   if(window||currentPost){
+   const privateCoverPending=entry.platform==='youtube'&&entry.status==='private_complete'&&entry.cover.status==='pending';
+   if((entry.status==='checked'&&supportsCurrentPost)||privateCoverPending){
+    previewLink=create('a',privateCoverPending?'Ausstehendes Cover öffnen':'Geprüften Auftrag öffnen','sma-history-preview-link');
+    previewLink.href=previewUrl+'&view=transfer&resume=1';previewLink.target='_top';
+   }else if(window||currentPost){
     previewLink=create('a',currentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen','sma-history-preview-link');
     previewLink.href=currentPost?previewUrl+'&view=current':previewUrl;previewLink.target='_top';
    }
    if(window){
     const expire=()=>{
-     status.textContent='Vorbereitung abgelaufen';
+     status.textContent=historyStatusLabel(entry.status,window);
      detail.textContent='In der Beitragsvorschau kannst du die Vorbereitung neu starten.';
      previewLink.href=previewUrl;previewLink.textContent=supportsCurrentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen';
     };
     const remaining=Date.parse(window.expires_at)-Date.now();
     if(window.status==='expired'||remaining<=0)expire();
     else if(window.status==='recheck'){
-     status.textContent='Kontoprüfung erforderlich';detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';
+     detail.textContent='Prüfe das Zielkonto in der Beitragsvorschau erneut.';
     }else{
      detail.textContent=entry.status==='preparing'
        ? 'Das Zielkonto ist noch offen. Du kannst diese Vorbereitung bis '+format(window.expires_at)+' Uhr (Wien) fortsetzen.'
@@ -183,13 +214,83 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
    row.append(details);list.append(row);
    if(entry.id===orderId){
     details.open=true;
-    if(focusOnReturn){focusOnReturn=false;toggle.focus();toggle.scrollIntoView?.({block:'center'});}
+    selectedToggle=toggle;
    }
   }
   const start=(pagesBeforeBatch+pageNumber)*pageSize;
   message.textContent=entries.length?(start+1)+'–'+(pagesBeforeBatch*pageSize+Math.min((pageNumber+1)*pageSize,entries.length))+' von '+summary.orders+' Aufträgen · Seite '+(pagesBeforeBatch+pageNumber+1)+' von '+Math.ceil(summary.orders/pageSize)+'.':'Keine Veröffentlichungsaufträge für '+label+' vorhanden.';
   nav.hidden=!entries.length;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
+  syncSearchMode();
+  if(focusOnReturn&&selectedToggle&&!list.hidden){
+   focusOnReturn=false;selectedToggle.focus();selectedToggle.scrollIntoView?.({block:'center'});
+  }
  }
+ function syncSearchMode(){
+  if(!findInput)return;
+  const q=findInput.value.trim(),searching=q.length>=2;
+  list.hidden=searching;message.hidden=searching;
+  if(searching)nav.hidden=true;
+  findResults.hidden=!searching;
+  findStatus.hidden=!searching&&q.length===0;
+ }
+ async function performHistorySearch(serial,term){
+  if(!active()||serial!==findSerial)return;
+  try{
+   const before=await getOwnerId();
+   if(serial!==findSerial||!active())return;
+   if(before!==expectedOwnerId){invalidateOwner();return;}
+   const response=await requestFind(term);
+   if(serial!==findSerial||!active())return;
+   const after=await getOwnerId();
+   if(serial!==findSerial||!active())return;
+   if(after!==expectedOwnerId){invalidateOwner();return;}
+   const found=readHistoryFind(response);findResults.replaceChildren();
+   for(const entry of found.entries){
+    const row=create('li'),button=create('button'),heading=create('strong',entry.title||'Gespeicherter Beitrag');
+    const caption=create('small');
+    const showStatus=()=>{caption.textContent=historyPlatforms[entry.platform]+' · '+historyStatusLabel(entry.status,entry.window)+' · '+format(entry.created_at);};
+    showStatus();
+    if(entry.window&&entry.window.status!=='expired'){
+     const remaining=Date.parse(entry.window.expires_at)-Date.now();
+     if(remaining>0)findExpiryTimers.push(setTimeout(showStatus,remaining+1));
+    }
+    caption.id='sma-history-find-detail-'+entry.id;
+    button.type='button';button.className='sma-history-find-open';button.append(heading,caption);
+    button.setAttribute('aria-describedby',caption.id);
+    button.setAttribute('aria-label','Auftrag in History öffnen: '+(entry.title||'Gespeicherter Beitrag'));
+    button.addEventListener('click',()=>{
+     if(!active()||!requestOrderPage)return;
+     cancelFind();
+     findInput.value='';findResults.replaceChildren();findStatus.textContent='';
+     orderId=entry.id.toLowerCase();focusOnReturn=true;selection=undefined;
+     const history=ownerWindow.history;
+     history.replaceState(history.state?.smaOptimization?null:history.state,'','#auftrag/'+orderId);
+     clear();load();
+    });
+    row.append(button);findResults.append(row);
+   }
+   findStatus.textContent=found.entries.length
+    ?found.entries.length+' Treffer im gesamten Auftragsverlauf'+(found.has_more?' · weitere Treffer möglich: Suche genauer.':'.')
+    :'Keine passenden Aufträge. Versuche einen anderen Suchbegriff.';
+  }catch{
+   if(serial!==findSerial||!active())return;
+   findResults.replaceChildren();findStatus.textContent='Die Auftragssuche ist gerade nicht verfügbar. Bitte erneut suchen.';
+  }
+ }
+ function onFindInput(){
+  if(!findInput||disposed)return;
+  cancelFind();
+  const term=findInput.value.trim();findResults.replaceChildren();
+  if(term.length<2){
+   findStatus.textContent=term?'Mindestens zwei Zeichen eingeben.':'';
+   if(lastResult)render(lastResult);else syncSearchMode();
+   return;
+  }
+  findStatus.textContent='Alle eigenen Aufträge werden durchsucht …';
+  syncSearchMode();const serial=findSerial;
+  findTimer=setTimeout(()=>{void performHistorySearch(serial,term);},350);
+ }
+ findInput?.addEventListener('input',onFindInput);
  async function load(append=false,requestedPage=null){
   if(!active()||busy||append&&!cursor)return;
   if(!append&&requestedPage===null)clear();
@@ -249,5 +350,23 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestTex
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
  if(orderId&&!page.classList.contains('active'))doc.querySelector('button[data-page="history"]')?.click();
  load();
- return {destroy(){disposed=true;clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ function hasSearchView(view){
+  if(disposed||invalidOwner)return false;
+  return view==='orders'||(view==='texts'&&Boolean(textCard));
+ }
+ function openSearchView(view){
+  if(!active()||!hasSearchView(view))return false;
+  if(view==='texts'){
+   selectEditView('texts');
+   return chapterTabs.select('edits',{focus:true});
+  }
+  if(findInput?.value){
+   findInput.value='';
+   onFindInput();
+  }
+  if(chapterTabs)return chapterTabs.select('orders',{focus:true});
+  refresh.focus();
+  return true;
+ }
+ return {hasSearchView,openSearchView,destroy(){disposed=true;cancelFind();findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

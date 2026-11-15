@@ -507,3 +507,71 @@ body.wide.post-preview-open #workspacePreview > #uploadPanel {
   body.wide.post-preview-open #workspacePreviewActions {margin-left:auto}
   body.wide.post-preview-open #workspaceDraftTools button {padding-inline:5px}
 }
+
+/* Magic Effect readiness: status follows real async work, never a fake countdown. */
+body.wide #magicText[data-magic-state="loading"],
+body.wide #workspaceDraftAction[data-magic-state="loading"],
+body.wide #magicText[data-magic-state="working"],
+body.wide #workspaceDraftAction[data-magic-state="working"]{
+  outline:2px solid #76c69b;
+  outline-offset:3px;
+  box-shadow:0 0 0 1px rgba(37,151,91,.07);
+  animation:sma-magic-readiness-pulse 2s ease-in-out infinite;
+}
+body.wide #magicText[data-magic-state="loading"]:disabled,
+body.wide #workspaceDraftAction[data-magic-state="loading"]:disabled{
+  opacity:.76;
+  cursor:progress;
+}
+body.wide .sma-magic-readiness{
+  flex-basis:100%;
+  max-width:700px;
+  margin:0;
+  padding:0;
+  color:#367951;
+  font-size:13px;
+  font-weight:600;
+  line-height:1.5;
+}
+body.wide #workspaceDraftNotice[data-magic-state="loading"],
+body.wide #workspaceDraftNotice[data-magic-state="working"]{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  color:#367951;
+}
+body.wide #magicReadiness[data-state="loading"]::before,
+body.wide #magicReadiness[data-state="working"]::before,
+body.wide #workspaceDraftNotice[data-magic-state="loading"]::before,
+body.wide #workspaceDraftNotice[data-magic-state="working"]::before{
+  content:"";
+  display:inline-block;
+  width:13px;
+  height:13px;
+  margin-right:8px;
+  vertical-align:-2px;
+  flex:none;
+  border:2px solid #b4dec6;
+  border-top-color:#278b56;
+  border-radius:50%;
+  animation:sma-magic-readiness-spin 1s linear infinite;
+}
+body.wide #magicReadiness[data-state="ready"]::before{
+  content:"✓";
+  color:#288951;
+  font-weight:800;
+  margin-right:7px;
+}
+body.wide #magicReadiness[data-state="error"],
+body.wide #magicReadiness[data-state="unavailable"]{color:#9d4f36}
+@keyframes sma-magic-readiness-pulse{
+  0%,100%{outline-color:#abdec0;box-shadow:0 0 0 0 rgba(38,145,85,.09)}
+  50%{outline-color:#27945b;box-shadow:0 0 0 4px rgba(38,145,85,.16)}
+}
+@keyframes sma-magic-readiness-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+  body.wide #magicText[data-magic-state],
+  body.wide #workspaceDraftAction[data-magic-state],
+  body.wide #magicReadiness::before,
+  body.wide #workspaceDraftNotice::before{animation:none!important}
+}

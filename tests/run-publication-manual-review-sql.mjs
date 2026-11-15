@@ -203,6 +203,57 @@ try{
  const data={target,drive_verified:true,text_verified:true,account_check:evidence,blockers:[]};
  const claim=await worker('claim');eq(claim.ok,true);const checked=await worker('finish_check',data,claim.lease_id);eq(checked.state,'checked');eq(checked.blockers,[]);
  eq((await provider({...data,size_bytes:2000})).code,'UPLOAD_TEST_APPROVAL_REQUIRED');eq(await count('publication_provider_attempts_v1'),0);
+ // Exercise the actual operator SELECT as the order moves beyond preparation.
+ const preflightSql=await src('youtube-private-release-preflight-readonly');
+ const preflight=async()=>(await db.query(preflightSql)).rows[0].readiness;
+ const snapshot=await preflight();
+ eq(snapshot.order_counts.prepared_youtube,0);
+ eq(snapshot.checked_private_youtube,{
+  orders:1,customer_approvals:1,current_stored_account_checks:1,current_bound_permissions:0,
+  expired_bound_permissions:0,orders_with_attempt_records:0,orders_without_attempt_records:1,
+  orders_with_event_records:0,portal_confirmed_private:0
+ });
+ for(const [fingerprint,expiry,active,expired] of [
+  ['sma_private.publication_provider_fingerprint_v1(o)',"now()+interval '1 minute'",1,0],
+  ['sma_private.publication_provider_fingerprint_v1(o)','now()',0,1],
+  ["repeat('f',64)","now()+interval '1 minute'",0,0]
+ ]){
+  await db.exec('begin');
+  await db.exec(`insert into sma_private.publication_provider_permissions_v1(order_id,fingerprint,expires_at)
+   select o.id,${fingerprint},${expiry} from sma_private.publication_orders_v1 o`);
+  const row=(await preflight()).checked_private_youtube;
+  eq(row.current_bound_permissions,active);eq(row.expired_bound_permissions,expired);
+  await db.exec('rollback');
+ }
+ for(const [field,change,prepared] of [
+  ['state',"'prepared'",1],['choices',`'{"visibility":"unlisted"}'`,0],
+  ['binding',`'{"platform":"tiktok"}'`,0],['state',"'cancelled'",0]
+ ]){
+  await db.exec('begin');await db.exec(`update sma_private.publication_orders_v1 set ${field}=${change}`);
+  const row=await preflight();
+  eq(row.checked_private_youtube.orders,0);eq(row.order_counts.prepared_youtube,prepared);
+  await db.exec('rollback');
+ }
+ await db.exec('begin');
+ await db.exec("update sma_private.publication_orders_v1 set account_check=null");
+ eq((await preflight()).checked_private_youtube.current_stored_account_checks,0);
+ await db.exec(`insert into sma_private.publication_provider_attempts_v1(order_id,fingerprint,platform,target_id,visibility,size_bytes)
+  select o.id,sma_private.publication_provider_fingerprint_v1(o),'youtube',o.target->>'id','private',2000
+  from sma_private.publication_orders_v1 o`);
+ await db.query(`insert into sma_private.publication_provider_events_v1(order_id,sequence,request_id,operation)
+  values ($1,1,$2,'init'),($1,2,$3,'status')`,[id(10),id(101),id(102)]);
+ const recorded=(await preflight()).checked_private_youtube;
+ eq(recorded.orders,1);eq(recorded.orders_with_attempt_records,1);eq(recorded.orders_without_attempt_records,0);
+ eq(recorded.orders_with_event_records,1);eq(recorded.portal_confirmed_private,0);
+ const providerId='synthetic_1';
+ const receipt={state:'complete',platform:'youtube',route:'youtube_video',target_id:target.id,
+  provider_id:providerId,expected_visibility:'private',visibility:'private',publicly_available:false,
+  url:'https://www.youtube.com/watch?v='+providerId,can_upload:false,can_publish:false,upload_retry_allowed:false};
+ await db.query("update sma_private.publication_provider_attempts_v1 set state='complete',provider_id=$1,result=$2",[providerId,receipt]);
+ eq((await preflight()).checked_private_youtube.portal_confirmed_private,1);
+ await db.query("update sma_private.publication_provider_attempts_v1 set result=$1",[{...receipt,target_id:'other'}]);
+ eq((await preflight()).checked_private_youtube.portal_confirmed_private,0);
+ await db.exec('rollback');
  // With a synthetic operator permission only inside a rolled-back transaction,
  // prove the actual provider journal rechecks the manual and remaining gates.
  for(const [changed,expected] of [[media,'init'],[{...media,checks:[...media.checks,check('VIDEO_CODEC','fail')]},'MEDIA_REVIEW_REQUIRED'],[{...media,content_review:{...media.content_review,status:'processing'}},'MEDIA_REVIEW_REQUIRED']]){

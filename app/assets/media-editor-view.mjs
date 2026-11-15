@@ -1,37 +1,89 @@
+import {drawMediaOverlay} from './media-text-overlay.mjs?v=2';
+import {exportFrameSize} from './media-export-model.mjs?v=3';
+import {mountOriginalVideo} from './original-video-preview.mjs?v=5';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountMediaMusic} from './media-music-view.mjs?v=4';
-import {mountMediaExport} from './media-export-view.mjs?v=4';
+import {mountMediaExport} from './media-export-view.mjs?v=7';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
-import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=3';
+import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=4';
 const errors={FILE_SYNC_RATE_LIMITED:'Bitte warte kurz und aktualisiere die Dateiangaben danach erneut.',FILE_SYNC_RUNNING:'Dein Kundenordner wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_UNAVAILABLE:'Die Dateiangaben konnten nicht aktualisiert werden. Deine Eingaben bleiben erhalten. Bitte erneut versuchen.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist momentan nicht erreichbar. Bitte erneut versuchen.',MUSIC_INVALID:'Bitte prüfe Musiklautstärke und Startzeit (0 bis unter 600 Sekunden).',RATE_LIMITED:'Für diesen Zeitraum wurden bereits viele Änderungen gespeichert. Bitte versuche es später erneut.',AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',ACCOUNT_UNAVAILABLE:'Dein Kundenkonto ist nicht eindeutig verfügbar.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',FILE_UNAVAILABLE:'Diese Datei ist nicht mehr verfügbar. Lade die Dateiliste neu.',FILE_CHANGED:'Die Datei wurde geändert. Lade die Dateiliste und den passenden Entwurf neu.',REVISION_CONFLICT:'Dieser Entwurf wurde inzwischen geändert. Lade den gespeicherten Stand, bevor du erneut speicherst.',REQUEST_CONFLICT:'Die Speicherung passt nicht mehr zu diesem Entwurf. Lade den gespeicherten Stand.',INVALID_SETTINGS:'Bitte prüfe die Eingaben: Zeitpunkte innerhalb der Videolänge, Cover innerhalb des Schnitts und höchstens 160 Zeichen ohne Zeilenumbruch.',UNAVAILABLE:'Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.'};
-export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,refreshMetadata=null,musicLibrary=null,thumbnail,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
+export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,refreshMetadata=null,musicLibrary=null,thumbnail,source=null,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
  const $=id=>doc.getElementById(id),control=k=>doc.querySelector('[name="'+k+'"]'),ownerWindow=doc.defaultView;
  let files=[],file=null,saved=null,attempt=null,busy=false,disposed=false,invalidOwner=false,dirty=false,generation=0,previewController=null,previewURL=null,metadataController=null,fileStale=false;
  let exportView,discardAction=null;
+ let useLinkedFile=initialAssetId!==null||initialAssetRevision!==null;
  const music=mountMediaMusic({doc,library:musicLibrary,createURL,revokeURL,setBusy:value=>lock(value),onChange:()=>{if(!saved||disposed||invalidOwner)return;setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);say('Ungespeicherte Änderungen.');}});
- const tabs=createChapterTabs({doc,id:'media-editor',list:$('chapters'),entries:[{key:'format',label:'Format & Ausschnitt',panel:$('formatPanel')},{key:'time',label:'Schnitt & Cover',panel:$('timePanel')},{key:'overlay',label:'Text',panel:$('overlayPanel')},{key:'audio',label:'Ton',panel:$('audioPanel')},...(exportDependencies?[{key:'export',label:'Export',panel:$('exportPanel')}]:[])],onSelect:key=>{if($('draftActions'))$('draftActions').hidden=key==='export';if($('draftPreview'))$('draftPreview').hidden=key==='export';}});
+ const original=source?mountOriginalVideo({
+  doc,host:$('editorOriginal'),thumbnailHost:$('stillPreview'),getOwnerId,expectedOwnerId,source,createURL,revokeURL,
+  loadedText:'Originalvideo geladen.',
+  onReadyChange:ready=>{$('showCover').hidden=!ready;$('playCut').hidden=!ready;$('timePreviewNote').textContent='';}
+ }):null;
+ function syncOriginal(){
+  const active=!$('timePanel').hidden&&saved&&!fileStale&&!invalidOwner;
+  original?.setContext(active?file:null);
+ }
+ const tabs=createChapterTabs({doc,id:'media-editor',list:$('chapters'),entries:[{key:'format',label:'Format & Ausschnitt',panel:$('formatPanel')},{key:'time',label:'Schnitt & Cover',panel:$('timePanel')},{key:'overlay',label:'Text',panel:$('overlayPanel')},{key:'audio',label:'Ton',panel:$('audioPanel')},...(exportDependencies?[{key:'export',label:'Export',panel:$('exportPanel')}]:[])],onSelect:key=>{if($('draftActions'))$('draftActions').hidden=key==='export';if($('draftPreview'))$('draftPreview').hidden=key==='export';syncOriginal();}});
  const say=(text,error=false)=>{$('status').textContent=text;$('status').dataset.error=String(error);};
  const current=g=>!disposed&&!invalidOwner&&g===generation;
  function warnBeforeLeaving(event){if(!dirty||disposed||invalidOwner)return;event.preventDefault();event.returnValue=true;}
  function setDirty(value){if(dirty===value)return;dirty=value;if(value)ownerWindow.addEventListener('beforeunload',warnBeforeLeaving);else ownerWindow.removeEventListener('beforeunload',warnBeforeLeaving);}
  function clearDiscard(){discardAction=null;$('discard').hidden=true;}
  function showDiscard(action){discardAction=action;$('discardMessage').textContent=action==='leave'?'Ungespeicherte Änderungen verwerfen und zum Dashboard zurückkehren?':'Ungespeicherte Änderungen verwerfen?';$('confirmDiscard').textContent=action==='leave'?'Verwerfen und zurück':'Verwerfen und laden';$('discard').hidden=false;$('discard').scrollIntoView?.({block:'nearest'});$('keepEditing').focus();}
- function releasePreview(){previewController?.abort();previewController=null;if(previewURL)revokeURL(previewURL);previewURL=null;$('image').removeAttribute('src');$('image').hidden=true;$('overlay').textContent='';}
+ function releasePreview(clearOverlay=true){previewController?.abort();previewController=null;if(previewURL)revokeURL(previewURL);previewURL=null;$('image').removeAttribute('src');$('image').hidden=true;
+  if(clearOverlay){$('overlay').textContent='';$('overlayCanvas').hidden=true;$('overlayCanvas').width=0;$('overlayCanvas').removeAttribute('aria-label');}
+ }
  function lock(value){busy=value;$('fields').disabled=value;for(const id of ['asset','refreshFiles','refreshMetadata','save','reload','confirmDiscard'])$(id).disabled=value;}
- function unavailable(message){metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;music.clear();exportView?.destroy();invalidOwner=true;generation++;releasePreview();files=[];file=null;saved=null;attempt=null;setDirty(false);clearDiscard();$('asset').replaceChildren();for(const key of Object.keys(editorDefaults))control(key).value='';$('fileInfo').textContent='';$('savedInfo').textContent='';$('editor').hidden=true;$('app').hidden=true;$('login').hidden=false;lock(true);say(message,true);}
+ function unavailable(message){original?.setContext(null);metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;music.clear();exportView?.destroy();invalidOwner=true;generation++;releasePreview();files=[];file=null;saved=null;attempt=null;setDirty(false);clearDiscard();$('asset').replaceChildren();for(const key of Object.keys(editorDefaults))control(key).value='';$('fileInfo').textContent='';$('savedInfo').textContent='';$('editor').hidden=true;$('app').hidden=true;$('login').hidden=false;lock(true);say(message,true);}
  async function owner(g){const id=await getOwnerId();if(!current(g))return false;if(id!==expectedOwnerId){unavailable(errors.AUTH_REQUIRED);return false;}return true;}
  function fail(error){const code=error?.message||'UNAVAILABLE';if(['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE'].includes(code)){unavailable(errors[code]);return;}say(errors[code]||errors.UNAVAILABLE,true);}
- function settings(){const s={};for(const k of Object.keys(editorDefaults)){const value=control(k).value;if(k.endsWith('_ms'))s[k]=value===''&&k!=='start_ms'?null:value.trim()===''?NaN:Math.round(Number(value)*1000);else if(['position_x','position_y','audio_volume'].includes(k))s[k]=Number(value);else s[k]=value;}const m=music.getSetting();return readEditorSettings({...s,...(m?{music:m}:{})},file);}
+ function timeValue(key){
+  const value=control(key).value.trim();
+  if(value==='')return key==='start_ms'?NaN:null;
+  return Math.round(Number(value)*1000);
+ }
+ function previewTimes(cover=null){
+  return readEditorSettings({...editorDefaults,start_ms:timeValue('start_ms'),end_ms:timeValue('end_ms'),cover_ms:cover},file);
+ }
+ function previewCut(){
+  if(!original||!file||fileStale||!saved)return;
+  const note=$('timePreviewNote');
+  try{
+   const {start_ms,end_ms}=previewTimes();
+   note.textContent=original.playRange(start_ms/1000,end_ms===null?null:end_ms/1000)?'':'Der gewählte Ausschnitt ist im geladenen Video nicht erreichbar.';
+  }catch{note.textContent='Gib einen gültigen Beginn und ein späteres Ende innerhalb des Videos ein.';}
+ }
+ $('playCut').addEventListener('click',previewCut);
+ function previewCover(){
+  if(!original||!file||fileStale||!saved)return;
+  const note=$('timePreviewNote');
+  try{
+   const times=previewTimes(timeValue('cover_ms'));
+   if(times.cover_ms===null)throw Error('MISSING_COVER');
+   note.textContent=original.seekTo(times.cover_ms/1000)?'':'Der Zeitpunkt ist im geladenen Video nicht erreichbar.';
+  }catch{note.textContent='Gib einen Cover-Zeitpunkt innerhalb des gewählten Schnitts ein.';}
+ }
+ $('showCover').addEventListener('click',previewCover);
+ function settings(){const s={};for(const k of Object.keys(editorDefaults)){const value=control(k).value;if(k.endsWith('_ms'))s[k]=timeValue(k);else if(['position_x','position_y','audio_volume'].includes(k))s[k]=Number(value);else s[k]=value;}const m=music.getSetting();return readEditorSettings({...s,...(m?{music:m}:{})},file);}
  function paint(){
   for(const k of ['position_x','position_y','audio_volume'])doc.querySelector('[data-value="'+k+'"]').textContent=control(k).value+' %';
-  const ratio=control('format').value==='original'?(file?.width_px&&file?.height_px?file.width_px/file.height_px:1):({'9:16':9/16,'1:1':1,'16:9':16/9})[control('format').value]||1;
+  const {width,height}=exportFrameSize(control('format').value,file?.width_px,file?.height_px);
+  const ratio=width/height;
   $('stage').style.aspectRatio=String(ratio);$('stage').style.maxWidth=Math.min(480,480*ratio)+'px';$('image').style.objectFit=control('fit').value;$('image').style.objectPosition=control('position_x').value+'% '+control('position_y').value+'%';
-  $('overlay').textContent=control('overlay_text').value;const position=control('overlay_position').value;$('overlay').style.top=position==='top'?'5%':position==='center'?'50%':'auto';$('overlay').style.bottom=position==='bottom'?'5%':'auto';$('overlay').style.transform=position==='center'?'translateY(-50%)':'none';
+  const text=control('overlay_text').value,position=control('overlay_position').value;
+  const layer=$('overlayCanvas'),fallback=$('overlay');
+  layer.hidden=!text||!drawMediaOverlay(layer,width,height,text,position);
+  if(layer.hidden)layer.removeAttribute('aria-label');else layer.setAttribute('aria-label',text);
+  fallback.textContent=layer.hidden?text:'';
+  if(fallback.textContent){
+   fallback.style.top=position==='top'?'5%':position==='center'?'50%':'auto';
+   fallback.style.bottom=position==='bottom'?'5%':'auto';
+   fallback.style.transform=position==='center'?'translateY(-50%)':'none';
+  }
  }
  function fill(result){saved=result;for(const [k,v] of Object.entries(result.settings).filter(([k])=>k!=='music'))control(k).value=v===null?'':k.endsWith('_ms')?String(v/1000):String(v);music.setContext(file,result.settings.music);setDirty(false);attempt=null;clearDiscard();$('savedInfo').textContent=result.revision?'Gespeicherter Entwurf · Version '+result.revision+' · '+new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(result.saved_at)):'Noch kein Bearbeitungsentwurf gespeichert.';paint();exportView?.setContext(file,saved,dirty||fileStale);}
  function metadataFields(){const missing=missingVideoMetadata(file);$('metadataPanel').hidden=!missing.length;$('metadataStatus').textContent=videoMetadataNotice(file);$('refreshMetadata').hidden=!refreshMetadata;}
  function fileFields(){
-  metadataFields();
+  metadataFields();syncOriginal();
   const timed=file.media_kind==='video'&&Number.isFinite(file.duration_ms)&&file.duration_ms>0;
   for(const k of ['start_ms','end_ms','cover_ms']){control(k).disabled=!timed;control(k).max=timed?String(file.duration_ms/1000):'';}
   control('audio_volume').disabled=file.media_kind!=='video';
@@ -39,21 +91,50 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   $('previewNote').textContent=file.media_kind==='video'?'Standbild-Vorschau für Format, Bildausschnitt und Text. Schnitt, Cover-Zeitpunkt und Ton werden beim Export angewendet.':'Vorschaubild für Format, Bildausschnitt und Text; noch kein exportiertes Ergebnis.';
  }
  async function loadPreview(g,selected){
-  releasePreview();const controller=new AbortController();previewController=controller;$('previewEmpty').hidden=false;$('previewEmpty').textContent='Vorschaubild wird geladen …';
+  releasePreview(false);const controller=new AbortController();previewController=controller;$('previewEmpty').hidden=false;$('previewEmpty').textContent='Vorschaubild wird geladen …';
   try{const blob=await thumbnail(selected,controller.signal);if(!current(g)||controller.signal.aborted||!await owner(g))return;previewURL=createURL(blob);$('image').src=previewURL;$('image').hidden=false;$('previewEmpty').hidden=true;paint();}
   catch{if(current(g)&&!controller.signal.aborted){$('previewEmpty').textContent='Das Vorschaubild ist momentan nicht verfügbar. Die Einstellungen können trotzdem gespeichert werden.';}}
  }
- async function loadFile(id){
-  if(disposed||invalidOwner)return;const g=++generation;fileStale=false;metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;releasePreview();music.clear();exportView?.setContext(null,null,false);file=files.find(f=>f.id===id)||null;saved=null;attempt=null;setDirty(false);$('editor').hidden=true;clearDiscard();
-  if(!file){say('Noch keine Bild- oder Videodateien vorhanden. Dateien kannst du unter Veröffentlichung hinzufügen.');return;}
+ async function loadFile(id,unavailableMessage){
+  if(disposed||invalidOwner)return;original?.setContext(null);const g=++generation;fileStale=false;metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;releasePreview();music.clear();exportView?.setContext(null,null,false);file=files.find(f=>f.id===id)||null;saved=null;attempt=null;setDirty(false);$('editor').hidden=true;clearDiscard();
+  $('fileDetails').hidden=!file;$('fileDetails').open=false;
+  if(!file){
+   $('fileInfo').textContent='';$('savedInfo').textContent='';
+   say(unavailableMessage||'Noch keine Bild- oder Videodateien vorhanden. Dateien kannst du unter Veröffentlichung hinzufügen.',Boolean(unavailableMessage));
+   return;
+  }
   $('asset').value=file.id;$('fileInfo').textContent=file.name;lock(true);say('Bearbeitungsentwurf wird geladen …');
   try{if(!await owner(g))return;const response=await request('get',{asset_id:file.id,asset_revision:file.revision});if(!current(g)||!await owner(g))return;fill(readEditorState(response,file));fileFields();$('editor').hidden=false;say('Entwurf geladen. Änderungen werden erst mit „Entwurf speichern“ gespeichert.');void loadPreview(g,file);}
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
  }
+ function renderOptions(unavailable){
+  const select=$('asset');select.replaceChildren();
+  if(unavailable){
+   const placeholder=doc.createElement('option');placeholder.value='';placeholder.disabled=true;
+   placeholder.textContent='Datei auswählen';select.append(placeholder);
+  }
+  for(const f of files){
+   const option=doc.createElement('option');option.value=f.id;option.textContent=f.caption;
+   select.append(option);
+  }
+  if(unavailable)select.value='';
+ }
  async function loadFiles(){
   if(disposed||invalidOwner||busy)return;if(dirty){say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}
   const g=++generation;lock(true);$('retry').hidden=true;say('Dateiliste wird geladen …');
-  try{if(!await owner(g))return;const response=await listFiles();if(!current(g)||!await owner(g))return;files=readEditorFiles(response);const selected=files.find(f=>f.id===(file?.id||initialAssetId))||files[0];$('asset').replaceChildren();for(const f of files){const option=doc.createElement('option');option.value=f.id;option.textContent=(f.media_kind==='video'?'Video · ':'Bild · ')+(f.name.length>90?f.name.slice(0,87)+'…':f.name);$('asset').append(option);}lock(false);$('app').hidden=false;await loadFile(selected?.id);}
+  try{
+   if(!await owner(g))return;
+   const response=await listFiles();
+   if(!current(g)||!await owner(g))return;
+   files=readEditorFiles(response,initialAssetId,initialAssetPortal);
+   const selected=useLinkedFile
+    ?files.find(f=>f.id===initialAssetId&&(initialAssetRevision===null||f.revision===initialAssetRevision))
+    :files.find(f=>f.id===file?.id)||files[0];
+   const unavailable=useLinkedFile&&!selected;
+   renderOptions(unavailable);
+   lock(false);$('app').hidden=false;
+   await loadFile(selected?.id,unavailable?'Die verlinkte Dateiversion ist nicht mehr verfügbar. Bitte prüfe die Dateiauswahl.':null);
+  }
   catch(e){if(current(g)){fail(e);if(!invalidOwner)$('retry').hidden=false;}}finally{if(current(g))lock(false);}
  }
  async function refreshFileMetadata(){
@@ -63,13 +144,13 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   $('metadataStatus').textContent='Dateiangaben werden im Kundenordner geprüft …';
   try{
    if(!await owner(g))return;const result=await refreshMetadata(controller.signal);if(!current(g)||!await owner(g)||controller.signal.aborted)return;
-   const latestFiles=readEditorFiles(result),latest=latestFiles.find(f=>f.id===selected.id);
+   const latestFiles=readEditorFiles(result,initialAssetId,initialAssetPortal),latest=latestFiles.find(f=>f.id===selected.id);
    if(!latest)throw Error('FILE_UNAVAILABLE');
-   files=latestFiles;
+   files=latestFiles;renderOptions(false);$('asset').value=selected.id;
    if(latest.revision!==selected.revision||latest.media_kind!==selected.media_kind){fileStale=true;exportView?.setContext(null,null,false);throw Error('FILE_CHANGED');}
-   file=latest;fileFields();paint();exportView?.setContext(file,saved,dirty||fileStale);void loadPreview(g,file);
+   file=latest;$('fileInfo').textContent=file.name;fileFields();paint();exportView?.setContext(file,saved,dirty||fileStale);void loadPreview(g,file);
    say(missingVideoMetadata(file).length?'Google Drive hat die fehlenden Dateiangaben noch nicht bereitgestellt. Bitte später erneut aktualisieren. Deine Eingaben bleiben erhalten.':'Dateiangaben aktualisiert. Deine Eingaben bleiben erhalten.');
-  }catch(e){if(current(g)&&!controller.signal.aborted){if(['FILE_UNAVAILABLE','FILE_CHANGED'].includes(e?.message)){fileStale=true;exportView?.setContext(null,null,false);}fail(e);if(!invalidOwner)$('metadataStatus').textContent=e?.message==='FILE_CHANGED'?'Die Dateiversion wurde geändert. Deine Eingaben bleiben sichtbar. Lade den passenden gespeicherten Stand, bevor du fortfährst.':errors[e?.message]||errors.FILE_SYNC_UNAVAILABLE;}}
+  }catch(e){if(current(g)&&!controller.signal.aborted){if(['FILE_UNAVAILABLE','FILE_CHANGED'].includes(e?.message)){fileStale=true;original?.setContext(null);exportView?.setContext(null,null,false);}fail(e);if(!invalidOwner)$('metadataStatus').textContent=e?.message==='FILE_CHANGED'?'Die Dateiversion wurde geändert. Deine Eingaben bleiben sichtbar. Lade den passenden gespeicherten Stand, bevor du fortfährst.':errors[e?.message]||errors.FILE_SYNC_UNAVAILABLE;}}
   finally{if(metadataController===controller)metadataController=null;if(current(g))lock(false);}
  }
  $('refreshMetadata').addEventListener('click',refreshFileMetadata);
@@ -82,15 +163,15 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   try{if(!await owner(g))return;const response=await request('save',input);if(!current(g)||!await owner(g))return;const result=readEditorState(response,file);fill(result);say(result.changed?'Entwurf gespeichert. Die Änderung steht jetzt in der History.':result.revision?'Gespeicherter Stand bestätigt. Es wurde kein doppelter Verlaufseintrag angelegt.':'Keine geänderten Einstellungen vorhanden.');}
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
  }
- const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);paint();say('Ungespeicherte Änderungen.');};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',save);
- const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}void loadFile($('asset').value);};$('asset').addEventListener('change',choose);
+ const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;if(['start_ms','end_ms'].includes(event.target.name))original?.stopRange();if(event.target.name.endsWith('_ms'))$('timePreviewNote').textContent='';setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);paint();say('Ungespeicherte Änderungen.');};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',save);
+ const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}useLinkedFile=false;void loadFile($('asset').value);};$('asset').addEventListener('change',choose);
  const reload=()=>{if(busy||!file)return;if(dirty){showDiscard('reload');return;}void loadFile(file.id);};$('reload').addEventListener('click',reload);
  const leave=event=>{if(event.defaultPrevented||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||disposed||invalidOwner||!dirty)return;event.preventDefault();if(busy){say('Bitte warte, bis der laufende Vorgang abgeschlossen ist.',true);return;}showDiscard('leave');};$('backDashboard').addEventListener('click',leave);
  const discard=()=>{if(busy||disposed||invalidOwner||!discardAction)return;if(discardAction==='leave'){clearDiscard();setDirty(false);try{navigate($('backDashboard').href);}catch{setDirty(true);showDiscard('leave');say('Das Dashboard konnte nicht geöffnet werden. Deine Eingaben sind noch vorhanden.',true);}return;}if(file)void loadFile(file.id);},keep=()=>clearDiscard();$('confirmDiscard').addEventListener('click',discard);$('keepEditing').addEventListener('click',keep);
  $('refreshFiles').addEventListener('click',loadFiles);$('retry').addEventListener('click',loadFiles);
- const visibility=async()=>{if(doc.visibilityState==='hidden'){$('app').hidden=true;return;}const g=generation;try{if(await owner(g)&&current(g))$('app').hidden=false;}catch{if(current(g))unavailable(errors.AUTH_REQUIRED);}};
+ const visibility=async()=>{if(doc.visibilityState==='hidden'){original?.stop();$('app').hidden=true;return;}const g=generation;try{if(await owner(g)&&current(g))$('app').hidden=false;}catch{if(current(g))unavailable(errors.AUTH_REQUIRED);}};
  doc.addEventListener('visibilitychange',visibility);ownerWindow.addEventListener('focus',visibility);
- if(exportDependencies)exportView=mountMediaExport({doc,...exportDependencies,getOwnerId,expectedOwnerId,uuid,createURL,revokeURL,setBusy:lock,onAuthLost:()=>unavailable(errors.AUTH_REQUIRED),musicSource:(m,signal)=>music.getSource(m,signal),getDraft:(f)=>request('get',{asset_id:f.id,asset_revision:f.revision})});
+ if(exportDependencies)exportView=mountMediaExport({doc,...exportDependencies,getOwnerId,expectedOwnerId,uuid,createURL,revokeURL,setBusy:lock,onAuthLost:()=>unavailable(errors.AUTH_REQUIRED),musicSource:(m,signal)=>music.getSource(m,signal),getDraft:(f,signal)=>request('get',{asset_id:f.id,asset_revision:f.revision},signal)});
  void loadFiles();
- return {invalidateOwner(id){if(id!==expectedOwnerId&&!disposed)unavailable(errors.AUTH_REQUIRED);},destroy(){if(disposed)return;clearDiscard();$('backDashboard').removeEventListener('click',leave);setDirty(false);disposed=true;generation++;metadataController?.abort();$('refreshMetadata').removeEventListener('click',refreshFileMetadata);exportView?.destroy();music.destroy();releasePreview();tabs.destroy();$('editorForm').removeEventListener('input',change);$('editorForm').removeEventListener('change',change);$('editorForm').removeEventListener('submit',save);$('asset').removeEventListener('change',choose);$('reload').removeEventListener('click',reload);$('confirmDiscard').removeEventListener('click',discard);$('keepEditing').removeEventListener('click',keep);$('refreshFiles').removeEventListener('click',loadFiles);$('retry').removeEventListener('click',loadFiles);doc.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('focus',visibility);$('app').hidden=true;}};
+ return {invalidateOwner(id){if(id!==expectedOwnerId&&!disposed)unavailable(errors.AUTH_REQUIRED);},destroy(){if(disposed)return;clearDiscard();$('backDashboard').removeEventListener('click',leave);setDirty(false);disposed=true;generation++;metadataController?.abort();$('refreshMetadata').removeEventListener('click',refreshFileMetadata);exportView?.destroy();original?.destroy();$('playCut').removeEventListener('click',previewCut);$('showCover').removeEventListener('click',previewCover);music.destroy();releasePreview();tabs.destroy();$('editorForm').removeEventListener('input',change);$('editorForm').removeEventListener('change',change);$('editorForm').removeEventListener('submit',save);$('asset').removeEventListener('change',choose);$('reload').removeEventListener('click',reload);$('confirmDiscard').removeEventListener('click',discard);$('keepEditing').removeEventListener('click',keep);$('refreshFiles').removeEventListener('click',loadFiles);$('retry').removeEventListener('click',loadFiles);doc.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('focus',visibility);$('app').hidden=true;}};
 }

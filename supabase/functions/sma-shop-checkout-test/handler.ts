@@ -5,6 +5,18 @@ const HOST = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 const ORIGINS = new Set(['https://sma-automation.com', 'https://www.sma-automation.com']);
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 
+function exactCents(value: unknown): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const decimal = String(value);
+  if (decimal.length > 64 || !/^[0-9]+(?:\.[0-9]+)?$/.test(decimal)) return null;
+  const [whole, fraction = ''] = decimal.split('.');
+  // Numeric columns may preserve trailing zeros beyond two decimals.
+  // Those are exact cents; any nonzero fractional-cent digit is unsafe.
+  if (fraction.length > 2 && !/^0+$/.test(fraction.slice(2))) return null;
+  const cents = Number(whole) * 100 + Number(fraction.slice(0, 2).padEnd(2, '0'));
+  return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
+}
+
 export function createHandler(authenticate: (req: Request) => Promise<any>) {
   return async (req: Request): Promise<Response> => {
     const origin = req.headers.get('origin') || '';
@@ -78,24 +90,26 @@ export function createHandler(authenticate: (req: Request) => Promise<any>) {
         if (!Number.isSafeInteger(stock) || stock < count) return reply(409, 'Gewünschte Menge nicht verfügbar: ' + p.produkt_name);
         let url: URL;
         try { url = new URL(p.kauf_url.trim()); } catch { return reply(409, 'Ungültige Shopify-Kaufadresse.'); }
-        const match = url.pathname.match(/^\/cart\/([0-9]{6,25}):[0-9]+\/?$/);
+        const match = url.pathname.match(/^\/cart\/([1-9][0-9]{5,24}):[1-9][0-9]*\/?$/);
         if (url.protocol !== 'https:' || url.hostname !== domain || url.port || url.username || url.password || url.search || url.hash || !match) return reply(409, 'Ungültige Shopify-Kaufadresse oder Variante.');
         if (variants.has(match[1])) return reply(409, 'Mehrere Produkte verweisen auf dieselbe Shopify-Variante.');
         variants.add(match[1]);
-        const price = p.preis === null ? NaN : Number(p.preis);
-        const cents = Math.round(price * 100);
+        const cents = exactCents(p.preis);
         const code = String(p.waehrung || '').toUpperCase();
-        if (!Number.isFinite(price) || price < 0 || !Number.isSafeInteger(cents) || !/^[A-Z]{3}$/.test(code) || (currency && currency !== code)) return reply(409, 'Preis oder Währung prüfen.');
+        if (cents === null || !/^[A-Z]{3}$/.test(code) || (currency && currency !== code)) return reply(409, 'Preis oder Währung prüfen.');
         currency = code;
         totalCents += cents * count;
         if (!Number.isSafeInteger(totalCents)) return reply(409, 'Warenkorbwert zu groß.');
         lines.push({produkt_id: id, name: p.produkt_name, menge: count, bestand: stock, einzelpreis: cents / 100, summe: cents * count / 100});
       }
-      return reply(200, 'Test bestanden: Händler, Produkte, Mengen und Shopify-Zuordnung sind gültig.', {
+      const merchantApproved = accounts[0].aktiv === true;
+      return reply(200, merchantApproved
+        ? 'Test bestanden: Händler, Produkte, Mengen und Shopify-Zuordnung sind gültig.'
+        : 'Warenkorb technisch geprüft. Händlerfreigabe für öffentliche Käufe fehlt noch.', {
         shop: TEST_SHOP, positionen: lines.length, gesamtmenge: quantity,
         warenkorb: lines, gesamtbetrag: totalCents / 100, waehrung: currency,
         kaufadresse_geprueft: true, live_checkout_unveraendert: true,
-        haendler_freigegeben: accounts[0].aktiv === true,
+        haendler_freigegeben: merchantApproved,
       });
     } catch {
       console.error('SMA checkout rehearsal failed');

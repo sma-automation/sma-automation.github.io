@@ -7,19 +7,19 @@ const db=new PGlite(), id=n=>'bca00000-0000-4000-8000-'+String(n).padStart(12,'0
 const uid=id(100),other=id(101),shop=n=>'https://sma-automation.com/app/shop.html?shop='+n;
 let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-const preview=(language,customer='fixture',kind='shop',body='Eine sachliche Beschreibung unseres zehnsekündigen Testvideos.',hashtags=['SMA','Video'])=>{
+const preview=(language,customer='fixture',kind='shop',body='Eine sachliche Beschreibung unseres zehnsekündigen Testvideos.',hashtags=['SMA','Video'],platforms=['youtube'])=>{
  const url=shop(customer),dest=kind==='product'?'🛒 '+(language==='en'?'View product: ':'Zum Produkt: ')+url+'&produkt=sku_01':
  '🛒 '+(language==='en'?'Visit our shop: ':'Zum Shop: ')+url;
- return {version:1,stage:'text_preview',can_publish:false,shop_url:url,language,drafts:[{
-  platform:'youtube',title:'Testclip',body,hashtags,review_notes:[],
+ return {version:1,stage:'text_preview',can_publish:false,shop_url:url,language,drafts:platforms.map(platform=>({
+  platform,title:'Testclip',body,hashtags,review_notes:[],
   ...(kind==='product'?{product_id:'sku_01'}:{}),
   caption:[body,hashtags.map(x=>'#'+x).join(' '),dest].filter(Boolean).join('\n\n')
- }]};
+ }))};
 };
-const setup=async(n,owner,customer,language,status='processing',content=null)=>{
+const setup=async(n,owner,customer,language,status='processing',content=null,platforms=['youtube'])=>{
  const key=id(n),lease=id(n+500);
  await db.query('insert into sma_private.publication_previews_v1(id,user_id,customer_id,input,shop_url,status,lease_id,lease_until,preview) values($1,$2,$3,$4,$5,$6,$7,now()+interval \'10 minutes\',$8)',
- [key,owner,owner===uid?1:2,{language,media_kind:'video',platforms:['youtube']},shop(customer),status,lease,content]);
+ [key,owner,owner===uid?1:2,{language,media_kind:'video',platforms},shop(customer),status,lease,content]);
  return {key,lease};
 };
 try{
@@ -49,6 +49,40 @@ try{
   const unchanged=(await db.query('select preview from sma_private.publication_previews_v1 where id=$1',[key])).rows[0].preview;
   eq(unchanged.drafts[0],d);
  }
+ // Four-channel acceptance, for two separate customers and both languages.
+ // Check the actual SQL trigger after finish, then repeat the UPDATE to confirm
+ // that no second invitation, footer or cross-customer link is ever introduced.
+ const portals=['youtube','tiktok','instagram','facebook'];
+ for(const [n,owner,customer,lang,kind] of [
+  [60,uid,'fixture','de','shop'],
+  [70,other,'other','en','product']
+ ]){
+  const input=preview(lang,customer,kind,
+   lang==='de'?'Eine unaufgeregte Beschreibung einer Testszene mit sichtbaren Handlungen.':
+    'A short factual description of a synthetic scene and visible details.',
+   ['SMA','Demo'],portals);
+  const {key,lease}=await setup(n,owner,customer,lang,'processing',null,portals);
+  await db.exec('set role service_role');
+  const result=(await db.query('select public.sma_publication_preview_finish_v1($1,$2,$3) as r',
+   [key,lease,input])).rows[0].r;
+  await db.exec('reset role');
+  eq(result.ok,true);
+  eq(result.preview.drafts.map(d=>d.platform),portals);
+  const invite=lang==='de'?'Schau doch mal in meinem Shop vorbei!':'Feel free to visit my shop!';
+  const link=kind==='product'?shop(customer)+'&produkt=sku_01':shop(customer);
+  for(const draft of result.preview.drafts){
+   eq(draft.body.endsWith('\n\n'+invite),true);
+   eq(draft.caption.split(invite).length-1,1);
+   eq(draft.caption.split(shop(customer)).length-1,1);
+   eq(draft.caption.endsWith(link),true);
+   eq(draft.caption.includes(shop(customer==='fixture'?'other':'fixture')),false);
+   eq(draft.caption.includes('#SMA #Demo'),true);
+  }
+  eq(result.preview.can_publish,false);
+  await db.query('update sma_private.publication_previews_v1 set preview=preview where id=$1',[key]);
+  const afterRepeat=(await db.query('select preview from sma_private.publication_previews_v1 where id=$1',[key])).rows[0].preview;
+  eq(afterRepeat,result.preview);
+ }
  // Saved edits cannot silently discard the standard invitation.
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
  await db.exec('set role authenticated');
@@ -75,6 +109,6 @@ try{
  eq(untouched.caption,invalid.drafts[0].caption);
  const after=(await db.query('select preview from sma_private.publication_previews_v1 where id=$1',[older.key])).rows[0].preview;
  eq(before,after);
- eq((await db.query('select count(*)::integer as n from sma_private.publication_previews_v1')).rows[0].n,6);
+ eq((await db.query('select count(*)::integer as n from sma_private.publication_previews_v1')).rows[0].n,8);
  console.log(checks+' customer-shop CTA SQL checks passed.');
 } finally {await db.close();}

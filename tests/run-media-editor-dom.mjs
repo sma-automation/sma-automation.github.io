@@ -9,18 +9,93 @@ const id=n=>'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),uid=id(91);
 const files=[{id:id(1),name:'Example.mp4',revision:'r1',media_kind:'video',mime_type:'video/mp4',duration_ms:10000,width_px:1080,height_px:1920},{id:id(2),name:'Image.jpg',revision:'r1',media_kind:'image',mime_type:'image/jpeg',duration_ms:null,width_px:1200,height_px:800}];
 const reply=(input,settings=defaults,revision=0)=>({ok:true,version:1,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,revision,settings,saved_at:revision?'2026-11-06T12:00:00Z':null,changed:revision>0});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-function fixture({navigate=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
+function fixture({initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,navigate=null,source=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
  const {document:doc,window}=parseHTML(html);Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});
  // Linkedom lacks native select.value setters; model the selected option through attributes.
  for(const select of doc.querySelectorAll('select'))Object.defineProperty(select,'value',{get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value||'';},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
  let owner=uid,serial=100;const calls=[],urls=[],revoked=[],thumbs=[],navigations=[];
- const view=mountMediaEditor({doc,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
+ const view=mountMediaEditor({doc,source,initialAssetId,initialAssetRevision,initialAssetPortal,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
  const $=s=>doc.querySelector(s),set=(key,value)=>{$('[name="'+key+'"]').value=value;$('[name="'+key+'"]').dispatchEvent(new window.Event('input',{bubbles:true}));};
  return {doc,window,view,$,calls,urls,revoked,thumbs,navigations,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
 }
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 const leave=f=>{const event=new f.window.Event('beforeunload',{cancelable:true});f.window.dispatchEvent(event);return event;};
 const back=(f,extra={})=>{const event=new f.window.Event('click',{cancelable:true,bubbles:true});Object.assign(event,extra);f.$('#backDashboard').dispatchEvent(event);return event;};
+await test('a gallery link opens the exact second file and lets the customer choose a different file',async()=>{
+ const f=fixture({initialAssetId:files[1].id,initialAssetRevision:'r1'});await tick();
+ assert.equal(f.$('#fileInfo').textContent,files[1].name);
+ assert.equal(f.calls[0].i.asset_id,files[1].id);assert.equal(f.thumbs[0].f.revision,'r1');
+ f.choose(0);await tick();f.$('#refreshFiles').click();await tick();
+ assert.equal(f.$('#fileInfo').textContent,files[0].name);f.view.destroy();
+});
+await test('catalog captions distinguish the edit from its source and retain the title of the linked portal',async()=>{
+ const source={...files[0],name:'SMA_Privattest_02.mp4',duration_ms:3000,display:{}};
+ const edit={...source,id:files[1].id,name:'SMA-Export-'+id(48)+'.mp4',display:{variant:'export',source_name:source.name},
+  assignments:[{platform:'youtube',status:'assigned',title:'YouTube-Fassung'},{platform:'tiktok',status:'assigned',title:'SMA Privattest 02'}]};
+ const f=fixture({initialAssetId:edit.id,initialAssetRevision:edit.revision,initialAssetPortal:'tiktok',listFiles:()=>({ok:true,files:[source,edit]})});
+ await tick();
+ assert.deepEqual([...f.doc.querySelectorAll('#asset option')].map(o=>o.textContent),['SMA Privattest 02 · Video · 3 Sek.','SMA Privattest 02 · Bearbeitetes Video · 3 Sek.']);
+ assert.equal(f.$('#asset').value,edit.id);assert.equal(f.$('#fileInfo').textContent,edit.name);assert.equal(f.$('#fileDetails').open,false);
+ f.choose(0);await tick();assert.equal(f.$('#fileInfo').textContent,source.name);
+ assert.deepEqual(f.calls.map(c=>[c.a,c.i.asset_id]),[['get',edit.id],['get',source.id]]);
+ f.view.destroy();
+});
+await test('time preview loads exact original on demand and seeks only inside the proposed cut',async()=>{
+ const videoFile={...files[0],size_bytes:12};
+ const reads=[],blob=new Blob([new Uint8Array(12)],{type:'video/mp4'});
+ const f=fixture({listFiles:()=>({ok:true,files:[videoFile,files[1]]}),source:(file,signal)=>{reads.push({file,signal});return blob;}});
+ await tick();
+ const player=f.$('#editorOriginal video'),load=f.$('#editorOriginal button'),show=f.$('#showCover');
+ let pauses=0;player.pause=()=>pauses++;player.load=()=>{};player.readyState=2;player.duration=10;player.currentTime=0;
+ assert.equal(reads.length,0);f.tab('Schnitt & Cover');assert.equal(f.$('#originalVideoPreview').hidden,false);
+ assert.equal(reads.length,0);assert.equal(show.hidden,true);load.click();await tick();
+ assert.equal(reads.length,1);assert.equal(reads[0].file.id,videoFile.id);assert.equal(reads[0].file.revision,videoFile.revision);
+ assert.equal(player.hidden,false);assert.equal(f.$('#stillPreview').style.display,'none');
+ player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(show.hidden,false);
+ show.click();assert.match(f.$('#timePreviewNote').textContent,/innerhalb/);assert.equal(leave(f).defaultPrevented,false);
+ f.set('start_ms','1');f.set('end_ms','3');f.set('cover_ms','3');show.click();assert.equal(player.currentTime,0);
+ f.set('cover_ms','1.5');const before=pauses;show.click();assert.equal(player.currentTime,1.5);assert.ok(pauses>before);assert.equal(f.$('#timePreviewNote').textContent,'');
+ f.tab('Text');assert.equal(f.$('#originalVideoPreview').hidden,true);assert.equal(player.hasAttribute('src'),false);assert.equal(f.$('#stillPreview').style.display,'');
+ assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('[name=cover_ms]').value,'1.5');
+ f.view.destroy();
+});
+await test('trim preview plays from the entered start, pauses at the end, and never writes a draft',async()=>{
+ const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],size_bytes:12}]}),source:()=>new Blob([new Uint8Array(12)],{type:'video/mp4'})});
+ await tick();f.tab('Schnitt & Cover');
+ const player=f.$('#editorOriginal video'),play=f.$('#playCut'),status=f.$('#originalVideoPreview p');
+ let plays=0;player.pause=()=>{player.paused=true;};player.play=async()=>{plays++;player.paused=false;};
+ player.load=()=>{};player.duration=10;player.readyState=4;player.currentTime=0;player.playbackRate=1;
+ assert.equal(play.hidden,true);f.$('#editorOriginal button').click();await tick();
+ player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(play.hidden,false);
+ f.set('start_ms','0.5');f.set('end_ms','2');f.set('cover_ms','9');play.click();
+ assert.equal(plays,1);assert.equal(player.currentTime,.5);
+ player.currentTime=2.02;player.dispatchEvent(new f.window.Event('timeupdate'));assert.equal(player.paused,true);assert.equal(player.currentTime,2);assert.match(status.textContent,/Ausschnitt beendet/);
+ play.click();assert.equal(player.currentTime,.5);assert.equal(plays,2);
+ f.set('end_ms','0.25');assert.equal(player.paused,true);play.click();assert.equal(plays,2);assert.match(f.$('#timePreviewNote').textContent,/gültigen Beginn/);
+ f.set('end_ms','');play.click();player.currentTime=10;player.dispatchEvent(new f.window.Event('ended'));assert.equal(player.currentTime,10);assert.match(status.textContent,/bis 10 Sekunden/);
+ play.click();f.set('cover_ms','1');f.$('#showCover').click();assert.equal(player.paused,true);assert.equal(player.currentTime,1);
+ play.click();f.tab('Ton');assert.equal(player.hasAttribute('src'),false);
+ assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();
+});
+await test('file or account changes discard an in-flight original and images only show the still preview',async()=>{
+ for(const action of ['select','owner','tab']){
+  const gate=deferred();let signal;
+  const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],size_bytes:12},files[1]]}),source:(_file,s)=>{signal=s;return gate.promise;}});
+  await tick();f.tab('Schnitt & Cover');f.$('#editorOriginal button').click();await tick();
+  if(action==='select')f.choose(1);else if(action==='owner')f.owner('other');else f.tab('Ton');
+  assert.equal(signal.aborted,true);gate.resolve(new Blob([new Uint8Array(12)],{type:'video/mp4'}));await tick();
+  assert.equal(f.$('#originalVideoPreview').hidden,true);assert.equal(f.$('#editorOriginal video').hasAttribute('src'),false);
+  assert.equal(f.$('#showCover').hidden,true);assert.equal(f.calls.some(c=>c.a==='save'),false);f.view.destroy();
+ }
+});
+await test('missing and revised targets open no substitute draft or thumbnail until a file is chosen',async()=>{
+ for(const [asset,revision] of [[id(95),'r1'],[files[1].id,'previous']]){
+  const f=fixture({initialAssetId:asset,initialAssetRevision:revision});await tick();
+  assert.equal(f.calls.length,0);assert.equal(f.thumbs.length,0);assert.equal(f.$('#editor').hidden,true);
+  assert.equal(f.$('#asset').value,'');assert.match(f.$('#status').textContent,/verlinkte Dateiversion/);
+  f.choose(0);await tick();assert.equal(f.calls[0].i.asset_id,files[0].id);f.view.destroy();
+ }
+});
 await test('Dashboard return requires an in-page discard decision and keeping edits never navigates or saves',async()=>{
  const f=fixture();await tick();assert.equal(back(f).defaultPrevented,false);f.set('overlay_text','Keep this edit');
  assert.equal(back(f).defaultPrevented,true);assert.equal(f.$('#discard').hidden,false);assert.match(f.$('#discardMessage').textContent,/Dashboard/);assert.equal(f.$('#confirmDiscard').textContent,'Verwerfen und zurück');
@@ -73,6 +148,43 @@ await test('music edits and metadata refresh preserve the warning without saving
  assert.equal(leave(f).defaultPrevented,false);f.$('#musicVolume').value='38';f.$('#musicVolume').dispatchEvent(new f.window.Event('input',{bubbles:true}));assert.equal(leave(f).defaultPrevented,true);
  f.$('#refreshMetadata').click();await tick();f.visibility('hidden');assert.equal(leave(f).defaultPrevented,true);f.visibility('visible');await tick();
  assert.equal(leave(f).defaultPrevented,true);assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();assert.equal(leave(f).defaultPrevented,false);
+});
+await test('standbild uses the exported title layout at every format and position, including wrapped text',async()=>{
+ const {overlayPNG}=await import('../app/assets/media-export-render.mjs');
+ const {exportPlan}=await import('../app/assets/media-export-model.mjs');
+ const f=fixture();await tick();
+ const layer=f.$('#overlayCanvas'),caption='SMA Hochformat – Vorschau und Export im Vergleich';
+ function recorder(){
+  const events=[];
+  return {events,ctx:{clearRect(){events.length=0;},measureText(value){return {width:[...value].length*16};},
+   fillRect(...args){events.push(['box',...args]);},fillText(...args){events.push([this.font,...args]);}}};
+ }
+ const preview=recorder();layer.getContext=()=>preview.ctx;
+ f.set('overlay_text',caption);
+ for(const format of ['9:16','1:1','16:9','original']){
+  f.set('format',format);
+  for(const position of ['top','center','bottom']){
+   f.set('overlay_position',position);
+   const plan=exportPlan({...files[0],size_bytes:1200},{...defaults,format,overlay_text:caption,overlay_position:position});
+   const expected=recorder();
+   const renderDoc={createElement:()=>({getContext:()=>expected.ctx,toBlob:cb=>cb(new Blob(['pixels']))})};
+   await overlayPNG(renderDoc,plan);
+   assert.deepEqual([layer.width,layer.height],[plan.width,plan.height]);
+   assert.equal(layer.getAttribute('aria-label'),caption);assert.equal(layer.hidden,false);assert.equal(f.$('#overlay').textContent,'');
+   assert.deepEqual(preview.events,expected.events);
+   if(format==='9:16'&&position==='top'){
+    assert.deepEqual(preview.events[0],['box',36,64,648,116]);
+    assert.deepEqual(preview.events.slice(1).map(event=>event[1]),['SMA Hochformat – Vorschau und Export','im Vergleich']);
+   }
+  }
+ }
+ f.set('format','9:16');
+ const longWord='a'.repeat(37)+'e\u0301'+'b'.repeat(9);
+ f.set('overlay_text','Zwei  Worte '+longWord);
+ assert.deepEqual(preview.events.slice(1).map(event=>event[1]),['Zwei  Worte','a'.repeat(37),'e\u0301'+'b'.repeat(9)]);
+ f.set('overlay_text','');assert.equal(layer.hidden,true);assert.equal(layer.hasAttribute('aria-label'),false);
+ f.set('overlay_text',caption);f.owner('other');assert.equal(layer.hidden,true);assert.equal(layer.width,0);assert.equal(layer.hasAttribute('aria-label'),false);
+ f.view.destroy();
 });
 await test('opening is read-only and exact chapter switching retains unsaved settings and safe preview text',async()=>{
  const f=fixture();await tick();assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('#editor').hidden,false);assert.equal(f.$('#image').hidden,false);

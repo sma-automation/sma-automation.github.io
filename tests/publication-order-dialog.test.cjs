@@ -41,6 +41,9 @@ test('status refresh replaces a consented preview with a terminal cancellation a
  };
  await open.events.click();await prepare();
  const firstId=preparedId;
+ assert.ok(dialog.querySelectorAll('h3').some(e=>e.textContent==='Privater YouTube-Test · noch kein Upload'));
+ assert.ok(dialog.querySelectorAll('li').some(e=>e.textContent?.includes('separate SMA-Betreiberfreigabe')));
+ assert.equal(requests.filter(x=>x.action==='approve').length,0);
  assert.equal(consent.parentElement.hidden,false);assert.equal(approve.disabled,true);
  consent.checked=true;consent.events.change();assert.equal(approve.disabled,true);
  for(const key of ['content_checked','media_rights','music_rights']){const e=byId.get('order-review-'+key);e.checked=true;e.events.change();}

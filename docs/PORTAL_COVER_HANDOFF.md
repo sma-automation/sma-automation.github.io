@@ -3,6 +3,20 @@
 Stand: 06.11.2026; PR #102 zusammengeführt und live. Baut auf [MUSIC_AND_EXPORT_COVER.md](MUSIC_AND_EXPORT_COVER.md)
 und [MUSIC_LIBRARY.md](MUSIC_LIBRARY.md) auf.
 
+## Erneuter Versuch nach YouTube-Kanalbestätigung
+
+Bei einem bestätigten privaten YouTube-Video kann ein Betreiber das identische gebundene
+Cover nach einer eindeutigen Berechtigungsablehnung separat freigeben. Dazu den zuletzt
+abgelehnten Coverversuch, die Video-ID, die Kanal-ID und die Coverrevision festhalten.
+Nach der Kanalbestätigung muss eine neue auftragsgebundene Betreiberfreigabe vorliegen.
+Die private Funktion `sma_private.publication_retry_private_cover_v1` prüft diese Werte
+unter derselben Auftragssperre wie der Dispatcher. Sie archiviert den vollständigen
+vorherigen Coverbeleg und gibt nur das Cover für den nächsten regulären Aufruf frei.
+Im Dashboard unter History öffnet „Ausstehendes Cover öffnen“ denselben Auftrag.
+Der Dispatcher prüft vor dem Versand erneut Konto und Datei. Die bestehende Video-ID,
+die Videosichtbarkeit und das Videojournal bleiben erhalten. Bei unklarer Antwort,
+geändertem Dateistand oder bereits bestätigtem Cover ist die Wiederholung gesperrt.
+
 ## Verhalten
 
 | Portal | Übergabe | Zeitpunkt |

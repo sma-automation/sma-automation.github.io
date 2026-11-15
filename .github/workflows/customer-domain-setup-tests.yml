@@ -1,5 +1,17 @@
 name: Customer website automatic setup checks
 on:
+  pull_request:
+    branches: [website-v1]
+    paths:
+      - app/assets/customer-website-*.mjs
+      - hosting/customer-website/**
+      - supabase/sql/customer-website*.sql
+      - supabase/sql/company-profiles.sql
+      - supabase/sql/website-automatic-setup.sql
+      - supabase/sql/website-setup-origin.sql
+      - tests/run-website-setup-sql.mjs
+      - tests/sql-runtime/customer-domain-lifecycle.mjs
+      - .github/workflows/customer-domain-setup-tests.yml
   push:
     branches: [customer-domain-automation, customer-website-first-setup, website-v1]
     paths:

@@ -1,3 +1,4 @@
+import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=1';
 // Presentation only: move the existing elements, never copy forms or customer data.
 export function createChapterTabs({doc,id,entries,initial=entries[0]?.key,list,onSelect}){
  const nav=list||doc.createElement('nav');
@@ -41,7 +42,7 @@ export function placeChapterBar(page,nav){
  page.setAttribute('data-sma-chapters','');
 }
 
-export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
+export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPreparePost:openPortals}){
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
  const cleanups=[],controllers=new Map();
  const children=(el,selector)=>el?[...el.children].filter(child=>child.matches(selector)):[];
@@ -80,8 +81,42 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
   {key:'portals',label:'Portale',en:'Platforms',nodes:children(publishing,'.card')},
   {key:'files',label:'Dateien',en:'Files',nodes:[...heads.slice(1),doc.getElementById('publishingFilesSlot')]}
  ]);
- const socialCards=[...page('social')?.querySelectorAll('.platform-card')||[]];
- mount('social',['YouTube','TikTok','Instagram','Facebook'].map(label=>({key:label.toLowerCase(),label,nodes:socialCards.filter(card=>card.querySelector('.platform-info strong')?.textContent.trim()===label)})));
+ const social=page('social');
+ const connections=mountPortalConnections(doc,publishing,social);
+ if(connections)cleanups.push(()=>connections.destroy());
+ else{
+  const socialCards=[...social?.querySelectorAll('.platform-card')||[]];
+  mount('social',['YouTube','TikTok','Instagram','Facebook'].map(label=>({key:label.toLowerCase(),label,nodes:socialCards.filter(card=>card.querySelector('.platform-info strong')?.textContent.trim()===label)})));
+ }
+ const workPanel=doc.getElementById('sma-overview-panel-work');
+ if(workPanel&&controllers.has('publishing')&&typeof openPortals==='function'){
+  function portalButton(className,de,en){
+   const button=doc.createElement('button');
+   button.type='button';button.className=className;
+   button.dataset.de=de;button.dataset.en=en;
+   button.textContent=/^en/i.test(doc.documentElement.lang)?en:de;
+   button.setAttribute('aria-controls','sma-publishing-panel-portals');
+   button.addEventListener('click',openPortals);
+   cleanups.push(()=>{button.removeEventListener('click',openPortals);button.remove();});
+   return button;
+  }
+  workPanel.prepend(portalButton('sma-prepare-post','Beitrag vorbereiten','Prepare a post'));
+  const count=workPanel.querySelector('[data-sma-social-count]');
+  const summary=count?.closest('.card');
+  if(connections&&summary&&!summary.querySelector('a,button,input,select,textarea,[tabindex],[role="button"]')){
+   summary.classList.add('sma-portal-summary');
+   const open=portalButton('sma-open-portals','Portale öffnen','Open platforms');
+   const description=[count,summary.querySelector('.muted')].filter(Boolean);
+   description.forEach((el,i)=>{
+    if(el.id)return;
+    el.id=i===0?'sma-overview-portal-count':'sma-overview-portal-caption';
+    cleanups.push(()=>el.removeAttribute('id'));
+   });
+   open.setAttribute('aria-describedby',description.map(el=>el.id).join(' '));
+   summary.append(open);
+   cleanups.push(()=>summary.classList.remove('sma-portal-summary'));
+  }
+ }
  const content=page('content'),contentTools=children(content?.querySelector('.grid'),'.card');
  mount('content',[
   {key:'files',label:'Meine Dateien',en:'My files',nodes:children(content,'.card')},
@@ -151,5 +186,5 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView}){
   cleanups.push(()=>{shopFrame.removeEventListener('load',attach);observer?.disconnect();unbind.forEach(fn=>fn());shopFrame.style.height=previousHeight;savedExtras.forEach(([el,hidden])=>el.hidden=hidden);tabs.destroy();shop.removeAttribute('data-sma-chapters');});
  }
  // Original layout containers remain in the DOM for existing code; empty ones take no space.
- return {controllers,destroy(){cleanups.reverse().forEach(fn=>fn());css.remove();}};
+ return {controllers,connections,destroy(){cleanups.reverse().forEach(fn=>fn());css.remove();}};
 }

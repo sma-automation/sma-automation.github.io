@@ -15,13 +15,17 @@ unveränderliches Änderungsjournal; sie behauptet keinen fertigen Medienexport.
 
 Dashboard → **Content** → **Content Optimizer** → **Bearbeitungsentwurf öffnen**.
 Die separate Seite nutzt die bestehende Anmeldung und den eigenen Dateikatalog.
+Eine einzelne Fassung lässt sich über **Veröffentlichung → Dateien → Dateidetails → Im Medieneditor öffnen** öffnen.
+Der Editor lädt die angeklickte Datei und prüft ihre Version. Fehlt sie inzwischen oder hat sich die Version geändert, kann der Kunde eine Datei aus seinem aktuellen Katalog wählen.
+Die Dateiauswahl zeigt denselben Titel, dieselbe Fassung und die bekannte Videolänge wie die Galerie. Bei mehreren Beitragstiteln wird für die angeklickte Datei der Titel des gewählten Portals übernommen. Unter **Dateiname anzeigen** steht der vollständige Dateiname.
+Das ursprüngliche Fenster behält die Galeriesuche. Beim Aufruf aus dem Kundenmedien-Pilot prüft der Editor den Pilotzugang im neuen Fenster erneut. Der Dashboard-Link führt dann zurück in den Pilot.
 Das Laden der Dateiliste liest gespeicherte Katalogdaten; neue Dateien werden
 weiterhin über Veröffentlichung hinzugefügt/aktualisiert.
 
 | Kapitel | Verfügbar | Grenze |
 | --- | --- | --- |
 | Format & Ausschnitt | Original, 9:16, 1:1, 16:9; Einpassen/Ausfüllen; horizontale/vertikale Position | Standbild-Vorschau, keine neue Mediendatei |
-| Schnitt & Cover | Beginn, Ende, Cover-Zeitpunkt in Sekunden | Nur für Videos mit bekannter Dauer; vorgemerkte Zeitpunkte, kein Schnitt-/Cover-Rendering |
+| Schnitt & Cover | Beginn, Ende und Cover-Zeitpunkt in Sekunden. Mit **Originalvideo laden** lässt sich die Datei abspielen. **Ausschnitt abspielen** startet am gewählten Beginn und stoppt am Ende. Ein leeres Endfeld spielt bis zum Dateiende. **Cover-Zeitpunkt ansehen** pausiert am eingetragenen Zeitpunkt. | Originalvorschau für MP4 bis 24 MB und 60 Sekunden. Schnitt und Gestaltung werden beim Export angewendet. |
 | Text | Bis 160 Unicode-Zeichen, oben/Mitte/unten, sichtbare Einblendung | Vorschau und gespeicherter Entwurf |
 | Ton | Originalton 0–100 % | Vorgemerkt; keine Hörprobe oder zusätzliche Musik |
 
