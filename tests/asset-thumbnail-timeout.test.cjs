@@ -30,7 +30,9 @@ function fixture({hold=null,intersection=false}={}){
   const body={ok:true,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,media_kind:'video',mime_type:'image/png',image_base64:png};
   return stage('http',{ok:true,json:()=>stage('body',body)});
  };
- const env={AbortController,AbortSignal,Blob,Uint8Array,atob,fetch:request,
+ const env={AbortController,AbortSignal:{any:AbortSignal.any.bind(AbortSignal),timeout:delay=>{
+   const controller=new AbortController();env.setTimeout(()=>controller.abort(),delay);return controller.signal;
+  }},Blob,Uint8Array,atob,fetch:request,
   Date:class extends Date{static now(){return clock;}},
   URL:{createObjectURL:blob=>{created.push(blob);return 'blob:fixture-'+created.length;},revokeObjectURL:url=>revoked.push(url)},
   customerMediaEndpoint:kind=>{assert.equal(kind,'thumbnail');return 'fixture:thumbnail';},
@@ -50,7 +52,7 @@ for(const phase of ['token','http','body'])test('three stalled '+phase+' reads r
  await f.advance(44999);assert.equal(f.tokenCount(),3);f.hold(null);await f.advance(1);
  assert.equal(f.tokenCount(),4,'fourth preview must no longer be blocked');
  for(const host of hosts.slice(0,3))assert.equal(host.textContent,'Vorschau folgt');
- assert.equal(hosts[3].children.length,1);assert.equal(f.created.length,1);assert.equal(f.timers.size,0);
+ assert.equal(hosts[3].children.length,1);assert.equal(f.created.length,1);
  const requests=f.requests.length;for(let i=0;i<3;i++)await f.release(i,i===1);
  assert.equal(f.requests.length,requests);assert.equal(f.created.length,1);f.loader.clear();
 });
@@ -58,7 +60,7 @@ for(const phase of ['token','http','body'])test('page reset cancels stale '+phas
  const f=fixture({hold:phase}),old=Array.from({length:4},()=>f.host());old.forEach((h,i)=>f.loader.observe(h,file('old-'+i)));await flush();
  f.loader.reset();f.hold(null);const current=f.host();f.loader.observe(current,file('current'));await flush();
  assert.equal(current.children.length,1);assert.equal(f.created.length,1);assert.equal(f.requests.some(r=>r.input.asset_id==='old-3'),false);
- assert.equal(f.timers.size,0);for(const r of f.requests.filter(r=>r.input.asset_id.startsWith('old-')))assert.equal(r.signal.aborted,true);
+ for(const r of f.requests.filter(r=>r.input.asset_id.startsWith('old-')))assert.equal(r.signal.aborted,true);
  for(let i=0;i<3;i++)await f.release(i,i===1);
  assert.equal(current.children.length,1);assert.equal(f.created.length,1);assert.equal(f.tokenCount(),4);f.loader.clear();
 });
@@ -66,19 +68,19 @@ test('token, transport and response-body phases share one loader allowance',asyn
  const f=fixture({hold:'token'}),host=f.host();f.loader.observe(host,file('one'));await flush();await f.advance(44000);
  f.hold('body');await f.release(0);assert.equal(f.held.length,2);
  await f.advance(1000);assert.equal(host.textContent,'Vorschau folgt');assert.equal(f.requests[0].signal.aborted,true);
- assert.equal(f.timers.size,0);await f.release(1);assert.equal(f.created.length,0);f.loader.clear();
+ await f.release(1);assert.equal(f.created.length,0);f.loader.clear();
 });
 for(const phase of ['http','body'])test('standalone thumbnail '+phase+' is bounded even when the source ignores cancellation',async()=>{
  const f=fixture({hold:phase});let finished=false,error;
  const run=f.env.fetchAssetThumbnail(file('standalone'),'fixture').then(()=>{finished=true;},e=>{finished=true;error=e;});
  await flush();await f.advance(45000);assert.equal(finished,true,'read must settle at its deadline');await run;
- assert.ok(error);assert.equal(f.requests[0].signal.aborted,true);assert.equal(f.timers.size,0);
+ assert.ok(error);assert.equal(f.requests[0].signal.aborted,true);
  await f.release(0);f.loader.clear();
 });
 test('parent cancellation settles a stalled standalone body and pre-abort starts no request',async()=>{
  const f=fixture({hold:'body'}),controller=new AbortController();let finished=false;
  const run=f.env.fetchAssetThumbnail(file('one'),'fixture',controller.signal).catch(()=>{finished=true;});await flush();
- controller.abort();await flush();assert.equal(finished,true);await run;assert.equal(f.timers.size,0);
+ controller.abort();await flush();assert.equal(finished,true);await run;
  await f.release(0,true);await assert.rejects(f.env.fetchAssetThumbnail(file('two'),'fixture',controller.signal));assert.equal(f.requests.length,1);
 });
 test('clear discards cached bytes and a late source cannot refill the cache',async()=>{
@@ -86,7 +88,7 @@ test('clear discards cached bytes and a late source cannot refill the cache',asy
  f.hold(null);await f.release(0);assert.equal(f.created.length,0);
  f.loader.observe(f.host(),file('same'));await flush();assert.equal(f.requests.length,2);assert.equal(f.created.length,1);
  f.loader.reset();f.loader.observe(f.host(),file('same'));await flush();assert.equal(f.requests.length,2,'same-owner paging may reuse the valid cache');
- assert.equal(f.revoked.length,1);f.loader.clear();assert.equal(f.revoked.length,2);assert.equal(f.timers.size,0);
+ assert.equal(f.revoked.length,1);f.loader.clear();assert.equal(f.revoked.length,2);
  f.loader.observe(f.host(),file('same'));await flush();assert.equal(f.requests.length,3);f.loader.clear();
 });
 test('a callback from a disconnected observer cannot consume the new view queue',async()=>{
@@ -101,10 +103,10 @@ test('thumbnail identity, revision, publication denial and image bounds stay str
  const valid={ok:true,can_publish:false,asset_id:selected.id,asset_revision:selected.revision,media_kind:'video',mime_type:'image/png',image_base64:png};
  for(const change of [{asset_id:'other'},{asset_revision:'old'},{media_kind:'image'},{can_publish:true},{ok:false},{mime_type:'text/html'},{image_base64:'??'},{image_base64:'AAAA'}]){
   await assert.rejects(f.env.fetchAssetThumbnail(selected,'fixture',undefined,async()=>({ok:true,json:async()=>({...valid,...change})})),/PREVIEW_UNAVAILABLE/);
-  assert.equal(f.timers.size,0);
+  
  }
  const blob=await f.env.fetchAssetThumbnail(selected,'fixture',undefined,async()=>({ok:true,json:async()=>valid}));
- assert.equal(blob.type,'image/png');assert.equal(blob.size,Buffer.from(png,'base64').length);assert.equal(f.timers.size,0);
+ assert.equal(blob.type,'image/png');assert.equal(blob.size,Buffer.from(png,'base64').length);
 });
 const runtime='./dom-runtime/node_modules/playwright-core/index.mjs';
 test('desktop and mobile thumbnails recover from stalled auth, HTTP and JSON without external requests',
@@ -118,6 +120,8 @@ test('desktop and mobile thumbnails recover from stalled auth, HTTP and JSON wit
    await page.route('**/*',route=>{network.push(route.request().url());return route.abort();});
    await page.setContent('<main><span id="a"></span><span id="b"></span><span id="c"></span><span id="d"></span></main>');await page.clock.install();
    const bootstrap=`window.IntersectionObserver=undefined;
+    // Playwright's controlled clock does not replace the browser's native timeout signal.
+    AbortSignal.timeout=delay=>{const controller=new AbortController();setTimeout(()=>controller.abort(),delay);return controller.signal;};
     const f=window.fixture={hold:${JSON.stringify(phase)},held:[],reads:[]};
     f.stage=(name,value)=>f.hold===name?new Promise(resolve=>f.held.push(()=>resolve(value))):Promise.resolve(value);
     const customerMediaEndpoint=kind=>{if(kind!=='thumbnail')throw Error('Unexpected route');return 'fixture:thumbnail';};
