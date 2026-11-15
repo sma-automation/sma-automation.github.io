@@ -105,7 +105,7 @@ test('desktop and mobile reload recover only the last stored form after a real b
    });
    async function mount(){
     await page.evaluate(({source,initial})=>{
-     window.store=Function(source.replace('export function tabDraftStore','function tabDraftStore')+';return tabDraftStore')(window);
+     window.store=Function('win',source.replace('export function tabDraftStore','function tabDraftStore')+';return tabDraftStore(win)')(window);
      window.currentRecord=store.read(initial.portal,initial.owner,initial.route)||initial;
      document.getElementById('body').value=currentRecord.form.body;
      document.getElementById('save').onclick=()=>{currentRecord.form.body=document.getElementById('body').value;store.update(currentRecord);};
