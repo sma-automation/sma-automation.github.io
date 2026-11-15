@@ -98,17 +98,18 @@ test('gallery receives the global query, resets the portal and opens the first f
   assignments:[{platform:i<12?'youtube':'tiktok',status:'assigned'}]}));
  files.push({id:'other',name:'Sommer.png',media_kind:'image',assignments:[]});
  const calls=[];
- const env={dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
+ const env={AbortController,setTimeout,clearTimeout,dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
   portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
-  dashboardSession:async()=>({user:{id:'owner'}}),supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
+  dashboardSession:read=>(read||((fn)=>fn()))(async()=>({user:{id:'owner'}})),
+  supabase:{rpc:(name,args)=>({abortSignal:async signal=>{assert.equal(signal.aborted,false);calls.push([name,args.p_action]);return {data:{ok:true,files}};}})}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);
  const editorHref='https://sma.test/app/media-editor.html?v=11&kundenmedien=pilot';
  const gallery=attach(document,document.querySelector('main'),editorHref);
  const portal=document.querySelector('#smaFilePortalFilter'),finder=document.querySelector('#smaFileSearch');
  // LinkeDOM exposes select.value as a getter. Emulate the native select setter.
  Object.defineProperty(portal,'value',{writable:true,value:'all'});
- await new Promise(resolve=>setImmediate(resolve));
+ await gallery.initialRead;
  const edit=document.querySelector('.sma-file-row details a');
  const target=new URL(edit.getAttribute('href'));assert.equal(target.searchParams.get('kundenmedien'),'pilot');
  assert.deepEqual(Object.fromEntries(new URLSearchParams(target.hash.slice(1))),{asset:'clip-0',revision:'stand:&0',portal:'youtube'});

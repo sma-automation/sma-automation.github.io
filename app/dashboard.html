@@ -545,7 +545,7 @@ function attachFileList(doc,page,editorHref){
  const soundtrack=owner?mountGalleryMusic({owner,onComplete:()=>load(false),onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
- let files=[],pageNumber=0,loading=false,lastSync=0,catalogState='loading';
+ let files=[],pageNumber=0,loading=false,lastSync=0,catalogState='loading',catalogController=null;
  const back=doc.createElement('button'),next=doc.createElement('button'),count=doc.createElement('span');
  back.type=next.type='button';back.textContent='Zurück';next.textContent='Weiter';
  count.setAttribute('role','status');
@@ -679,8 +679,23 @@ function attachFileList(doc,page,editorHref){
   (hit||finder).focus();
  }
  finder.addEventListener('input',()=>{pageNumber=0;draw();});portalFilter.addEventListener('change',()=>{pageNumber=0;draw();});
- async function catalogSession(){
-  const session=await dashboardSession();
+ // Consume late auth/body replies even when their underlying operation cannot abort.
+ function readCatalogWithin(signal,start){
+  return new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(callback,value)=>{
+    if(settled)return;
+    settled=true;signal.removeEventListener('abort',cancel);callback(value);
+   };
+   const cancel=()=>finish(reject,Error('CATALOG_READ_ABORTED'));
+   if(signal.aborted)return cancel();
+   signal.addEventListener('abort',cancel,{once:true});
+   Promise.resolve().then(()=>{signal.throwIfAborted();return start();})
+    .then(value=>finish(resolve,value),error=>finish(reject,error));
+  });
+ }
+ async function catalogSession(read){
+  const session=await dashboardSession(read);
   if(disposed||signedOut||owner!==dashboardOwnerId)return null;
   if(!owner||session?.user?.id!==owner){leaveDashboard();return null;}
   return session;
@@ -692,12 +707,12 @@ function attachFileList(doc,page,editorHref){
   const summary=files.length?'Die Suche verwendet die zuletzt gespeicherte Dateiliste.':'Keine gespeicherten Dateien in dieser Ansicht geladen.';
   return folderNotice+' '+summary;
  }
- async function syncFolder(session){
+ async function syncFolder(session,read,signal){
   let res,body;
   try{
-   res=await fetch(customerMediaEndpoint('catalog'),{method:'POST',
-    headers:{Authorization:'Bearer '+session.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(90000)});
-   body=await res.json();
+   res=await read(()=>fetch(customerMediaEndpoint('catalog'),{method:'POST',
+    headers:{Authorization:'Bearer '+session.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal}));
+   body=await read(()=>res.json());
   }catch{
    throw Error(interruptedNotice);
   }
@@ -718,19 +733,25 @@ function attachFileList(doc,page,editorHref){
   let attemptNotice='';
   let step=sync?'folder':'catalog';
   loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();
+  const controller=new AbortController();catalogController=controller;
+  let timedOut=false;
+  // Keep the folder's existing 90-second allowance; saved-list reads get 15 seconds.
+  // Each allowance is shared by the complete attempt, including session and body reads.
+  const deadline=setTimeout(()=>{timedOut=true;controller.abort();},sync?90000:15000);
+  const read=start=>readCatalogWithin(controller.signal,start);
   try{
    if(sync){
     say('Kundenordner wird geprüft …');
-    const session=await catalogSession();if(!session)return;
-    attemptNotice=await syncFolder(session)||'';
+    const session=await catalogSession(read);if(!session)return;
+    attemptNotice=await syncFolder(session,read,controller.signal)||'';
     if(attemptNotice)folderNotice=attemptNotice;
    }
    if(disposed||signedOut||owner!==dashboardOwnerId)return;
    step='catalog';
    if(retryingCatalog)say('Die Dateiliste wird erneut geladen …');
-   const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}});
+   const {data,error}=await read(()=>supabase.rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}}).abortSignal(controller.signal));
    if(error||!data?.ok||!Array.isArray(data.files))throw Error('Die Dateiliste konnte nicht geladen werden.');
-   if(!await catalogSession())return;
+   if(!await catalogSession(read))return;
    files=data.files;hasCatalog=true;catalogState='ready';retryStep=null;
    scanRunning=data.sync_state==='running';
    if(scanRunning)folderNotice=runningNotice;
@@ -743,9 +764,10 @@ function attachFileList(doc,page,editorHref){
   }catch(error){
    if(disposed||signedOut||owner!==dashboardOwnerId)return;
    catalogState='error';retryStep=step;
-   if(step==='catalog')say('Die Dateiliste ist gerade nicht erreichbar. Du kannst sie erneut laden.');
-   else{folderNotice=error.message;say(catalogWarning());}
+   if(step==='catalog')say(timedOut?'Das Laden der Dateiliste dauert gerade zu lange. Bitte wähle „Dateiliste erneut laden“.':'Die Dateiliste ist gerade nicht erreichbar. Du kannst sie erneut laden.');
+   else{folderNotice=timedOut?'Der Ordnerabgleich dauert gerade zu lange. Bitte versuche es erneut.':error.message;say(catalogWarning());}
   }finally{
+   clearTimeout(deadline);if(catalogController===controller)catalogController=null;
    loading=false;
    if(!disposed){
     refresh.textContent=retryStep==='catalog'?'Dateiliste erneut laden':scanRunning?'Abgleichstatus prüfen':'Dateien aktualisieren';
@@ -800,7 +822,7 @@ function attachFileList(doc,page,editorHref){
       finder.focus();
       return true;
     },
-    clear(){cancelReload();disposed=true;soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
+    clear(){cancelReload();disposed=true;catalogController?.abort();soundtrack?.destroy();doc.removeEventListener('sma-music-unlocked',wakeMusic);thumbnails.clear();}};
 }
 let pending;
 let signedOut=false,retryDashboardOnReconnect=false;
