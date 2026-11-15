@@ -1,5 +1,65 @@
 # TikTok: verbindliche Kennzeichnung von KI-generierten Videos
 
+## Live abgeschlossen – 15. November 2026
+
+**PR #304 ist zusammengeführt** (`46920c3`). Die nachfolgenden
+Entwurfsabschnitte sind historische Vorprüfungen. Maßgeblich ist dieses
+Abschlussprotokoll.
+
+Die koordinierte Umstellung ist in der Reihenfolge Datenbank → bestehende
+Provider-/Coverkopie → Dashboard erfolgt. Beide GitHub-Prüfworkflows auf
+`2fb6f52` waren vor dem Merge erfolgreich. Die ausgelieferte Beitragsseite
+lädt `publication-preview.js?v=99`, der Client `publication-order.mjs?v=27`.
+
+- **Datenbank:** Migration `publication_tiktok_aigc_v1` installiert. Der
+  Funktions-MD5 ist nun `4c2b8f52a86916deb123cf2d70ed2526`; anonyme
+  Ausführung der privaten Funktion bleibt gesperrt. Keine Berechtigung
+  erweitert und keine Kundenfreigabe angelegt. Der unveränderte frühere
+  Funktionsstand ist privat gesichert.
+- **n8n:** Die bestehende Kopie `JaidX5YeKl6ZTqjQ` heißt weiterhin
+  „SMA – Auftrag – Provider und Cover V1“. Fünf Code-Nodes wurden über
+  den Editor aktualisiert: die vier eingebetteten Validatoren sowie die
+  sichere abschließende Coverstatus-Rückmeldung. Keine Nodes hinzugefügt,
+  keine Kanten, Credentials, HTTP-Einstellungen oder Wiederholungen geändert.
+  Vor Aktivierung wurde der Entwurf erneut exportiert und exakt verglichen.
+- **Veröffentlichter Workflow:** „PR 304 – TikTok KI-Kennzeichnung“,
+  Versionskennung `0a7055ac-8e5a-47ca-a9f2-f20f2f98afe9`. Der anschließend
+  über die aktuelle Publish-Timeline geladene Export bestätigt dieselbe
+  `versionId` und `activeVersionId`, 47 Nodes und vollständige Übereinstimmung
+  aller normalisierten Nodes, Verbindungen und Einstellungen mit dem
+  geprüften Kandidaten. Der Workflow wurde nicht ausgeführt.
+- **Echter Kundenbereich:** Beim bestehenden TikTok-Testclip öffnet
+  „Freigabe vorbereiten“ das verbundene Zielkonto und die neue leere
+  Pflichtauswahl „Ist das Video KI-generiert?“. Ja setzt `true`, Nein
+  `false`; nach Rücksetzen ist die leere Auswahl ungültig. Kein Klick
+  auf „Auftrag prüfen“ oder eine Freigabe. Dialog anschließend geschlossen.
+- **YouTube-Gegenprüfung:** Der vorhandene Entwurf „SMA Privattest 02“
+  und sein geplantes Cover öffnen weiterhin. Die Kontoprüfung funktioniert,
+  Sichtbarkeit, Kinderkennzeichnung und synthetische Inhalte bleiben
+  eigenständige leere Pflichtauswahlen. Kein TikTok-Flag im YouTube-Dialog.
+  Dialog ohne Auftrag geschlossen; Rückweg zur Portalseite bestanden.
+- **Live-SQL ohne Schreibnachwirkung:** Sechs Fälle wurden als angemeldete
+  Rolle innerhalb einer abschließend zurückgerollten Transaktion geprüft.
+  Eine vorab nachweislich nicht vorhandene Datei verhindert jede
+  Auftragserstellung: Ja/Nein passieren die Eingangsvalidierung und liefern
+  `FILE_UNAVAILABLE`; fehlend, `null`, String und Zahl liefern
+  `INVALID_CHOICES`. Alle sechs Erwartungen bestanden. Es wurde nie
+  `approve` aufgerufen. Abschließend: 15 bestehende Aufträge, zwei historische
+  Providerberechtigungen (keine aktuell gültig), zwei historische Versuche
+  und null Probeaufträge.
+
+Die vorhandene isolierte Abnahme bleibt: 930 Node-Tests, 1030 synthetische
+Dialogprüfungen, 38 AIGC-SQL- und 149 Provider-/Cover-SQL-Prüfungen bestanden.
+Der neue Live-Nachweis ersetzt keinen TikTok-App-Audit und keinen echten
+Provider-End-to-End-Upload. Das offene YouTube-Ergebnis `uncertain` wurde
+nicht erneut gestartet oder als Erfolg umgeschrieben.
+
+Keine Medienuploads, Dateifreigaben, Operatorberechtigungen, öffentlichen
+Beiträge, Käufe oder Tarifwechsel. Der Kundenmedien-Pilotworkflow
+`aEm2khRhdM6EUdoq` und seine drei regulären Wege wurden nicht verändert.
+Private Sicherungen bleiben außerhalb des öffentlichen Repositorys.
+
+
 ## Kernabgleich vom 15. November 2026
 
 Der bestehende Entwurf wurde mit `website-v1` bei `c009e70` (PR #303)
