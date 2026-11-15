@@ -12,7 +12,9 @@ function setup({search='',eligible=false,onboarding=false}={}){
  const dataset={},regularDashboard={hidden:true};let checks=0;
  const env={AbortSignal,URLSearchParams,location:{search},document:{documentElement:{dataset},getElementById(id){assert.equal(id,'regularDashboard');return regularDashboard;}},dashboardOwnerId:null,signedOut:false,endpoint:'https://fixture.invalid',window:{location:{replace:url=>redirects.push(url)}},
   leaveDashboard:()=>{env.signedOut=true;redirects.push('index.html');},
-  supabase:{rpc:async(name,{p_route,p_owner})=>{
+  supabase:{rpc:async(name,params)=>{
+   if(name==='sma_onboarding_paused_booking_v1'){assert.equal(params,undefined);return {data:null,error:null};}
+   const {p_route,p_owner}=params;
    if(name==='sma_onboarding_plan_choice_v1'){assert.equal(p_owner,'first');return {data:{ok:onboarding}};}
    assert.equal(name,'sma_customer_media_pilot_v1');assert.equal(p_route,'eligible');checks++;return {data:{ok:eligible}};},auth:{getSession:async()=>({error:authFailure||null,data:{session:owner?{user:{id:owner},access_token:owner}:null}})}},
   fetch:async(_url,opts)=>{
