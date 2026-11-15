@@ -1,6 +1,6 @@
 # SMA – Startcheck zum 1. Dezember 2026 (rein lesend)
 
-Stand: **13. November 2026**, Österreich. Dieser Bericht ist eine
+Stand: **15. November 2026**, Österreich. Dieser Bericht ist eine
 Momentaufnahme und **keine** automatisierte Kunden- oder Uploadfreigabe.
 
 ## Ziel
@@ -16,6 +16,22 @@ Die Ausgabe enthält absichtlich weder Kundennamen/Kunden-IDs,
 E-Mail-Adressen, Medienbytes, Dateipfade noch Tokens. **Eine Anzahl
 gilt nie als Beweis für den unveränderten Freigabe-Fingerprint oder
 einen erfolgreich veröffentlichten Beitrag.**
+
+## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
+
+PR #304 (`46920c3`) ist nach koordinierter Umstellung von Datenbank,
+Provider-/Coverkopie und Client live. Die leere verpflichtende Ja/Nein-Auswahl
+wurde im echten Kundenbereich ohne Auftragserstellung geprüft. Die
+veröffentlichte 47-Node-Version entspricht dem geprüften Kandidaten.
+Sechs Live-SQL-Eingangsfälle in einer zurückgerollten Transaktion sowie die
+YouTube-Kontoprüfung und der Rückweg zu den Portalen bestanden. Der vorhandene
+Testentwurf und sein Cover blieben erhalten. Kein Medienupload, keine
+Kunden-/Operatorfreigabe und kein neuer Übertragungsversuch.
+
+PR #199 wurde ohne Merge durch PR #304 ersetzt. Die TikTok-App-Freigabe für
+den öffentlichen Kundenbetrieb und ein gesondert autorisierter Provider-E2E
+bleiben eigenständige offene Nachweise. Einzelne bestandene Module bedeuten
+weiterhin keine vollständige Startfreigabe. [Live-Abnahme](TIKTOK_AIGC_RELEASE.md).
 
 ## Live-Abgleich vom 13.11.2026
 
@@ -143,8 +159,8 @@ Die Felder `external_e2e_status=NOT_VERIFIED_BY_THIS_QUERY`,
 `allows_publication=false` und
 `initiates_checkout=false` werden absichtlich nie durch
 einfache Zählerüberschreitungen auf »bereit« gesetzt.
-TikTok-KI-Pflichtwahl bleibt im offenen, nicht freigegebenen
-Entwurf #199. Die visuelle weitere Vereinfachung der Vorschau
+TikTok-KI-Pflichtwahl ist seit PR #304 live abgenommen (siehe Ergänzung vom
+15.11.2026); PR #199 wurde dadurch ohne Merge ersetzt. Die visuelle weitere Vereinfachung der Vorschau
 (Issue #198) ist ausdrücklich **erst nach der Kernabnahme**
 vorgesehen.
 
