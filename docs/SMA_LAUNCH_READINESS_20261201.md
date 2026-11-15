@@ -85,9 +85,46 @@ Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
    Eindeutigkeit und Status erneut prüfen. Beide Konten bleiben inaktiv.
    Bei einem späteren Adresswechsel müssen Website und n8n erneut abgeglichen werden.
 
-**Noch offen für den bezahlten Start** sind der erste Durchlauf mit einer
-echten Vormerkung, die ausdrückliche Buchung und die Übernahme der von Mollie
-bestätigten Zahlung in den Website-Zugang.
+### Paketbuchung im betreuten Pilotbetrieb
+
+Für das zugeordnete Website-Konto kann der Betreiber eine bereits vorhandene,
+offene Mollie-Erstzahlung des SMA-Händlerkontos hinterlegen. Die Vormerkung
+bleibt unverbindlich. Erst „Zahlungspflichtig buchen“ speichert den Auftrag mit
+Paket, Bedingungsversion und Zeitpunkt und zeigt den Zahlungslink an.
+Wiederholtes Klicken und Neuladen verwenden dieselbe Buchung. Nach dem Buchen
+bleibt das Paket bis zur Klärung der Zahlung festgelegt.
+
+1. Im vorhandenen Mitgliedschaftsablauf die Erstzahlung für die zugeordnete
+   n8n-Kennung identifizieren. Der Abgleich erwartet `sequenceType=first`,
+   `metadata.kunde_id`, `metadata.paket`, die richtige Monatsgebühr in EUR
+   und dieselbe Mollie-Kunden-ID. Die Erstellung der ersten Zahlungsanforderung
+   für ein noch inaktives Neuprofil ist ein separater Integrationsschritt.
+   Für ein Konto ohne Zahlungsanforderung bleibt die Vormerkung nutzbar.
+2. Mit einem privaten Mollie-Lesezugang in `SMA_MOLLIE_READ_TOKEN`
+   `node n8n/sync-onboarding-payment.mjs tr_ID` ausführen. Das Hilfsprogramm
+   ruft die Zahlung bei Mollie ab. Den ausgegebenen SQL-Aufruf zeitnah im
+   privaten SQL-Editor ausführen. Er enthält den kundenbezogenen Zahlungslink.
+   `OFFERED` bestätigt die Bereitstellung. Ein Paketwechsel vor der Buchung
+   schließt das alte Angebot. Ein abgelaufenes Angebot lässt sich ersetzen.
+3. Nach der ausdrücklichen Buchung zahlt der Kunde über den angezeigten
+   Mollie-Link. Bei der Abrechnung denselben Leseabruf erneut ausführen.
+   `PAID` bestätigt die passende Erstzahlung. Die Website-Rückkehr ändert
+   keinen Zahlungs- oder Zugangsstatus.
+4. Sobald das n8n-Konto für die bezahlte Mitgliedschaft bereitsteht,
+   `node n8n/sync-onboarding-payment.mjs tr_ID --mit-konto` ausführen.
+   Die Eingaben aus der tatsächlich gespeicherten n8n-Zeile ablesen.
+   Beim Zugangstoken genügt die Angabe, ob er vorhanden ist. Das Hilfsprogramm
+   liest auch das zugehörige Monatsabo bei Mollie. Erst der bestätigte Abgleich
+   schaltet das Paket im Website-Profil frei. `N8N_PENDING` hält den Zugang
+   geschlossen. `ACTIVE` bestätigt die Freischaltung.
+5. Bei abgelaufener, fehlgeschlagener oder stornierter Zahlung sowie einer
+   Rückerstattung oder Rückbuchung die jeweilige Erstzahlung frisch abrufen
+   und den SQL-Abgleich ausführen. Eine Rückbuchung schließt den zugehörigen
+   Website-Zugang. Die Folgeabrechnung verbleibt im bestehenden n8n-Ablauf.
+
+Der Pilot verwendet Betreiberabgleiche. Der automatische Anschluss für neue
+inaktive Konten, die Zustellung von Zahlungsereignissen an diesen Abgleich und
+der erste Durchlauf mit einer echten Vormerkung sind noch offen.
 
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 

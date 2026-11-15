@@ -14,7 +14,7 @@ try {
     const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
     const page=await context.newPage();
     const errors=[];
-    let saved=null, writes=0, sessionReads=0, linked=false;
+    let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -33,6 +33,14 @@ try {
           return route.fulfill({json:{ok:false,code:'CONFLICT',plan:saved}});
         if (p_plan) {saved=p_plan;writes++;}
         return route.fulfill({json:{ok:true,plan:saved,linked}});
+      }
+      if(req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_booking_v1'){
+        const {p_offer,p_plan,p_terms}=req.postDataJSON();
+        if(p_offer){
+          assert.equal(p_offer,offer.id);assert.equal(p_plan,saved);assert.equal(p_terms,offer.terms);bookings++;
+          offer={...offer,state:'booked',checkout:'https://www.mollie.com/checkout/fixture'};
+        }
+        return route.fulfill({json:{ok:true,offer}});
       }
       errors.push(req.method()+' '+url.pathname);return route.abort();
     });
@@ -62,7 +70,23 @@ try {
     await page.getByRole('radio',{name:/Alpha 100/}).check();await save.click();
     await page.getByText(/zwischenzeitlich geändert/).waitFor();
     assert.equal(await page.getByRole('radio',{name:/Delta 500/}).isChecked(),true);
-    assert.equal(writes,1);assert.deepEqual(errors,[]);
+    assert.equal(writes,1);
+    offer={id:'fixture-order',plan:'delta',terms:'2026-11-15-v1',state:'offered',checkout:null};
+    await page.reload();
+    const book=page.getByRole('button',{name:'Zahlungspflichtig buchen'});
+    await book.waitFor();assert.equal(await page.locator('#checkout').isHidden(),true);
+    assert.equal(bookings,0);
+    await page.getByRole('radio',{name:/Alpha 100/}).check();assert.equal(await book.isHidden(),true);
+    await page.getByRole('radio',{name:/Delta 500/}).check();
+    if(mobile)await book.tap();else{await book.focus();await book.press('Enter');}
+    await page.getByRole('link',{name:'Bei Mollie bezahlen'}).waitFor();
+    assert.equal(bookings,1);assert.equal(await radios.first().isDisabled(),true);
+    await page.reload();await page.getByRole('link',{name:'Bei Mollie bezahlen'}).waitFor();
+    assert.equal(bookings,1);assert.equal(await book.isHidden(),true);
+    offer={...offer,state:'paid',checkout:null};await page.reload();
+    await page.getByText(/Deine Zahlung ist bestätigt/).waitFor();
+    assert.equal(await page.locator('#checkout').isHidden(),true);
+    assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');
     await context.close();
   }
