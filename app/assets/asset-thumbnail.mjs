@@ -1,7 +1,8 @@
-const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-asset-preview-v1';
+import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
+
 export async function fetchAssetThumbnail(file,token,signal,request=fetch){
  signal?.throwIfAborted();
- const response=await request(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(45000)])});
+ const response=await request(customerMediaEndpoint('thumbnail'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(45000)])});
  const r=await response.json();signal?.throwIfAborted();
  if(!response.ok||r?.ok!==true||r.can_publish!==false||r.asset_id!==file.id||r.asset_revision!==file.revision||r.media_kind!==file.media_kind||!['image/jpeg','image/png','image/webp'].includes(r.mime_type)||typeof r.image_base64!=='string'||r.image_base64.length>2666668||!/^[A-Za-z0-9+/]+={0,2}$/.test(r.image_base64))throw Error('PREVIEW_UNAVAILABLE');
  const bytes=Uint8Array.from(atob(r.image_base64),c=>c.charCodeAt(0));if(bytes.length<12||bytes.length>2000000)throw Error('PREVIEW_UNAVAILABLE');

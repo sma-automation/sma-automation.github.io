@@ -1,3 +1,4 @@
+import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
@@ -6,7 +7,7 @@ import {missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} 
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
-import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=1';
+import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=2';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
@@ -42,7 +43,7 @@ const magicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-mag
 const reviewEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-content-review-v1';
 Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
 messages.INVALID_HASHTAGS=hashtagMessage;
-const fileEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1';
+
 Object.assign(messages,{FILE_UNAVAILABLE:'Diese Datei ist nicht mehr im zugeordneten Kundenordner verfügbar.',FILE_CHANGED:'Die Datei wurde geändert. Aktualisiere die Dateiliste und erstelle einen neuen passenden Text.',FILE_REFRESH_REQUIRED:'Bitte aktualisiere zuerst die Dateiliste.',ASSIGNMENT_CHANGED:'Der zugeordnete Text wurde außerhalb dieser Datei geändert. Bitte erstelle einen neuen Text für die Datei.',ASSIGNMENT_CONFLICT:'Die Zuordnung wurde inzwischen geändert. Lade den gespeicherten Text erneut.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.',FILE_SYNC_UNAVAILABLE:'Die Dateiliste konnte nicht aktualisiert werden. Bitte versuche es erneut.',FILE_SYNC_RUNNING:'Die Dateiliste wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_RATE_LIMITED:'Bitte warte kurz, bevor du die Dateien erneut aktualisierst.',FILE_CATALOG_TOO_LARGE:'Der Kundenordner enthält mehr Dateien als diese Ansicht vollständig laden kann.',FILE_METADATA_INVALID:'Die Dateiinformationen sind unvollständig. Bitte prüfe die Dateien im Kundenordner.',PORTAL_REQUIRES_VIDEO:'Für dieses Portal wird derzeit eine Videodatei benötigt.',TEXT_ALREADY_ASSIGNED:'Dieser Text gehört bereits zu einer anderen Datei. Bitte erstelle einen eigenen Text.',FILE_FORMAT_MISMATCH:'Die Textvorbereitung passt nicht zur ausgewählten Dateiart.'});
 const params=new URLSearchParams(location.search);
 const requestedPortal=params.get('portal');
@@ -378,7 +379,7 @@ function assertFileContext(context){
 }
 async function syncFileCatalog(){
  const auth=await session();if(signedOut)throw fileError('AUTH_REQUIRED');
- const response=await fetch(fileEndpoint,{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});
+ const response=await fetch(customerMediaEndpoint('catalog'),{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(90000)});
  const data=await response.json();if(signedOut)throw fileError('AUTH_REQUIRED');if(!response.ok||!data?.ok)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
 }
 function catalogFileIsFresh(file){
@@ -1720,11 +1721,11 @@ try{
  }
  coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
   if(!['youtube','tiktok'].includes(selectedPortal))return fetchAssetThumbnail(f,(await session()).access_token,signal);
-  const blob=await (await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner);
+  const blob=await (await import('./media-editor-api.mjs?v=7')).editorSource(f,signal,coverOwner);
   if(blob.type!=='image/png'||(f.size_bytes!=null&&blob.size!==f.size_bytes))throw Error('COVER_UNAVAILABLE');
   return blob;
  }});
- originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=4')).editorSource(f,signal,coverOwner)});
+ originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=7')).editorSource(f,signal,coverOwner)});
  if(params.has('order')||startupDraft){
   await loadHistoryPreview();
  }else{

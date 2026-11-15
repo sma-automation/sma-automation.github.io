@@ -1,6 +1,7 @@
+import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
 import {createMusicLibraryAPI} from './music-library-api.mjs?v=3';
-import {refreshMediaCatalog} from './media-metadata.mjs?v=1';
-import {fetchAssetThumbnail} from './asset-thumbnail.mjs?v=1';
+import {refreshMediaCatalog} from './media-metadata.mjs?v=2';
+import {fetchAssetThumbnail} from './asset-thumbnail.mjs?v=2';
 import {transferDeviceFile} from './device-upload.mjs?v=1';
 import {sha256,EXPORT_MAX_BYTES} from './media-export-model.mjs?v=1';
 import {editorUUID} from './media-editor-model.mjs?v=2';
@@ -18,7 +19,7 @@ export async function editorRefreshFiles(owner,signal){await refreshMediaCatalog
 export async function editorThumbnail(file,signal,owner){return fetchAssetThumbnail(file,(await session(owner)).access_token,signal);}
 export const exportRequest=(action,input,owner)=>rpc('sma_publication_editor_export_v1',{p_action:action,p_input:input},owner);
 export async function editorSource(file,signal,owner){
- const s=await session(owner),response=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-editor-source-v1',{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(180000)]),headers:{'Content-Type':'application/json',Authorization:'Bearer '+s.access_token},body:JSON.stringify({asset_id:file.id||file.asset_id,asset_revision:file.revision||file.asset_revision})});
+ const s=await session(owner),response=await fetch(customerMediaEndpoint('original'),{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(180000)]),headers:{'Content-Type':'application/json',Authorization:'Bearer '+s.access_token},body:JSON.stringify({asset_id:file.id||file.asset_id,asset_revision:file.revision||file.asset_revision})});
  if(!response.ok)throw Error('SOURCE_UNAVAILABLE');const r=await response.json();
  if(r?.ok!==true)throw Error(r?.code||'SOURCE_UNAVAILABLE');
  if(r.can_publish!==false||r.asset_id!==(file.id||file.asset_id)||r.asset_revision!==(file.revision||file.asset_revision)||!['video/mp4','image/jpeg','image/png','image/webp'].includes(r.mime_type)||file.mime_type&&r.mime_type!==file.mime_type||!Number.isInteger(r.size_bytes)||r.size_bytes<12||r.size_bytes>EXPORT_MAX_BYTES||typeof r.sha256!=='string'||!/^[a-f0-9]{64}$/.test(r.sha256)||typeof r.data_base64!=='string'||r.data_base64.length>32000000||!/^[A-Za-z0-9+/]+={0,2}$/.test(r.data_base64))throw Error('SOURCE_UNAVAILABLE');
