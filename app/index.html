@@ -184,14 +184,26 @@ button:hover {
   background: var(--blue-dark);
 }
 
-button.secondary {
+button.secondary,
+.auth-mode-link {
   background: transparent;
   border: 1px solid #31415f;
   color: #dbe5ff;
 }
 
-button.secondary:hover {
+button.secondary:hover,
+.auth-mode-link:hover {
   background: #1d2a41;
+}
+
+.auth-mode-link {
+  display: grid;
+  place-items: center;
+  min-height: 46px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 button:disabled {
@@ -271,7 +283,7 @@ button.link-button:hover {
     <h1 id="viewTitle">Kundenbereich</h1>
 
     <div id="viewIntro" class="intro">
-      Melde dich an oder registriere dein SMA-Konto.
+      Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.
     </div>
 
     <!-- LOGIN UND REGISTRIERUNG -->
@@ -318,12 +330,12 @@ button.link-button:hover {
 
         </div>
 
-        <div class="password-note">
+        <div class="password-note" id="registrationPasswordHint" hidden>
           Für neue Passwörter: mindestens 10 Zeichen
           mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen.
         </div>
 
-        <div class="link-row">
+        <div class="link-row" id="forgotLinkRow">
           <button
             id="forgotButton"
             class="link-button"
@@ -335,17 +347,13 @@ button.link-button:hover {
 
         <div class="actions">
 
-          <button id="loginButton" type="submit">
+          <button id="authSubmit" type="submit" disabled>
             Anmelden
           </button>
 
-          <button
-            id="registerButton"
-            class="secondary"
-            type="button"
-          >
-            Registrieren
-          </button>
+          <a id="authModeLink" class="auth-mode-link" href="?ansicht=registrieren">
+            Neues Konto erstellen
+          </a>
 
         </div>
 
@@ -514,8 +522,8 @@ const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const forgotEmail = document.getElementById('forgotEmail');
 
-const loginButton = document.getElementById('loginButton');
-const registerButton = document.getElementById('registerButton');
+const authSubmit = document.getElementById('authSubmit');
+const authModeLink = document.getElementById('authModeLink');
 const sendResetButton = document.getElementById('sendResetButton');
 const savePasswordButton = document.getElementById('savePasswordButton');
 
@@ -543,18 +551,20 @@ function setStatus(message, type = '') {
 // BUTTONS SPERREN
 
 function setBusy(busy) {
-  loginButton.disabled = busy;
-  registerButton.disabled = busy;
+  authSubmit.disabled = busy;
   sendResetButton.disabled = busy;
   savePasswordButton.disabled = busy;
 }
 
 // ANSICHT WECHSELN
 
+let currentView;
+
 function showView(view) {
+  currentView = view;
 
   document.getElementById('loginView').hidden =
-    view !== 'login';
+    view !== 'login' && view !== 'register';
 
   document.getElementById('forgotView').hidden =
     view !== 'forgot';
@@ -562,10 +572,30 @@ function showView(view) {
   document.getElementById('resetView').hidden =
     view !== 'reset';
 
+  if (view === 'login' || view === 'register') {
+    const registering = view === 'register';
+    const pilot = urlQuery.get('kundenmedien') === 'pilot';
+    const next = new URLSearchParams();
+    if (!registering) next.set('ansicht', 'registrieren');
+    if (pilot) next.set('kundenmedien', 'pilot');
+    authModeLink.href = 'index.html' + (next.size ? '?' + next : '');
+    authModeLink.textContent = registering ? 'Mit bestehendem Konto anmelden' : 'Neues Konto erstellen';
+    authSubmit.textContent = registering ? 'Konto erstellen' : 'Anmelden';
+    passwordInput.setAttribute('autocomplete', registering ? 'new-password' : 'current-password');
+    document.getElementById('registrationPasswordHint').hidden = !registering;
+    if (registering) passwordInput.setAttribute('aria-describedby', 'registrationPasswordHint');
+    else passwordInput.removeAttribute('aria-describedby');
+    document.getElementById('forgotLinkRow').hidden = registering;
+  }
+
   const titles = {
     login: [
       'Kundenbereich',
-      'Melde dich an oder registriere dein SMA-Konto.'
+      'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.'
+    ],
+    register: [
+      'SMA-Konto erstellen',
+      'Registriere dich mit deiner E-Mail-Adresse und einem neuen Passwort.'
     ],
     forgot: [
       'Passwort vergessen?',
@@ -663,6 +693,8 @@ if (recoveryMode) {
 
   setStatus('Bitte gib dein neues Passwort ein.');
 
+} else {
+  showView(urlQuery.get('ansicht') === 'registrieren' ? 'register' : 'login');
 }
 
 // BESTEHENDE SESSION PRÜFEN
@@ -692,106 +724,48 @@ if (sessionData?.session && !recoveryMode) {
 
 }
 
-// ANMELDUNG
+// ANMELDUNG UND REGISTRIERUNG
 
 form.addEventListener('submit', async (event) => {
-
   event.preventDefault();
+  if (authSubmit.disabled || recoveryMode || !['login', 'register'].includes(currentView)) return;
 
-  setBusy(true);
-  setStatus('Anmeldung wird geprüft ...');
-
+  const registering = currentView === 'register';
   const email = emailInput.value.trim();
   const password = passwordInput.value;
 
-  const { error } =
-    await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-  if (error) {
-
-    setStatus(error.message, 'error');
-    setBusy(false);
-    return;
-
-  }
-
-  setStatus(
-    'Anmeldung erfolgreich.',
-    'success'
-  );
-
-  openDashboard();
-
-});
-
-// REGISTRIERUNG
-
-registerButton.addEventListener('click', async () => {
-
-  if (!emailInput.reportValidity()) return;
-  if (!passwordInput.reportValidity()) return;
-
-  if (!strongPassword(passwordInput.value)) {
-
+  if (registering && !strongPassword(password)) {
     setStatus(
       'Bitte verwende mindestens 10 Zeichen, Groß- und Kleinbuchstaben, eine Zahl und ein Sonderzeichen.',
       'error'
     );
-
     return;
-
   }
 
   setBusy(true);
-  setStatus('Registrierung wird erstellt ...');
+  setStatus(registering ? 'Registrierung wird erstellt …' : 'Anmeldung wird geprüft …');
+  try {
+    const credentials = { email, password };
+    const { data, error } = registering
+      ? await supabase.auth.signUp({ ...credentials, options: { emailRedirectTo: APP_URL } })
+      : await supabase.auth.signInWithPassword(credentials);
+    if (error) {
+      setStatus(error.message, 'error');
+      return;
+    }
+    if (registering && !data?.session) {
+      setStatus('Bitte prüfe dein Postfach für die Bestätigung deiner E-Mail-Adresse.', 'success');
+      return;
+    }
 
-  const email = emailInput.value.trim();
-  const password = passwordInput.value;
-
-  const { data, error } =
-    await supabase.auth.signUp({
-
-      email,
-      password,
-
-      options: {
-        emailRedirectTo: APP_URL
-      }
-
-    });
-
-  if (error) {
-
-    setStatus(error.message, 'error');
+    openDashboard();
+  } catch {
+    setStatus('SMA ist gerade nicht erreichbar. Bitte versuche es erneut.', 'error');
+  } finally {
     setBusy(false);
-    return;
-
   }
-
-  if (data?.session) {
-
-    setStatus(
-      'Registrierung erfolgreich.',
-      'success'
-    );
-
-    window.location.replace('dashboard.html');
-
-    return;
-
-  }
-
-  setStatus(
-    'Registrierung erfolgreich. Bitte bestätige jetzt die E-Mail-Adresse.',
-    'success'
-  );
-
-  setBusy(false);
-
 });
+authSubmit.disabled = false;
 
 // PASSWORT VERGESSEN ANZEIGEN
 
