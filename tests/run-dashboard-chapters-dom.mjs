@@ -129,6 +129,30 @@ await test('connection cards preserve the delegated OAuth click, native status r
   assert.equal(doc.querySelector('.sma-portal-actions'),null);
  }
 });
+await test('the overview counter opens the portal chapter and preserves native status updates',()=>{
+ const overview=page('overview',grid(card('summary','<div class="card-title">Social Media</div><div class="big-value"><span data-sma-social-count>0/4</span></div><div id="caption" class="muted">verbundene Plattformen</div>'),card('content'),card('account')));
+ const list=content=>'<div class="platform-list"><article class="platform-card"><div class="platform-info"><strong>YouTube</strong></div>'+content+'</article></div>';
+ const publishing=page('publishing',card('portals',list('<button class="sma-optimize">Optimieren</button>'))+'<div id="publishingFilesSlot"></div>');
+ const social=page('social',list('<div class="platform-action"><a href="/fixture">Verbinden</a></div>'));
+ const {document:doc}=parseHTML('<html lang="en"><head></head><body>'+overview+publishing+social+'</body></html>');
+ const count=doc.querySelector('[data-sma-social-count]'),summary=doc.getElementById('summary');
+ let opens=0;
+ const mount=()=>mountDashboardChapters({doc,stylesheetUrl:'/chapters.css',onPreparePost:()=>opens++});
+ for(let n=0;n<2;n++){
+  const view=mount(),button=summary.querySelector('button');
+  assert.equal(button.textContent,'Open platforms');assert.equal(button.dataset.de,'Portale öffnen');
+  assert.equal(button.getAttribute('aria-controls'),doc.getElementById('sma-publishing-panel-portals').id);
+  assert.deepEqual(button.getAttribute('aria-describedby').split(' ').map(id=>doc.getElementById(id)),[count,doc.getElementById('caption')]);
+  count.textContent='2/4';button.click();assert.equal(opens,n+1);
+  assert.equal(summary.querySelector('[data-sma-social-count]'),count);
+  view.destroy();button.click();assert.equal(opens,n+1);assert.equal(summary.querySelector('button'),null);
+  assert(!count.id);assert.equal(doc.getElementById('caption').id,'caption');
+ }
+ const existing=doc.createElement('a');existing.href='/other';summary.append(existing);
+ const guarded=mount();assert.equal(summary.querySelector('button'),null);guarded.destroy();existing.remove();
+ doc.getElementById('page-social').remove();const unavailable=mount();
+ assert.equal(summary.querySelector('button'),null);unavailable.destroy();
+});
 await test('publication keeps its portal rows and file gallery, with optimizer outside chapter panels',()=>{
  const f=fixture(),tabs=f.view.controllers.get('publishing'),optimizer=f.$('#smaOptimizationPage');assert.equal(optimizer.parentNode,f.$('#page-publishing'));assert.equal(optimizer.closest('.sma-chapter-panel'),null);assert.equal(optimizer.hidden,true);
  tabs.select('files');f.$('#file-query').value='Video';tabs.select('portals');assert.equal(f.$('#portals').hidden,false);tabs.select('files');assert.equal(f.$('#file-query').value,'Video');f.destroy();

@@ -170,7 +170,7 @@ const newCustomerShell=`<!doctype html><html lang="de"><meta charset="utf-8"><me
 <body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"></div></header>
 <aside><p>Arbeitsbereich</p><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button><button data-page="social">Social Media</button></aside><main>
 <section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid">
-<div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
+<div class="card"><div class="card-title">Social Media</div><div class="big-value"><span data-sma-social-count>1/4</span></div><div class="muted">verbundene Plattformen</div></div><div class="card">Content</div><div class="card">Konto</div></div></section>
 <section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
 <div class="card"><div class="platform-list">${platformNames.map(name=>'<article class="platform-card">'+platformInfo(name)+'</article>').join('')}</div></div>
 <div id="publishingFilesSlot"></div></section>
@@ -325,6 +325,22 @@ async function checkDashboardPreview(browser,width,height){
   await page.goto(dashboard);
   const frame=page.frameLocator('#dashboard'),sidebar=frame.locator('aside');
   await frame.getByRole('button',{name:'Beitrag vorbereiten'}).click();
+  await frame.getByRole('tab',{name:'Dateien'}).click();
+  const overview=mobile?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Start'}):sidebar.getByRole('button',{name:'Übersicht'});
+  await overview.click();
+  const shortcut=frame.getByRole('button',{name:'Portale öffnen',exact:true});
+  await fits(shortcut,width);
+  if(mobile){
+   const count=frame.locator('#page-overview [data-sma-social-count]');
+   await count.scrollIntoViewIfNeeded();
+   const box=await count.boundingBox();
+   await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+  }else{
+   await shortcut.focus();await shortcut.press('Enter');
+  }
+  const portalTab=frame.getByRole('tab',{name:'Portale',selected:true});
+  await portalTab.waitFor();
+  assert(await portalTab.evaluate(el=>el===el.ownerDocument.activeElement),'opening the counter selects and focuses Portale');
   assert.equal(await frame.locator('[data-page=social]').isVisible(),false);
   const panel=frame.getByRole('tabpanel',{name:'Portale'});
   for(const name of platformNames){

@@ -16,7 +16,7 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=31';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=7';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=8';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=13';
@@ -371,7 +371,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=6',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=7',location.href).href,
     onPreparePost:ownerId&&page.querySelector('.sma-optimize')&&findAreaNavigation('publishing')
       ?()=>navigateDashboardArea('portals'):null
   });

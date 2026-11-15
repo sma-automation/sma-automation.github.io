@@ -19,6 +19,8 @@ Die freigegebene Kapitel-Darstellung der YouTube-Optimierung wird auf die Dashbo
 | Kundenassistent | Einrichtung · Assistenz |
 | Webseite & Domain | Webseite · Firmendaten · Shop-Button · Domain · WordPress |
 
+Unter **Übersicht → Arbeitsbereich** führt die Kachel mit dem Zähler verbundener Plattformen über **Portale öffnen** zu den Verbindungen.
+
 Die Portalkacheln unter **Veröffentlichung → Portale** zeigen den Verbindungsstatus. Neben **Optimieren** steht die vorhandene Verbindungsaktion des jeweiligen Anbieters. Die ursprüngliche Verbindungsliste verarbeitet die Rückmeldung des Anbieters auch in dieser Ansicht. Beim Aktualisieren der Liste werden die Optimieren-Schaltflächen wieder zugeordnet. Ein Neuladen im selben Konto und Tab stellt die zuletzt fokussierte Portalaktion wieder her.
 
 ## Umsetzung
