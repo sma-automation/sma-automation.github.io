@@ -841,6 +841,19 @@ async function dashboardHtml(){
  if(!response.ok){
   if(response.status>=500)throw connectionError(unavailable);
   if(response.status===403&&!pilotRequested){
+   // Resolve only a signed-in owner's verified suspended booking. The payment
+   // status page rechecks ownership and never grants access on its own.
+   const paused=await supabase.rpc('sma_onboarding_paused_booking_v1');
+   if(paused.error)throw connectionError(unavailable);
+   if(typeof paused.data==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(paused.data)){
+    const current=await dashboardSession();
+    if(!signedOut&&current?.user?.id===owner&&dashboardOwnerId===owner){
+     window.location.replace('paketwahl.html?buchung='+encodeURIComponent(paused.data));
+     throw Error('Dein pausierter Zahlungsstand wird geöffnet …');
+    }
+    if(!signedOut)leaveDashboard();
+    throw Error('Die Anmeldung wurde gewechselt.');
+   }
    const {data,error}=await supabase.rpc('sma_onboarding_plan_choice_v1',{p_owner:owner});
    if(error)throw connectionError(unavailable);
    if(data?.ok===true){
