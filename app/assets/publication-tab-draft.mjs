@@ -36,13 +36,28 @@ function sameAttempt(a,b){
 function checkpointNotice(win){
  let current=null,node=null,actions=null,copyButton=null,copyStatus=null,manual=null;
  let copyGeneration=0,copyTimer=null;
+ // Request the native leave confirmation only while a checkpoint failure is unresolved.
+ // This is not a save and browsers may omit the prompt (for example on mobile shutdown).
+ let warnOnLeave=false;
+ function beforeUnload(event){
+  if(!warnOnLeave||!current)return;
+  event.preventDefault();event.returnValue='';
+ }
+ function guardLeave(enabled){
+  if(warnOnLeave===enabled)return;
+  warnOnLeave=enabled;
+  try{
+   if(enabled)win.addEventListener?.('beforeunload',beforeUnload);
+   else win.removeEventListener?.('beforeunload',beforeUnload);
+  }catch{/* Optional browser events must not block checkpoint or logout cleanup. */}
+ }
  const matches=v=>!!current&&!!v&&['token','owner','portal'].every(k=>current[k]===v[k]);
  function clearCopy(){
   copyGeneration++;
   if(copyTimer!==null){win.clearTimeout(copyTimer);copyTimer=null;}
   if(actions){actions.hidden=true;copyButton.disabled=false;copyStatus.textContent='';manual.value='';manual.hidden=true;}
  }
- function hide(){try{clearCopy();if(node){node.hidden=true;node.textContent='';}}catch{}}
+ function hide(){guardLeave(false);try{clearCopy();if(node){node.hidden=true;node.textContent='';}}catch{}}
  // Read only the current portal's editable text, at the explicit click, not its old checkpoint.
  function copyFields(){
   const doc=win.document,p=current?.portal;
@@ -106,6 +121,7 @@ function checkpointNotice(win){
   },
   failed(v){
    if(!matches(v))return;
+   guardLeave(true);
    try{
     const doc=win.document,main=doc?.querySelector('main');
     if(!main||!doc.getElementById('saveStatus'))return;
