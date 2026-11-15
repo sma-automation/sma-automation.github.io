@@ -805,15 +805,43 @@ function attachFileList(doc,page,editorHref){
 let pending;
 let signedOut=false,retryDashboardOnReconnect=false;
 function connectionError(message){return Object.assign(new Error(message),{retryOnReconnect:true});}
-async function dashboardSession(){
+const dashboardReads=new Set();
+function cancelDashboardReads(){for(const controller of dashboardReads)controller.abort();}
+// Bound every stage, including auth and JSON reads which may not be abortable.
+// A late settlement is consumed but cannot continue a cancelled login.
+function readWithinDashboard(signal,start){
+ return new Promise((resolve,reject)=>{
+  let settled=false;
+  const finish=(callback,value)=>{
+   if(settled)return;
+   settled=true;signal.removeEventListener('abort',cancel);callback(value);
+  };
+  const cancel=()=>finish(reject,connectionError('Die Dashboard-Prüfung wurde abgebrochen. Bitte versuche es erneut.'));
+  if(signal.aborted)return cancel();
+  signal.addEventListener('abort',cancel,{once:true});
+  Promise.resolve().then(()=>{
+   if(signal.aborted)throw connectionError('Die Dashboard-Prüfung wurde abgebrochen. Bitte versuche es erneut.');
+   return start();
+  }).then(value=>finish(resolve,value),error=>finish(reject,error));
+ });
+}
+async function dashboardSession(read=start=>start()){
  try{
-  const {data,error}=await supabase.auth.getSession();
+  const {data,error}=await read(()=>supabase.auth.getSession());
   if(!error)return data?.session??null;
  }catch{}
  throw connectionError('Deine Anmeldung konnte gerade nicht geprüft werden. Bitte versuche es erneut.');
 }
 async function dashboardHtml(){
- const session=await dashboardSession();
+ if(signedOut)throw Error('Bitte melde dich bei SMA an.');
+ const controller=new AbortController();
+ dashboardReads.add(controller);
+ let timedOut=false;
+ // Preserve the existing 45-second HTTP allowance, now shared by the full login.
+ const deadline=setTimeout(()=>{timedOut=true;controller.abort();},45000);
+ const read=start=>readWithinDashboard(controller.signal,start);
+ try{
+ const session=await dashboardSession(read);
  if(signedOut)throw Error('Bitte melde dich bei SMA an.');
  const pilotRequested=new URLSearchParams(location.search).get('kundenmedien')==='pilot';
  if(!session?.user?.id){
@@ -826,7 +854,7 @@ async function dashboardHtml(){
  dashboardOwnerId=owner;
  if(pilotRequested){
   delete document.documentElement.dataset.smaCustomerMedia;
-  const {data,error}=await supabase.rpc('sma_customer_media_pilot_v1',{p_route:'eligible'});
+  const {data,error}=await read(()=>supabase.rpc('sma_customer_media_pilot_v1',{p_route:'eligible'}).abortSignal(controller.signal));
   if(error||data?.ok!==true){
    document.getElementById('regularDashboard').hidden=false;
    throw Error('Der private Kundenmedientest ist für diese Anmeldung nicht verfügbar.');
@@ -835,18 +863,18 @@ async function dashboardHtml(){
  const unavailable='Das Dashboard ist gerade nicht erreichbar. Bitte versuche es erneut.';
  let response;
  try{
-  response=await fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token},cache:'no-store',
-   credentials:'omit',signal:AbortSignal.timeout(45000)});
+  response=await read(()=>fetch(endpoint,{method:'POST',headers:{Authorization:'Bearer '+session.access_token},cache:'no-store',
+   credentials:'omit',signal:controller.signal}));
  }catch{throw connectionError(unavailable);}
  if(!response.ok){
   if(response.status>=500)throw connectionError(unavailable);
   if(response.status===403&&!pilotRequested){
    // Resolve only a signed-in owner's verified suspended booking. The payment
    // status page rechecks ownership and never grants access on its own.
-   const paused=await supabase.rpc('sma_onboarding_paused_booking_v1');
+   const paused=await read(()=>supabase.rpc('sma_onboarding_paused_booking_v1').abortSignal(controller.signal));
    if(paused.error)throw connectionError(unavailable);
    if(typeof paused.data==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(paused.data)){
-    const current=await dashboardSession();
+    const current=await dashboardSession(read);
     if(!signedOut&&current?.user?.id===owner&&dashboardOwnerId===owner){
      window.location.replace('paketwahl.html?buchung='+encodeURIComponent(paused.data));
      throw Error('Dein pausierter Zahlungsstand wird geöffnet …');
@@ -854,10 +882,10 @@ async function dashboardHtml(){
     if(!signedOut)leaveDashboard();
     throw Error('Die Anmeldung wurde gewechselt.');
    }
-   const {data,error}=await supabase.rpc('sma_onboarding_plan_choice_v1',{p_owner:owner});
+   const {data,error}=await read(()=>supabase.rpc('sma_onboarding_plan_choice_v1',{p_owner:owner}).abortSignal(controller.signal));
    if(error)throw connectionError(unavailable);
    if(data?.ok===true){
-    const current=await dashboardSession();
+    const current=await dashboardSession(read);
     if(!signedOut&&current?.user?.id===owner&&dashboardOwnerId===owner){
      window.location.replace('paketwahl.html');
      throw Error('Deine Paketwahl wird geöffnet …');
@@ -868,15 +896,19 @@ async function dashboardHtml(){
   }
   throw Error(response.status===403?'Dein SMA-Zugang konnte noch nicht zugeordnet werden.':unavailable);
  }
- const result=await response.json().catch(()=>null);
+ const result=await read(()=>response.json()).catch(()=>null);
  if(typeof result?.html!=='string'||!result.html.includes('data-sma-customer-id'))throw Error('Das Dashboard konnte nicht vollständig geladen werden.');
- const current=await dashboardSession();
+ const current=await dashboardSession(read);
  if(signedOut||dashboardOwnerId!==owner||current?.user?.id!==owner){
   if(!signedOut)leaveDashboard();
   throw Error('Die Anmeldung wurde gewechselt.');
  }
  if(pilotRequested)document.documentElement.dataset.smaCustomerMedia='pilot';
  return result.html;
+ }catch(error){
+  if(timedOut)throw connectionError('Die Anmeldung dauert gerade zu lange. Bitte wähle „Erneut laden“.');
+  throw error;
+ }finally{clearTimeout(deadline);dashboardReads.delete(controller);}
 }
 // Called only by the same-origin dashboard frame after OAuth returns.
 window.smaDashboardResponse=async()=>new Response(await dashboardHtml(),{headers:{'Content-Type':'text/html'}});
@@ -899,7 +931,7 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){galleryReload.clear();signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){galleryReload.clear();signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -921,11 +953,10 @@ window.addEventListener('message',event=>{
 });
 function leaveDashboard(){
  delete document.documentElement.dataset.smaCustomerMedia;
- galleryReload.clear();signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');
+ galleryReload.clear();signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');
 }
 supabase.auth.onAuthStateChange((event,s)=>{
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
 });
 await load();
 </script></body></html>
-

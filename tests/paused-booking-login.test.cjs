@@ -12,12 +12,13 @@ const shell='<body data-sma-customer-id="fixture">Dashboard</body>';
 function login({paused=order,error=null,afterLookup=null,status=403,onboarding=false,search=''}={}){
  let owner='first';
  const redirects=[],calls=[];
- const env={AbortSignal,URLSearchParams,location:{search},signedOut:false,dashboardOwnerId:null,
+ const env={AbortController,AbortSignal,setTimeout,clearTimeout,URLSearchParams,location:{search},signedOut:false,dashboardOwnerId:null,
   document:{documentElement:{dataset:{}},getElementById(){return {hidden:true};}},
   endpoint:'https://fixture.invalid/dashboard',window:{location:{replace:path=>redirects.push(path)}},
   leaveDashboard(){env.signedOut=true;redirects.push('index.html');},
   supabase:{auth:{getSession:async()=>({data:{session:owner?{user:{id:owner},access_token:'fixture'}:null}})},
-   rpc:async(name,args)=>{
+   rpc:(name,args)=>({abortSignal:async signal=>{
+    assert.ok(signal instanceof AbortSignal);
     calls.push(name);
     if(name==='sma_onboarding_paused_booking_v1'){
      assert.equal(args,undefined);
@@ -27,7 +28,7 @@ function login({paused=order,error=null,afterLookup=null,status=403,onboarding=f
     }
     if(name==='sma_onboarding_plan_choice_v1'){assert.equal(args.p_owner,'first');return {data:{ok:onboarding}};}
     assert.equal(name,'sma_customer_media_pilot_v1');assert.equal(args.p_route,'eligible');return {data:{ok:true}};
-   }},
+   }})},
   fetch:async(url,options)=>{
    assert.equal(url,env.endpoint);assert.equal(options.method,'POST');
    assert.equal(options.headers.Authorization,'Bearer fixture');assert.equal(options.credentials,'omit');
