@@ -6,6 +6,7 @@ import {chromium} from './dom-runtime/node_modules/playwright-core/index.mjs';
 const site = 'https://sma.test';
 const fakeClient = `export function createClient(){return {
  auth:{getSession:async()=>({data:{session:{user:{id:'fixture'},access_token:'fixture'}}}),onAuthStateChange(){}},
+ functions:{invoke:async(name,options)=>({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)})).json()})},
  rpc: async(name,params) => ({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params)})).json()})
 };}`;
 const browser = await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
@@ -14,7 +15,7 @@ try {
     const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
     const page=await context.newPage();
     const errors=[];
-    let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0;
+    let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0, paymentCalls=0;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -38,9 +39,15 @@ try {
         const {p_offer,p_plan,p_terms}=req.postDataJSON();
         if(p_offer){
           assert.equal(p_offer,offer.id);assert.equal(p_plan,saved);assert.equal(p_terms,offer.terms);bookings++;
-          offer={...offer,state:'booked',checkout:'https://www.mollie.com/checkout/fixture'};
+          offer={...offer,state:'booked',id:offer.automated?'actual-booking':offer.id,checkout:offer.automated?null:'https://www.mollie.com/checkout/fixture'};
         }
         return route.fulfill({json:{ok:true,offer}});
+      }
+      if(req.method()==='POST' && url.href===site+'/fixture/sma-package-payment'){
+        assert.deepEqual(req.postDataJSON(),{owner:'fixture',order:'actual-booking'});
+        paymentCalls++;
+        offer={...offer,checkout:'https://www.mollie.com/checkout/fixture'};
+        return route.fulfill({json:{code:'BOOKED'}});
       }
       errors.push(req.method()+' '+url.pathname);return route.abort();
     });
@@ -86,6 +93,13 @@ try {
     offer={...offer,state:'paid',checkout:null};await page.reload();
     await page.getByText(/Deine Zahlung ist bestätigt/).waitFor();
     assert.equal(await page.locator('#checkout').isHidden(),true);
+    offer={id:'virtual',plan:saved,terms:'2026-11-15-v1',state:'offered',automated:true,checkout:null};
+    await page.reload();await book.waitFor();assert.equal(paymentCalls,0);
+    await book.click();await page.getByRole('link',{name:'Bei Mollie bezahlen'}).waitFor();
+    assert.equal(paymentCalls,1);assert.equal(bookings,2);
+    await page.reload();const refresh=page.getByRole('button',{name:'Zahlungsstand erneut abrufen'});
+    await refresh.waitFor();assert.equal(paymentCalls,1);await refresh.click();
+    await page.getByRole('link',{name:'Bei Mollie bezahlen'}).waitFor();assert.equal(paymentCalls,2);assert.equal(bookings,2);
     assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');
     await context.close();

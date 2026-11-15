@@ -97,9 +97,8 @@ bleibt das Paket bis zur Klärung der Zahlung festgelegt.
 1. Im vorhandenen Mitgliedschaftsablauf die Erstzahlung für die zugeordnete
    n8n-Kennung identifizieren. Der Abgleich erwartet `sequenceType=first`,
    `metadata.kunde_id`, `metadata.paket`, die richtige Monatsgebühr in EUR
-   und dieselbe Mollie-Kunden-ID. Die Erstellung der ersten Zahlungsanforderung
-   für ein noch inaktives Neuprofil ist ein separater Integrationsschritt.
-   Für ein Konto ohne Zahlungsanforderung bleibt die Vormerkung nutzbar.
+   und dieselbe Mollie-Kunden-ID. Neue, zugeordnete Konten können den unten
+   beschriebenen automatischen Buchungsweg nutzen.
 2. Mit einem privaten Mollie-Lesezugang in `SMA_MOLLIE_READ_TOKEN`
    `node n8n/sync-onboarding-payment.mjs tr_ID` ausführen. Das Hilfsprogramm
    ruft die Zahlung bei Mollie ab. Den ausgegebenen SQL-Aufruf zeitnah im
@@ -122,9 +121,31 @@ bleibt das Paket bis zur Klärung der Zahlung festgelegt.
    und den SQL-Abgleich ausführen. Eine Rückbuchung schließt den zugehörigen
    Website-Zugang. Die Folgeabrechnung verbleibt im bestehenden n8n-Ablauf.
 
-Der Pilot verwendet Betreiberabgleiche. Der automatische Anschluss für neue
-inaktive Konten, die Zustellung von Zahlungsereignissen an diesen Abgleich und
-der erste Durchlauf mit einer echten Vormerkung sind noch offen.
+### Automatische Erstzahlung für zugeordnete Neukonten
+
+Die Vormerkung bleibt unverbindlich. Erst der Klick auf „Zahlungspflichtig buchen“
+speichert den Auftrag und fordert einen Zahlungslink für das festgelegte Paket an.
+Bei einer Unterbrechung kann der Kunde den Zahlungsstand erneut abrufen.
+Die Rückkehr von Mollie führt über die reguläre Zugangsprüfung ins Dashboard.
+
+Die Edge Function `sma-package-payment` verwendet den privaten n8n-Dienst
+`8v2wcz5lh0yUf3sw`. Er nutzt vorhandene Verbindungen zum SMA-Händlerkonto
+und zur Datenbank. Die Aufträge an n8n sind einmal gültig. Die Funktion ruft
+jede Zahlung bei Mollie ab und prüft Konto, Erstzahlung, Betrag, Währung und Paket.
+Nach bestätigter Zahlung legt sie das Monatsabo mit der ersten Folgezahlung einen
+Monat nach dem Zahlungstag an. Sie liest das Abo und die Kundenzuordnung aus der
+Anbieterantwort bzw. der aktualisierten Kundenzeile. Erst dann öffnet sie den Zugang.
+Der bisherige n8n-Zahlungsworkflow empfängt die Folgezahlungen.
+
+Die Einstellung `sma_private.onboarding_payment_settings_v1.enabled` steuert neue
+automatische Angebote. Bestehende Buchungen lassen sich weiter abgleichen. Nach
+einer unklaren Anbieterantwort außerhalb des Wiederholungsfensters die vorhandene
+Zahlung oder das Abo beim Händler abgleichen, bevor weitere Zahlungen angelegt
+werden. Rückerstattungen und Rückbuchungen der Erstzahlung sperren den Zugang.
+Ein aktives Abo bleibt in diesem Fall beim Händler gesondert zu klären.
+
+Die automatisierten Tests verwenden simulierte Anbieterantworten. Der erste
+Durchlauf mit einer echten Kundenbuchung steht aus.
 
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 

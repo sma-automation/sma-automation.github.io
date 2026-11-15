@@ -8,6 +8,9 @@ on:
       - supabase/migrations/*_onboarding_plan_choice_v1.sql
       - supabase/migrations/*_onboarding_n8n_link_v1.sql
       - supabase/migrations/*_onboarding_package_booking_v1.sql
+      - supabase/migrations/*_onboarding_payment_automation_v1.sql
+      - supabase/functions/sma-package-payment/**
+      - n8n/package-payment/**
       - n8n/sync-onboarding-payment.mjs
       - tests/run-onboarding-plan-sql.mjs
       - n8n/confirm-onboarding-row.cjs
@@ -201,7 +204,7 @@ on:
       - .github/workflows/publication-history-tests.yml
   pull_request:
     branches: [website-v1]
-    paths: ['app/**', 'supabase/**', 'tests/**', 'n8n/confirm-onboarding-row.cjs', 'n8n/sync-onboarding-payment.mjs', '.github/workflows/publication-history-tests.yml']
+    paths: ['app/**', 'supabase/**', 'tests/**', 'n8n/confirm-onboarding-row.cjs', 'n8n/sync-onboarding-payment.mjs', 'n8n/package-payment/**', '.github/workflows/publication-history-tests.yml']
 permissions: {}
 jobs:
   test:
