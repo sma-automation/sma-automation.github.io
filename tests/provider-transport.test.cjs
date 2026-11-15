@@ -4,7 +4,7 @@ const yt='https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumab
 const tt='https://open-upload.tiktokapis.com/video/?upload_id=1&upload_token=synthetic';
 const now=Date.parse('2026-11-03T20:00:00Z');
 const i={ok:true,id:'fa690000-0000-4000-8000-000000000010',lease_id:'fa690000-0000-4000-8000-000000000011',sequence:1,operation:'init',platform:'youtube',target_id:'synthetic_channel',visibility:'private',size_bytes:1000,received_bytes:0,session_url:yt,session_expires_at:'2026-11-03T21:00:00Z',binding:{platform:'youtube',media_kind:'video',asset_revision:'sha256:'+'a'.repeat(64)+':1'},draft:{title:'Exakter Titel',caption:'Exakter gespeicherter Beitrag #test'},choices:{visibility:'private',made_for_kids:false,contains_synthetic_media:false}};
-const tk={...i,platform:'tiktok',target_id:'synthetic_creator',visibility:'SELF_ONLY',session_url:tt,provider_id:'v_pub_file~1',binding:{...i.binding,platform:'tiktok'},choices:{visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,brand_content_toggle:false,brand_organic_toggle:false}};
+const tk={...i,platform:'tiktok',target_id:'synthetic_creator',visibility:'SELF_ONLY',session_url:tt,provider_id:'v_pub_file~1',binding:{...i.binding,platform:'tiktok'},choices:{visibility:'SELF_ONLY',disable_comment:true,disable_duet:true,disable_stitch:true,brand_content_toggle:false,brand_organic_toggle:false,is_aigc:true}};
 test('upload session rejects host/path injection, redirects, credentials, duplicates and expired URLs',()=>{
  assert.equal(providerSession('youtube',yt),yt);assert.equal(providerSession('tiktok',tt),tt);
  assert.equal(providerSession('tiktok',tt.replace('open-upload','upload.us')),tt.replace('open-upload','upload.us'));
@@ -13,8 +13,20 @@ test('upload session rejects host/path injection, redirects, credentials, duplic
 });
 test('init request preserves exact stored texts and choices and requires a journal intent',()=>{
  const y=providerRequest(i,'synthetic-token',now),t=providerRequest(tk,'synthetic-token',now);
- assert.equal(y.body.snippet.title,i.draft.title);assert.equal(y.body.snippet.description,i.draft.caption);assert.equal(t.body.post_info.title,tk.draft.caption);
+ assert.equal(y.body.snippet.title,i.draft.title);assert.equal(y.body.snippet.description,i.draft.caption);assert.equal(t.body.post_info.title,tk.draft.caption);assert.equal(t.body.post_info.is_aigc,true);assert.equal(providerRequest({...tk,choices:{...tk.choices,is_aigc:false}},'synthetic-token',now).body.post_info.is_aigc,false);
  for(const bad of [{...i,lease_id:null},{...i,ok:false},{...i,sequence:0},{...i,platform:'facebook'},{...i,choices:{visibility:'private'}}])assert.throws(()=>providerRequest(bad,'synthetic-token',now));
+});
+test('TikTok transport refuses missing or malformed AI disclosure before HTTP',()=>{
+ for(const bad of [null,'true','false',0,1]){
+  assert.throws(()=>providerRequest({...tk,choices:{...tk.choices,is_aigc:bad}},'synthetic-token',now),/INVALID_CHOICES/);
+ }
+ const missing={...tk.choices};delete missing.is_aigc;
+ assert.throws(()=>providerRequest({...tk,choices:missing},'synthetic-token',now),/INVALID_CHOICES/);
+ const expected=providerRequest(tk,'synthetic-token',now);
+ assert.equal(expected.url,'https://open.tiktokapis.com/v2/post/publish/video/init/');
+ assert.equal(expected.body.post_info.privacy_level,'SELF_ONLY');
+ assert.equal(expected.body.post_info.is_aigc,true);
+ assert.equal(expected.body.post_info.title,tk.draft.caption);
 });
 test('provider metadata preserves the exact customer-shop invitation for both portals',()=>{
  const caption='Farbige Linien im SMA-Testvideo.\\n\\nSchau doch mal in meinem Shop vorbei!\\n\\n#SMA #Video\\n\\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde';
