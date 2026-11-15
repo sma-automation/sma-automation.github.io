@@ -1,7 +1,9 @@
+import {drawMediaOverlay} from './media-text-overlay.mjs?v=1';
+import {exportFrameSize} from './media-export-model.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=5';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountMediaMusic} from './media-music-view.mjs?v=4';
-import {mountMediaExport} from './media-export-view.mjs?v=5';
+import {mountMediaExport} from './media-export-view.mjs?v=6';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=4';
 const errors={FILE_SYNC_RATE_LIMITED:'Bitte warte kurz und aktualisiere die Dateiangaben danach erneut.',FILE_SYNC_RUNNING:'Dein Kundenordner wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_UNAVAILABLE:'Die Dateiangaben konnten nicht aktualisiert werden. Deine Eingaben bleiben erhalten. Bitte erneut versuchen.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist momentan nicht erreichbar. Bitte erneut versuchen.',MUSIC_INVALID:'Bitte prüfe Musiklautstärke und Startzeit (0 bis unter 600 Sekunden).',RATE_LIMITED:'Für diesen Zeitraum wurden bereits viele Änderungen gespeichert. Bitte versuche es später erneut.',AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',ACCOUNT_UNAVAILABLE:'Dein Kundenkonto ist nicht eindeutig verfügbar.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',FILE_UNAVAILABLE:'Diese Datei ist nicht mehr verfügbar. Lade die Dateiliste neu.',FILE_CHANGED:'Die Datei wurde geändert. Lade die Dateiliste und den passenden Entwurf neu.',REVISION_CONFLICT:'Dieser Entwurf wurde inzwischen geändert. Lade den gespeicherten Stand, bevor du erneut speicherst.',REQUEST_CONFLICT:'Die Speicherung passt nicht mehr zu diesem Entwurf. Lade den gespeicherten Stand.',INVALID_SETTINGS:'Bitte prüfe die Eingaben: Zeitpunkte innerhalb der Videolänge, Cover innerhalb des Schnitts und höchstens 160 Zeichen ohne Zeilenumbruch.',UNAVAILABLE:'Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.'};
@@ -27,7 +29,9 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  function setDirty(value){if(dirty===value)return;dirty=value;if(value)ownerWindow.addEventListener('beforeunload',warnBeforeLeaving);else ownerWindow.removeEventListener('beforeunload',warnBeforeLeaving);}
  function clearDiscard(){discardAction=null;$('discard').hidden=true;}
  function showDiscard(action){discardAction=action;$('discardMessage').textContent=action==='leave'?'Ungespeicherte Änderungen verwerfen und zum Dashboard zurückkehren?':'Ungespeicherte Änderungen verwerfen?';$('confirmDiscard').textContent=action==='leave'?'Verwerfen und zurück':'Verwerfen und laden';$('discard').hidden=false;$('discard').scrollIntoView?.({block:'nearest'});$('keepEditing').focus();}
- function releasePreview(){previewController?.abort();previewController=null;if(previewURL)revokeURL(previewURL);previewURL=null;$('image').removeAttribute('src');$('image').hidden=true;$('overlay').textContent='';}
+ function releasePreview(clearOverlay=true){previewController?.abort();previewController=null;if(previewURL)revokeURL(previewURL);previewURL=null;$('image').removeAttribute('src');$('image').hidden=true;
+  if(clearOverlay){$('overlay').textContent='';$('overlayCanvas').hidden=true;$('overlayCanvas').width=0;$('overlayCanvas').removeAttribute('aria-label');}
+ }
  function lock(value){busy=value;$('fields').disabled=value;for(const id of ['asset','refreshFiles','refreshMetadata','save','reload','confirmDiscard'])$(id).disabled=value;}
  function unavailable(message){original?.setContext(null);metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;music.clear();exportView?.destroy();invalidOwner=true;generation++;releasePreview();files=[];file=null;saved=null;attempt=null;setDirty(false);clearDiscard();$('asset').replaceChildren();for(const key of Object.keys(editorDefaults))control(key).value='';$('fileInfo').textContent='';$('savedInfo').textContent='';$('editor').hidden=true;$('app').hidden=true;$('login').hidden=false;lock(true);say(message,true);}
  async function owner(g){const id=await getOwnerId();if(!current(g))return false;if(id!==expectedOwnerId){unavailable(errors.AUTH_REQUIRED);return false;}return true;}
@@ -62,9 +66,19 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  function settings(){const s={};for(const k of Object.keys(editorDefaults)){const value=control(k).value;if(k.endsWith('_ms'))s[k]=timeValue(k);else if(['position_x','position_y','audio_volume'].includes(k))s[k]=Number(value);else s[k]=value;}const m=music.getSetting();return readEditorSettings({...s,...(m?{music:m}:{})},file);}
  function paint(){
   for(const k of ['position_x','position_y','audio_volume'])doc.querySelector('[data-value="'+k+'"]').textContent=control(k).value+' %';
-  const ratio=control('format').value==='original'?(file?.width_px&&file?.height_px?file.width_px/file.height_px:1):({'9:16':9/16,'1:1':1,'16:9':16/9})[control('format').value]||1;
+  const {width,height}=exportFrameSize(control('format').value,file?.width_px,file?.height_px);
+  const ratio=width/height;
   $('stage').style.aspectRatio=String(ratio);$('stage').style.maxWidth=Math.min(480,480*ratio)+'px';$('image').style.objectFit=control('fit').value;$('image').style.objectPosition=control('position_x').value+'% '+control('position_y').value+'%';
-  $('overlay').textContent=control('overlay_text').value;const position=control('overlay_position').value;$('overlay').style.top=position==='top'?'5%':position==='center'?'50%':'auto';$('overlay').style.bottom=position==='bottom'?'5%':'auto';$('overlay').style.transform=position==='center'?'translateY(-50%)':'none';
+  const text=control('overlay_text').value,position=control('overlay_position').value;
+  const layer=$('overlayCanvas'),fallback=$('overlay');
+  layer.hidden=!text||!drawMediaOverlay(layer,width,height,text,position);
+  if(layer.hidden)layer.removeAttribute('aria-label');else layer.setAttribute('aria-label',text);
+  fallback.textContent=layer.hidden?text:'';
+  if(fallback.textContent){
+   fallback.style.top=position==='top'?'5%':position==='center'?'50%':'auto';
+   fallback.style.bottom=position==='bottom'?'5%':'auto';
+   fallback.style.transform=position==='center'?'translateY(-50%)':'none';
+  }
  }
  function fill(result){saved=result;for(const [k,v] of Object.entries(result.settings).filter(([k])=>k!=='music'))control(k).value=v===null?'':k.endsWith('_ms')?String(v/1000):String(v);music.setContext(file,result.settings.music);setDirty(false);attempt=null;clearDiscard();$('savedInfo').textContent=result.revision?'Gespeicherter Entwurf · Version '+result.revision+' · '+new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(result.saved_at)):'Noch kein Bearbeitungsentwurf gespeichert.';paint();exportView?.setContext(file,saved,dirty||fileStale);}
  function metadataFields(){const missing=missingVideoMetadata(file);$('metadataPanel').hidden=!missing.length;$('metadataStatus').textContent=videoMetadataNotice(file);$('refreshMetadata').hidden=!refreshMetadata;}
@@ -77,7 +91,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   $('previewNote').textContent=file.media_kind==='video'?'Standbild-Vorschau für Format, Bildausschnitt und Text. Schnitt, Cover-Zeitpunkt und Ton werden beim Export angewendet.':'Vorschaubild für Format, Bildausschnitt und Text; noch kein exportiertes Ergebnis.';
  }
  async function loadPreview(g,selected){
-  releasePreview();const controller=new AbortController();previewController=controller;$('previewEmpty').hidden=false;$('previewEmpty').textContent='Vorschaubild wird geladen …';
+  releasePreview(false);const controller=new AbortController();previewController=controller;$('previewEmpty').hidden=false;$('previewEmpty').textContent='Vorschaubild wird geladen …';
   try{const blob=await thumbnail(selected,controller.signal);if(!current(g)||controller.signal.aborted||!await owner(g))return;previewURL=createURL(blob);$('image').src=previewURL;$('image').hidden=false;$('previewEmpty').hidden=true;paint();}
   catch{if(current(g)&&!controller.signal.aborted){$('previewEmpty').textContent='Das Vorschaubild ist momentan nicht verfügbar. Die Einstellungen können trotzdem gespeichert werden.';}}
  }

@@ -1,4 +1,4 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=14';
+import {mountMediaEditor} from './media-editor-view.mjs?v=15';
 import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=10';
 
 const query = new URLSearchParams(location.search);

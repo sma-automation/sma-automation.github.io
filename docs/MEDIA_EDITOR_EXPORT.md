@@ -134,6 +134,10 @@ Entwurfsversion noch geprüft wird. Ein neuer Versuch verwendet ein eigenes
 Abbruchsignal. Eine verspätete Antwort oder Fortschrittsmeldung des ersten
 Versuchs kann die neue Vorschau weder ersetzen noch deren Bedienung freigeben.
 
+## Texteinblendung in der Standbildvorschau
+
+Die Standbildvorschau zeichnet den Text in den Pixelmaßen des gewählten Ausgabeformats und skaliert ihn mit dem Bild. Vorschau und Export nutzen dieselbe Berechnung für Schriftgröße, Zeilenumbruch, Hintergrund und Position. Das gilt für Originalformat, Hochformat, Quadrat und Querformat.
+
 ## Nächster Schritt
 
 Zusätzliche Musik und die Cover-Zuordnung zur Portalvorbereitung sind implementiert;

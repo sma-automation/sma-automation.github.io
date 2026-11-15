@@ -149,6 +149,36 @@ await test('music edits and metadata refresh preserve the warning without saving
  f.$('#refreshMetadata').click();await tick();f.visibility('hidden');assert.equal(leave(f).defaultPrevented,true);f.visibility('visible');await tick();
  assert.equal(leave(f).defaultPrevented,true);assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();assert.equal(leave(f).defaultPrevented,false);
 });
+await test('standbild uses the exported title layout at every format and position, including wrapped text',async()=>{
+ const {overlayPNG}=await import('../app/assets/media-export-render.mjs');
+ const {exportPlan}=await import('../app/assets/media-export-model.mjs');
+ const f=fixture();await tick();
+ const layer=f.$('#overlayCanvas'),caption='SMA Hochformat – Vorschau und Export im Vergleich';
+ function recorder(){
+  const events=[];
+  return {events,ctx:{clearRect(){events.length=0;},measureText(value){return {width:[...value].length*16};},
+   fillRect(...args){events.push(['box',...args]);},fillText(...args){events.push([this.font,...args]);}}};
+ }
+ const preview=recorder();layer.getContext=()=>preview.ctx;
+ f.set('overlay_text',caption);
+ for(const format of ['9:16','1:1','16:9','original']){
+  f.set('format',format);
+  for(const position of ['top','center','bottom']){
+   f.set('overlay_position',position);
+   const plan=exportPlan({...files[0],size_bytes:1200},{...defaults,format,overlay_text:caption,overlay_position:position});
+   const expected=recorder();
+   const renderDoc={createElement:()=>({getContext:()=>expected.ctx,toBlob:cb=>cb(new Blob(['pixels']))})};
+   await overlayPNG(renderDoc,plan);
+   assert.deepEqual([layer.width,layer.height],[plan.width,plan.height]);
+   assert.equal(layer.getAttribute('aria-label'),caption);assert.equal(layer.hidden,false);assert.equal(f.$('#overlay').textContent,'');
+   assert.deepEqual(preview.events,expected.events);
+   if(format==='9:16'&&position==='top'){assert.deepEqual(preview.events[0],['box',36,64,648,116]);assert.equal(preview.events.length,3);}
+  }
+ }
+ f.set('overlay_text','');assert.equal(layer.hidden,true);assert.equal(layer.hasAttribute('aria-label'),false);
+ f.set('overlay_text',caption);f.owner('other');assert.equal(layer.hidden,true);assert.equal(layer.width,0);assert.equal(layer.hasAttribute('aria-label'),false);
+ f.view.destroy();
+});
 await test('opening is read-only and exact chapter switching retains unsaved settings and safe preview text',async()=>{
  const f=fixture();await tick();assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('#editor').hidden,false);assert.equal(f.$('#image').hidden,false);
  f.set('format','9:16');f.set('fit','cover');f.set('position_x','75');f.tab('Text');f.set('overlay_text','<img src=x onerror=bad()>');f.tab('Format & Ausschnitt');
