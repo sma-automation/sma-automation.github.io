@@ -62,6 +62,7 @@ async function request(plan = null) {
       status.textContent = 'Deine Vormerkung wurde zwischenzeitlich geändert. Die aktuelle Auswahl wird angezeigt.';
     } else {
       status.textContent = saved ? names[saved] + ' ist für dein Konto vorgemerkt.' : 'Du hast noch kein Paket vorgemerkt.';
+      if (value.linked === true) status.textContent += ' Dein SMA-Kundenkonto ist zugeordnet.';
     }
   } catch {
     if (leaving) return;

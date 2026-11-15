@@ -6,6 +6,7 @@ on:
       - supabase/sql/launch-readiness-readonly.sql
       - tests/run-launch-readiness-sql.mjs
       - supabase/migrations/*_onboarding_plan_choice_v1.sql
+      - supabase/migrations/*_onboarding_n8n_link_v1.sql
       - tests/run-onboarding-plan-sql.mjs
       - tests/launch-readiness-readonly.test.cjs
       - app/assets/original-video-preview.mjs
