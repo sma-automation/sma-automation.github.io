@@ -4,10 +4,11 @@ import {mountMediaExport} from './media-export-view.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
 import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=3';
 const errors={FILE_SYNC_RATE_LIMITED:'Bitte warte kurz und aktualisiere die Dateiangaben danach erneut.',FILE_SYNC_RUNNING:'Dein Kundenordner wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_UNAVAILABLE:'Die Dateiangaben konnten nicht aktualisiert werden. Deine Eingaben bleiben erhalten. Bitte erneut versuchen.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist momentan nicht erreichbar. Bitte erneut versuchen.',MUSIC_INVALID:'Bitte prüfe Musiklautstärke und Startzeit (0 bis unter 600 Sekunden).',RATE_LIMITED:'Für diesen Zeitraum wurden bereits viele Änderungen gespeichert. Bitte versuche es später erneut.',AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',ACCOUNT_UNAVAILABLE:'Dein Kundenkonto ist nicht eindeutig verfügbar.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',FILE_UNAVAILABLE:'Diese Datei ist nicht mehr verfügbar. Lade die Dateiliste neu.',FILE_CHANGED:'Die Datei wurde geändert. Lade die Dateiliste und den passenden Entwurf neu.',REVISION_CONFLICT:'Dieser Entwurf wurde inzwischen geändert. Lade den gespeicherten Stand, bevor du erneut speicherst.',REQUEST_CONFLICT:'Die Speicherung passt nicht mehr zu diesem Entwurf. Lade den gespeicherten Stand.',INVALID_SETTINGS:'Bitte prüfe die Eingaben: Zeitpunkte innerhalb der Videolänge, Cover innerhalb des Schnitts und höchstens 160 Zeichen ohne Zeilenumbruch.',UNAVAILABLE:'Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.'};
-export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,refreshMetadata=null,musicLibrary=null,thumbnail,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
+export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,refreshMetadata=null,musicLibrary=null,thumbnail,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,initialAssetRevision=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
  const $=id=>doc.getElementById(id),control=k=>doc.querySelector('[name="'+k+'"]'),ownerWindow=doc.defaultView;
  let files=[],file=null,saved=null,attempt=null,busy=false,disposed=false,invalidOwner=false,dirty=false,generation=0,previewController=null,previewURL=null,metadataController=null,fileStale=false;
  let exportView,discardAction=null;
+ let useLinkedFile=initialAssetId!==null||initialAssetRevision!==null;
  const music=mountMediaMusic({doc,library:musicLibrary,createURL,revokeURL,setBusy:value=>lock(value),onChange:()=>{if(!saved||disposed||invalidOwner)return;setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);say('Ungespeicherte Änderungen.');}});
  const tabs=createChapterTabs({doc,id:'media-editor',list:$('chapters'),entries:[{key:'format',label:'Format & Ausschnitt',panel:$('formatPanel')},{key:'time',label:'Schnitt & Cover',panel:$('timePanel')},{key:'overlay',label:'Text',panel:$('overlayPanel')},{key:'audio',label:'Ton',panel:$('audioPanel')},...(exportDependencies?[{key:'export',label:'Export',panel:$('exportPanel')}]:[])],onSelect:key=>{if($('draftActions'))$('draftActions').hidden=key==='export';if($('draftPreview'))$('draftPreview').hidden=key==='export';}});
  const say=(text,error=false)=>{$('status').textContent=text;$('status').dataset.error=String(error);};
@@ -43,9 +44,13 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   try{const blob=await thumbnail(selected,controller.signal);if(!current(g)||controller.signal.aborted||!await owner(g))return;previewURL=createURL(blob);$('image').src=previewURL;$('image').hidden=false;$('previewEmpty').hidden=true;paint();}
   catch{if(current(g)&&!controller.signal.aborted){$('previewEmpty').textContent='Das Vorschaubild ist momentan nicht verfügbar. Die Einstellungen können trotzdem gespeichert werden.';}}
  }
- async function loadFile(id){
+ async function loadFile(id,unavailableMessage){
   if(disposed||invalidOwner)return;const g=++generation;fileStale=false;metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;releasePreview();music.clear();exportView?.setContext(null,null,false);file=files.find(f=>f.id===id)||null;saved=null;attempt=null;setDirty(false);$('editor').hidden=true;clearDiscard();
-  if(!file){say('Noch keine Bild- oder Videodateien vorhanden. Dateien kannst du unter Veröffentlichung hinzufügen.');return;}
+  if(!file){
+   $('fileInfo').textContent='';$('savedInfo').textContent='';
+   say(unavailableMessage||'Noch keine Bild- oder Videodateien vorhanden. Dateien kannst du unter Veröffentlichung hinzufügen.',Boolean(unavailableMessage));
+   return;
+  }
   $('asset').value=file.id;$('fileInfo').textContent=file.name;lock(true);say('Bearbeitungsentwurf wird geladen …');
   try{if(!await owner(g))return;const response=await request('get',{asset_id:file.id,asset_revision:file.revision});if(!current(g)||!await owner(g))return;fill(readEditorState(response,file));fileFields();$('editor').hidden=false;say('Entwurf geladen. Änderungen werden erst mit „Entwurf speichern“ gespeichert.');void loadPreview(g,file);}
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
@@ -53,7 +58,29 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  async function loadFiles(){
   if(disposed||invalidOwner||busy)return;if(dirty){say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}
   const g=++generation;lock(true);$('retry').hidden=true;say('Dateiliste wird geladen …');
-  try{if(!await owner(g))return;const response=await listFiles();if(!current(g)||!await owner(g))return;files=readEditorFiles(response);const selected=files.find(f=>f.id===(file?.id||initialAssetId))||files[0];$('asset').replaceChildren();for(const f of files){const option=doc.createElement('option');option.value=f.id;option.textContent=(f.media_kind==='video'?'Video · ':'Bild · ')+(f.name.length>90?f.name.slice(0,87)+'…':f.name);$('asset').append(option);}lock(false);$('app').hidden=false;await loadFile(selected?.id);}
+  try{
+   if(!await owner(g))return;
+   const response=await listFiles();
+   if(!current(g)||!await owner(g))return;
+   files=readEditorFiles(response);
+   const selected=useLinkedFile
+    ?files.find(f=>f.id===initialAssetId&&(initialAssetRevision===null||f.revision===initialAssetRevision))
+    :files.find(f=>f.id===file?.id)||files[0];
+   const unavailable=useLinkedFile&&!selected;
+   const select=$('asset');select.replaceChildren();
+   if(unavailable){
+    const placeholder=doc.createElement('option');placeholder.value='';placeholder.disabled=true;
+    placeholder.textContent='Datei auswählen';select.append(placeholder);
+   }
+   for(const f of files){
+    const option=doc.createElement('option');option.value=f.id;
+    option.textContent=(f.media_kind==='video'?'Video · ':'Bild · ')+(f.name.length>90?f.name.slice(0,87)+'…':f.name);
+    select.append(option);
+   }
+   if(unavailable)select.value='';
+   lock(false);$('app').hidden=false;
+   await loadFile(selected?.id,unavailable?'Die verlinkte Dateiversion ist nicht mehr verfügbar. Bitte prüfe die Dateiauswahl.':null);
+  }
   catch(e){if(current(g)){fail(e);if(!invalidOwner)$('retry').hidden=false;}}finally{if(current(g))lock(false);}
  }
  async function refreshFileMetadata(){
@@ -83,7 +110,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
  }
  const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;setDirty(true);exportView?.setContext(file,saved,dirty||fileStale);paint();say('Ungespeicherte Änderungen.');};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',save);
- const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}void loadFile($('asset').value);};$('asset').addEventListener('change',choose);
+ const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}useLinkedFile=false;void loadFile($('asset').value);};$('asset').addEventListener('change',choose);
  const reload=()=>{if(busy||!file)return;if(dirty){showDiscard('reload');return;}void loadFile(file.id);};$('reload').addEventListener('click',reload);
  const leave=event=>{if(event.defaultPrevented||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||disposed||invalidOwner||!dirty)return;event.preventDefault();if(busy){say('Bitte warte, bis der laufende Vorgang abgeschlossen ist.',true);return;}showDiscard('leave');};$('backDashboard').addEventListener('click',leave);
  const discard=()=>{if(busy||disposed||invalidOwner||!discardAction)return;if(discardAction==='leave'){clearDiscard();setDirty(false);try{navigate($('backDashboard').href);}catch{setDirty(true);showDiscard('leave');say('Das Dashboard konnte nicht geöffnet werden. Deine Eingaben sind noch vorhanden.',true);}return;}if(file)void loadFile(file.id);},keep=()=>clearDiscard();$('confirmDiscard').addEventListener('click',discard);$('keepEditing').addEventListener('click',keep);

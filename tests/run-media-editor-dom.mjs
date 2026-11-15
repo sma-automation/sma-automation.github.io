@@ -9,18 +9,33 @@ const id=n=>'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),uid=id(91);
 const files=[{id:id(1),name:'Example.mp4',revision:'r1',media_kind:'video',mime_type:'video/mp4',duration_ms:10000,width_px:1080,height_px:1920},{id:id(2),name:'Image.jpg',revision:'r1',media_kind:'image',mime_type:'image/jpeg',duration_ms:null,width_px:1200,height_px:800}];
 const reply=(input,settings=defaults,revision=0)=>({ok:true,version:1,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,revision,settings,saved_at:revision?'2026-11-06T12:00:00Z':null,changed:revision>0});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-function fixture({navigate=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
+function fixture({initialAssetId=null,initialAssetRevision=null,navigate=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
  const {document:doc,window}=parseHTML(html);Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});
  // Linkedom lacks native select.value setters; model the selected option through attributes.
  for(const select of doc.querySelectorAll('select'))Object.defineProperty(select,'value',{get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value||'';},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
  let owner=uid,serial=100;const calls=[],urls=[],revoked=[],thumbs=[],navigations=[];
- const view=mountMediaEditor({doc,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
+ const view=mountMediaEditor({doc,initialAssetId,initialAssetRevision,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
  const $=s=>doc.querySelector(s),set=(key,value)=>{$('[name="'+key+'"]').value=value;$('[name="'+key+'"]').dispatchEvent(new window.Event('input',{bubbles:true}));};
  return {doc,window,view,$,calls,urls,revoked,thumbs,navigations,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
 }
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 const leave=f=>{const event=new f.window.Event('beforeunload',{cancelable:true});f.window.dispatchEvent(event);return event;};
 const back=(f,extra={})=>{const event=new f.window.Event('click',{cancelable:true,bubbles:true});Object.assign(event,extra);f.$('#backDashboard').dispatchEvent(event);return event;};
+await test('a gallery link opens the exact second file and lets the customer choose a different file',async()=>{
+ const f=fixture({initialAssetId:files[1].id,initialAssetRevision:'r1'});await tick();
+ assert.equal(f.$('#fileInfo').textContent,files[1].name);
+ assert.equal(f.calls[0].i.asset_id,files[1].id);assert.equal(f.thumbs[0].f.revision,'r1');
+ f.choose(0);await tick();f.$('#refreshFiles').click();await tick();
+ assert.equal(f.$('#fileInfo').textContent,files[0].name);f.view.destroy();
+});
+await test('missing and revised targets open no substitute draft or thumbnail until a file is chosen',async()=>{
+ for(const [asset,revision] of [[id(95),'r1'],[files[1].id,'previous']]){
+  const f=fixture({initialAssetId:asset,initialAssetRevision:revision});await tick();
+  assert.equal(f.calls.length,0);assert.equal(f.thumbs.length,0);assert.equal(f.$('#editor').hidden,true);
+  assert.equal(f.$('#asset').value,'');assert.match(f.$('#status').textContent,/verlinkte Dateiversion/);
+  f.choose(0);await tick();assert.equal(f.calls[0].i.asset_id,files[0].id);f.view.destroy();
+ }
+});
 await test('Dashboard return requires an in-page discard decision and keeping edits never navigates or saves',async()=>{
  const f=fixture();await tick();assert.equal(back(f).defaultPrevented,false);f.set('overlay_text','Keep this edit');
  assert.equal(back(f).defaultPrevented,true);assert.equal(f.$('#discard').hidden,false);assert.match(f.$('#discardMessage').textContent,/Dashboard/);assert.equal(f.$('#confirmDiscard').textContent,'Verwerfen und zurück');

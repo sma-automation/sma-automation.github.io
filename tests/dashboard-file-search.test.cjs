@@ -94,7 +94,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  const html=readFileSync('app/dashboard.html','utf8');
  const source=html.slice(html.indexOf('function attachFileList('),html.indexOf('let pending;'));
  const {document,window}=parseHTML('<html><head></head><body><main><div id="publishingFilesSlot"></div></main></body></html>');
- const files=Array.from({length:24},(_,i)=>({id:'clip-'+i,name:'Küche Mai '+i+'.mp4',media_kind:'video',
+ const files=Array.from({length:24},(_,i)=>({id:'clip-'+i,name:'Küche Mai '+i+'.mp4',revision:'stand:&'+i,media_kind:'video',
   assignments:[{platform:i<12?'youtube':'tiktok',status:'assigned'}]}));
  files.push({id:'other',name:'Sommer.png',media_kind:'image',assignments:[]});
  const calls=[];
@@ -103,11 +103,16 @@ test('gallery receives the global query, resets the portal and opens the first f
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
   dashboardSession:async()=>({user:{id:'owner'}}),supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);
- const gallery=attach(document,document.querySelector('main'));
+ const editorHref='https://sma.test/app/media-editor.html?v=10&kundenmedien=pilot';
+ const gallery=attach(document,document.querySelector('main'),editorHref);
  const portal=document.querySelector('#smaFilePortalFilter'),finder=document.querySelector('#smaFileSearch');
  // LinkeDOM exposes select.value as a getter. Emulate the native select setter.
  Object.defineProperty(portal,'value',{writable:true,value:'all'});
  await new Promise(resolve=>setImmediate(resolve));
+ const edit=document.querySelector('.sma-file-row details a');
+ const target=new URL(edit.getAttribute('href'));assert.equal(target.searchParams.get('kundenmedien'),'pilot');
+ assert.deepEqual(Object.fromEntries(new URLSearchParams(target.hash.slice(1))),{asset:'clip-0',revision:'stand:&0'});
+ assert.equal(edit.target,'_blank');assert.equal(edit.rel,'noopener');
  const next=()=>[...document.querySelectorAll('.sma-file-pages button')].find(b=>b.textContent==='Weiter');
  portal.value='youtube';portal.dispatchEvent(new window.Event('change'));next().click();
  assert.match(document.querySelector('.sma-file-pages').textContent,/Seite 2 von 2/);
