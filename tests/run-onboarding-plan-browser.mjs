@@ -23,7 +23,7 @@ try {
     let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0, paymentCalls=0;
     const order='80000000-0000-4000-8000-000000000001';
     const returnUrl=site+'/app/paketwahl.html?buchung='+order;
-    let paymentState='booked',statusReads=0,closeOnRefresh=false;
+    let paymentState='booked',statusReads=0,closeOnRefresh=false,pausedReads=0;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -35,6 +35,10 @@ try {
         sessionReads++;
         if(paymentState==='active') return route.fulfill({json:{html:'<body data-sma-customer-id="fixture"><p>Mein Kundenbereich</p></body>'}});
         return route.fulfill({status:403,json:{error:'Zugang nicht freigeschaltet oder Anmeldung abgelaufen.'}});
+      }
+      if (req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_paused_booking_v1') {
+        assert.equal(req.postData(),null);pausedReads++;
+        return route.fulfill({body:JSON.stringify(paymentState==='renewal_suspended'?order:null),contentType:'application/json'});
       }
       if (req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_plan_choice_v1') {
         const {p_owner,p_plan,p_expected_plan}=req.postDataJSON();
@@ -81,7 +85,7 @@ try {
     assert.equal(await radios.count(),3);
     assert.equal(await page.locator('input:checked').count(),0);
     assert.equal(await save.isDisabled(),true);
-    assert.equal(sessionReads,1);assert.equal(writes,0);
+    assert.equal(sessionReads,1);assert.equal(writes,0);assert.equal(pausedReads,1);
     const beta=page.getByRole('radio',{name:/Beta 300/});
     if (mobile) {await beta.tap();await save.tap();}
     else {await beta.focus();await beta.press('Space');await beta.press('Tab');await page.keyboard.press('Enter');}
@@ -150,6 +154,22 @@ try {
     paymentState='renewal_suspended';await page.goto(returnUrl);await page.getByText(/Dein Zugang pausiert/).waitFor();
     assert.equal(await book.isHidden(),true);assert.equal(await page.locator('#checkout').isHidden(),true);
     await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).waitFor();
+    const pausedBeforeLogin=pausedReads;
+    await page.evaluate(()=>{sessionStorage.signedOut='1';});
+    await page.goto(site+'/app/index.html');
+    await page.locator('#email').fill('test@example.invalid');await page.locator('#password').fill('SMA-Testpasswort-12345!');
+    await page.getByRole('button',{name:'Anmelden',exact:true}).click();
+    await page.getByText(/Dein Zugang pausiert/).waitFor();
+    assert.equal(page.url(),returnUrl);assert.equal(pausedReads,pausedBeforeLogin+1);
+    assert.equal(await book.isHidden(),true);assert.equal(await page.locator('#checkout').isHidden(),true);
+    await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
+    await page.waitForFunction(()=>!document.querySelector('#retry').disabled);
+    assert.equal(page.url(),returnUrl);
+    paymentState='active';await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
+    await page.frameLocator('#dashboard').getByText('Mein Kundenbereich').waitFor();
+    assert.equal(pausedReads,pausedBeforeLogin+1);
+    assert.deepEqual({bookings,paymentCalls,writes},countsBeforeReturn);
+    console.log((mobile?'Handy':'Desktop')+': Normaler Login führt zur eigenen pausierten Buchung; bestätigte Ersatzzahlung öffnet Dashboard ohne neue Buchung.');
     paymentState='offline';await page.goto(returnUrl);await page.getByText(/konnte gerade nicht geladen werden/).waitFor();
     paymentState='unavailable';await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
     await page.getByText('Diese Buchung ist für dein Konto nicht verfügbar.').waitFor();
