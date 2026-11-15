@@ -163,6 +163,29 @@ Ein aktives Abo bleibt in diesem Fall beim Händler gesondert zu klären.
 Die automatisierten Tests verwenden simulierte Anbieterantworten. Der erste
 Durchlauf mit einer echten Kundenbuchung steht aus.
 
+### Folgezahlung einer automatischen Paketbuchung prüfen
+
+Für eine gemeldete Abbuchung aus einem SMA-Monatsabo kann der Betreiber die
+Zahlungs-ID mit dem vorhandenen Mollie-Lesezugang prüfen:
+
+```sh
+node n8n/sync-onboarding-payment.mjs tr_ID --folgezahlung
+```
+
+Das Programm liest die Einzelzahlung und anschließend ihr Abo über das
+zugehörige Mollie-Konto. Den ausgegebenen `SELECT` im privaten SQL-Editor
+ausführen. `ZUGEORDNET` bestätigt, dass Abo, Paket, Konto und Buchung zu diesem
+Beleg passen. Das Ergebnis zeigt den Zahlungsstatus, Erstell- und Zahlungszeit in
+UTC, erstattete und rückgebuchte Eurobeträge sowie den aktuellen Buchungs- und
+Website-Zugang. Auch eine teilweise Erstattung ist am Betrag erkennbar.
+`NICHT_ZUGEORDNET` lässt alle Ergebnisfelder frei. `PRUEFEN` beim Website-Zugang
+kennzeichnet widersprüchliche Profildaten.
+
+Der Abgleich liest einen einzelnen Beleg. Bei einer fehlgeschlagenen Abbuchung
+auch spätere Zahlungsversuche für denselben Monat prüfen. Der Betreiberabgleich
+verändert weder Zugang noch Abo. Eine automatische Anpassung des Website-Zugangs
+aufgrund von Folgezahlungen steht noch aus.
+
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 
 PR #304 (`46920c3`) ist nach koordinierter Umstellung von Datenbank,

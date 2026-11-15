@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {prepareRenewalCheck} from '../n8n/sync-onboarding-payment.mjs';
 import {checkScheduledSubscription} from './check-onboarding-subscription.mjs';
 import {spawnSync} from 'node:child_process';
 import {readFile, readdir} from 'node:fs/promises';
@@ -281,14 +282,49 @@ try {
   assert.equal((await work('receipt',{receipt:paidAuto,row:{...rowAuto,mollie_subscription_id:'sub_foreign'}})).error,'SUBSCRIPTION_CONFLICT');
   assert.deepEqual(await work('receipt',{receipt:paidAuto,row:rowAuto}),{state:'ACTIVE'});
   assert.equal(await readAsCustomer(second),'active');
-  await db.exec('reset role');await db.exec('begin');
+  await db.exec('reset role');
+  const renewal={id:'tr_cycle',mode:'live',sequenceType:'recurring',customerId:'cst_auto',subscriptionId:'sub_auto',
+    amount:{currency:'EUR',value:'500.00'},createdAt:new Date(Date.now()+3600_000).toISOString(),status:'pending'};
+  const matchingSub={id:'sub_auto',mode:'live',customerId:'cst_auto',interval:'1 month',amount:renewal.amount,
+    metadata:{order:booked.id,kunde_id:beta.n8n_ref,paket:'delta'}};
+  const inspect=(payment=renewal,sub=matchingSub)=>prepareRenewalCheck(payment.id,
+    async path=>path.startsWith('/payments/')?payment:sub).then(sql=>one(sql));
+  await db.exec('begin read only');
+  for(const state of ['open','pending','authorized','failed','expired','canceled','paid']){
+    const paidAt=state==='paid'?renewal.createdAt:null;
+    const result=await inspect({...renewal,status:state,paidAt});
+    assert.deepEqual(result,{zuordnung:'ZUGEORDNET',zahlungsstatus:state,zahlung_erstellt_utc:renewal.createdAt,
+      zahlung_bezahlt_utc:paidAt,erstattet_eur:'0.00',rueckgebucht_eur:'0.00',buchungsstatus:'active',website_zugang:'AKTIV'});
+  }
+  const refunded={...renewal,status:'paid',paidAt:renewal.createdAt,amountRefunded:{value:'2.50',currency:'EUR'},
+    amountChargedBack:{value:'10.00',currency:'EUR'}};
+  const review=await inspect(refunded);
+  assert.deepEqual([review.erstattet_eur,review.rueckgebucht_eur],['2.50','10.00']);
+  assert.deepEqual(await inspect(refunded),review);
+  for(const [p,s] of [
+    [renewal,{...matchingSub,metadata:{...matchingSub.metadata,order:offer.id}}],
+    [renewal,{...matchingSub,metadata:{...matchingSub.metadata,kunde_id:alpha.n8n_ref}}],
+    [{...renewal,id:'tr_auto'},matchingSub],
+    [{...renewal,createdAt:'2020-01-01T00:00:00Z'},matchingSub],
+    [{...renewal,customerId:'cst_else'},{...matchingSub,customerId:'cst_else'}],
+    [{...renewal,subscriptionId:'sub_else'},{...matchingSub,id:'sub_else'}]
+  ]){
+    const invalid=await inspect(p,s);
+    assert.equal(invalid.zuordnung,'NICHT_ZUGEORDNET');
+    assert.ok(Object.entries(invalid).every(([key,v])=>key==='zuordnung'||v===null));
+  }
+  await db.exec('rollback');
+  console.log('Folgezahlungen, Teilrückerstattung, Rückbuchung und fremde Belege im schreibgeschützten Betreiberabgleich geprüft.');
+  await db.exec('begin');
   await db.query("update public.sma_kunden set aktiv=false where user_id=$1",[second]);
+  assert.equal((await inspect()).website_zugang,'PRUEFEN');
   await db.exec('set local role authenticated');await session(second);assert.equal(await status(booked.id),'unavailable');
   await db.exec('rollback');await db.exec('set role service_role');
   assert.deepEqual(await work('release'),{ok:true});assert.equal((await work('lock')).state,'active');
   assert.deepEqual(await work('receipt',{receipt:{...paidAuto,reversed:true}}),{state:'REVERSED'});
   await db.exec('reset role');assert.equal((await profile(second)).aktiv,false);
   assert.equal(await readAsCustomer(second),'reversed');
+  const locked=await inspect(refunded);assert.equal(locked.buchungsstatus,'reversed');assert.equal(locked.website_zugang,'GESPERRT');
   console.log('Abbruch, Ablauf und Fehlschlag geprüft: Alte Angebote bleiben verbraucht, nur eine neue Bestätigung erzeugt den nächsten Auftrag.');
   console.log('Zahlungsrückkehr mit eigenen und fremden Buchungen sowie allen Status in lesenden Transaktionen geprüft.');
   console.log('Automatische Buchung, Einmalaufträge, Wiederholungen, Erstzahlung, Abo, Freischaltung und Rückbuchung in PostgreSQL geprüft.');
