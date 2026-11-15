@@ -10,6 +10,7 @@ const names = {alpha: 'Alpha', beta: 'Beta', delta: 'Delta'};
 const booking = document.querySelector('#booking');
 const book = document.querySelector('#book');
 const checkout = document.querySelector('#checkout');
+const refreshPayment = document.querySelector('#refresh-payment');
 const prices = {alpha:100,beta:300,delta:500};
 let offer = null;
 let owner, saved = null, busy = false, leaving = false;
@@ -40,6 +41,7 @@ function syncSubmit() {
 function displayOffer(value) {
   if (!value?.ok) throw Error('Booking unavailable');
   offer = value.offer;
+  refreshPayment.hidden = true;
   checkout.hidden = true;
   checkout.removeAttribute('href');
   if (!offer) return;
@@ -48,6 +50,7 @@ function displayOffer(value) {
   document.querySelector('#booking-terms').textContent = terms;
   book.hidden = offer.state !== 'offered';
   if (offer.state === 'booked') {
+    refreshPayment.hidden = offer.automated !== true;
     status.textContent = 'Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.';
     if (offer.checkout) {
       const url = new URL(offer.checkout);
@@ -56,11 +59,12 @@ function displayOffer(value) {
       checkout.hidden = false;
     }
   } else if (offer.state === 'paid') {
+    refreshPayment.hidden = offer.automated !== true;
     status.textContent = 'Deine Zahlung ist bestätigt. Der Dashboard-Zugang wird vorbereitet.';
   }
 }
 
-async function request(plan = null, selectedOffer = null) {
+async function request(plan = null, selectedOffer = null, paymentOrder = null) {
   if (leaving || busy) return;
   busy = true;
   offer = null;
@@ -75,7 +79,7 @@ async function request(plan = null, selectedOffer = null) {
     if (!current) return leave('index.html');
     if (owner && current !== owner) return leave('dashboard.html');
     owner = current;
-    let changedOffer = false;
+    let changedOffer = false, paymentWaiting = false;
     if (selectedOffer) {
       const result = await client.rpc('sma_onboarding_booking_v1', {
         p_owner:owner, p_offer:selectedOffer.id, p_plan:selectedOffer.plan, p_terms:selectedOffer.terms
@@ -83,6 +87,14 @@ async function request(plan = null, selectedOffer = null) {
       if (leaving) return;
       if (result.error || (!result.data?.ok && result.data?.code !== 'OFFER_CHANGED')) throw Error('Booking unavailable');
       changedOffer = result.data?.code === 'OFFER_CHANGED';
+      const confirmed = result.data?.offer;
+      if (!changedOffer && confirmed?.automated === true && confirmed.state === 'booked') paymentOrder = confirmed.id;
+    }
+    if (paymentOrder) {
+      const payment = await client.functions.invoke('sma-package-payment',{body:{order:paymentOrder,owner}});
+      if (leaving) return;
+      if (payment.data?.code === 'ACTIVE') return leave('dashboard.html');
+      paymentWaiting = !!payment.error;
     }
     const result = await client.rpc('sma_onboarding_plan_choice_v1', {
       p_owner: owner, p_plan: plan, p_expected_plan: plan ? saved : null
@@ -113,6 +125,7 @@ async function request(plan = null, selectedOffer = null) {
       if (current.error) throw current.error;
       displayOffer(current.data);
     }
+    if (paymentWaiting && offer?.automated) status.textContent = 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.';
     if (changedOffer) status.textContent = 'Dein Zahlungsangebot hat sich geändert. Prüfe den aktuellen Stand.';
   } catch {
     if (leaving) return;
@@ -134,6 +147,9 @@ form.addEventListener('submit', event => {
 });
 book.addEventListener('click', () => {
   if (!booking.hidden && !book.disabled && offer?.state === 'offered') void request(null, offer);
+});
+refreshPayment.addEventListener('click', () => {
+  if (!busy && !booking.hidden && offer?.automated && !refreshPayment.hidden) void request(null, null, offer.id);
 });
 retry.addEventListener('click', () => request());
 document.querySelector('#logout').addEventListener('click', async () => {
