@@ -12,7 +12,14 @@ const fakeClient = `export function createClient(){return {
   const response=await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)});
   return response.ok?{data:await response.json()}:{error:{status:response.status}};
  }},
- rpc: async(name,params) => ({data:await (await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params)})).json()})
+ rpc:(name,params)=>{
+  let signal;
+  return {
+   abortSignal(value){signal=value;return this;},
+   then(resolve,reject){return fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params),signal})
+    .then(response=>response.json()).then(data=>({data})).then(resolve,reject);}
+  };
+ }
 };}`;
 const browser = await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
 try {

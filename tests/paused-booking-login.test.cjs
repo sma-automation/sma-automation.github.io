@@ -82,11 +82,12 @@ async function paymentPage({initial='renewal_suspended',search='?buchung='+order
  };
  const client={auth:{getSession:async()=>({data:{session:account?{user:{id:account}}:null}}),
   onAuthStateChange(){},signOut:async()=>({error:null})},
-  rpc:async(name,args)=>{
+  rpc:(name,args)=>({abortSignal:async signal=>{
+   assert.ok(signal instanceof AbortSignal);
    assert.equal(name,'sma_onboarding_payment_status_v1');assert.equal(args.p_order,order);
    calls.push(name);return {data:state,error:null};
-  }};
- const env={URLSearchParams,location:{search,replace:path=>redirects.push(path)},
+  }})};
+ const env={AbortController,URLSearchParams,location:{search,replace:path=>redirects.push(path)},
   document:{querySelector:node,addEventListener(){},hidden:false},window:{addEventListener(){}},
   navigator:{onLine:true},createClient:()=>client,setTimeout:()=>1,clearTimeout(){}};
  const source=payment.replace(/^import[^\n]*\n/,'');

@@ -19,7 +19,8 @@ function setup({state='renewal_suspended',online=true,hidden=false,valid=true}={
  const client={auth:{
   getSession:async()=>({data:{session:account?{user:{id:account}}:null}}),
   onAuthStateChange:fn=>{authHandler=fn;},signOut:async()=>({error:null})
- },rpc:async(name,args)=>{
+ },rpc:(name,args)=>({abortSignal:async signal=>{
+  assert.ok(signal instanceof AbortSignal);
   assert.equal(name,'sma_onboarding_payment_status_v1');assert.equal(args.p_order,order);
   reads++;active++;maxActive=Math.max(maxActive,active);
   const response={data:reply,error:fail?{message:'fixture outage'}:null};
@@ -27,8 +28,8 @@ function setup({state='renewal_suspended',online=true,hidden=false,valid=true}={
    if(hold){hold=false;await new Promise(resolve=>{held=resolve;});}
    return response;
   }finally{active--;}
- }};
- const env={document,navigator,URLSearchParams,createClient:()=>client,
+ }})};
+ const env={AbortController,document,navigator,URLSearchParams,createClient:()=>client,
   location:{search:'?buchung='+(valid?order:'invalid'),replace:path=>redirects.push(path)},
   window:{addEventListener:(name,fn)=>{events.window[name]=fn;}},
   setTimeout:(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},
@@ -112,7 +113,8 @@ test('rapid clicks and returning while a response is pending never overlap statu
  assert.equal(f.node('#retry').disabled,true);
  await f.retry();await f.retry();assert.equal(f.reads(),2);
  await f.offline();await f.online();await f.event('online');
- assert.equal(f.reads(),2);assert.equal(f.timers.size,0);
+ assert.equal(f.reads(),2);assert.equal(f.timers.size,1);
+ assert.equal([...f.timers.values()][0].delay,15000); // Only the in-flight deadline remains.
  await f.release();assert.equal(f.reads(),3);assert.equal(f.maxActive(),1);
  assert.equal(f.timers.size,1);assert.deepEqual(f.redirects,[]);
 });
@@ -165,10 +167,10 @@ test('desktop and mobile browsers restore automatically and recover after offlin
  const site='https://sma.test',url=site+'/app/paketwahl.html?buchung='+order;
  const fake=`export function createClient(){return {
   auth:{getSession:async()=>({data:{session:{user:{id:'fixture'}}}}),onAuthStateChange(){},signOut:async()=>({})},
-  rpc:async(name,args)=>{
-   const response=await fetch('/fixture/status',{method:'POST',body:JSON.stringify({name,args})});
+  rpc:(name,args)=>({abortSignal:async signal=>{
+   const response=await fetch('/fixture/status',{method:'POST',body:JSON.stringify({name,args}),signal});
    return {data:await response.json(),error:null};
-  }
+  }})
  };}`;
  try{
   for(const mobile of [false,true]){
