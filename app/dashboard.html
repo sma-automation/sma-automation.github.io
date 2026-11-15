@@ -6,6 +6,8 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
+import {customerMediaEndpoint} from './assets/customer-media-routes.mjs?v=1';
+
 import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=2';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
 import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
@@ -19,7 +21,7 @@ import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=12';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
-import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=1';
+import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=2';
 import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=3';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -98,7 +100,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','47');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','48');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -682,8 +684,8 @@ function attachFileList(doc,page){
  async function syncFolder(session){
   let res,body;
   try{
-   res=await fetch('https://johnmusic.app.n8n.cloud/webhook/sma-publication-files-v1',{method:'POST',
-    headers:{Authorization:'Bearer '+session.access_token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(90000)});
+   res=await fetch(customerMediaEndpoint('catalog'),{method:'POST',
+    headers:{Authorization:'Bearer '+session.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(90000)});
    body=await res.json();
   }catch{
    throw Error(interruptedNotice);
@@ -809,6 +811,12 @@ async function dashboardHtml(){
  const owner=session.user.id;
  if(dashboardOwnerId&&dashboardOwnerId!==owner){leaveDashboard();throw Error('Die Anmeldung wurde gewechselt.');}
  dashboardOwnerId=owner;
+ const pilotRequested=new URLSearchParams(location.search).get('kundenmedien')==='pilot';
+ if(pilotRequested){
+  delete document.documentElement.dataset.smaCustomerMedia;
+  const {data,error}=await supabase.rpc('sma_customer_media_pilot_v1',{p_route:'eligible'});
+  if(error||data?.ok!==true)throw Error('Der private Kundenmedientest ist für diese Anmeldung nicht verfügbar.');
+ }
  const unavailable='Das Dashboard ist gerade nicht erreichbar. Bitte versuche es erneut.';
  let response;
  try{
@@ -826,6 +834,7 @@ async function dashboardHtml(){
   if(!signedOut)leaveDashboard();
   throw Error('Die Anmeldung wurde gewechselt.');
  }
+ if(pilotRequested)document.documentElement.dataset.smaCustomerMedia='pilot';
  return result.html;
 }
 // Called only by the same-origin dashboard frame after OAuth returns.
@@ -869,6 +878,7 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
 function leaveDashboard(){
+ delete document.documentElement.dataset.smaCustomerMedia;
  galleryReload.clear();signedOut=true;dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');
 }
 supabase.auth.onAuthStateChange((event,s)=>{
