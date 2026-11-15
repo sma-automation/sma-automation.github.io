@@ -127,6 +127,13 @@ erhielt keine neue Datei. Nach dem Test wurden die ursprünglichen Zeitfelder
 wiederhergestellt und erneut geladen. Im Entwurfsverlauf stehen der Test
 als Version 1 und die Rückstellung als Version 2.
 
+## Vorschau abbrechen und erneut starten (15.11.2026)
+
+**Abbrechen** gibt **Vorschau erzeugen** sofort wieder frei, auch wenn die
+Entwurfsversion noch geprüft wird. Ein neuer Versuch verwendet ein eigenes
+Abbruchsignal. Eine verspätete Antwort oder Fortschrittsmeldung des ersten
+Versuchs kann die neue Vorschau weder ersetzen noch deren Bedienung freigeben.
+
 ## Nächster Schritt
 
 Zusätzliche Musik und die Cover-Zuordnung zur Portalvorbereitung sind implementiert;
