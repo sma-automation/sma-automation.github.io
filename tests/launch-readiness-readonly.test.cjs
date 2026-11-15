@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const source=readFileSync('supabase/sql/launch-readiness-readonly.sql','utf8');
-const noComments=source.replace(/^--.*$/gm,'').trim();
+const noComments=source.replace(/^\s*--.*$/gm,'').trim();
 
 test('SMA launch preflight consists only of one read-only SELECT statement',()=>{
  assert.match(noComments,/^WITH\s+snapshot\s+AS\s*\(/i);
@@ -30,4 +30,13 @@ test('report never upgrades preflight counts into permission to publish or pay',
  assert.match(source,/'requires_personal_approval',true/);
  assert.match(source,/'BLOCKED_NO_EXPLICIT_APPROVAL'/);
  assert.match(source,/verified_at >= now\(\)-interval '15 minutes'/);
+});
+test('gallery counts separate pending work from completed clips and never call a renderer or evidence writer',()=>{
+ for(const field of ['gallery_completed_jobs','gallery_pending_jobs','gallery_pending_due_jobs',
+  'gallery_pending_scheduled_jobs','gallery_pending_unscheduled_jobs','gallery_other_jobs',
+  'gallery_completed_without_record','music_listed_tracks'])assert.ok(source.includes("'"+field+"'"),field);
+ assert.match(noComments,/g\.state='completed' AND NOT EXISTS/);
+ assert.match(noComments,/e\.gallery_job_id=g\.id/);
+ assert.match(noComments,/'version',3/);
+ assert.doesNotMatch(noComments,/\b(?:gallery_background_(?:tick|pick)|gallery_music_(?:request|enqueue)|publication_gallery_technical_register|gallery_worker_snapshot)_v1\s*\(/i);
 });

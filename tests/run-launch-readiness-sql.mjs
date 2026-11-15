@@ -7,6 +7,7 @@ const report = await sql('launch-readiness-readonly.sql');
 const db = new PGlite();
 const blocked = 'BLOCKED_NO_EXPLICIT_APPROVAL';
 const manual = 'MANUAL_PROVIDER_E2E_REVIEW_REQUIRED';
+let galleryChecks = 0;
 
 async function check(total, current, state) {
   const { rows: [{ readiness }] } = await db.query(report);
@@ -15,6 +16,31 @@ async function check(total, current, state) {
   assert.equal(readiness.publishing.state, state);
   assert.equal(readiness.allows_publication, false);
   assert.equal(readiness.initiates_checkout, false);
+}
+
+async function checkGallery(expected) {
+  await db.exec('BEGIN READ ONLY');
+  try {
+    const snapshot = async () => (await db.query(`SELECT
+      (SELECT jsonb_agg(to_jsonb(g) ORDER BY id) FROM sma_private.gallery_music_v1 g) AS jobs,
+      (SELECT jsonb_agg(to_jsonb(e)) FROM sma_private.publication_gallery_technical_v1 e) AS evidence,
+      (SELECT jsonb_agg(to_jsonb(t)) FROM sma_private.music_catalog_v1 t) AS tracks`)).rows;
+    const before = await snapshot();
+    const {rows:[{readiness}]} = await db.query(report);
+    assert.equal(readiness.version,3);
+    const media=readiness.media;
+    for (const [key,value] of Object.entries(expected)) assert.equal(media[key],value,key);
+    assert.equal(media.gallery_music_jobs,media.gallery_completed_jobs+media.gallery_pending_jobs+media.gallery_other_jobs);
+    assert.equal(media.gallery_pending_jobs,media.gallery_pending_due_jobs+media.gallery_pending_scheduled_jobs+media.gallery_pending_unscheduled_jobs);
+    assert.ok(media.gallery_completed_without_record<=media.gallery_completed_jobs);
+    assert.equal(readiness.allows_publication,false);
+    assert.equal(readiness.initiates_checkout,false);
+    assert.equal(readiness.requires_personal_approval,true);
+    assert.equal(readiness.external_e2e_status,'NOT_VERIFIED_BY_THIS_QUERY');
+    assert.doesNotMatch(JSON.stringify(readiness),/60600000|gallery_job_id|next_attempt|access_token|drive_file_id/);
+    assert.deepEqual(await snapshot(),before);
+    galleryChecks++;
+  } finally {await db.exec('ROLLBACK');}
 }
 
 try {
@@ -28,8 +54,9 @@ try {
     );
     CREATE TABLE public.sma_bestellungen (ist_testbestellung boolean);
     CREATE TABLE sma_private.publication_files_v1 (available boolean, verified_at timestamptz);
-    CREATE TABLE sma_private.publication_gallery_technical_v1 ();
-    CREATE TABLE sma_private.gallery_music_v1 ();
+    CREATE TABLE sma_private.publication_gallery_technical_v1 (gallery_job_id uuid);
+    CREATE TABLE sma_private.gallery_music_v1 (id uuid PRIMARY KEY, state text, next_attempt timestamptz);
+    CREATE TABLE sma_private.music_catalog_v1 (listed boolean);
     CREATE TABLE sma_private.customer_websites_v1 (published_at timestamptz);
     CREATE TABLE sma_private.website_provider_connections_v1 ();
   `);
@@ -75,7 +102,47 @@ try {
     await db.exec('ROLLBACK TO SAVEPOINT variant');
   }
   await db.exec('ROLLBACK');
-  console.log('8 launch readiness SQL scenarios passed.');
+
+  // Isolated metadata fixtures only; never render media or call a registration function.
+  await checkGallery({gallery_music_jobs:0,gallery_completed_without_record:0,music_listed_tracks:0});
+  const completed='60600000-0000-4000-8000-000000000001';
+  const pending='60600000-0000-4000-8000-000000000002';
+  await db.exec(`INSERT INTO sma_private.gallery_music_v1 VALUES
+    ('${completed}','completed',NULL),('${pending}','pending',now()-interval '1 hour'),
+    ('60600000-0000-4000-8000-000000000003','pending',now()+interval '1 hour'),
+    ('60600000-0000-4000-8000-000000000004','pending',now()+interval '2 hours');
+    INSERT INTO sma_private.music_catalog_v1 VALUES(false);`);
+  await checkGallery({gallery_music_jobs:4,gallery_completed_jobs:1,gallery_pending_jobs:3,
+    gallery_pending_due_jobs:1,gallery_pending_scheduled_jobs:2,gallery_pending_unscheduled_jobs:0,
+    gallery_other_jobs:0,gallery_completed_without_record:1,gallery_technical_records:0,music_listed_tracks:0});
+  await db.exec("INSERT INTO sma_private.publication_gallery_technical_v1 VALUES('60600000-0000-4000-8000-000000000099')");
+  await checkGallery({gallery_technical_records:1,gallery_completed_without_record:1});
+  await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 VALUES($1)',[completed]);
+  await checkGallery({gallery_technical_records:2,gallery_completed_without_record:0,gallery_completed_jobs:1});
+  // Duplicate synthetic evidence cannot multiply the completed-job count.
+  await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 VALUES($1)',[completed]);
+  await checkGallery({gallery_technical_records:3,gallery_completed_without_record:0,gallery_completed_jobs:1});
+  await db.query("UPDATE sma_private.gallery_music_v1 SET state='pending',next_attempt=now()-interval '1 hour' WHERE id=$1",[completed]);
+  await checkGallery({gallery_completed_jobs:0,gallery_pending_jobs:4,gallery_pending_due_jobs:2,gallery_completed_without_record:0});
+  await db.query("UPDATE sma_private.gallery_music_v1 SET state='completed',next_attempt=NULL WHERE id=$1",[completed]);
+  await db.query('UPDATE sma_private.gallery_music_v1 SET next_attempt=NULL WHERE id=$1',[pending]);
+  await checkGallery({gallery_pending_jobs:3,gallery_pending_due_jobs:0,gallery_pending_scheduled_jobs:2,gallery_pending_unscheduled_jobs:1});
+  await db.query("UPDATE sma_private.gallery_music_v1 SET state='check_upload' WHERE id=$1",[pending]);
+  await checkGallery({gallery_pending_jobs:2,gallery_other_jobs:1,gallery_pending_unscheduled_jobs:0});
+  await db.query('UPDATE sma_private.gallery_music_v1 SET state=NULL WHERE id=$1',[pending]);
+  await checkGallery({gallery_pending_jobs:2,gallery_other_jobs:1});
+  await db.exec('UPDATE sma_private.music_catalog_v1 SET listed=true');
+  await checkGallery({music_listed_tracks:1,gallery_completed_without_record:0});
+  await db.exec('INSERT INTO sma_private.music_catalog_v1 VALUES(false),(NULL)');
+  await checkGallery({music_listed_tracks:1});
+  await db.query('DELETE FROM sma_private.gallery_music_v1 WHERE id=$1',[completed]);
+  await checkGallery({gallery_music_jobs:3,gallery_completed_jobs:0,gallery_completed_without_record:0,gallery_technical_records:3});
+  for(const role of ['anon','authenticated']){
+    await db.exec('BEGIN READ ONLY; SET LOCAL ROLE '+role);
+    try{await assert.rejects(db.query(report),/permission denied/);}
+    finally{await db.exec('ROLLBACK');}
+  }
+  console.log(`8 publication-permission and ${galleryChecks} read-only gallery/catalog SQL scenarios passed; browser roles denied.`);
 } finally {
   await db.close();
 }
