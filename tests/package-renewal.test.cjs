@@ -42,3 +42,24 @@ test('Fehlende oder widersprüchliche Providerseiten ergeben keine Zugangsentsch
     await assert.rejects(renewalDecision({order,sub,today:'2028-02-01',event:fee.id,readPage}));
   }
 });
+
+test('Ohne Rückruf decken Erstmonat und spätere bezahlte Wiederholung bis zum jeweiligen Endtag',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  const run=(today,payments,status='canceled')=>assessRenewal({order,sub:{...sub,status},today,event:null,
+    readPage:async()=>({payments,next:null})});
+  assert.deepEqual(await run('2028-01-30',[]),{decision:'WAIT',checkOn:'2028-01-31'});
+  assert.deepEqual(await run('2028-01-31',[]),{decision:'SUSPEND',checkOn:'2028-02-29'});
+  const retry=bill('tr_paidretry','2028-02-03');
+  assert.deepEqual(await run('2028-02-29',[retry]),{decision:'ACTIVE',checkOn:'2028-03-03'});
+  assert.deepEqual(await run('2028-03-03',[retry],'completed'),{decision:'SUSPEND',checkOn:'2028-04-03'});
+});
+test('Fehlende Meldung allein sperrt weder aktive Abos noch offene oder strittige Zahlungen',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  const run=(status,payments)=>assessRenewal({order,sub:{...sub,status},today:'2028-02-01',event:null,
+    readPage:async()=>({payments,next:null})});
+  assert.deepEqual(await run('active',[]),{decision:'WAIT',checkOn:null});
+  assert.deepEqual(await run('suspended',[]),{decision:'SUSPEND',checkOn:null});
+  assert.deepEqual(await run('canceled',[bill('tr_open','2028-01-31','open')]),{decision:'WAIT',checkOn:null});
+  const partial={...bill('tr_partial','2028-01-31'),amountRefunded:{currency:'EUR',value:'1.00'}};
+  assert.deepEqual(await run('completed',[partial]),{decision:'REVIEW',checkOn:null});
+});

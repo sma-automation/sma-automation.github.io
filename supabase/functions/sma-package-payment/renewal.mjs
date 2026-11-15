@@ -20,11 +20,11 @@ function cents(money){
   valid(money?.currency==='EUR' && typeof money.value==='string' && /^\d{1,7}\.\d{2}$/.test(money.value));
   return Number(money.value.replace('.',''));
 }
-export async function renewalDecision({order,sub,event,today,readPage}){
+export async function assessRenewal({order,sub,event,today,readPage}){
   const anchor=sub.startDate;
   valid(/^\d{4}-\d\d-\d\d$/.test(anchor)&&monthDate(anchor,0)===anchor);
   const [start]=period(anchor,today);
-  let cursor=null,found=false,covered=false,pending=false,failed=false,review=false;
+  let cursor=null,found=false,coveredUntil=null,pending=false,failed=false,review=false;
   const seen=new Set(),cursors=new Set();
   do{
     const page=await readPage(cursor);
@@ -46,7 +46,10 @@ export async function renewalDecision({order,sub,event,today,readPage}){
         if(today>=end && today>=retryEnd)continue;
         if(chargedBack>0 || refunded>=total)failed=true;
         else if(refunded>0)review=true;
-        else covered=true;
+        else {
+          const until=end>retryEnd?end:retryEnd;
+          if(!coveredUntil||until>coveredUntil)coveredUntil=until;
+        }
       }else if(cycle===start){
         if(['open','pending','authorized'].includes(p.status))pending=true;else failed=true;
       }
@@ -55,9 +58,16 @@ export async function renewalDecision({order,sub,event,today,readPage}){
     if(cursor){valid(!cursors.has(cursor)&&cursors.size<9);cursors.add(cursor);}
   }while(cursor);
   valid(!event||found);
-  if(today<anchor)return 'WAIT';
-  if(covered)return 'ACTIVE';
-  if(review)return 'REVIEW';
-  if(pending||!failed)return 'WAIT';
-  return 'SUSPEND';
+  if(today<anchor)return {decision:'WAIT',checkOn:anchor};
+  if(coveredUntil)return {decision:'ACTIVE',checkOn:coveredUntil};
+  if(review)return {decision:'REVIEW',checkOn:null};
+  const ended=['canceled','completed'].includes(sub.status);
+  const billingStopped=ended||sub.status==='suspended';
+  if(pending||(!failed&&!billingStopped))return {decision:'WAIT',checkOn:null};
+  return {decision:'SUSPEND',checkOn:ended?monthDate(today,1):null};
+}
+
+// Preserve the decision-only interface for callers that do not manage a schedule.
+export async function renewalDecision(input){
+  return (await assessRenewal(input)).decision;
 }

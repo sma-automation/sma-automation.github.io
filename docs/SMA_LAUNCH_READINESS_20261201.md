@@ -201,10 +201,27 @@ Zuerst sperrt SMA die Website, dann die zugehörige n8n-Zeile. Bei einer
 bestätigten Ersatzzahlung öffnet SMA ausschließlich eine durch diesen Abgleich
 gesetzte Sperre. Erst nach Rücklesen der n8n-Zeile öffnet sich die Website.
 
-Der Abgleich läuft bei einem Mollie-Zahlungsrückruf. Bleibt ein Rückruf
-vollständig aus, etwa nach einer Kündigung ohne weitere Abbuchung, gibt es
-bislang keinen zeitgesteuerten Abgleich. Demo- und betreute Pilotkonten
-verwenden ihre bisherigen Zugangswege.
+Mollie-Rückrufe lösen den Abgleich sofort aus. Zusätzlich sucht der private
+Datenbankjob `sma-package-renewal-due-v1` alle fünf Minuten nach fälligen
+automatischen Buchungen mit bereits zugeordneter Erstzahlung und Abo-ID. Pro
+Lauf verarbeitet er bis zu zehn Buchungen. Bei leerer Warteschlange gibt es
+keinen Aufruf der Zahlungsfunktion, von n8n oder von Mollie. Jeder fällige
+Auftrag erhält ein zwei Minuten gültiges Einmalticket für die Zahlungsfunktion
+desselben Supabase-Projekts. Der Zeitplan kann ausschließlich bestehende
+Zahlungen und Abos abgleichen.
+
+Bei bestätigter Deckung ist der nächste planmäßige Abruf am ersten nicht mehr
+gedeckten Tag (UTC) fällig. Eine Kündigung oder ein abgeschlossenes Abo lässt
+bezahlte Zeit bestehen. Nach ihrem Ablauf pausiert der Zugang, wenn weder
+eine deckende Zahlung noch ein offener Versuch oder eine Teilrückerstattung
+vorliegt. Für ein wegen ungültigen Mandats ausgesetztes Abo gelten dieselben
+Deckungsregeln mit täglicher Nachprüfung. Ein aktives Abo ohne eindeutigen Zahlungsbeleg und Fälle zur
+Betreiberprüfung werden nach einem Tag erneut geprüft. Bereits pausierte,
+beendete Abos werden nach einem Monat noch einmal geprüft. Providerfehler
+lösen Wiederholungen nach 15 Minuten, einer Stunde und danach alle sechs
+Stunden aus. Eine bestätigte Rückbuchung der Erstzahlung beendet den
+Zeitplan nach Prüfung der Sperre. Demo- und betreute Pilotkonten verwenden
+ihre bisherigen Zugangswege.
 
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 

@@ -8,7 +8,7 @@ async function fixture({time=Date.now(),issued={},reported={}}={}){
  const p={id:'tr_first',mode:'live',status:'open',sequenceType:'first',customerId:'cst_one',amount:{value:'300.00',currency:'EUR'},metadata:{order:id,sma_onboarding_ref:ref,paket:'beta'},_links:{checkout:{href:'https://www.mollie.com/checkout/test'}}};
  const counts={};const fail={};const subscriptions=new Map();
  const handler=createPaymentHandler({
-  now:()=>time,newId:randomUUID,signature:async()=>'fixture-proof',callback:'https://fixture.invalid/pay',
+  schedule:{record:async()=>true},now:()=>time,newId:randomUUID,signature:async()=>'fixture-proof',callback:'https://fixture.invalid/pay',
   authorize:async(auth,who,order)=>auth==='Bearer session'&&who===owner&&order===id,
   worker:async(order,lease,act,v)=>{
    if(act==='lock'){if(o.lease)return {error:'BUSY'};o.lease=lease;}
