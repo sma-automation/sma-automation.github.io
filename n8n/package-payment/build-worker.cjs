@@ -2,7 +2,7 @@ const {randomUUID} = require('node:crypto');
 const {readFileSync,writeFileSync} = require('node:fs');
 
 // Take credential references and the table reference from the installed customer assistant.
-function build(source){
+function build(source,{renewalOnly=false}={}){
   const get=name=>{
     const n=source.nodes.find(n=>n.name===name);
     if(!n)throw Error('Quellknoten fehlt: '+name);
@@ -75,6 +75,51 @@ return [{json:{ok:true,value:vals}}];`},1330,0);
       n=node('Kundenzeile '+op,'dataTable',1.1,params,1060,(i-4)*165,{alwaysOutputData:true});
     }
     edge(split,n,i);edge(n,short);
+  }
+  const originalCount=nodes.length;
+  const start=node('Folgeabgleich','webhook',2.1,{httpMethod:'POST',path:'sma-paket-folge-dienst-v1',responseMode:'responseNode',options:{}},0,1400,{webhookId:randomUUID()});
+  const validate=node('Folgeticket prüfen','code',2,getLocal(check).parameters,220,1400);
+  const load=node('Folgeauftrag abrufen','httpRequest',4.5,getLocal(claim).parameters,440,1400,{credentials:database});
+  const choices=structuredClone(getLocal(split).parameters);
+  choices.rules.values=choices.rules.values.slice(0,2);
+  ['renewals','restore'].forEach((op,i)=>{
+    const rule=choices.rules.values[i];rule.outputKey=op;rule.conditions.conditions[0].rightValue=op;
+  });
+  const route=node('Folgeauftrag auswählen','switch',3.4,choices,660,1400);
+  const url="={{ 'https://api.mollie.com/v2/customers/'+encodeURIComponent($json.data.customer)+'/subscriptions/'+encodeURIComponent($json.data.subscription)+'/payments?limit=50'+($json.data.cursor?'&from='+encodeURIComponent($json.data.cursor):'') }}";
+  const list=node('Mollie Abozahlungen lesen','httpRequest',4.5,{...getLocal('Mollie subscription').parameters,url},900,1270,{credentials:merchant});
+  const params=structuredClone(getLocal('Kundenzeile disable').parameters);
+  for(const f of params.filters.conditions)if(['zugang_aktiv','zahlung_bestaetigt'].includes(f.keyName))f.condition='isFalse';
+  params.filters.conditions.push({keyName:'zugangs_token',condition:'isNotEmpty'});
+  params.columns.value={zugang_aktiv:true,zahlung_bestaetigt:true};
+  const restore=node('Bestehenden Zugang fortsetzen','dataTable',1.1,params,900,1450,{alwaysOutputData:true});
+  const small=node('Folgebelege begrenzen','code',2,{jsCode:`const r=$input.first().json;
+const job=$('Folgeauftrag abrufen').first().json;
+if(job.op==='restore')return [{json:{ok:true,value:{}}}];
+const items=r._embedded?.payments;
+if(!Array.isArray(items)||items.length!==r.count||items.length>50||!r._links)return [{json:{ok:false}}];
+let next=null;
+if(r._links.next!=null){
+ const href=r._links.next.href;
+ const prefix='https://api.mollie.com/v2/customers/'+job.data.customer+'/subscriptions/'+job.data.subscription+'/payments?';
+ if(typeof href!=='string'||!href.startsWith(prefix))return [{json:{ok:false}}];
+ next=href.slice(prefix.length).split('&').find(v=>v.startsWith('from='))?.slice(5);
+ if(!next||!/^tr_[A-Za-z0-9]{1,64}$/.test(next))return [{json:{ok:false}}];
+}
+const payments=items.map(item=>{
+ const out={};for(const k of ['id','mode','customerId','subscriptionId','sequenceType','amount','status','createdAt','paidAt','amountRefunded','amountChargedBack'])if(k in item)out[k]=item[k];
+ if(item.metadata && typeof item.metadata==='object'){out.metadata={};for(const k of ['order','kunde_id','paket'])if(k in item.metadata)out.metadata[k]=item.metadata[k];}
+ return out;
+});
+return [{json:{ok:true,value:{payments,next}}}];`},1140,1320);
+  const invalid=node('Folgeauftrag unbekannt','code',2,getLocal(fail).parameters,900,1620);
+  const reply=node('Folgeabgleich antworten','respondToWebhook',1.5,getLocal(answer).parameters,1380,1400);
+  edge(start,validate);edge(validate,load);edge(load,route);edge(route,list);edge(route,restore,1);edge(route,invalid,2);
+  edge(list,small);edge(restore,small);edge(small,reply);edge(invalid,reply);
+  function getLocal(name){return nodes.find(n=>n.name===name);}
+  if(renewalOnly){
+    const added=nodes.slice(originalCount);
+    return {nodes:added,connections:Object.fromEntries(added.filter(n=>connections[n.name]).map(n=>[n.name,connections[n.name]]))};
   }
   return {name:'SMA – Paketbuchung – Zahlungsdienst V1',nodes,connections,settings:{executionOrder:'v1',saveDataSuccessExecution:'none',saveDataErrorExecution:'none',saveManualExecutions:false,saveExecutionProgress:false,executionTimeout:90,availableInMCP:false,callerPolicy:'workflowsFromSameOwner'}};
 }

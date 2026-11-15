@@ -1,3 +1,4 @@
+import {renewalDecision} from './renewal.mjs';
 const prices={alpha:'100.00',beta:'300.00',delta:'500.00'};
 const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 const pid=/^tr_[A-Za-z0-9]{1,64}$/, cid=/^cst_[A-Za-z0-9]{1,64}$/, sid=/^sub_[A-Za-z0-9]{1,64}$/;
@@ -44,7 +45,7 @@ function matchingSub(sub,o){
     sub.amount?.value===prices[o.plan] && sub.amount?.currency==='EUR' && sub.interval==='1 month';
 }
 
-export function createPaymentHandler({authorize,worker,bridge,signature,callback,now=Date.now,newId=()=>crypto.randomUUID()}){
+export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRenewal,signature,callback,now=Date.now,newId=()=>crypto.randomUUID()}){
   const response=(status,code)=>new Response(JSON.stringify({code}),{status,headers});
   return async request=>{
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
@@ -52,9 +53,11 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
     const url=new URL(request.url);let id,lease,locked=false;
     try{
       let event=null;
+      const cycle=url.searchParams.get('cycle')==='1';
+      if(cycle&&!url.searchParams.has('order'))return response(403,'DENIED');
       if(url.searchParams.has('order')){
         id=url.searchParams.get('order');
-        if(!uuid.test(id)||url.searchParams.get('proof')!==await signature(id))return response(403,'DENIED');
+        if(!uuid.test(id)||url.searchParams.get('proof')!==await signature(cycle?'renewal/'+id:id))return response(403,'DENIED');
         if(!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded'))return response(400,'INVALID');
         const body=await request.text();if(body.length>150)return response(400,'INVALID');
         event=new URLSearchParams(body).get('id');if(!pid.test(event))return response(400,'INVALID');
@@ -71,7 +74,8 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
       let o=await write('lock');locked=true;
       requireValue(o.id===id&&Object.hasOwn(prices,o.plan)&&o.automated===true);
       if(o.state==='closed')return response(200,'CLOSED');
-      if(event && o.payment_id && event!==o.payment_id)return response(409,'MISMATCH');
+      if(cycle && (!o.payment_id||!o.subscription_id))return response(503,'RETRY');
+      if(!cycle && event && o.payment_id && event!==o.payment_id)return response(409,'MISMATCH');
       if(event && !o.merchant_customer)return response(503,'RETRY');
       const account=()=>bridge('account',{row:o.n8n_row_id,ref:o.n8n_ref,email:o.email});
       if(!o.payment_id&&!event){
@@ -89,7 +93,7 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
       const hook=new URL(callback);hook.searchParams.set('order',id);hook.searchParams.set('proof',await signature(id));
       let p;
       if(event||o.payment_id){
-        const requested=event||o.payment_id;
+        const requested=cycle?o.payment_id:(event||o.payment_id);
         p=await bridge('payment',{payment:requested});requireValue(p.id===requested);
       }else{
         eligibleTime(o.first_started,now);
@@ -112,7 +116,39 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
         requireValue(sameAccount(after,o)&&after.zugang_aktiv===false&&after.zahlung_bestaetigt===false);
         return response(200,'REVERSED');
       }
-      if(['BOOKED','ACTIVE','CLOSED'].includes(state))return response(200,state);
+      if(state==='BOOKED'||state==='CLOSED'||(state==='ACTIVE'&&!cycle))return response(200,state);
+      const today=new Date(now()).toISOString().slice(0,10);
+      const reconcile=async(sub,notification)=>{
+        const call=async(action,data)=>{
+          const result=await renewal(id,lease,action,data);requireValue(result && !result.error);return result;
+        };
+        const decision=await renewalDecision({order:o,sub,event:notification,today,readPage:async cursor=>{
+          const {ticket}=await call('renewals',{cursor});requireValue(uuid.test(ticket));return consumeRenewal(ticket);
+        }});
+        if(state!=='ACTIVE')return decision;
+        if(['WAIT','REVIEW'].includes(decision)&&!o.renewal_suspended)return decision;
+        const row=await account();
+        const action=decision==='ACTIVE'?'restore':'suspend';
+        let result=await call(action,{row});
+        if(result.state==='REVIEW'||result.state==='ACTIVE')return result.state;
+        if(result.state==='RESTORE'){
+          requireValue(uuid.test(result.ticket));await consumeRenewal(result.ticket);
+          const after=await account();requireValue(activated(after,o));
+          result=await call('restore',{row:after});requireValue(result.state==='ACTIVE');return 'ACTIVE';
+        }
+        requireValue(result.state==='SUSPEND');
+        if(activated(row,o))await bridge('disable',{row:o.n8n_row_id,ref:o.n8n_ref,email:o.email,customer:o.merchant_customer,subscription:o.subscription_id,plan:o.plan});
+        const after=await account();
+        requireValue(sameAccount(after,o)&&after.paket===o.plan&&after.mollie_subscription_id===o.subscription_id&&
+          after.mollie_customer_id===o.merchant_customer&&after.zugang_aktiv===false&&after.zahlung_bestaetigt===false);
+        return decision==='REVIEW'?'REVIEW':'SUSPENDED';
+      };
+      if(cycle && state==='ACTIVE'){
+        requireValue(receipt.status==='paid'&&!receipt.reversed&&typeof receipt.paid_at==='string');
+        const sub=await bridge('subscription',{customer:o.merchant_customer,subscription:o.subscription_id});
+        requireValue(matchingSub(sub,o)&&sub.id===o.subscription_id&&sub.startDate===nextMonth(receipt.paid_at));
+        return response(200,await reconcile(sub,event));
+      }
       requireValue(state==='PAID' && receipt.status==='paid' && !receipt.reversed && typeof receipt.paid_at==='string');
       const startDate=nextMonth(receipt.paid_at);
       let row=await account();
@@ -121,18 +157,22 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
         requireValue(startDate>new Date(now()).toISOString().slice(0,10));
         o=await write('begin_subscription');
         eligibleTime(o.sub_started,now);
+        const renewalHook=new URL(callback);
+        renewalHook.searchParams.set('order',id);renewalHook.searchParams.set('cycle','1');
+        renewalHook.searchParams.set('proof',await signature('renewal/'+id));
         const created=await bridge('subscribe',{order:id,customer:o.merchant_customer,body:{amount,interval:'1 month',startDate,
           description:'SMA '+o.plan.toUpperCase()+' – Monatsabo',metadata:{order:id,kunde_id:o.n8n_ref,paket:o.plan},
-          webhookUrl:'https://johnmusic.app.n8n.cloud/webhook/sma-mollie-zahlung-status'}});
+          webhookUrl:renewalHook.href}});
         requireValue(matchingSub(created,o));
         o=await write('subscription',{id:created.id});
       }
       // A replayed creation response can be cached. Verify the stored subscription itself.
       const sub=await bridge('subscription',{customer:o.merchant_customer,subscription:o.subscription_id});
       requireValue(matchingSub(sub,o) && sub.id===o.subscription_id && sub.startDate===startDate);
-      const firstMonthPaid=startDate>new Date(now()).toISOString().slice(0,10);
+      const firstMonthPaid=startDate>today;
       const scheduled=sub.status==='pending' && sub.nextPaymentDate===startDate;
-      if(!firstMonthPaid || (sub.status!=='active' && !scheduled)){
+      if(firstMonthPaid && cycle)await reconcile(sub,event);
+      if(firstMonthPaid ? (sub.status!=='active' && !scheduled) : (await reconcile(sub,cycle?event:null)!=='ACTIVE')){
         // Let Mollie retry while an authenticated customer sees their confirmed payment.
         return event ? response(503,'RETRY') : response(200,'PAID');
       }

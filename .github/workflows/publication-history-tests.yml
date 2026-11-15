@@ -11,6 +11,7 @@ on:
       - supabase/migrations/*_onboarding_payment_automation_v1.sql
       - supabase/migrations/*_onboarding_payment_status_v1.sql
       - supabase/migrations/*_onboarding_booking_retry_v1.sql
+      - supabase/migrations/*_onboarding_subscription_renewal_v1.sql
       - supabase/functions/sma-package-payment/**
       - n8n/package-payment/**
       - n8n/sync-onboarding-payment.mjs

@@ -147,6 +147,9 @@ try {
     paymentState='closed';await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
     await page.getByText('Diese Zahlung wurde nicht abgeschlossen.').waitFor();
     assert.equal(await page.getByRole('link',{name:'Zur Paketwahl'}).getAttribute('href'),'paketwahl.html');
+    paymentState='renewal_suspended';await page.goto(returnUrl);await page.getByText(/Dein Zugang pausiert/).waitFor();
+    assert.equal(await book.isHidden(),true);assert.equal(await page.locator('#checkout').isHidden(),true);
+    await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).waitFor();
     paymentState='offline';await page.goto(returnUrl);await page.getByText(/konnte gerade nicht geladen werden/).waitFor();
     paymentState='unavailable';await page.getByRole('button',{name:'Zahlungsstand erneut prüfen'}).click();
     await page.getByText('Diese Buchung ist für dein Konto nicht verfügbar.').waitFor();

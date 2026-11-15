@@ -42,7 +42,7 @@ async function check() {
     if (error) throw error;
     if (data === 'active') return leave('dashboard.html');
     pending = data === 'booked' || data === 'paid';
-    retry.hidden = !pending;
+    retry.hidden = !pending && data !== 'renewal_suspended';
     navigation.href = 'dashboard.html';
     navigation.textContent = 'Dashboard-Zugang prüfen';
     if (data === 'booked') {
@@ -57,6 +57,8 @@ async function check() {
       navigation.href = 'paketwahl.html';
       navigation.textContent = 'Zur Paketwahl';
       status.textContent = 'Diese Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du dein Paket erneut buchen.';
+    } else if (data === 'renewal_suspended') {
+      status.textContent = 'Dein Zugang pausiert. Für den aktuellen Abrechnungszeitraum fehlt eine bestätigte Folgezahlung. Sobald Mollie die Zahlung bestätigt, prüft SMA den Zugang erneut.';
     } else if (data === 'reversed') status.textContent = 'Die Zahlung wurde erstattet oder zurückgebucht. Der Zugang aus dieser Buchung ist gesperrt.';
     else status.textContent = 'Diese Buchung ist für dein Konto nicht verfügbar.';
     if (pending && attempt >= delays.length) status.textContent += ' Du kannst den Stand erneut prüfen.';

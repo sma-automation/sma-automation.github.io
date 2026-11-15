@@ -119,7 +119,7 @@ bleibt das Paket bis zur Klärung der Zahlung festgelegt.
 5. Bei abgelaufener, fehlgeschlagener oder stornierter Zahlung sowie einer
    Rückerstattung oder Rückbuchung die jeweilige Erstzahlung frisch abrufen
    und den SQL-Abgleich ausführen. Eine Rückbuchung schließt den zugehörigen
-   Website-Zugang. Die Folgeabrechnung verbleibt im bestehenden n8n-Ablauf.
+   Website-Zugang. Für betreute Pilotbuchungen verbleibt die Folgeabrechnung im bisherigen n8n-Ablauf.
 
 ### Automatische Erstzahlung für zugeordnete Neukonten
 
@@ -150,8 +150,7 @@ ausstehendes Abo den vereinbarten Starttag als nächsten Zahlungstermin meldet.
 Zuletzt liest SMA die aktualisierte n8n-Kundenzeile, bevor es den Zugang öffnet.
 Bei unklarem Termin kann der Dienst dieselbe Abo-ID später erneut lesen.
 Ist der bezahlte erste Monat inzwischen abgelaufen und der Zugang noch gesperrt,
-muss die Folgezahlung geprüft werden. Der bisherige n8n-Zahlungsworkflow
-empfängt die Folgezahlungen.
+prüft SMA eine bezahlte Folgeperiode vor der ersten Freischaltung.
 
 Die Einstellung `sma_private.onboarding_payment_settings_v1.enabled` steuert neue
 automatische Angebote. Bestehende Buchungen lassen sich weiter abgleichen. Nach
@@ -183,8 +182,29 @@ kennzeichnet widersprüchliche Profildaten.
 
 Der Abgleich liest einen einzelnen Beleg. Bei einer fehlgeschlagenen Abbuchung
 auch spätere Zahlungsversuche für denselben Monat prüfen. Der Betreiberabgleich
-verändert weder Zugang noch Abo. Eine automatische Anpassung des Website-Zugangs
-aufgrund von Folgezahlungen steht noch aus.
+verändert weder Zugang noch Abo.
+
+Neue automatische Buchungen erhalten einen eigenen signierten Rückruf für
+Folgezahlungen. SMA liest die Erstzahlung, das zugeordnete Monatsabo und alle
+Seiten seiner Abbuchungen beim Händler. Vor einer Änderung muss die gemeldete
+Zahlungs-ID in diesem Abo vorhanden sein. Der bestehende private Zahlungsdienst
+verwendet hierfür den zusätzlichen Einstieg `sma-paket-folge-dienst-v1`.
+
+Abrechnungsperioden beginnen am Starttag des Abos, in kurzen Monaten am
+Monatsende (UTC). Ein erfolgreicher späterer Abbuchungsversuch deckt mindestens
+bis zum entsprechenden Tag des Folgemonats ab. Eine bestätigte volle Zahlung
+deckt die laufende Periode auch bei einer älteren Fehlermeldung. Ein laufender
+Versuch lässt den bisherigen Zugang bestehen. Ohne deckende Zahlung führen ein
+endgültiger Fehlschlag, eine vollständige Erstattung oder eine Rückbuchung der
+aktuellen Abbuchung zur Pause. Eine Teilerstattung bleibt zur Betreiberprüfung.
+Zuerst sperrt SMA die Website, dann die zugehörige n8n-Zeile. Bei einer
+bestätigten Ersatzzahlung öffnet SMA ausschließlich eine durch diesen Abgleich
+gesetzte Sperre. Erst nach Rücklesen der n8n-Zeile öffnet sich die Website.
+
+Der Abgleich läuft bei einem Mollie-Zahlungsrückruf. Bleibt ein Rückruf
+vollständig aus, etwa nach einer Kündigung ohne weitere Abbuchung, gibt es
+bislang keinen zeitgesteuerten Abgleich. Demo- und betreute Pilotkonten
+verwenden ihre bisherigen Zugangswege.
 
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 
