@@ -43,12 +43,17 @@ async function check() {
     if (data === 'active') return leave('dashboard.html');
     pending = data === 'booked' || data === 'paid';
     retry.hidden = !pending;
-    if (data === 'booked') status.textContent = 'Wir warten auf die Zahlungsbestätigung von Mollie.';
-    else if (data === 'paid') status.textContent = 'Deine Zahlung ist bestätigt. Dein Dashboard wird freigeschaltet.';
+    navigation.href = 'dashboard.html';
+    navigation.textContent = 'Dashboard-Zugang prüfen';
+    if (data === 'booked') {
+      navigation.href = 'paketwahl.html';
+      navigation.textContent = 'Zur offenen Buchung';
+      status.textContent = 'Wir warten auf die Zahlungsbestätigung von Mollie.';
+    } else if (data === 'paid') status.textContent = 'Deine Zahlung ist bestätigt. Dein Dashboard wird freigeschaltet.';
     else if (data === 'closed') {
-      status.textContent = 'Diese Zahlung wurde nicht abgeschlossen.';
       navigation.href = 'paketwahl.html';
       navigation.textContent = 'Zur Paketwahl';
+      status.textContent = 'Diese Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du dein Paket erneut buchen.';
     } else if (data === 'reversed') status.textContent = 'Die Zahlung wurde erstattet oder zurückgebucht. Der Zugang aus dieser Buchung ist gesperrt.';
     else status.textContent = 'Diese Buchung ist für dein Konto nicht verfügbar.';
     if (pending && attempt >= delays.length) status.textContent += ' Du kannst den Stand erneut prüfen.';

@@ -15,11 +15,12 @@ async function fixture(){
    else assert.equal(lease,o.lease);
    if(act==='release')o.lease=null;
    if(act==='customer')o.merchant_customer=v.id;
-   if(act==='payment')o.payment_id=v.id;
+   if(act==='payment'){o.payment_id=v.id;o.checkout=v.checkout;o.expires=v.expires;}
    if(act==='begin_subscription')o.sub_started??=start;
    if(act==='subscription')o.subscription_id=v.id;
    if(act==='receipt'){
     if(v.receipt.reversed)state='reversed';
+    else if(state==='booked'&&['failed','expired','canceled'].includes(v.receipt.status))state='closed';
     else if(state!=='reversed'&&v.receipt.status==='paid')state=v.row||state==='active'?'active':'paid';
     return {state:state.toUpperCase()};
    }
@@ -65,4 +66,19 @@ test('Testmodus, falsches Paket, unbekannter Betrag und abgelaufene Wiederholung
  }
  const x=await fixture();x.o.first_started='2020-01-01T00:00:00Z';assert.equal((await x.go()).status,503);
  assert.equal(x.counts.first,undefined);assert.equal(x.counts.customer,undefined);
+});
+
+test('Laufende Zahlungen verlieren den Checkout-Link, endgültig geschlossene Aufträge bleiben geschlossen',async()=>{
+ for(const terminal of ['failed','expired','canceled']){
+  const x=await fixture();
+  await x.go();assert.equal(x.o.checkout,x.p._links.checkout.href);
+  for(const status of ['pending','authorized']){
+   x.p.status=status;assert.equal((await (await x.event()).json()).code,'BOOKED');
+   assert.equal(x.o.checkout,null);assert.equal(x.o.expires,null);
+  }
+  x.p.status=terminal;
+  assert.equal((await (await x.event()).json()).code,'CLOSED');
+  assert.equal((await (await x.event()).json()).code,'CLOSED');
+  assert.equal(x.counts.first,1);assert.equal(x.counts.subscribe,undefined);assert.equal(x.row().zugang_aktiv,false);
+ }
 });

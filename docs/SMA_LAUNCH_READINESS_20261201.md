@@ -130,7 +130,12 @@ Nach der Rückkehr von Mollie sieht der angemeldete Kunde den gespeicherten
 Status seiner Buchung. Solange die Seite sichtbar ist, prüft sie diesen Stand
 bis zu viermal automatisch. Weitere Abfragen sind per Button möglich. Sobald
 der Zugang aktiv ist, öffnet die Seite das reguläre Dashboard. Die Rückkehr
-und jede Statusabfrage sind rein lesend.
+und jede Statusabfrage sind rein lesend. „Zur offenen Buchung“ öffnet die
+vorhandene Buchung. Sobald Mollie eine laufende oder autorisierte Zahlung
+meldet, wird der gespeicherte Checkout-Link ausgeblendet. Nach einem Abbruch,
+Ablauf oder Fehlschlag bleibt die alte Buchung geschlossen. Ein neues Angebot
+erhält eine eigene Kennung und erfordert wieder „Zahlungspflichtig buchen“.
+Ein verspäteter Klick auf das vorherige Angebot erzeugt keinen Auftrag.
 
 Die Edge Function `sma-package-payment` verwendet den privaten n8n-Dienst
 `8v2wcz5lh0yUf3sw`. Er nutzt vorhandene Verbindungen zum SMA-Händlerkonto

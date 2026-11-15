@@ -99,9 +99,10 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
       }
       const receipt=projectPayment(p,o);
       if(receipt.status==='open')requireValue(/^https:\/\/(www|checkout)\.mollie\.com\/checkout\/[A-Za-z0-9/_-]+$/.test(receipt.checkout));
-      if(!o.payment_id || (o.state==='booked' && receipt.status==='open')){
-        const expires=receipt.expires??(receipt.status==='open'?new Date(now()+15*60_000).toISOString():null);
-        o=await write('payment',{id:p.id,checkout:receipt.checkout,expires});
+      const payable=receipt.status==='open';
+      if(!o.payment_id || (o.state==='booked' && ['open','pending','authorized'].includes(receipt.status))){
+        const expires=payable ? (receipt.expires??new Date(now()+15*60_000).toISOString()) : null;
+        o=await write('payment',{id:p.id,checkout:payable?receipt.checkout:null,expires});
       }
       const {state}=await write('receipt',{receipt});
       if(state==='REVERSED'){
