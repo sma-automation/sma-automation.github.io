@@ -49,8 +49,11 @@ async function check() {
       navigation.href = 'paketwahl.html';
       navigation.textContent = 'Zur offenen Buchung';
       status.textContent = 'Wir warten auf die Zahlungsbestätigung von Mollie.';
-    } else if (data === 'paid') status.textContent = 'Deine Zahlung ist bestätigt. Dein Dashboard wird freigeschaltet.';
-    else if (data === 'closed') {
+    } else if (data === 'paid') {
+      navigation.href = 'paketwahl.html';
+      navigation.textContent = 'Zur bezahlten Buchung';
+      status.textContent = 'Deine Zahlung ist bestätigt. Dein Dashboard wird freigeschaltet.';
+    } else if (data === 'closed') {
       navigation.href = 'paketwahl.html';
       navigation.textContent = 'Zur Paketwahl';
       status.textContent = 'Diese Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du dein Paket erneut buchen.';

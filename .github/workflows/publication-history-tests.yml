@@ -15,6 +15,7 @@ on:
       - n8n/package-payment/**
       - n8n/sync-onboarding-payment.mjs
       - tests/run-onboarding-plan-sql.mjs
+      - tests/check-onboarding-subscription.mjs
       - n8n/confirm-onboarding-row.cjs
       - tests/launch-readiness-readonly.test.cjs
       - app/assets/original-video-preview.mjs

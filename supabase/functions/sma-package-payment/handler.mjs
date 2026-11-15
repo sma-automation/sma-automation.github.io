@@ -39,9 +39,9 @@ function activated(row,o){
     row.paket===o.plan&&row.mollie_customer_id===o.merchant_customer&&row.mollie_subscription_id===o.subscription_id;
 }
 function matchingSub(sub,o){
-  return sub && sid.test(sub.id) && sub.metadata?.order===o.id && sub.metadata?.kunde_id===o.n8n_ref &&
-    sub.metadata?.paket===o.plan && sub.amount?.value===prices[o.plan] && sub.amount?.currency==='EUR' &&
-    sub.interval==='1 month' && sub.status==='active';
+  return sub && sid.test(sub.id) && sub.mode==='live' && sub.customerId===o.merchant_customer &&
+    sub.metadata?.order===o.id && sub.metadata?.kunde_id===o.n8n_ref && sub.metadata?.paket===o.plan &&
+    sub.amount?.value===prices[o.plan] && sub.amount?.currency==='EUR' && sub.interval==='1 month';
 }
 
 export function createPaymentHandler({authorize,worker,bridge,signature,callback,now=Date.now,newId=()=>crypto.randomUUID()}){
@@ -113,25 +113,29 @@ export function createPaymentHandler({authorize,worker,bridge,signature,callback
         return response(200,'REVERSED');
       }
       if(['BOOKED','ACTIVE','CLOSED'].includes(state))return response(200,state);
-      requireValue(state==='PAID');
+      requireValue(state==='PAID' && receipt.status==='paid' && !receipt.reversed && typeof receipt.paid_at==='string');
+      const startDate=nextMonth(receipt.paid_at);
       let row=await account();
       requireValue(sameAccount(row,o)&&(dormant(row)||activated(row,o)));
-      o=await write('begin_subscription');
-      let sub;
-      if(o.subscription_id){
-        sub=await bridge('subscription',{customer:o.merchant_customer,subscription:o.subscription_id});
-        requireValue(sub.id===o.subscription_id);
-      }else{
-        eligibleTime(o.sub_started,now);
-        requireValue(typeof p.paidAt==='string');
-        const startDate=nextMonth(p.paidAt);
+      if(!o.subscription_id){
         requireValue(startDate>new Date(now()).toISOString().slice(0,10));
-        sub=await bridge('subscribe',{order:id,customer:o.merchant_customer,body:{amount,interval:'1 month',startDate,
+        o=await write('begin_subscription');
+        eligibleTime(o.sub_started,now);
+        const created=await bridge('subscribe',{order:id,customer:o.merchant_customer,body:{amount,interval:'1 month',startDate,
           description:'SMA '+o.plan.toUpperCase()+' – Monatsabo',metadata:{order:id,kunde_id:o.n8n_ref,paket:o.plan},
           webhookUrl:'https://johnmusic.app.n8n.cloud/webhook/sma-mollie-zahlung-status'}});
+        requireValue(matchingSub(created,o));
+        o=await write('subscription',{id:created.id});
       }
-      requireValue(matchingSub(sub,o));
-      o=await write('subscription',{id:sub.id});
+      // A replayed creation response can be cached. Verify the stored subscription itself.
+      const sub=await bridge('subscription',{customer:o.merchant_customer,subscription:o.subscription_id});
+      requireValue(matchingSub(sub,o) && sub.id===o.subscription_id && sub.startDate===startDate);
+      const firstMonthPaid=startDate>new Date(now()).toISOString().slice(0,10);
+      const scheduled=sub.status==='pending' && sub.nextPaymentDate===startDate;
+      if(!firstMonthPaid || (sub.status!=='active' && !scheduled)){
+        // Let Mollie retry while an authenticated customer sees their confirmed payment.
+        return event ? response(503,'RETRY') : response(200,'PAID');
+      }
       if(!activated(row,o)){
         await bridge('activate',{row:o.n8n_row_id,ref:o.n8n_ref,email:o.email,customer:o.merchant_customer,
           subscription:o.subscription_id,plan:o.plan,token:newId()+newId()});

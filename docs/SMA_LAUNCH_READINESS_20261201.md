@@ -142,9 +142,16 @@ Die Edge Function `sma-package-payment` verwendet den privaten n8n-Dienst
 und zur Datenbank. Die Aufträge an n8n sind einmal gültig. Die Funktion ruft
 jede Zahlung bei Mollie ab und prüft Konto, Erstzahlung, Betrag, Währung und Paket.
 Nach bestätigter Zahlung legt sie das Monatsabo mit der ersten Folgezahlung einen
-Monat nach dem Zahlungstag an. Sie liest das Abo und die Kundenzuordnung aus der
-Anbieterantwort bzw. der aktualisierten Kundenzeile. Erst dann öffnet sie den Zugang.
-Der bisherige n8n-Zahlungsworkflow empfängt die Folgezahlungen.
+Monat nach dem Zahlungstag an. Sie speichert die geprüfte Mollie-Abo-ID und
+ruft dieses Abo beim Händler erneut ab. Konto, Buchung, Paket, Betrag,
+Monatsintervall und Startdatum müssen passen. Der bereits bezahlte erste
+Monat wird freigeschaltet, wenn das Abo aktiv ist oder Mollie für ein noch
+ausstehendes Abo den vereinbarten Starttag als nächsten Zahlungstermin meldet.
+Zuletzt liest SMA die aktualisierte n8n-Kundenzeile, bevor es den Zugang öffnet.
+Bei unklarem Termin kann der Dienst dieselbe Abo-ID später erneut lesen.
+Ist der bezahlte erste Monat inzwischen abgelaufen und der Zugang noch gesperrt,
+muss die Folgezahlung geprüft werden. Der bisherige n8n-Zahlungsworkflow
+empfängt die Folgezahlungen.
 
 Die Einstellung `sma_private.onboarding_payment_settings_v1.enabled` steuert neue
 automatische Angebote. Bestehende Buchungen lassen sich weiter abgleichen. Nach
