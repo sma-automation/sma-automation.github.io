@@ -32,3 +32,9 @@ Die neue Dateisuche ist der erste Schritt. Eine spätere übergreifende Suche na
 ## Prüfung
 
 `tests/dashboard-file-search.test.cjs` deckt Suchausdrücke, Portalfilter, Datenschutz, gefilterte Paginierung und die direkte Editorroute ab. Die vorhandenen Dashboard-, History-, Kapitel- und Veröffentlichungs-Regressionstests bleiben aktiv.
+
+## Live-Test des gemeinsamen Kundenmedien-Workflows, 15. November 2026
+
+Nach PR #290 zeigte der Katalog im freigegebenen Testkonto 11 von 11 Dateien. Für die bearbeitete Fassung von „SMA Privattest 02“ lud die Galerie ein Vorschaubild mit 220 × 124 Pixeln. Das Originalvideo mit 1280 × 720 Pixeln lief drei Sekunden bis zum Ende. „Zurück zu den Suchergebnissen“ fokussierte dieselbe Fassung. Esc führte zu „Übersicht → Konto & Paket“ und setzte den Fokus auf „Suche“. Auch über den regulären Einstieg gelangen Katalogabruf, Bildvorschau und Wiedergabe.
+
+Wer `app/dashboard.html?kundenmedien=pilot` abgemeldet öffnet, gelangt nach der Anmeldung wieder zum Pilot-Einstieg. Dort prüft der Server die Berechtigung. Falls die Pilotprüfung keinen Zugang bestätigt, führt „Reguläres Dashboard öffnen“ ins eigene Dashboard.

@@ -2,7 +2,7 @@
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>SMA · Kundenbereich</title>
 <style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f9;color:#151b27}#state{max-width:560px;margin:15vh auto;padding:32px;background:white;border:1px solid #dfe3eb;border-radius:20px;text-align:center}.brand{display:flex;justify-content:center;align-items:center;gap:9px;font-weight:800;font-size:24px;margin-bottom:24px;color:#4065d8}.brand span{background:#f0f3ff;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);padding:13px 22px}button,a{font:inherit}button{border:1px solid #dfe3eb;padding:11px 18px;border-radius:10px;background:white;cursor:pointer;margin:8px}#retry{background:#4065d8;color:white}#dashboard{border:0;display:block;width:100%;height:100dvh}[hidden]{display:none!important}p{line-height:1.6}
 </style></head>
-<body><section id="state" role="status"><div class="brand" aria-label="SMA"><span>S</span>=<span>M</span>=<span>A</span></div><h1 id="heading">Dein SMA-Dashboard wird geladen</h1><p id="message">Die Anmeldung wird geprüft …</p><button id="retry" hidden>Erneut laden</button><button id="logout" hidden>Abmelden</button></section>
+<body><section id="state" role="status"><div class="brand" aria-label="SMA"><span>S</span>=<span>M</span>=<span>A</span></div><h1 id="heading">Dein SMA-Dashboard wird geladen</h1><p id="message">Die Anmeldung wird geprüft …</p><button id="retry" hidden>Erneut laden</button><a id="regularDashboard" href="dashboard.html" hidden>Reguläres Dashboard öffnen</a><button id="logout" hidden>Abmelden</button></section>
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
@@ -804,18 +804,21 @@ async function dashboardSession(){
 async function dashboardHtml(){
  const session=await dashboardSession();
  if(signedOut)throw Error('Bitte melde dich bei SMA an.');
+ const pilotRequested=new URLSearchParams(location.search).get('kundenmedien')==='pilot';
  if(!session?.user?.id){
-  window.location.replace('index.html');
+  window.location.replace(pilotRequested?'index.html?kundenmedien=pilot':'index.html');
   throw Error('Bitte melde dich bei SMA an.');
  }
  const owner=session.user.id;
  if(dashboardOwnerId&&dashboardOwnerId!==owner){leaveDashboard();throw Error('Die Anmeldung wurde gewechselt.');}
  dashboardOwnerId=owner;
- const pilotRequested=new URLSearchParams(location.search).get('kundenmedien')==='pilot';
  if(pilotRequested){
   delete document.documentElement.dataset.smaCustomerMedia;
   const {data,error}=await supabase.rpc('sma_customer_media_pilot_v1',{p_route:'eligible'});
-  if(error||data?.ok!==true)throw Error('Der private Kundenmedientest ist für diese Anmeldung nicht verfügbar.');
+  if(error||data?.ok!==true){
+   document.getElementById('regularDashboard').hidden=false;
+   throw Error('Der private Kundenmedientest ist für diese Anmeldung nicht verfügbar.');
+  }
  }
  const unavailable='Das Dashboard ist gerade nicht erreichbar. Bitte versuche es erneut.';
  let response;
@@ -843,6 +846,7 @@ async function load(){
   if(pending)return pending;
   pending=(async()=>{
     retryDashboardOnReconnect=false;
+    document.getElementById('regularDashboard').hidden=true;
     document.getElementById('retry').hidden=true;
     document.getElementById('message').textContent='Die Anmeldung wird geprüft …';
     try{

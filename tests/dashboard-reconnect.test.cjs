@@ -9,8 +9,8 @@ const shell='<body data-sma-customer-id="test">Übersicht</body>';
 function setup({search='',eligible=false}={}){
  let owner='first',authFailure=false,fetchFailure=null,switched=null,requests=0;
  const redirects=[];
- const dataset={};let checks=0;
- const env={AbortSignal,URLSearchParams,location:{search},document:{documentElement:{dataset}},dashboardOwnerId:null,signedOut:false,endpoint:'https://fixture.invalid',window:{location:{replace:url=>redirects.push(url)}},
+ const dataset={},regularDashboard={hidden:true};let checks=0;
+ const env={AbortSignal,URLSearchParams,location:{search},document:{documentElement:{dataset},getElementById(id){assert.equal(id,'regularDashboard');return regularDashboard;}},dashboardOwnerId:null,signedOut:false,endpoint:'https://fixture.invalid',window:{location:{replace:url=>redirects.push(url)}},
   leaveDashboard:()=>{env.signedOut=true;redirects.push('index.html');},
   supabase:{rpc:async(name,{p_route})=>{assert.equal(name,'sma_customer_media_pilot_v1');assert.equal(p_route,'eligible');checks++;return {data:{ok:eligible}};},auth:{getSession:async()=>({error:authFailure||null,data:{session:owner?{user:{id:owner},access_token:owner}:null}})}},
   fetch:async(_url,opts)=>{
@@ -21,7 +21,7 @@ function setup({search='',eligible=false}={}){
   }
  };
  vm.runInNewContext(code,env);
- return {pilot:()=>dataset.smaCustomerMedia,checks:()=>checks,read:()=>env.dashboardHtml(),redirects,requests:()=>requests,auth:state=>{authFailure=state;},
+ return {pilot:()=>dataset.smaCustomerMedia,regularDashboard,checks:()=>checks,read:()=>env.dashboardHtml(),redirects,requests:()=>requests,auth:state=>{authFailure=state;},
   owner:id=>{owner=id;},fail:status=>{fetchFailure=status;},switchDuringRead:id=>{switched=id;}};
 }
 
@@ -51,8 +51,51 @@ test('only the verified pilot in an opted-in tab selects the combined media rout
  assert.equal(ordinary.checks(),0);assert.equal(ordinary.pilot(),undefined);
  const denied=setup({search:'?kundenmedien=pilot'});await assert.rejects(denied.read(),/nicht verfügbar/);
  assert.equal(denied.requests(),0);assert.equal(denied.pilot(),undefined);
+ assert.equal(denied.regularDashboard.hidden,false);
+ assert.equal(ordinary.regularDashboard.hidden,true);
  const switched=setup({search:'?kundenmedien=pilot',eligible:true});switched.switchDuringRead('second');
  await assert.rejects(switched.read(),/Anmeldung wurde gewechselt/);assert.equal(switched.pilot(),undefined);
  const pilot=setup({search:'?kundenmedien=pilot',eligible:true});assert.equal(await pilot.read(),shell);
  assert.equal(pilot.checks(),1);assert.equal(pilot.pilot(),'pilot');
+});
+
+test('signed-out dashboard hands just the explicit pilot selection to the login page',async()=>{
+ for(const [search,login] of [
+  ['?kundenmedien=pilot&portal=youtube','index.html?kundenmedien=pilot'],
+  ['?kundenmedien=anderer-wert','index.html'],
+  ['?portal=youtube','index.html']
+ ]){
+  const f=setup({search});f.owner(null);
+  await assert.rejects(f.read(),/melde dich/);
+  assert.deepEqual(f.redirects,[login]);assert.equal(f.checks(),0);assert.equal(f.requests(),0);
+ }
+});
+
+test('login returns to the selected dashboard after sign-in or session reuse; recovery stays on the login page',async()=>{
+ const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
+ const loginHtml=readFileSync('app/index.html','utf8');
+ const source=loginHtml.split('<script type="module">')[1].split('</script>')[0];
+ const script=source.slice(source.indexOf('const SUPABASE_URL'));
+ const regularHref=parseHTML(html).document.getElementById('regularDashboard').getAttribute('href');
+ assert.equal(regularHref,'dashboard.html');
+ for(const [search,hasSession,expected] of [
+  ['?kundenmedien=pilot',false,'dashboard.html?kundenmedien=pilot'],
+  ['?kundenmedien=pilot&portal=youtube',true,'dashboard.html?kundenmedien=pilot'],
+  ['',false,regularHref],['?kundenmedien=anderer-wert',true,regularHref],
+  ['?type=recovery&kundenmedien=pilot',true,null]
+ ]){
+  const {document,window}=parseHTML(loginHtml);
+  const redirects=[];
+  const auth={onAuthStateChange(){},getSession:async()=>({data:{session:hasSession?{}:null}}),
+   signInWithPassword:async()=>({error:null})};
+  const location={search,hash:'',replace:href=>redirects.push(href)};
+  await vm.runInNewContext('(async()=>{'+script+'})()',{document,window:{location},URLSearchParams,createClient:()=>({auth})});
+  if(!hasSession){
+   assert.deepEqual(redirects,[]);
+   document.getElementById('authForm').dispatchEvent(new window.Event('submit',{cancelable:true}));
+   await new Promise(resolve=>setImmediate(resolve));
+  }
+  assert.deepEqual(redirects,expected?[expected]:[]);
+  if(expected===null)assert.equal(document.getElementById('resetView').hidden,false);
+ }
 });
