@@ -7,25 +7,49 @@ const status = document.querySelector('#status');
 const retry = document.querySelector('#retry');
 const navigation = document.querySelector('nav a');
 const delays = [3000, 7000, 15000, 30000];
-let owner, timer, attempt = 0, pending = false, busy = false, leaving = false;
+let owner, timer, attempt = 0, pending = validOrder, busy = false, leaving = false;
+let pageActive = true, wasAvailable = !document.hidden && navigator.onLine, resumeAfterRead = false;
+
+function available() {
+  return validOrder && !leaving && pageActive && !document.hidden && navigator.onLine;
+}
 
 function leave(path) {
   leaving = true;
+  pending = false;
+  resumeAfterRead = false;
   clearTimeout(timer);
+  status.textContent = '';
+  retry.hidden = true;
+  navigation.hidden = true;
   location.replace(path);
 }
 
 function waitForUpdate() {
   clearTimeout(timer);
-  if (leaving || busy || !pending || document.hidden || !navigator.onLine || attempt >= delays.length) return;
+  if (!available() || busy || !pending || attempt >= delays.length) return;
   timer = setTimeout(() => {
     attempt++;
     void check();
   }, delays[attempt]);
 }
 
+// A genuine return to an online, visible page gets one fresh bounded read cycle.
+// Duplicate browser events cannot reset the budget or start overlapping reads.
+function resumeUpdates() {
+  const ready = available();
+  const returned = ready && !wasAvailable;
+  wasAvailable = ready;
+  clearTimeout(timer);
+  if (!ready || !pending) return;
+  if (!returned) return waitForUpdate();
+  attempt = 0;
+  if (busy) resumeAfterRead = true;
+  else void check();
+}
+
 async function check() {
-  if (busy || leaving) return;
+  if (busy || !available()) return;
   clearTimeout(timer);
   busy = true;
   retry.disabled = true;
@@ -37,12 +61,21 @@ async function check() {
     if (!current) return leave('index.html?buchung=' + order);
     if (owner && owner !== current) return leave('index.html');
     owner = current;
+    if (!available()) return;
     const {data, error} = await client.rpc('sma_onboarding_payment_status_v1', {p_order:order});
     if (leaving) return;
     if (error) throw error;
+    // Auth events may arrive after the RPC reply. Recheck before showing its state.
+    const latest = await client.auth.getSession();
+    if (leaving) return;
+    if (latest.error) throw latest.error;
+    const latestOwner = latest.data?.session?.user?.id;
+    if (!latestOwner) return leave('index.html?buchung=' + order);
+    if (latestOwner !== owner) return leave('index.html');
+    if (!available()) return;
     if (data === 'active') return leave('dashboard.html');
-    pending = data === 'booked' || data === 'paid';
-    retry.hidden = !pending && data !== 'renewal_suspended';
+    pending = data === 'booked' || data === 'paid' || data === 'renewal_suspended';
+    retry.hidden = !pending;
     navigation.href = 'dashboard.html';
     navigation.textContent = 'Dashboard-Zugang prüfen';
     if (data === 'booked') {
@@ -61,7 +94,9 @@ async function check() {
       status.textContent = 'Dein Zugang pausiert. Für den aktuellen Abrechnungszeitraum fehlt eine bestätigte Folgezahlung. Sobald Mollie die Zahlung bestätigt, prüft SMA den Zugang erneut.';
     } else if (data === 'reversed') status.textContent = 'Die Zahlung wurde erstattet oder zurückgebucht. Der Zugang aus dieser Buchung ist gesperrt.';
     else status.textContent = 'Diese Buchung ist für dein Konto nicht verfügbar.';
-    if (pending && attempt >= delays.length) status.textContent += ' Du kannst den Stand erneut prüfen.';
+    if (pending) status.textContent += attempt >= delays.length
+      ? ' Die automatische Prüfung pausiert. Du kannst den Stand erneut prüfen.'
+      : ' Der Zahlungsstand wird automatisch erneut geprüft.';
   } catch {
     if (!leaving) {
       status.textContent = 'Der Zahlungsstand konnte gerade nicht geladen werden. Bitte versuche es erneut.';
@@ -71,7 +106,10 @@ async function check() {
   } finally {
     busy = false;
     retry.disabled = false;
-    waitForUpdate();
+    const resume = resumeAfterRead && available() && pending;
+    resumeAfterRead = false;
+    if (resume) void check();
+    else waitForUpdate();
   }
 }
 
@@ -79,12 +117,18 @@ document.title = 'Zahlungsstand · SMA';
 document.querySelector('h1').textContent = 'Dein Zahlungsstand';
 document.querySelector('#plan-intro').hidden = true;
 retry.textContent = 'Zahlungsstand erneut prüfen';
-retry.addEventListener('click', () => { attempt = 0; void check(); });
-document.addEventListener('visibilitychange', waitForUpdate);
-window.addEventListener('online', waitForUpdate);
-window.addEventListener('offline', () => clearTimeout(timer));
-window.addEventListener('pagehide', () => clearTimeout(timer));
-window.addEventListener('pageshow', event => { if (event.persisted) waitForUpdate(); });
+retry.addEventListener('click', () => {
+  if (busy || !available()) return;
+  attempt = 0;
+  void check();
+});
+document.addEventListener('visibilitychange', resumeUpdates);
+window.addEventListener('online', resumeUpdates);
+window.addEventListener('offline', resumeUpdates);
+window.addEventListener('pagehide', () => { pageActive = false; resumeUpdates(); });
+window.addEventListener('pageshow', event => {
+  if (event.persisted) { pageActive = true; resumeUpdates(); }
+});
 
 client.auth.onAuthStateChange((event, session) => {
   if (leaving) return;
@@ -105,5 +149,7 @@ document.querySelector('#logout').addEventListener('click', async () => {
   }
 });
 
-if (validOrder) await check();
-else status.textContent = 'Dieser Zahlungslink ist ungültig.';
+if (validOrder) {
+  if (!navigator.onLine) status.textContent = 'Keine Internetverbindung. Der Zahlungsstand wird geprüft, sobald du wieder online bist.';
+  await check();
+} else status.textContent = 'Dieser Zahlungslink ist ungültig.';
