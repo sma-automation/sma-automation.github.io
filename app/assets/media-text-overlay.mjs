@@ -16,14 +16,33 @@ export function drawMediaOverlay(canvas, width, height, text, position) {
   ctx.textAlign = 'center';
   const lines = [];
   let line = '';
-  for (const character of text) {
-    if (line && ctx.measureText(line + character).width > maxTextWidth) {
-      lines.push(line);
+  for (const token of text.match(/ +|[^ ]+/gu) || []) {
+    if (token.startsWith(' ')) {
+      line += token;
+      continue;
+    }
+    if (line && ctx.measureText(line + token).width > maxTextWidth) {
+      const complete = line.replace(/ +$/, '');
+      if (complete) lines.push(complete);
       line = '';
     }
-    line += character;
+    if (ctx.measureText(token).width <= maxTextWidth) {
+      line += token;
+      continue;
+    }
+    // Split only words that cannot fit on an empty line.
+    const graphemes = typeof Intl.Segmenter === 'function'
+      ? Array.from(new Intl.Segmenter(undefined, {granularity: 'grapheme'}).segment(token), entry => entry.segment)
+      : Array.from(token);
+    for (const character of graphemes) {
+      if (line && ctx.measureText(line + character).width > maxTextWidth) {
+        lines.push(line);
+        line = '';
+      }
+      line += character;
+    }
   }
-  lines.push(line);
+  lines.push(line.replace(/ +$/, ''));
 
   const lineHeight = Math.ceil(fontSize * 1.35);
   const boxHeight = lines.length * lineHeight + 2 * padding;
