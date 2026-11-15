@@ -7,8 +7,30 @@ const status = document.querySelector('#status');
 const retry = document.querySelector('#retry');
 const navigation = document.querySelector('nav a');
 const delays = [3000, 7000, 15000, 30000];
-let owner, timer, attempt = 0, pending = validOrder, busy = false, leaving = false;
+const checkTimeout = 15000;
+let owner, timer, activeRead, attempt = 0, pending = validOrder, busy = false, leaving = false;
 let pageActive = true, wasAvailable = !document.hidden && navigator.onLine, resumeAfterRead = false;
+
+// One deadline covers both session reads and the status request. Auth reads do
+// not accept an AbortSignal, so race every stage and consume late settlements.
+function readWithinCheck(signal, start) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', cancel);
+      callback(value);
+    };
+    const cancel = () => finish(reject, Error('Payment status read cancelled'));
+    if (signal.aborted) return cancel();
+    signal.addEventListener('abort', cancel, {once:true});
+    Promise.resolve().then(() => {
+      if (signal.aborted) throw Error('Payment status read cancelled');
+      return start();
+    }).then(value => finish(resolve, value), error => finish(reject, error));
+  });
+}
 
 function available() {
   return validOrder && !leaving && pageActive && !document.hidden && navigator.onLine;
@@ -19,6 +41,7 @@ function leave(path) {
   pending = false;
   resumeAfterRead = false;
   clearTimeout(timer);
+  activeRead?.abort();
   status.textContent = '';
   retry.hidden = true;
   navigation.hidden = true;
@@ -53,8 +76,16 @@ async function check() {
   clearTimeout(timer);
   busy = true;
   retry.disabled = true;
+  const controller = new AbortController();
+  activeRead = controller;
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, checkTimeout);
+  const read = start => readWithinCheck(controller.signal, start);
   try {
-    const session = await client.auth.getSession();
+    const session = await read(() => client.auth.getSession());
     if (session.error) throw session.error;
     const current = session.data?.session?.user?.id;
     if (leaving) return;
@@ -62,11 +93,11 @@ async function check() {
     if (owner && owner !== current) return leave('index.html');
     owner = current;
     if (!available()) return;
-    const {data, error} = await client.rpc('sma_onboarding_payment_status_v1', {p_order:order});
+    const {data, error} = await read(() => client.rpc('sma_onboarding_payment_status_v1', {p_order:order}).abortSignal(controller.signal));
     if (leaving) return;
     if (error) throw error;
     // Auth events may arrive after the RPC reply. Recheck before showing its state.
-    const latest = await client.auth.getSession();
+    const latest = await read(() => client.auth.getSession());
     if (leaving) return;
     if (latest.error) throw latest.error;
     const latestOwner = latest.data?.session?.user?.id;
@@ -99,11 +130,16 @@ async function check() {
       : ' Der Zahlungsstand wird automatisch erneut geprüft.';
   } catch {
     if (!leaving) {
-      status.textContent = 'Der Zahlungsstand konnte gerade nicht geladen werden. Bitte versuche es erneut.';
+      status.textContent = timedOut
+        ? 'Die Prüfung dauert zu lange. Bitte prüfe den Zahlungsstand erneut.'
+        : 'Der Zahlungsstand konnte gerade nicht geladen werden. Bitte versuche es erneut.';
+      if (attempt >= delays.length) status.textContent += ' Die automatische Prüfung pausiert.';
       retry.hidden = false;
       pending = true;
     }
   } finally {
+    clearTimeout(deadline);
+    if (activeRead === controller) activeRead = null;
     busy = false;
     retry.disabled = false;
     const resume = resumeAfterRead && available() && pending;
@@ -138,6 +174,7 @@ client.auth.onAuthStateChange((event, session) => {
 document.querySelector('#logout').addEventListener('click', async () => {
   clearTimeout(timer);
   leaving = true;
+  activeRead?.abort();
   try {
     const {error} = await client.auth.signOut();
     if (error) throw error;

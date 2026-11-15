@@ -46,7 +46,7 @@
     <nav><a href="dashboard.html">Dashboard-Zugang prüfen</a><button id="logout">Abmelden</button></nav>
   </main>
   <script type="module">
-    if (new URLSearchParams(location.search).has('buchung')) await import('./assets/onboarding-payment-return.mjs?v=5');
+    if (new URLSearchParams(location.search).has('buchung')) await import('./assets/onboarding-payment-return.mjs?v=6');
     else await import('./assets/onboarding-plan.mjs?v=6');
   </script>
 </body>
