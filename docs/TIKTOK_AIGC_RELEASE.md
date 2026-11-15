@@ -18,15 +18,63 @@ Lokale Abnahme auf diesem zusammengeführten Stand:
 - 149 isolierte Provider-/Cover-SQL-Prüfungen bestanden.
 - Quellenprüfung: `SOURCE_PREFLIGHT_OK; LIVE_EXPORT_NOT_VERIFIED; NO_DEPLOYMENT`.
 
-**Weiterhin Entwurf, keine Live-Umstellung.** Die folgenden Live-Beobachtungen
-stammen vom 10. November und wurden am 15. November nicht erneut bestätigt.
-Der nächste Schritt ist der frische authentifizierte Abgleich der tatsächlich
-veröffentlichten Provider-/Coverversion; danach die lesende Prüfung des
-aktuellen Datenbank-Funktionshashs und der bestehenden TikTok-Aufträge.
-Erst bei passender Basis kann die koordinierte Umstellung von Datenbank,
-Provider-/Coverkopie und Client erfolgen. Der Kundenmedien-Pilotworkflow
-`aEm2khRhdM6EUdoq` wurde nicht verändert. Kein Upload, keine Freigabe,
-kein Provideraufruf und keine Kostenänderung wurden ausgeführt.
+## Authentifizierter Live-Abgleich vom 15. November 2026
+
+Der bereinigte Entwurf ist **PR #304** auf `c009e70` (ein Commit mit
+20 geänderten Dateien). PR #199 ist technisch ersetzt; seine alte
+Branchhistorie erzeugte trotz abgeglichener Dateiinhalte Mergekonflikte.
+
+**Datenbank ausschließlich gelesen:**
+
+- `publication_order_request_v1` hat weiterhin den erwarteten MD5
+  `ce9dc4edbe66a00ce89924c1a91b49d1`.
+- Keine nicht stornierten TikTok-Aufträge ohne Boolean `choices.is_aigc`.
+- Keine installierte AIGC-Migration und keine zeitlich gültige
+  Providerberechtigung.
+- Zwei historische YouTube-Versuche: einer `complete`, einer `uncertain`.
+  Die alte Anforderung „null Versuche insgesamt“ ist damit überholt;
+  historische Versuche werden weder gelöscht noch erneut ausgeführt.
+  Der unklare Versuch bleibt als solcher erhalten.
+
+**n8n authentifiziert gelesen:** Der direkte Editor-Export enthält
+`versionId`, aber kein `activeVersionId`. Er wird weiterhin mit
+`PUBLISHED_VERSION_UNVERIFIED` abgewiesen. Über **View timeline → aktuell
+veröffentlichte Fassung → Actions → Download** wurde separat die tatsächlich
+veröffentlichte Version „PR 257 – HTTP-Header und Antwortfelder“ geladen.
+Dieser Export enthält identische `versionId` und `activeVersionId`.
+Er besitzt 47 Nodes, exakt die erwarteten Verbindungen, Einstellungen
+und den vollständigen SHA-256-Prüfweg.
+
+Der erste vollständige Vergleich stoppte korrekt mit `INSTALLED_NODE_DRIFT`.
+Die einzige Codeabweichung liegt in `Coverstatus zurückgeben`: Der aktive
+Altstand verwendet bei unbekanntem Status `blocked`; der vorbereitete
+Kandidat setzt bei fehlender/abgewiesener Coverbestätigung `ok:false` und
+`uncertain`. Die Vorprüfung akzeptiert jetzt zusätzlich **nur den exakt
+bekannten historischen Code dieses einen Nodes**. Sie vergleicht dabei
+weiterhin den gesamten normalisierten Node einschließlich aller übrigen
+Parameter, Typen, Fehlerpfade und Einstellungen. Beliebige Codevarianten,
+weitere Parameter oder Wiederholungen bleiben gesperrt. Der Kandidat behält
+die strengere Rückmeldung; der Altstand wird nicht in den Kandidaten kopiert.
+
+Die erneute Prüfung des unveränderten veröffentlichten Exports liefert:
+
+```text
+INSTALLED_BASELINE_MATCH; AIGC_CANDIDATE_SOURCE_READY; NO_DEPLOYMENT
+```
+
+930 Node-Tests und 19 gezielte Offline-Tests bestanden, einschließlich neuer Negativfälle für
+veränderte Veröffentlichungsflags, zusätzliche Parameter, Fehlerpfade und
+Wiederholungen am historischen Coverstatus. Beide CI-Workflows des ersten
+PR-#304-Commits `9b49620` bestanden ebenfalls.
+
+**Weiterhin Entwurf, keine Live-Umstellung.** Der Export ist nur eine
+Momentaufnahme. Vor der koordinierten Umstellung Datenbank → Provider-/
+Coverkopie → Client müssen dieselben Basen unmittelbar erneut bestätigt
+werden. Danach sind Ja/Nein und die unveränderten YouTube-/Coverwege ohne
+Medienupload und ohne Kundenfreigabe zu prüfen. Private Exporte bleiben
+außerhalb des Repositorys; keine Tokens oder Kundendaten übernommen.
+Der Kundenmedien-Pilotworkflow `aEm2khRhdM6EUdoq` wurde nicht verändert.
+Kein Upload, keine Freigabe, kein Provideraufruf und keine Kostenänderung.
 
 ## Offener Live-Nachweis – Beobachtungen vom 10. November 2026
 

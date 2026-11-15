@@ -112,6 +112,29 @@ test('gate refuses existing AIGC modifications instead of silently applying them
  assert.match(r.stderr,/AIGC_ROLLOUT_BLOCKED: INSTALLED_NODE_DRIFT/);
 });
 
+test('exact published PR-257 cover summary passes without accepting other node drift',()=>{
+ const published=JSON.parse(JSON.stringify(installed));
+ const summary=published.nodes.find(n=>n.name==='Coverstatus zurückgeben');
+ summary.parameters.jsCode="return [{json:{ok:$json.ok===true,state:'complete',cover_state:['complete','failed','uncertain'].includes($json.cover_state)?$json.cover_state:'blocked',can_upload:false,can_publish:false}}];";
+ const passed=exportAndCheck(published,'published-pr257-summary');
+ assert.equal(passed.status,0,passed.stderr);
+ assert.match(passed.stdout,/INSTALLED_BASELINE_MATCH/);
+ assert.notEqual(target.nodes.find(n=>n.name===summary.name).parameters.jsCode,summary.parameters.jsCode,
+  'candidate must retain the stricter cover summary');
+ for(const mutate of [
+  n=>{n.parameters.jsCode=n.parameters.jsCode.replace('can_publish:false','can_publish:true')},
+  n=>{n.parameters.extra='synthetic-secret'},
+  n=>{n.onError='continueErrorOutput'},
+  n=>{n.retryOnFail=true}
+ ]){
+  const altered=JSON.parse(JSON.stringify(published));
+  mutate(altered.nodes.find(n=>n.name===summary.name));
+  const blocked=exportAndCheck(altered,'changed-published-summary');
+  assert.notEqual(blocked.status,0);
+  assert.doesNotMatch(blocked.stderr,/synthetic-secret/);
+ }
+});
+
 test('gate rejects new triggers, extra nodes, automatic retries and setting drift',()=>{
  const extra=JSON.parse(JSON.stringify(installed));
  extra.nodes.push({...extra.nodes[0],name:'Unapproved trigger',type:'n8n-nodes-base.webhook'});

@@ -23,6 +23,10 @@ NEW_KEYS = "['visibility','disable_comment','disable_duet','disable_stitch','bra
 OLD_KEYS = "['visibility','disable_comment','disable_duet','disable_stitch','brand_content_toggle','brand_organic_toggle']"
 NEW_BODY = "brand_organic_toggle:choices.brand_organic_toggle,is_aigc:choices.is_aigc}"
 OLD_BODY = "brand_organic_toggle:choices.brand_organic_toggle}"
+# Exact terminal summary observed in the published PR-257 version on 2026-11-15.
+# Only this known code variant is accepted; the candidate keeps the stricter
+# summary, which never presents a rejected cover finish as confirmed.
+PUBLISHED_COVER_SUMMARY = "return [{json:{ok:$json.ok===true,state:'complete',cover_state:['complete','failed','uncertain'].includes($json.cover_state)?$json.cover_state:'blocked',can_upload:false,can_publish:false}}];"
 REQUIRED_SETTINGS = {
     "executionOrder": "v1",
     "saveDataErrorExecution": "none",
@@ -162,8 +166,16 @@ def verify_installed(installed, original, patcher):
     if set(n["name"] for n in current_nodes) != set(before):
         raise GateError("INSTALLED_NODE_SET_DRIFT")
     for node in current_nodes:
-        if patcher.digest(patcher.normalized(node)) != patcher.digest(patcher.normalized(before[node["name"]])):
-            raise GateError("INSTALLED_NODE_DRIFT")
+        expected = before[node["name"]]
+        actual_digest = patcher.digest(patcher.normalized(node))
+        if actual_digest == patcher.digest(patcher.normalized(expected)):
+            continue
+        if node["name"] == "Coverstatus zurückgeben":
+            historical = copy.deepcopy(expected)
+            historical["parameters"]["jsCode"] = PUBLISHED_COVER_SUMMARY
+            if actual_digest == patcher.digest(patcher.normalized(historical)):
+                continue
+        raise GateError("INSTALLED_NODE_DRIFT")
     if not isinstance(installed.get("connections"), dict) or patcher.digest(installed["connections"]) != patcher.digest(original["connections"]):
         raise GateError("INSTALLED_EDGES_DRIFT")
 
