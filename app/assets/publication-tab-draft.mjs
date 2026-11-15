@@ -31,7 +31,41 @@ function sameAttempt(a,b){
  return JSON.stringify(fields(a.base))===JSON.stringify(fields(b.base))&&
   JSON.stringify(fields(a.sent))===JSON.stringify(fields(b.sent));
 }
+// Optional browser-only notice. It never changes form fields or the server save status.
+// Track only the current attempt's identity, not a second in-memory draft copy.
+function checkpointNotice(win){
+ let current=null,node=null;
+ const matches=v=>!!current&&!!v&&['token','owner','portal'].every(k=>current[k]===v[k]);
+ function hide(){try{if(node){node.hidden=true;node.textContent='';}}catch{}}
+ return {
+  begin(v){
+   if(!v||!portals.includes(v.portal)||!uuid(v.token)||!string(v.owner,128)||!v.owner)return;
+   if(!matches(v))hide();
+   current={token:v.token,owner:v.owner,portal:v.portal};
+  },
+  failed(v){
+   if(!matches(v))return;
+   try{
+    const doc=win.document,main=doc?.querySelector('main');
+    if(!main||!doc.getElementById('saveStatus'))return;
+    if(!node){
+     node=doc.createElement('p');node.id='tabDraftStorageWarning';node.className='notice';
+     node.setAttribute('role','status');node.setAttribute('aria-live','polite');node.setAttribute('aria-atomic','true');
+     node.hidden=true;main.prepend(node);
+    }
+    if(node.hidden){
+     node.textContent='Zwischensicherung im Browser nicht möglich. Lass diese Seite geöffnet und kopiere deine aktuellen Texte vor dem Neuladen. Beachte zusätzlich den Speicherstatus bei SMA.';
+     node.hidden=false;
+    }
+   }catch{/* A missing view must never interrupt saving or sign-out. */}
+  },
+  saved(v){if(matches(v))hide();},
+  forget(v){if(matches(v)){hide();current=null;}},
+  clearOwner(owner){if(current?.owner===owner){hide();current=null;}}
+ };
+}
 export function tabDraftStore(win){
+ const notice=checkpointNotice(win);
  function read(portal){
   if(!portals.includes(portal))return null;
   try{
@@ -52,24 +86,32 @@ export function tabDraftStore(win){
   },
   matches(v){return !!v&&read(v.portal)?.token===v.token;},
   write(v){
+   notice.begin(v);
    try{
     const raw=JSON.stringify(v);
     if(valid(v,v.portal)&&raw.length<=32000){
-     try{win.sessionStorage.setItem(key(v.portal),raw);return;}
+     try{win.sessionStorage.setItem(key(v.portal),raw);notice.saved(v);return;}
      catch{
       // setItem failed: keep only a validated checkpoint of this exact attempt.
       // This does not claim that the newer form reached storage or the server.
-      if(sameAttempt(read(v.portal),v))return;
+      if(sameAttempt(read(v.portal),v)){notice.failed(v);return;}
      }
     }
    }catch{}
    try{win.sessionStorage.removeItem(key(v.portal));}catch{}
+   notice.failed(v);
   },
-  update(v){if(read(v.portal)?.token===v.token)this.write(v);},
+  update(v){
+   const saved=read(v.portal);
+   if(saved?.token===v.token)this.write(v);
+   else if(!saved)notice.failed(v);
+  },
   forget(v){
+   notice.forget(v);
    try{if(v&&read(v.portal)?.token===v.token)win.sessionStorage.removeItem(key(v.portal));}catch{}
   },
   clearOwner(owner){
+   notice.clearOwner(owner);
    for(const portal of portals){const v=read(portal);if(v&&v.owner===owner)this.forget(v);}
   }
  };
