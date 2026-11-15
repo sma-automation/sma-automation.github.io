@@ -840,6 +840,19 @@ async function dashboardHtml(){
  }catch{throw connectionError(unavailable);}
  if(!response.ok){
   if(response.status>=500)throw connectionError(unavailable);
+  if(response.status===403&&!pilotRequested){
+   const {data,error}=await supabase.rpc('sma_onboarding_plan_choice_v1',{p_owner:owner});
+   if(error)throw connectionError(unavailable);
+   if(data?.ok===true){
+    const current=await dashboardSession();
+    if(!signedOut&&current?.user?.id===owner&&dashboardOwnerId===owner){
+     window.location.replace('paketwahl.html');
+     throw Error('Deine Paketwahl wird geöffnet …');
+    }
+    if(!signedOut)leaveDashboard();
+    throw Error('Die Anmeldung wurde gewechselt.');
+   }
+  }
   throw Error(response.status===403?'Dein SMA-Zugang konnte noch nicht zugeordnet werden.':unavailable);
  }
  const result=await response.json().catch(()=>null);
