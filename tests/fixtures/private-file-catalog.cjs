@@ -31,8 +31,10 @@ async function runCatalog({mapping, lease, readPage, finish}) {
       } else if (name === 'Dateimetadaten aus Drive lesen') {
         assert.equal(node.parameters.url, 'https://www.googleapis.com/drive/v3/files');
         assert.equal(node.parameters.specifyQuery, 'json');
-        assert.equal(node.parameters.jsonQuery, '={{ $json.query }}');
-        item = await readPage(item.query);
+        const expression = node.parameters.jsonQuery.slice(3, -2);
+        const queryText = runInNewContext(expression, {$json: item});
+        assert.equal(typeof queryText, 'string', 'HTTP Request expects JSON text');
+        item = await readPage(JSON.parse(queryText));
       } else if (name === 'Dateiliste speichern' || name === 'Dateifehler speichern') {
         assert(node.parameters.url.endsWith('/rpc/sma_publication_files_finish_v1'));
         item = await finish(item);
