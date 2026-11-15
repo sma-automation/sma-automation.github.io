@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {readFile, readdir} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 
@@ -120,6 +121,20 @@ try {
   await db.exec('set local role authenticated');
   assert.equal((await call(first)).code, 'ACCOUNT_UNAVAILABLE');
   await db.exec('rollback');
+  // Run the operator's real entry point. A quoted address remains data in the SQL editor.
+  const address = "o'brien+pilot@example.invalid";
+  await db.query('update public.sma_kunden set kunde_email=$1 where user_id=$2',[address,second]);
+  await db.query('update auth.users set email=$1 where id=$2',[address,second]);
+  const prepare = state => spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
+    input: [beta.n8n_ref,'124',beta.n8n_ref,address,'',state,'AUS','AUS'].join('\n')+'\n', encoding:'utf8'
+  });
+  const denied = prepare('EIN');
+  assert.equal(denied.status,1); assert.equal(denied.stdout,'');
+  const checked = prepare('AUS');
+  assert.equal(checked.status,0,checked.stderr);
+  assert.equal(checked.stdout.includes(address),false);
+  assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'LINKED');
+  assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'ALREADY_LINKED');
   console.log('Kontozuordnung: Berechtigungen, eindeutige Nachweise, Adresswechsel, Wiederholung, konkurrierende Zuordnung und unveränderte Zugangssperren geprüft.');
   console.log('Paketvormerkung: Neuzugang, drei Paketoptionen, Wiederholung, Konflikt, Kontentrennung und Zugangssperren geprüft.');
 } finally {await db.close();}

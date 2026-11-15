@@ -69,18 +69,16 @@ Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
    Treffer erfordern einen manuellen Abgleich.
 3. Die gespeicherte n8n-Zeile erneut öffnen. Die interne numerische `id`, die
    Kennung, die E-Mail-Adresse und die vier Statusfelder direkt aus dieser
-   Ansicht mit der Vormerkung vergleichen. Der folgende Aufruf zeigt die Form
-   mit fiktiven Werten. Für den echten Aufruf die reservierte Kennung im ersten
-   Argument sowie die **abgelesenen** sieben Werte im zweiten Argument einsetzen.
-   Der Datenbankaufruf übernimmt den vom Betreiber geprüften Zeilenstand.
+   Ansicht ablesen. Im Projektverzeichnis den folgenden lokalen Befehl starten
+   und die Werte eingeben. Das Hilfsprogramm gibt den fertigen SQL-Aufruf aus
+   und baut E-Mail-Adressen mit Sonderzeichen korrekt ein.
 
-   ```sql
-   select sma_private.confirm_onboarding_n8n_v1(
-     'kunde_beispiel',
-     '[{"id":123,"kunde_id":"kunde_beispiel","kunde_email":"beispiel@example.invalid",
-        "paket":null,"zugang_aktiv":false,"demo_delta_aktiv":false,"zahlung_bestaetigt":false}]'::jsonb
-   );
+   ```sh
+   node n8n/confirm-onboarding-row.cjs
    ```
+
+   Den ausgegebenen Aufruf im privaten Supabase-SQL-Editor ausführen. Er enthält
+   die abgelesenen Angaben. Die Datenbank gleicht diese mit der Vormerkung ab.
 
 4. `LINKED` bestätigt die erste Zuordnung, `ALREADY_LINKED` die Wiederholung
    mit derselben Zeile. Bei allen anderen Ergebnissen Kennung, Adresse,
