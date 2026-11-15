@@ -1,4 +1,4 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=11';
+import {mountMediaEditor} from './media-editor-view.mjs?v=12';
 import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=9';
 
 const query = new URLSearchParams(location.search);
@@ -49,14 +49,15 @@ async function openEditor() {
     document.documentElement.dataset.smaCustomerMedia = 'pilot';
     document.getElementById('backDashboard').href = './dashboard.html?kundenmedien=pilot';
   }
+  const source=(file,signal)=>editorSource(file,signal,owner);
   view = mountMediaEditor({
     doc:document, expectedOwnerId:owner, getOwnerId, musicLibrary:editorMusicLibrary(owner),
     request:(action,input)=>editorRequest(action,input,owner), listFiles:()=>editorFiles(owner),
     refreshMetadata:signal=>editorRefreshFiles(owner,signal), thumbnail:(file,signal)=>editorThumbnail(file,signal,owner),
-    uuid:()=>crypto.randomUUID(),
+    source,uuid:()=>crypto.randomUUID(),
     exportDependencies:{
       request:(action,input)=>exportRequest(action,input,owner),
-      source:(file,signal)=>editorSource(file,signal,owner),
+      source,
       upload:(blob,artifact,signal,onProgress)=>uploadExport(blob,artifact,signal,owner,onProgress)
     },
     initialAssetId:fileLink.get('asset') ?? query.get('asset'),
