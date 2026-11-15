@@ -34,9 +34,70 @@ function sameAttempt(a,b){
 // Optional browser-only notice. It never changes form fields or the server save status.
 // Track only the current attempt's identity, not a second in-memory draft copy.
 function checkpointNotice(win){
- let current=null,node=null;
+ let current=null,node=null,actions=null,copyButton=null,copyStatus=null,manual=null;
+ let copyGeneration=0,copyTimer=null;
  const matches=v=>!!current&&!!v&&['token','owner','portal'].every(k=>current[k]===v[k]);
- function hide(){try{if(node){node.hidden=true;node.textContent='';}}catch{}}
+ function clearCopy(){
+  copyGeneration++;
+  if(copyTimer!==null){win.clearTimeout(copyTimer);copyTimer=null;}
+  if(actions){actions.hidden=true;copyButton.disabled=false;copyStatus.textContent='';manual.value='';manual.hidden=true;}
+ }
+ function hide(){try{clearCopy();if(node){node.hidden=true;node.textContent='';}}catch{}}
+ // Read only the current portal's editable text, at the explicit click, not its old checkpoint.
+ function copyFields(){
+  const doc=win.document,p=current?.portal;
+  if(!portals.includes(p))return null;
+  const fields=[['Titel',p+'-title'],['Beitrag',p+'-body'],['Hashtags',p+'-hashtags']];
+  const values=[];
+  for(const [label,id] of fields){
+   const field=doc.getElementById(id);
+   if(typeof field?.value!=='string')return null;
+   values.push(label+'\n'+field.value);
+  }
+  const description=doc.getElementById('source_text');
+  if(typeof description?.value==='string'&&description.value)values.push('Inhaltsbeschreibung\n'+description.value);
+  const text=values.join('\n\n');
+  return text.length<=32000?text:null; // Never silently truncate a rescue copy.
+ }
+ function offerCopy(){
+  try{
+   if(copyFields()===null||typeof node.after!=='function')return;
+   if(!actions){
+    const doc=win.document;
+    actions=doc.createElement('div');actions.id='tabDraftStorageActions';actions.className='actions';
+    copyButton=doc.createElement('button');copyButton.id='tabDraftCopy';copyButton.type='button';
+    copyButton.className='secondary';copyButton.textContent='Aktuelle Texte kopieren';
+    copyStatus=doc.createElement('p');copyStatus.id='tabDraftCopyStatus';copyStatus.className='note';
+    copyStatus.setAttribute('role','status');copyStatus.setAttribute('aria-live','polite');
+    copyStatus.style.cssText='flex-basis:100%;margin:0;overflow-wrap:anywhere';
+    manual=doc.createElement('textarea');manual.id='tabDraftManualCopy';manual.readOnly=true;manual.hidden=true;
+    manual.setAttribute('aria-label','Aktuelle Texte zum manuellen Kopieren');manual.setAttribute('aria-describedby',copyStatus.id);
+    manual.style.cssText='width:100%;min-width:0;max-width:100%;white-space:pre-wrap';
+    copyButton.addEventListener('click',()=>{
+     if(!current||node.hidden||actions.hidden||copyButton.disabled)return;
+     const text=copyFields();
+     if(text===null){manual.value='';manual.hidden=true;copyStatus.textContent='Bitte kopiere deine Texte direkt aus den Eingabefeldern. Es wurde nichts kopiert.';return;}
+     const ticket=++copyGeneration;let settled=false;
+     copyButton.disabled=true;manual.value=text;manual.hidden=true;copyStatus.textContent='Texte werden kopiert …';
+     const finish=ok=>{
+      if(settled||ticket!==copyGeneration||!current||node.hidden)return;settled=true;
+      if(copyTimer!==null){win.clearTimeout(copyTimer);copyTimer=null;}
+      copyButton.disabled=false;
+      if(ok){manual.value='';manual.hidden=true;copyStatus.textContent='Texte vom Klick kopiert. Bitte außerhalb von SMA einfügen und sichern. Das bestätigt keine Speicherung bei SMA.';}
+      else{manual.hidden=false;copyStatus.textContent='Automatisches Kopieren nicht bestätigt. Markiere und kopiere den Text im folgenden Feld und sichere ihn außerhalb von SMA.';manual.focus();manual.select();}
+     };
+     try{
+      if(typeof win.navigator?.clipboard?.writeText!=='function'){finish(false);return;}
+      copyTimer=win.setTimeout(()=>finish(false),10000);
+      // Preserve the user gesture; never read the clipboard or retry automatically.
+      Promise.resolve(win.navigator.clipboard.writeText(text)).then(()=>finish(true),()=>finish(false));
+     }catch{finish(false);}
+    });
+    actions.append(copyButton,copyStatus,manual);node.after(actions);
+   }
+   actions.hidden=false;
+  }catch{/* The original manual-copy warning remains available. */}
+ }
  return {
   begin(v){
    if(!v||!portals.includes(v.portal)||!uuid(v.token)||!string(v.owner,128)||!v.owner)return;
@@ -57,6 +118,7 @@ function checkpointNotice(win){
      node.textContent='Zwischensicherung im Browser nicht möglich. Lass diese Seite geöffnet und kopiere deine aktuellen Texte vor dem Neuladen. Beachte zusätzlich den Speicherstatus bei SMA.';
      node.hidden=false;
     }
+    offerCopy();
    }catch{/* A missing view must never interrupt saving or sign-out. */}
   },
   saved(v){if(matches(v))hide();},
