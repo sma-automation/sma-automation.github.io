@@ -21,6 +21,16 @@ function valid(v,portal){
   validFields(v.base)&&validFields(v.sent)&&object(v.form)&&string(v.form.title,160)&&string(v.form.body,2400)&&
   string(v.form.tags,1000)&&validLink(v.form.link);
 }
+// Only form edits may reuse the last persisted checkpoint after a storage failure.
+// A new attempt, owner, file, route, baseline or sent payload must never revive it.
+function sameAttempt(a,b){
+ if(!a)return false;
+ for(const field of ['token','owner','portal','route','fileId','fileRevision','previewId','assignment','revision','shop'])
+  if(a[field]!==b[field])return false;
+ const fields=v=>[v.title,v.body,v.hashtags,v.product_id];
+ return JSON.stringify(fields(a.base))===JSON.stringify(fields(b.base))&&
+  JSON.stringify(fields(a.sent))===JSON.stringify(fields(b.sent));
+}
 export function tabDraftStore(win){
  function read(portal){
   if(!portals.includes(portal))return null;
@@ -44,7 +54,14 @@ export function tabDraftStore(win){
   write(v){
    try{
     const raw=JSON.stringify(v);
-    if(valid(v,v.portal)&&raw.length<=32000){win.sessionStorage.setItem(key(v.portal),raw);return;}
+    if(valid(v,v.portal)&&raw.length<=32000){
+     try{win.sessionStorage.setItem(key(v.portal),raw);return;}
+     catch{
+      // setItem failed: keep only a validated checkpoint of this exact attempt.
+      // This does not claim that the newer form reached storage or the server.
+      if(sameAttempt(read(v.portal),v))return;
+     }
+    }
    }catch{}
    try{win.sessionStorage.removeItem(key(v.portal));}catch{}
   },
