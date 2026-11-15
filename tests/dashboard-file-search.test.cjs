@@ -103,7 +103,7 @@ test('gallery receives the global query, resets the portal and opens the first f
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
   dashboardSession:async()=>({user:{id:'owner'}}),supabase:{rpc:async(name,args)=>{calls.push([name,args.p_action]);return {data:{ok:true,files}};}}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);
- const editorHref='https://sma.test/app/media-editor.html?v=10&kundenmedien=pilot';
+ const editorHref='https://sma.test/app/media-editor.html?v=11&kundenmedien=pilot';
  const gallery=attach(document,document.querySelector('main'),editorHref);
  const portal=document.querySelector('#smaFilePortalFilter'),finder=document.querySelector('#smaFileSearch');
  // LinkeDOM exposes select.value as a getter. Emulate the native select setter.
@@ -111,7 +111,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  await new Promise(resolve=>setImmediate(resolve));
  const edit=document.querySelector('.sma-file-row details a');
  const target=new URL(edit.getAttribute('href'));assert.equal(target.searchParams.get('kundenmedien'),'pilot');
- assert.deepEqual(Object.fromEntries(new URLSearchParams(target.hash.slice(1))),{asset:'clip-0',revision:'stand:&0'});
+ assert.deepEqual(Object.fromEntries(new URLSearchParams(target.hash.slice(1))),{asset:'clip-0',revision:'stand:&0',portal:'youtube'});
  assert.equal(edit.target,'_blank');assert.equal(edit.rel,'noopener');
  const next=()=>[...document.querySelectorAll('.sma-file-pages button')].find(b=>b.textContent==='Weiter');
  portal.value='youtube';portal.dispatchEvent(new window.Event('change'));next().click();

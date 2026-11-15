@@ -1,3 +1,4 @@
+import {dashboardFileDescription} from './dashboard-file-search.mjs?v=2';
 import {readMusicSetting} from './media-music-model.mjs?v=1';
 export const editorDefaults=Object.freeze({format:'original',fit:'contain',position_x:50,position_y:50,start_ms:0,end_ms:null,cover_ms:null,overlay_text:'',overlay_position:'bottom',audio_volume:100});
 export const editorLabels=Object.freeze({format:'Format',fit:'Bildeinpassung',position_x:'Ausschnitt horizontal',position_y:'Ausschnitt vertikal',start_ms:'Schnittbeginn',end_ms:'Schnittende',cover_ms:'Cover-Zeitpunkt',overlay_text:'Texteinblendung',overlay_position:'Textposition',audio_volume:'Originalton',music:'Musikspur'});
@@ -16,9 +17,24 @@ export function readEditorState(r,file){
  if(r.version!==1||r.can_publish!==false||r.asset_id!==file.id||r.asset_revision!==file.revision||!Number.isInteger(r.revision)||r.revision<0||r.revision>2147483647||typeof r.changed!=='boolean'||(r.revision===0?r.saved_at!==null:!editorTimestamp(r.saved_at)))throw Error('UNAVAILABLE');
  return {revision:r.revision,settings:readEditorSettings(r.settings,file),saved_at:r.saved_at,changed:r.changed};
 }
-export function readEditorFiles(r){
+export function readEditorFiles(r,linkedId=null,linkedPortal=null){
  if(!object(r)||r.ok!==true||!Array.isArray(r.files))throw Error(r?.code||'UNAVAILABLE');
- const ids=new Set();return r.files.map(f=>{if(!object(f)||!editorUUID(f.id)||ids.has(f.id)||typeof f.name!=='string'||Array.from(f.name).length>500||typeof f.revision!=='string'||!f.revision||f.revision.length>250||!['image','video'].includes(f.media_kind)||f.duration_ms!==null&&(!Number.isSafeInteger(f.duration_ms)||f.duration_ms<0)||[f.width_px,f.height_px].some(n=>n!==null&&(!Number.isInteger(n)||n<=0))||f.size_bytes!==undefined&&(!Number.isSafeInteger(f.size_bytes)||f.size_bytes<0))throw Error('UNAVAILABLE');ids.add(f.id);return Object.fromEntries(['id','name','revision','media_kind','mime_type','duration_ms','width_px','height_px',...(f.size_bytes!==undefined?['size_bytes']:[])].map(k=>[k,f[k]]));});
+ const ids=new Set();
+ return r.files.map(f=>{
+  if(!object(f)||!editorUUID(f.id)||ids.has(f.id)||typeof f.name!=='string'||Array.from(f.name).length>500||typeof f.revision!=='string'||!f.revision||f.revision.length>250||!['image','video'].includes(f.media_kind)||f.duration_ms!==null&&(!Number.isSafeInteger(f.duration_ms)||f.duration_ms<0)||[f.width_px,f.height_px].some(n=>n!==null&&(!Number.isInteger(n)||n<=0))||f.size_bytes!==undefined&&(!Number.isSafeInteger(f.size_bytes)||f.size_bytes<0))throw Error('UNAVAILABLE');
+  ids.add(f.id);
+  const display=object(f.display)?{
+   source_name:typeof f.display.source_name==='string'?f.display.source_name:'',
+   variant:typeof f.display.variant==='string'?f.display.variant:''
+  }:null;
+  const {title,version}=dashboardFileDescription({
+   name:f.name,media_kind:f.media_kind,duration_ms:f.duration_ms,modified_at:f.modified_at,
+   assignments:f.assignments,display
+  },'',f.id===linkedId?linkedPortal:null);
+  const caption=[title,version].filter(Boolean).join(' · ');
+  const file=Object.fromEntries(['id','name','revision','media_kind','mime_type','duration_ms','width_px','height_px',...(f.size_bytes!==undefined?['size_bytes']:[])].map(k=>[k,f[k]]));
+  return {...file,caption};
+ });
 }
 export function editorValue(key,v){
  if(key==='music')return v?v.name+' · '+v.volume+' % · ab '+(v.start_ms/1000).toLocaleString('de-AT')+' s':'Keine';

@@ -2,9 +2,9 @@ import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1
 import {mountMediaMusic} from './media-music-view.mjs?v=4';
 import {mountMediaExport} from './media-export-view.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
-import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=3';
+import {editorDefaults,readEditorFiles,readEditorState,readEditorSettings} from './media-editor-model.mjs?v=4';
 const errors={FILE_SYNC_RATE_LIMITED:'Bitte warte kurz und aktualisiere die Dateiangaben danach erneut.',FILE_SYNC_RUNNING:'Dein Kundenordner wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_UNAVAILABLE:'Die Dateiangaben konnten nicht aktualisiert werden. Deine Eingaben bleiben erhalten. Bitte erneut versuchen.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist momentan nicht erreichbar. Bitte erneut versuchen.',MUSIC_INVALID:'Bitte prüfe Musiklautstärke und Startzeit (0 bis unter 600 Sekunden).',RATE_LIMITED:'Für diesen Zeitraum wurden bereits viele Änderungen gespeichert. Bitte versuche es später erneut.',AUTH_REQUIRED:'Bitte melde dich erneut bei SMA an.',ACCOUNT_UNAVAILABLE:'Dein Kundenkonto ist nicht eindeutig verfügbar.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',FILE_UNAVAILABLE:'Diese Datei ist nicht mehr verfügbar. Lade die Dateiliste neu.',FILE_CHANGED:'Die Datei wurde geändert. Lade die Dateiliste und den passenden Entwurf neu.',REVISION_CONFLICT:'Dieser Entwurf wurde inzwischen geändert. Lade den gespeicherten Stand, bevor du erneut speicherst.',REQUEST_CONFLICT:'Die Speicherung passt nicht mehr zu diesem Entwurf. Lade den gespeicherten Stand.',INVALID_SETTINGS:'Bitte prüfe die Eingaben: Zeitpunkte innerhalb der Videolänge, Cover innerhalb des Schnitts und höchstens 160 Zeichen ohne Zeilenumbruch.',UNAVAILABLE:'Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.'};
-export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,refreshMetadata=null,musicLibrary=null,thumbnail,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,initialAssetRevision=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
+export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,refreshMetadata=null,musicLibrary=null,thumbnail,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
  const $=id=>doc.getElementById(id),control=k=>doc.querySelector('[name="'+k+'"]'),ownerWindow=doc.defaultView;
  let files=[],file=null,saved=null,attempt=null,busy=false,disposed=false,invalidOwner=false,dirty=false,generation=0,previewController=null,previewURL=null,metadataController=null,fileStale=false;
  let exportView,discardAction=null;
@@ -46,6 +46,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  }
  async function loadFile(id,unavailableMessage){
   if(disposed||invalidOwner)return;const g=++generation;fileStale=false;metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;releasePreview();music.clear();exportView?.setContext(null,null,false);file=files.find(f=>f.id===id)||null;saved=null;attempt=null;setDirty(false);$('editor').hidden=true;clearDiscard();
+  $('fileDetails').hidden=!file;$('fileDetails').open=false;
   if(!file){
    $('fileInfo').textContent='';$('savedInfo').textContent='';
    say(unavailableMessage||'Noch keine Bild- oder Videodateien vorhanden. Dateien kannst du unter Veröffentlichung hinzufügen.',Boolean(unavailableMessage));
@@ -55,6 +56,18 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   try{if(!await owner(g))return;const response=await request('get',{asset_id:file.id,asset_revision:file.revision});if(!current(g)||!await owner(g))return;fill(readEditorState(response,file));fileFields();$('editor').hidden=false;say('Entwurf geladen. Änderungen werden erst mit „Entwurf speichern“ gespeichert.');void loadPreview(g,file);}
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
  }
+ function renderOptions(unavailable){
+  const select=$('asset');select.replaceChildren();
+  if(unavailable){
+   const placeholder=doc.createElement('option');placeholder.value='';placeholder.disabled=true;
+   placeholder.textContent='Datei auswählen';select.append(placeholder);
+  }
+  for(const f of files){
+   const option=doc.createElement('option');option.value=f.id;option.textContent=f.caption;
+   select.append(option);
+  }
+  if(unavailable)select.value='';
+ }
  async function loadFiles(){
   if(disposed||invalidOwner||busy)return;if(dirty){say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}
   const g=++generation;lock(true);$('retry').hidden=true;say('Dateiliste wird geladen …');
@@ -62,22 +75,12 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
    if(!await owner(g))return;
    const response=await listFiles();
    if(!current(g)||!await owner(g))return;
-   files=readEditorFiles(response);
+   files=readEditorFiles(response,initialAssetId,initialAssetPortal);
    const selected=useLinkedFile
     ?files.find(f=>f.id===initialAssetId&&(initialAssetRevision===null||f.revision===initialAssetRevision))
     :files.find(f=>f.id===file?.id)||files[0];
    const unavailable=useLinkedFile&&!selected;
-   const select=$('asset');select.replaceChildren();
-   if(unavailable){
-    const placeholder=doc.createElement('option');placeholder.value='';placeholder.disabled=true;
-    placeholder.textContent='Datei auswählen';select.append(placeholder);
-   }
-   for(const f of files){
-    const option=doc.createElement('option');option.value=f.id;
-    option.textContent=(f.media_kind==='video'?'Video · ':'Bild · ')+(f.name.length>90?f.name.slice(0,87)+'…':f.name);
-    select.append(option);
-   }
-   if(unavailable)select.value='';
+   renderOptions(unavailable);
    lock(false);$('app').hidden=false;
    await loadFile(selected?.id,unavailable?'Die verlinkte Dateiversion ist nicht mehr verfügbar. Bitte prüfe die Dateiauswahl.':null);
   }
@@ -90,11 +93,11 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   $('metadataStatus').textContent='Dateiangaben werden im Kundenordner geprüft …';
   try{
    if(!await owner(g))return;const result=await refreshMetadata(controller.signal);if(!current(g)||!await owner(g)||controller.signal.aborted)return;
-   const latestFiles=readEditorFiles(result),latest=latestFiles.find(f=>f.id===selected.id);
+   const latestFiles=readEditorFiles(result,initialAssetId,initialAssetPortal),latest=latestFiles.find(f=>f.id===selected.id);
    if(!latest)throw Error('FILE_UNAVAILABLE');
-   files=latestFiles;
+   files=latestFiles;renderOptions(false);$('asset').value=selected.id;
    if(latest.revision!==selected.revision||latest.media_kind!==selected.media_kind){fileStale=true;exportView?.setContext(null,null,false);throw Error('FILE_CHANGED');}
-   file=latest;fileFields();paint();exportView?.setContext(file,saved,dirty||fileStale);void loadPreview(g,file);
+   file=latest;$('fileInfo').textContent=file.name;fileFields();paint();exportView?.setContext(file,saved,dirty||fileStale);void loadPreview(g,file);
    say(missingVideoMetadata(file).length?'Google Drive hat die fehlenden Dateiangaben noch nicht bereitgestellt. Bitte später erneut aktualisieren. Deine Eingaben bleiben erhalten.':'Dateiangaben aktualisiert. Deine Eingaben bleiben erhalten.');
   }catch(e){if(current(g)&&!controller.signal.aborted){if(['FILE_UNAVAILABLE','FILE_CHANGED'].includes(e?.message)){fileStale=true;exportView?.setContext(null,null,false);}fail(e);if(!invalidOwner)$('metadataStatus').textContent=e?.message==='FILE_CHANGED'?'Die Dateiversion wurde geändert. Deine Eingaben bleiben sichtbar. Lade den passenden gespeicherten Stand, bevor du fortfährst.':errors[e?.message]||errors.FILE_SYNC_UNAVAILABLE;}}
   finally{if(metadataController===controller)metadataController=null;if(current(g))lock(false);}

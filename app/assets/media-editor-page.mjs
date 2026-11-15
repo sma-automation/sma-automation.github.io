@@ -1,5 +1,5 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=10';
-import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=8';
+import {mountMediaEditor} from './media-editor-view.mjs?v=11';
+import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=9';
 
 const query = new URLSearchParams(location.search);
 const fileLink = new URLSearchParams(location.hash.slice(1));
@@ -60,7 +60,8 @@ async function openEditor() {
       upload:(blob,artifact,signal,onProgress)=>uploadExport(blob,artifact,signal,owner,onProgress)
     },
     initialAssetId:fileLink.get('asset') ?? query.get('asset'),
-    initialAssetRevision:fileLink.get('revision')
+    initialAssetRevision:fileLink.get('revision'),
+    initialAssetPortal:fileLink.get('portal')
   });
   function checkOwner(id) {
     if (id !== owner) clearPilot();
