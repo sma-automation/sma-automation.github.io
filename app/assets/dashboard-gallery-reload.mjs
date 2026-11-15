@@ -44,6 +44,10 @@ export function galleryReloadStore(win){
     clear();
     if(!reload||!owner||saved?.owner!==owner||saved.entry!==entry)return null;
     const v=saved.view;
+    if(v?.kind==='portal-action'){
+     if(!portals.has(v.portal)||v.portal==='all'||!['connect','optimize'].includes(v.action))return null;
+     return {kind:v.kind,portal:v.portal,action:v.action};
+    }
     if(v?.kind==='preview')return validPreview(v)?v:null;
     if(!v||typeof v.query!=='string'||!portals.has(v.portal)||!Number.isSafeInteger(v.page)||v.page<0||
        !validId(v.selected)||!validId(v.file)||!controls.has(v.focus))return null;

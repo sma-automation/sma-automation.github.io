@@ -50,3 +50,13 @@ test('search preview reload binds the return path to its owner, file, portal and
  const gallery=previewReloadSnapshot(route,{id:'clip-a',query:'Werkstatt',page:3,portal:'all'});
  assert.deepEqual(gallery.origin,{global:false,query:'Werkstatt',page:3,portal:'all'});
 });
+
+test('portal return restores just the platform and control for the same customer and reload',async()=>{
+ const {galleryReloadStore}=await modulePromise;
+ const same=galleryReloadStore(tab()),view={kind:'portal-action',portal:'tiktok',action:'connect'};
+ same.save('first',{...view,href:'template-only'});assert.deepEqual(same.take('first'),view);
+ for(const invalid of [{portal:'all'},{portal:'other'},{action:'publish'}]){
+  same.save('first',{...view,...invalid});assert.equal(same.take('first'),null);
+ }
+ same.save('first',view);assert.equal(same.take('second'),null);
+});

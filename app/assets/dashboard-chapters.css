@@ -26,11 +26,11 @@
 [data-sma-chapters]>.page-head>.sma-chapters+p{margin-top:0}
 #page-publishing.sma-optimizing .sma-chapters{display:none!important}
 #page-publishing [data-chapter=files]>.page-head h1{font-size:20px}
-#page-social[hidden],[data-page="social"][hidden]{display:none!important}
+[data-page="social"][hidden],#page-publishing .platform-list[hidden],.sma-portal-connections>:not(.platform-list){display:none!important}
+#page-social.sma-portal-connections{display:block;margin:0;padding:0}
 #page-publishing .sma-portal-actions{
  display:flex;align-items:center;gap:8px;grid-column:3;grid-row:1;min-width:0;max-width:100%;
 }
-#page-publishing .sma-portal-actions .platform-action{display:flex;min-width:0;margin:0}
 #page-publishing .sma-portal-actions :is(.sma-optimize,.button){
  display:inline-flex;align-items:center;justify-content:center;min-width:0;max-width:100%;min-height:44px;
  margin:0;padding:8px 14px;font:600 14px/1.25 Inter,Arial,sans-serif;text-align:center;white-space:normal;
