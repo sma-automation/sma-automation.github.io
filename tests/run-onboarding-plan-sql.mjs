@@ -37,6 +37,13 @@ try {
   await db.exec(await readFile('supabase/migrations/'+statusMigration,'utf8'));
   const retryMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_booking_retry_v1.sql'));
   await db.exec(await readFile('supabase/migrations/'+retryMigration,'utf8'));
+  const renewalMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_subscription_renewal_v1.sql'));
+  await db.exec(await readFile('supabase/migrations/'+renewalMigration,'utf8'));
+  for(const role of ['anon','authenticated']){
+    await db.exec('set role '+role);
+    await assert.rejects(db.query("select public.sma_package_renewal_v1(null,null,'restore','{}')"),/permission denied/);
+    await db.exec('reset role');
+  }
   const baseline=(await one('select jsonb_agg(to_jsonb(c) order by id) as customers from public.sma_kunden c')).customers;
   await db.exec('set role authenticated');await session(first);
   assert.deepEqual(await call(first),{ok:true,plan:null});
