@@ -1,3 +1,4 @@
+import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=1';
 // Presentation only: move the existing elements, never copy forms or customer data.
 export function createChapterTabs({doc,id,entries,initial=entries[0]?.key,list,onSelect}){
  const nav=list||doc.createElement('nav');
@@ -93,33 +94,11 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPrepareP
   cleanups.push(()=>{prepare.removeEventListener('click',onPreparePost);prepare.remove();});
  }
  const social=page('social');
- const socialCards=[...social?.querySelectorAll('.platform-card')||[]];
- const platform=card=>card.querySelector('.platform-info strong')?.textContent.trim();
- const portalCards=new Map([...publishing?.querySelectorAll('.platform-card')||[]].map(card=>[platform(card),card]));
- const pairs=socialCards.map(source=>{
-  const target=portalCards.get(platform(source));
-  return {target,optimize:target?.querySelector('.sma-optimize'),connection:source.querySelector('.platform-action')};
- });
- if(pairs.length&&pairs.every(pair=>pair.optimize&&pair.connection?.querySelector('a,button'))){
-  const restore=[];
-  for(const {target,optimize,connection} of pairs){
-   const actions=doc.createElement('div');
-   actions.className='sma-portal-actions';
-   target.append(actions);
-   // Move the original controls, including the signed link or disabled provider button.
-   moveGroup(actions,[optimize,connection],restore);
-   restore.push(()=>actions.remove());
-  }
-  const socialNav=[...doc.querySelectorAll('[data-page="social"]')];
-  if(social.classList.contains('active'))doc.querySelector('[data-page="publishing"]')?.click();
-  for(const el of [social,...socialNav]){
-   const hidden=el.hidden;el.hidden=true;
-   restore.push(()=>{el.hidden=hidden;});
-  }
-  cleanups.push(()=>restore.reverse().forEach(fn=>fn()));
- }else{
-  // A different shell can still expose its own actions on the original page.
-  mount('social',['YouTube','TikTok','Instagram','Facebook'].map(label=>({key:label.toLowerCase(),label,nodes:socialCards.filter(card=>platform(card)===label)})));
+ const connections=mountPortalConnections(doc,publishing,social);
+ if(connections)cleanups.push(()=>connections.destroy());
+ else{
+  const socialCards=[...social?.querySelectorAll('.platform-card')||[]];
+  mount('social',['YouTube','TikTok','Instagram','Facebook'].map(label=>({key:label.toLowerCase(),label,nodes:socialCards.filter(card=>card.querySelector('.platform-info strong')?.textContent.trim()===label)})));
  }
  const content=page('content'),contentTools=children(content?.querySelector('.grid'),'.card');
  mount('content',[
@@ -190,5 +169,5 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPrepareP
   cleanups.push(()=>{shopFrame.removeEventListener('load',attach);observer?.disconnect();unbind.forEach(fn=>fn());shopFrame.style.height=previousHeight;savedExtras.forEach(([el,hidden])=>el.hidden=hidden);tabs.destroy();shop.removeAttribute('data-sma-chapters');});
  }
  // Original layout containers remain in the DOM for existing code; empty ones take no space.
- return {controllers,destroy(){cleanups.reverse().forEach(fn=>fn());css.remove();}};
+ return {controllers,connections,destroy(){cleanups.reverse().forEach(fn=>fn());css.remove();}};
 }

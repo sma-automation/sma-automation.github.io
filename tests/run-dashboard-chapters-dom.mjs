@@ -90,32 +90,42 @@ await test('keyboard navigation has one focusable tab and matching accessible pa
  key('ArrowLeft');assert.equal(tabs.selected,'facebook');assert.equal(focused,'facebook');key('Home');assert.equal(tabs.selected,'youtube');key('ArrowRight');assert.equal(tabs.selected,'tiktok');key('End');assert.equal(tabs.selected,'facebook');
  for(const entry of tabs.entries){assert.equal(entry.button.getAttribute('tabindex'),entry.key==='facebook'?'0':'-1');assert.equal(entry.button.getAttribute('aria-controls'),entry.panel.id);assert.equal(entry.panel.getAttribute('aria-labelledby'),entry.button.id);}f.destroy();
 });
-await test('publication moves the original connection controls by platform and restores them on teardown',()=>{
- const portal=name=>'<article class="platform-card"><div class="platform-info"><strong>'+name+'</strong></div>';
- const link='<a href="/connect/test" target="_blank" rel="noopener" data-en="Reconnect">Neu verbinden</a>';
+await test('connection cards preserve the delegated OAuth click, native status refresh and the original optimizers',async()=>{
+ const portal=name=>'<article class="platform-card" data-sma-platform="'+name+'"><div class="platform-info"><strong>'+name+'</strong></div>';
+ const link='<a href="/connect/test" target="_blank" rel="noopener" data-en="Connect">Verbinden</a>';
  const blocked='<button disabled data-en="Meta approval pending">Meta-Freigabe offen</button>';
  const names=['YouTube','Instagram'];
- const publishing=names.map(name=>portal(name)+'<button class="sma-optimize">Optimieren</button></article>').join('');
- const social=names.slice().reverse().map(name=>portal(name)+'<div class="platform-action">'+(name==='YouTube'?link:blocked)+'</div></article>').join('');
+ const publishing=names.map(name=>portal(name)+'<button class="sma-optimize" data-portal="'+name.toLowerCase()+'">Optimieren</button></article>').join('');
+ const sourceRows=names.slice().reverse().map(name=>portal(name)+'<div class="platform-action">'+(name==='YouTube'?link:blocked)+'</div></article>').join('');
+ const list=html=>'<div class="platform-list">'+html+'</div>';
  const {document:doc}=parseHTML('<html><head></head><body><nav><button data-page="publishing">Veröffentlichung</button><button data-page="social">Social Media</button></nav>'+
-  page('publishing',card('portals',publishing)+'<div id="publishingFilesSlot"></div>')+page('social',social)+'</body></html>');
- const source=doc.getElementById('page-social'),nav=doc.querySelector('[data-page="social"]');
- const controls=[source.querySelector('a'),source.querySelector('button')];
- const cards=[...doc.querySelectorAll('#portals .platform-card')],optimizers=cards.map(c=>c.querySelector('button'));
- const parents=controls.map(c=>c.parentElement.parentElement);let clicked=0;
- controls[0].addEventListener('click',e=>{e.preventDefault();clicked++;});
+  page('publishing',card('portals',list(publishing))+'<div id="publishingFilesSlot"></div>')+page('social',list(sourceRows))+'</body></html>');
+ const source=doc.getElementById('page-social'),nav=doc.querySelector('[data-page="social"]'),home=source.parentElement;
+ const pub=doc.querySelector('#page-publishing .platform-list'),native=source.querySelector('.platform-list');
+ const originals=[...pub.querySelectorAll('button')];
+ let pending='';
+ doc.addEventListener('click',event=>{
+  const clicked=event.target.closest('#page-social .platform-action a[href]');
+  if(clicked){event.preventDefault();pending=clicked.closest('[data-sma-platform]').dataset.smaPlatform;}
+ },true);
  for(let n=0;n<2;n++){
-  const view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css'});
-  assert(source.hidden&&nav.hidden);assert(!view.controllers.has('social'));
-  cards.forEach((c,i)=>{
-   const actions=c.querySelector('.sma-portal-actions');
-   assert.equal(actions.firstElementChild,optimizers[i]);
-   assert.equal(actions.lastElementChild.firstElementChild,controls[i]);
-  });
-  assert.equal(controls[0].getAttribute('target'),'_blank');assert.equal(controls[1].disabled,true);
-  controls[0].click();assert.equal(clicked,n+1);
-  view.destroy();assert(!source.hidden&&!nav.hidden);
-  controls.forEach((el,i)=>assert.equal(el.parentElement.parentElement,parents[i]));
+  const connect=source.querySelector('a'),view=mountDashboardChapters({doc,stylesheetUrl:'/chapters.css'});
+  assert(nav.hidden&&pub.hidden);assert(!view.controllers.has('social'));
+  assert(doc.getElementById('sma-publishing-panel-portals').contains(connect));
+  assert.equal(doc.querySelector('#page-publishing .platform-list'),pub);
+  assert.deepEqual([...native.children].map(c=>c.dataset.smaPlatform),names);
+  assert.equal(connect.previousElementSibling,originals[0]);assert.equal(connect.target,'_blank');
+  connect.click();assert.equal(pending,'YouTube');
+  // The session shell replaces both lists after verifying the customer's fresh response.
+  native.innerHTML=sourceRows.replace('>Verbinden<','>Neu verbinden<').replace('href="/connect/test"','href="/connect/fresh"');
+  pub.innerHTML=names.map(name=>portal(name)+'</article>').join('');
+  await tick();
+  assert.deepEqual([...native.querySelectorAll('.sma-optimize')],originals);
+  assert.equal(native.querySelector('a').textContent,'Neu verbinden');
+  assert.equal(native.querySelector('a').getAttribute('href'),'/connect/fresh');
+  assert(native.querySelector('button[disabled]').disabled);
+  view.destroy();assert(!nav.hidden&&!pub.hidden);assert.equal(source.parentElement,home);
+  assert.deepEqual([...pub.querySelectorAll('.sma-optimize')],originals);
   assert.equal(doc.querySelector('.sma-portal-actions'),null);
  }
 });

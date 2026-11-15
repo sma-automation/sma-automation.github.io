@@ -16,13 +16,13 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=31';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=6';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=7';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=13';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=2';
-import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=3';
+import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=4';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
@@ -49,7 +49,7 @@ window.addEventListener('pagehide',event=>{
  const preview=optimizerPage&&!optimizerPage.hidden&&publishingPage?.classList.contains('active')?
   previewReloadSnapshot(route,origin):null;
  const pending=previewMatchesHistory(startupView,route)?startupView:null;
- galleryReload.save(dashboardOwnerId,preview||pending||(galleryVisible()?fileView.snapshot():null));
+ galleryReload.save(dashboardOwnerId,preview||pending||(galleryVisible()?fileView.snapshot():dashboardChapters?.connections?.snapshot()));
 });
 window.addEventListener('online',()=>{
  if(signedOut)return;
@@ -371,7 +371,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=5',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=6',location.href).href,
     onPreparePost:ownerId&&page.querySelector('.sma-optimize')&&findAreaNavigation('publishing')
       ?()=>navigateDashboardArea('portals'):null
   });
@@ -497,7 +497,9 @@ frame.addEventListener('load',async()=>{
    await reopenSearchPreview(saved,fileView,doc,page,ownerId);
   }else{
    startupView=null;
-   if(saved&&fileView)await fileView.reopenGallery(saved,()=>navigateDashboardArea('files'));
+   if(saved?.kind==='portal-action'){
+    if(dashboardChapters?.connections&&activateSearchPage('publishing','portals'))dashboardChapters.connections.restore(saved);
+   }else if(saved&&fileView)await fileView.reopenGallery(saved,()=>navigateDashboardArea('files'));
   }
 });
 async function reopenSearchPreview(saved,list,doc,page,ownerId){

@@ -330,7 +330,7 @@ async function checkDashboardPreview(browser,width,height){
   for(const name of platformNames){
    const group=panel.locator('.platform-card').filter({hasText:name});
    const optimize=group.getByRole('button',{name:'Optimieren'});
-   const connect=group.locator('.platform-action :is(a,button)');
+   const connect=group.locator('.platform-action :is(a,button):not(.sma-optimize)');
    await fits(optimize,width);await fits(connect,width);
    const first=await optimize.boundingBox(),next=await connect.boundingBox();
    assert(first&&next&&first.x+first.width<=next.x+1&&Math.abs(first.y+first.height/2-next.y-next.height/2)<2);
@@ -338,6 +338,24 @@ async function checkDashboardPreview(browser,width,height){
    if(name==='YouTube'||name==='TikTok')assert.equal(await connect.getAttribute('href'),'/connect/'+name);
    else assert(await connect.isDisabled());
   }
+  const connectTikTok=panel.getByRole('link',{name:'Verbinden',exact:true});
+  await connectTikTok.focus();
+  await page.reload();
+  await connectTikTok.waitFor();
+  assert(await connectTikTok.evaluate(el=>el.ownerDocument.activeElement===el),'reload should return to the TikTok connection');
+  await connectTikTok.evaluate(el=>{
+   const doc=el.ownerDocument;
+   const native=doc.querySelector('#page-social .platform-list'),publishing=doc.querySelector('#page-publishing .platform-list');
+   const fresh=native.cloneNode(true);
+   for(const button of fresh.querySelectorAll('.sma-optimize'))button.remove();
+   fresh.querySelector('a[href="/connect/TikTok"]').textContent='Neu verbinden';
+   native.replaceChildren(...fresh.children);
+   publishing.innerHTML=publishing.innerHTML;
+  });
+  const refreshed=panel.locator('a[href="/connect/TikTok"]');
+  assert.equal(await refreshed.textContent(),'Neu verbinden');
+  assert(await refreshed.evaluate(el=>el.ownerDocument.activeElement===el),'status refresh should preserve the connection focus');
+  assert.equal(await panel.getByRole('button',{name:'Optimieren'}).count(),4);
   await panel.locator('.sma-optimize[data-portal=youtube]').click();
   const editor=frame.frameLocator('iframe[data-portal="youtube"]');
   await editor.getByRole('button',{name:/Beitragsvorschau öffnen/}).click();
