@@ -6,13 +6,15 @@ const html=readFileSync('app/dashboard.html','utf8');
 const code=html.slice(html.indexOf('function connectionError('),html.indexOf('// Called only by the same-origin'));
 const shell='<body data-sma-customer-id="test">Übersicht</body>';
 
-function setup({search='',eligible=false}={}){
+function setup({search='',eligible=false,onboarding=false}={}){
  let owner='first',authFailure=false,fetchFailure=null,switched=null,requests=0;
  const redirects=[];
  const dataset={},regularDashboard={hidden:true};let checks=0;
  const env={AbortSignal,URLSearchParams,location:{search},document:{documentElement:{dataset},getElementById(id){assert.equal(id,'regularDashboard');return regularDashboard;}},dashboardOwnerId:null,signedOut:false,endpoint:'https://fixture.invalid',window:{location:{replace:url=>redirects.push(url)}},
   leaveDashboard:()=>{env.signedOut=true;redirects.push('index.html');},
-  supabase:{rpc:async(name,{p_route})=>{assert.equal(name,'sma_customer_media_pilot_v1');assert.equal(p_route,'eligible');checks++;return {data:{ok:eligible}};},auth:{getSession:async()=>({error:authFailure||null,data:{session:owner?{user:{id:owner},access_token:owner}:null}})}},
+  supabase:{rpc:async(name,{p_route,p_owner})=>{
+   if(name==='sma_onboarding_plan_choice_v1'){assert.equal(p_owner,'first');return {data:{ok:onboarding}};}
+   assert.equal(name,'sma_customer_media_pilot_v1');assert.equal(p_route,'eligible');checks++;return {data:{ok:eligible}};},auth:{getSession:async()=>({error:authFailure||null,data:{session:owner?{user:{id:owner},access_token:owner}:null}})}},
   fetch:async(_url,opts)=>{
    requests++;assert.equal(opts.headers.Authorization,'Bearer '+owner);
    if(fetchFailure==='offline')throw Error('offline');
@@ -168,4 +170,15 @@ test('recovery takes priority over a registration link and a verified session re
  const existing=await openLogin(query,auth);
  assert.deepEqual(existing.redirects,['dashboard.html?kundenmedien=pilot']);
  assert.equal(existing.document.getElementById('authModeLink').getAttribute('href'),'index.html?kundenmedien=pilot');
+});
+
+test('only the confirmed new customer goes from a regular dashboard refusal to plan selection',async()=>{
+ const fresh=setup({onboarding:true});fresh.fail(403);
+ await assert.rejects(fresh.read(),/Paketwahl/);
+ assert.deepEqual(fresh.redirects,['paketwahl.html']);
+ const paid=setup({onboarding:true});assert.equal(await paid.read(),shell);assert.deepEqual(paid.redirects,[]);
+ const pilot=setup({search:'?kundenmedien=pilot',eligible:true,onboarding:true});pilot.fail(403);
+ await assert.rejects(pilot.read(),/zugeordnet/);assert.deepEqual(pilot.redirects,[]);
+ const switched=setup({onboarding:true});switched.switchDuringRead('second');switched.fail(403);
+ await assert.rejects(switched.read(),/gewechselt/);assert.deepEqual(switched.redirects,['index.html']);
 });

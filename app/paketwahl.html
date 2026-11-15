@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Paket vormerken · SMA</title>
+  <style>
+    *{box-sizing:border-box} [hidden]{display:none!important}
+    body{margin:0;background:#05070b;color:#f5f7fb;font:1rem/1.5 Arial,sans-serif}
+    header{padding:18px max(16px,calc((100% - 850px)/2));border-bottom:1px solid #253452;font-size:22px;font-weight:800}
+    main{max-width:850px;margin:clamp(24px,7vh,68px) auto;padding:0 16px}
+    h1{font-size:clamp(28px,5vw,40px);line-height:1.12;margin:0 0 12px}
+    p{color:#c3cde1} fieldset{border:0;padding:0;margin:24px 0 16px;min-width:0}
+    legend{font-weight:bold;margin-bottom:8px}.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    label{display:grid;align-content:start;grid-template-columns:auto 1fr;align-items:center;gap:8px;border:1px solid #455775;padding:16px;border-radius:12px;background:#101726;cursor:pointer}
+    label span, label small{grid-column:2} label small{color:#c3cde1} label:has(:checked){border-color:#86a6ff}
+    input{margin:0;accent-color:#7195ff} button,a{font:inherit}button{cursor:pointer;padding:10px 15px;border-radius:8px;border:1px solid #455775;color:inherit;background:transparent}
+    button[type=submit]{border-color:#315fd1;background:#315fd1;font-weight:bold}button:disabled{opacity:.55;cursor:default}
+    :focus-visible{outline:3px solid #9eb7ff;outline-offset:3px}a{color:#a9bdff}nav{display:flex;align-items:center;gap:20px;margin-top:24px;flex-wrap:wrap}
+    @media(max-width:620px){.plans{grid-template-columns:1fr}label{padding:12px}}
+  </style>
+</head>
+<body>
+  <header>SMA</header>
+  <main>
+    <h1>Dein SMA-Paket vormerken</h1>
+    <p>Die Vormerkung ist unverbindlich. Eine Buchung ist über diese Seite noch nicht möglich.</p>
+    <form id="choice" hidden>
+      <fieldset><legend>Paket auswählen</legend><div class="plans">
+        <label><input type="radio" name="plan" value="alpha" required><strong>Alpha</strong><span>100 € / Monat</span><small>Social-Media-Posting und Portalverbindungen</small></label>
+        <label><input type="radio" name="plan" value="beta" required><strong>Beta</strong><span>300 € / Monat</span><small>Alpha plus Shopbereich und SMA 24/7-Verkäufer</small></label>
+        <label><input type="radio" name="plan" value="delta" required><strong>Delta</strong><span>500 € / Monat</span><small>Beta plus eigene Website und Domain</small></label>
+      </div></fieldset>
+      <button type="submit">Auswahl vormerken</button>
+    </form>
+    <p id="status" role="status">Dein Konto wird geprüft …</p>
+    <button id="retry" hidden>Erneut laden</button>
+    <nav><a href="dashboard.html">Dashboard-Zugang prüfen</a><button id="logout">Abmelden</button></nav>
+  </main>
+  <script type="module" src="./assets/onboarding-plan.mjs?v=1"></script>
+</body>
+</html>

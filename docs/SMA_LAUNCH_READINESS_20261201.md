@@ -17,6 +17,30 @@ E-Mail-Adressen, Medienbytes, Dateipfade noch Tokens. **Eine Anzahl
 gilt nie als Beweis für den unveränderten Freigabe-Fingerprint oder
 einen erfolgreich veröffentlichten Beitrag.**
 
+## Einstieg nach der E-Mail-Bestätigung (15.11.2026)
+
+Der veröffentlichte Website-Workflow `JHkHPTTL2ttfCMMg` (Version
+`971b74ee-6ef0-4fff-8eaf-0f22876dfbba`) gibt für ein neues bestätigtes
+Profil HTTP 403 zurück. Der Registrierungs-Trigger legt es ohne Paket,
+Zahlung, Demo und n8n-Zuordnung an. Der veröffentlichte Kundenassistent
+`GHBsYQcyt0JLFvRP` verwendet für seine bestehende Paketseite einen aktiven
+n8n-Kundenzugang mit eigenem Zugangstoken.
+
+Nach einer 403-Antwort im regulären Dashboard prüft SMA, ob das angemeldete
+Konto für eine erste Paketvormerkung berechtigt ist. Nur ein eindeutig
+zugeordnetes, E-Mail-bestätigtes und bisher unverbundenes Neuprofil ohne
+Zugang oder Paket erhält die Auswahl. Alpha, Beta und Delta lassen sich
+unverbindlich vormerken und beim nächsten Besuch ändern. Die Vormerkung
+wird getrennt vom Kundenpaket gespeichert. Bei Änderungen in zwei Fenstern
+zeigt SMA die aktuelle Auswahl an. Die Tests verwenden ausschließlich
+synthetische Konten und simulierte Dienstantworten.
+
+**Noch offen für den bezahlten Start** sind die Zuordnung dieses Website-Kontos
+zum n8n-Kunden, die ausdrückliche Buchung und die Übernahme einer von Mollie
+bestätigten Zahlung in den Website-Zugang. Die Vormerkung allein aktiviert
+keinen dieser Schritte. Die Datenbankmigration heißt
+`20261115144202_onboarding_plan_choice_v1.sql`.
+
 ## Ergänzung vom 15.11.2026: TikTok-KI-Kennzeichnung live
 
 PR #304 (`46920c3`) ist nach koordinierter Umstellung von Datenbank,
