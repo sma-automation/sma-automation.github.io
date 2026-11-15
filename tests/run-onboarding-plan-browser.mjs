@@ -20,7 +20,7 @@ try {
     let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0, paymentCalls=0;
     const order='80000000-0000-4000-8000-000000000001';
     const returnUrl=site+'/app/paketwahl.html?buchung='+order;
-    let paymentState='booked',statusReads=0;
+    let paymentState='booked',statusReads=0,closeOnRefresh=false;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -44,15 +44,22 @@ try {
       if(req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_booking_v1'){
         const {p_offer,p_plan,p_terms}=req.postDataJSON();
         if(p_offer){
-          assert.equal(p_offer,offer.id);assert.equal(p_plan,saved);assert.equal(p_terms,offer.terms);bookings++;
-          offer={...offer,state:'booked',id:offer.automated?'actual-booking':offer.id,checkout:offer.automated?null:'https://www.mollie.com/checkout/fixture'};
+          if(p_offer!==offer.id) return route.fulfill({json:{ok:false,code:'OFFER_CHANGED'}});
+          assert.equal(p_plan,saved);assert.equal(p_terms,offer.terms);bookings++;
+          offer={...offer,state:'booked',id:offer.automated?(p_offer==='retry-offer'?'retry-booking':'actual-booking'):offer.id,checkout:offer.automated?null:'https://www.mollie.com/checkout/fixture'};
         }
         return route.fulfill({json:{ok:true,offer}});
       }
       if(req.method()==='POST' && url.href===site+'/fixture/sma-package-payment'){
-        assert.deepEqual(req.postDataJSON(),{owner:'fixture',order:'actual-booking'});
+        assert.deepEqual(req.postDataJSON(),{owner:'fixture',order:offer.id});
+        assert.ok(['actual-booking','retry-booking'].includes(offer.id));
         paymentCalls++;
-        offer={...offer,checkout:'https://www.mollie.com/checkout/fixture'};
+        if(closeOnRefresh){
+          closeOnRefresh=false;
+          offer={...offer,id:'next-offer',state:'offered',checkout:null};
+          return route.fulfill({json:{code:'CLOSED'}});
+        }
+        offer={...offer,checkout:'https://www.mollie.com/checkout/'+(offer.id==='retry-booking'?'second':'fixture')};
         return route.fulfill({json:{code:'BOOKED'}});
       }
       if(req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_payment_status_v1'){
@@ -146,6 +153,27 @@ try {
     await page.getByRole('button',{name:'Anmelden',exact:true}).click();
     await page.getByText(/Zugang aus dieser Buchung ist gesperrt/).waitFor();
     assert.equal(page.url(),returnUrl);assert.deepEqual({bookings,paymentCalls,writes},countsBeforeReturn);
+    paymentState='booked';await page.goto(returnUrl);
+    await page.getByRole('link',{name:'Zur offenen Buchung'}).click();
+    const pay=page.getByRole('link',{name:'Bei Mollie bezahlen'});
+    await pay.waitFor();assert.equal(await pay.getAttribute('href'),'https://www.mollie.com/checkout/fixture');
+    assert.deepEqual({bookings,paymentCalls,writes},countsBeforeReturn);
+    offer={...offer,checkout:null};await page.reload();
+    await page.getByRole('button',{name:'Zahlungsstand erneut abrufen'}).waitFor();assert.equal(await pay.isHidden(),true);
+    paymentState='closed';offer={id:'old-offer',plan:saved,terms:'2026-11-15-v1',state:'offered',automated:true,checkout:null};
+    await page.goto(returnUrl);await page.getByRole('link',{name:'Zur Paketwahl'}).click();await book.waitFor();
+    assert.deepEqual({bookings,paymentCalls,writes},countsBeforeReturn);
+    offer={...offer,id:'retry-offer'};await book.click();
+    await page.getByText(/Dein Zahlungsangebot hat sich geändert/).waitFor();
+    assert.deepEqual({bookings,paymentCalls,writes},countsBeforeReturn);
+    await book.click();await pay.waitFor();await page.reload();await pay.waitFor();
+    assert.equal(await pay.getAttribute('href'),'https://www.mollie.com/checkout/second');
+    assert.equal(bookings,countsBeforeReturn.bookings+1);assert.equal(paymentCalls,countsBeforeReturn.paymentCalls+1);
+    closeOnRefresh=true;await page.getByRole('button',{name:'Zahlungsstand erneut abrufen'}).click();
+    await page.getByText(/Die vorherige Zahlung wurde nicht abgeschlossen/).waitFor();
+    assert.equal(await pay.isHidden(),true);assert.equal(await book.isVisible(),true);
+    assert.equal(bookings,countsBeforeReturn.bookings+1);
+    console.log((mobile?'Handy':'Desktop')+': Offene Buchung fortgesetzt, veraltetes Angebot abgewiesen und neuen Zahlungsversuch einmal gebucht.');
     assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Desktop')+': Mollie-Rückkehr, verspätete und sofortige Freischaltung, Abbruch, Wiederanmeldung und begrenzte Statusabfragen bestanden.');
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');

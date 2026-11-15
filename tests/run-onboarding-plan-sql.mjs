@@ -33,6 +33,8 @@ try {
   await db.exec(await readFile('supabase/migrations/'+automationMigration,'utf8'));
   const statusMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_payment_status_v1.sql'));
   await db.exec(await readFile('supabase/migrations/'+statusMigration,'utf8'));
+  const retryMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_booking_retry_v1.sql'));
+  await db.exec(await readFile('supabase/migrations/'+retryMigration,'utf8'));
   const baseline=(await one('select jsonb_agg(to_jsonb(c) order by id) as customers from public.sma_kunden c')).customers;
   await db.exec('set role authenticated');await session(first);
   assert.deepEqual(await call(first),{ok:true,plan:null});
@@ -199,6 +201,11 @@ try {
   const virtual=(await booking(second)).offer;
   assert.deepEqual([virtual.plan,virtual.automated,virtual.state],['delta',true,'offered']);
   assert.equal((await booking(second,virtual.id,'beta')).code,'OFFER_CHANGED');
+  const legacyOffer='00000000-0000-4000-8000-000000000001';
+  assert.equal((await booking(second,legacyOffer,'delta')).code,'OFFER_CHANGED');
+  await session(first);
+  assert.equal((await booking(first,virtual.id,'alpha')).code,'OFFER_CHANGED');
+  await session(second);
   await db.exec('reset role');
   const bookingsForSecond=async()=>Number((await one('select count(*) as n from sma_private.onboarding_package_bookings_v1 where user_id=$1',[second])).n);
   assert.equal(await bookingsForSecond(),0);
@@ -207,6 +214,10 @@ try {
   assert.notEqual(booked.id,virtual.id);assert.equal(booked.state,'booked');assert.equal(booked.automated,true);
   assert.deepEqual((await booking(second,virtual.id,'delta')).offer,booked);
   await db.exec('reset role');assert.equal(await bookingsForSecond(),1);
+  await db.exec('begin');
+  await db.query('update sma_private.onboarding_package_bookings_v1 set accepted_offer_id=null where id=$1',[booked.id]);
+  await db.exec('set local role authenticated');assert.equal((await booking(second,legacyOffer,'delta')).offer.id,booked.id);
+  await db.exec('rollback');
   const status=async order=>(await one('select public.sma_onboarding_payment_status_v1($1) as state',[order])).state;
   const readAsCustomer=async(id)=> {
     await db.exec('begin read only');await db.exec('set local role authenticated');await session(id);
@@ -234,6 +245,26 @@ try {
   const automatic={...receipt,id:'tr_auto',plan:'delta',value:'500.00',customer:'cst_auto',ref:beta.n8n_ref};
   assert.deepEqual(await work('receipt',{receipt:automatic}),{state:'BOOKED'});
   assert.equal((await work('begin_subscription')).error,'INVALID_TRANSITION');
+  for(const terminal of ['canceled','expired','failed']){
+    await db.exec('begin');await db.exec('set local role service_role');
+    assert.deepEqual(await work('receipt',{receipt:{...automatic,status:terminal}}),{state:'CLOSED'});
+    await db.exec('set local role authenticated');await session(second);
+    // A delayed repeat from the old tab must never start the next order.
+    assert.equal((await booking(second,virtual.id,'delta')).code,'OFFER_CHANGED');
+    assert.equal((await booking(second,booked.id,'delta')).code,'OFFER_CHANGED');
+    const fresh=(await booking(second)).offer;
+    assert.equal(fresh.state,'offered');assert.notEqual(fresh.id,virtual.id);
+    assert.deepEqual((await booking(second)).offer,fresh);
+    await db.exec('reset role');assert.equal(await bookingsForSecond(),1);
+    await db.exec('set local role authenticated');
+    const next=(await booking(second,fresh.id,'delta')).offer;
+    assert.notEqual(next.id,booked.id);assert.equal(next.state,'booked');assert.equal(next.checkout,null);
+    assert.deepEqual((await booking(second,fresh.id,'delta')).offer,next);
+    assert.equal((await booking(second,virtual.id,'delta')).code,'OFFER_CHANGED');
+    assert.equal(await status(booked.id),'closed');
+    await db.exec('reset role');assert.equal(await bookingsForSecond(),2);
+    assert.equal((await profile(second)).aktiv,false);await db.exec('rollback');
+  }
   const paidAuto={...automatic,status:'paid',paid_at:new Date(Date.now()+1000).toISOString()};
   assert.deepEqual(await work('receipt',{receipt:paidAuto}),{state:'PAID'});
   assert.equal(await readAsCustomer(second),'paid');
@@ -251,6 +282,7 @@ try {
   assert.deepEqual(await work('receipt',{receipt:{...paidAuto,reversed:true}}),{state:'REVERSED'});
   await db.exec('reset role');assert.equal((await profile(second)).aktiv,false);
   assert.equal(await readAsCustomer(second),'reversed');
+  console.log('Abbruch, Ablauf und Fehlschlag geprüft: Alte Angebote bleiben verbraucht, nur eine neue Bestätigung erzeugt den nächsten Auftrag.');
   console.log('Zahlungsrückkehr mit eigenen und fremden Buchungen sowie allen Status in lesenden Transaktionen geprüft.');
   console.log('Automatische Buchung, Einmalaufträge, Wiederholungen, Erstzahlung, Abo, Freischaltung und Rückbuchung in PostgreSQL geprüft.');
   console.log('Paketbuchung: ausdrücklicher Auftrag, Kontentrennung, Erstzahlung, n8n-Nachweis, Wiederholung und Rückbuchung geprüft.');

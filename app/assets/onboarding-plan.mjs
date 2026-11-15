@@ -79,7 +79,7 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
     if (!current) return leave('index.html');
     if (owner && current !== owner) return leave('dashboard.html');
     owner = current;
-    let changedOffer = false, paymentWaiting = false;
+    let changedOffer = false, paymentWaiting = false, paymentClosed = false;
     if (selectedOffer) {
       const result = await client.rpc('sma_onboarding_booking_v1', {
         p_owner:owner, p_offer:selectedOffer.id, p_plan:selectedOffer.plan, p_terms:selectedOffer.terms
@@ -95,6 +95,7 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       if (leaving) return;
       if (payment.data?.code === 'ACTIVE') return leave('dashboard.html');
       paymentWaiting = !!payment.error;
+      paymentClosed = payment.data?.code === 'CLOSED';
     }
     const result = await client.rpc('sma_onboarding_plan_choice_v1', {
       p_owner: owner, p_plan: plan, p_expected_plan: plan ? saved : null
@@ -126,6 +127,7 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       displayOffer(current.data);
     }
     if (paymentWaiting && offer?.automated) status.textContent = 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.';
+    if (paymentClosed && offer?.state === 'offered') status.textContent = 'Die vorherige Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du das Paket erneut buchen.';
     if (changedOffer) status.textContent = 'Dein Zahlungsangebot hat sich geändert. Prüfe den aktuellen Stand.';
   } catch {
     if (leaving) return;
