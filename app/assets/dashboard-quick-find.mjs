@@ -91,8 +91,9 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  }
  function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)focusLauncher();}
  function dismiss(){hide();onDismiss?.();}
- function item(title,subtitle,handler,restoreFocus=true){
+ function item(title,subtitle,handler,restoreFocus=true,key=null){
   const el=create('button');el.type='button';el.className='sma-qf-item';
+  if(key)el.dataset.quickAction=key;
   el.append(create('strong',title),create('small',subtitle));el.addEventListener('click',async()=>{
    if(disposed)return;
    try{if(await handler()===true)hide(restoreFocus);else status.textContent='Bereich derzeit nicht verfügbar.';}
@@ -102,27 +103,28 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  function render(){
   if(disposed||overlay.hidden)return;
   const focusedFile=doc.activeElement?.dataset?.quickFile;
+  const focusedAction=doc.activeElement?.dataset?.quickAction;
   results.replaceChildren();
   const query=input.value.trim(),areas=getAreas();
   const found=quickFindMatches(query,areas,getFiles());
-  for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page);
+  for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page,'area:'+a.key);
   for(const file of found.files){
    const label=dashboardFileDescription(file,query);
    const hit=item(label.title,label.version||'Kundendatei · im Portal öffnen',()=>onOpenFile(file.id,label.portal,input.value,launcher),false);
    hit.dataset.quickFile=file.id;
   }
   if(found.fileCount>found.files.length&&Array.isArray(areas)&&areas.some(a=>a.key==='files')){
-   item('Alle '+found.fileCount+' Dateien anzeigen','Gefilterte Galerie öffnen',()=>onNavigate('files',query),false);
+   item('Alle '+found.fileCount+' Dateien anzeigen','Gefilterte Galerie öffnen',()=>onNavigate('files',query),false,'all-files');
   }
   // Deep-search actions are NOT matches; keep them out of the hit count.
   let deepActions=0;
   if(Array.isArray(areas)){
    if(canSearchHistory(query)&&areas.some(a=>a.key==='history')){
-    item('In Aufträgen suchen','Eigene Veröffentlichungsaufträge durchsuchen',()=>onNavigate('history-search',query),false);
+    item('In Aufträgen suchen','Eigene Veröffentlichungsaufträge durchsuchen',()=>onNavigate('history-search',query),false,'history-search');
     deepActions++;
    }
    if(canSearchOrders(query)&&areas.some(a=>a.key==='shop')){
-    item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false);
+    item('In Bestellungen suchen','Bestellnummern im Shop durchsuchen',()=>onNavigate('shop-search',query),false,'shop-search');
     deepActions++;
    }
   }
@@ -145,6 +147,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
    status.textContent=prefix||(deepActions?'Keine direkten Treffer. Suche in Aufträgen oder Bestellungen.':'Keine Treffer. Versuche einen kürzeren Begriff.');
   status.setAttribute('aria-busy',fileStatus==='loading'?'true':'false');
   if(focusedFile)focusFile(focusedFile);
+  else if(focusedAction)([...results.children].find(el=>el.dataset.quickAction===focusedAction)||input).focus();
  }
  function focusFile(id){
   const hit=[...results.children].find(el=>el.dataset.quickFile===id);
@@ -158,6 +161,16 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  const openFromHeader=()=>show(button);
  const keydown=e=>{
   if(disposed)return;
+  if(e.key==='Tab'&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!overlay.hidden){
+   // Keep keyboard navigation inside the modal without stealing focus from an opened destination.
+   const controls=[close,input,...(retry.hidden?[]:[retry]),...results.children]
+    .filter(el=>!el.hidden&&!el.disabled&&el.tabIndex>=0);
+   const current=controls.indexOf(doc.activeElement);
+   if(current<0||e.shiftKey&&current===0||!e.shiftKey&&current===controls.length-1){
+    e.preventDefault();(e.shiftKey?controls.at(-1):controls[0])?.focus();
+   }
+   return;
+  }
   if(e.key==='Escape'&&!overlay.hidden){e.preventDefault();dismiss();return;}
   if((e.ctrlKey||e.metaKey)&&e.key?.toLowerCase()==='k'){e.preventDefault();overlay.hidden?show(doc.activeElement||button):dismiss();}
  };
