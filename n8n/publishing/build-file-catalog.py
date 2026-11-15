@@ -44,7 +44,7 @@ const query = {
 if (tokens.length) query.pageToken = tokens[tokens.length - 1];
 return [{json: {query, tokens, bytes: state.bytes || 0}}];
 """,2200,-220,onError='continueErrorOutput')
-node('Dateimetadaten aus Drive lesen','httpRequest',{'url':'https://www.googleapis.com/drive/v3/files','authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'specifyQuery':'json','jsonQuery':'={{ $json.query }}','options':opts},2420,-220,v=4.5,credentials=drive,onError='continueErrorOutput')
+node('Dateimetadaten aus Drive lesen','httpRequest',{'url':'https://www.googleapis.com/drive/v3/files','authentication':'predefinedCredentialType','nodeCredentialType':'googleDriveOAuth2Api','sendQuery':True,'specifyQuery':'json','jsonQuery':'={{ JSON.stringify($json.query) }}','options':opts},2420,-220,v=4.5,credentials=drive,onError='continueErrorOutput')
 code('Drive-Seite prüfen',core+"""
 const response = $input.first().json;
 const request = $('Drive-Seite vorbereiten').first(0, $runIndex).json;

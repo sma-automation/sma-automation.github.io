@@ -317,7 +317,7 @@
         "nodeCredentialType": "googleDriveOAuth2Api",
         "sendQuery": true,
         "specifyQuery": "json",
-        "jsonQuery": "={{ $json.query }}",
+        "jsonQuery": "={{ JSON.stringify($json.query) }}",
         "options": {
           "redirect": {
             "redirect": {
