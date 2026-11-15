@@ -1,5 +1,5 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=13';
-import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=9';
+import {mountMediaEditor} from './media-editor-view.mjs?v=14';
+import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=10';
 
 const query = new URLSearchParams(location.search);
 const fileLink = new URLSearchParams(location.hash.slice(1));
@@ -52,7 +52,7 @@ async function openEditor() {
   const source=(file,signal)=>editorSource(file,signal,owner);
   view = mountMediaEditor({
     doc:document, expectedOwnerId:owner, getOwnerId, musicLibrary:editorMusicLibrary(owner),
-    request:(action,input)=>editorRequest(action,input,owner), listFiles:()=>editorFiles(owner),
+    request:(action,input,signal)=>editorRequest(action,input,owner,signal), listFiles:()=>editorFiles(owner),
     refreshMetadata:signal=>editorRefreshFiles(owner,signal), thumbnail:(file,signal)=>editorThumbnail(file,signal,owner),
     source,uuid:()=>crypto.randomUUID(),
     exportDependencies:{
