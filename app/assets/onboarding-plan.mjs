@@ -7,11 +7,17 @@ const submit = form.querySelector('[type=submit]');
 const status = document.querySelector('#status');
 const retry = document.querySelector('#retry');
 const names = {alpha: 'Alpha', beta: 'Beta', delta: 'Delta'};
+const booking = document.querySelector('#booking');
+const book = document.querySelector('#book');
+const checkout = document.querySelector('#checkout');
+const prices = {alpha:100,beta:300,delta:500};
+let offer = null;
 let owner, saved = null, busy = false, leaving = false;
 
 function leave(page) {
   leaving = true;
   form.hidden = true;
+  booking.hidden = true;
   status.textContent = '';
   location.replace(page);
 }
@@ -24,12 +30,40 @@ client.auth.onAuthStateChange((event, session) => {
 
 function syncSubmit() {
   const selection = form.elements.plan.value;
-  submit.disabled = busy || !selection || selection === saved;
+  const locked = offer && offer.state !== 'offered';
+  fields.disabled = busy || !!locked;
+  submit.disabled = fields.disabled || !selection || selection === saved;
+  booking.hidden = leaving || !offer || selection !== saved || offer.plan !== saved;
+  book.disabled = busy || booking.hidden || offer?.state !== 'offered';
 }
 
-async function request(plan = null) {
+function displayOffer(value) {
+  if (!value?.ok) throw Error('Booking unavailable');
+  offer = value.offer;
+  checkout.hidden = true;
+  checkout.removeAttribute('href');
+  if (!offer) return;
+  if (offer.terms !== '2026-11-15-v1' || offer.plan !== saved || !['offered','booked','paid'].includes(offer.state)) throw Error('Offer changed');
+  const terms = names[saved] + ' · ' + prices[saved] + ' € pro Monat. Zusätzlich 30 % Provision auf den Monatsumsatz.';
+  document.querySelector('#booking-terms').textContent = terms;
+  book.hidden = offer.state !== 'offered';
+  if (offer.state === 'booked') {
+    status.textContent = 'Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.';
+    if (offer.checkout) {
+      const url = new URL(offer.checkout);
+      if (!/^https:\/\/(www|checkout)\.mollie\.com\/checkout\/[A-Za-z0-9/_-]+$/.test(url.href)) throw Error('Invalid checkout');
+      checkout.href = url.href;
+      checkout.hidden = false;
+    }
+  } else if (offer.state === 'paid') {
+    status.textContent = 'Deine Zahlung ist bestätigt. Der Dashboard-Zugang wird vorbereitet.';
+  }
+}
+
+async function request(plan = null, selectedOffer = null) {
   if (leaving || busy) return;
   busy = true;
+  offer = null;
   fields.disabled = true;
   syncSubmit();
   retry.hidden = true;
@@ -41,6 +75,15 @@ async function request(plan = null) {
     if (!current) return leave('index.html');
     if (owner && current !== owner) return leave('dashboard.html');
     owner = current;
+    let changedOffer = false;
+    if (selectedOffer) {
+      const result = await client.rpc('sma_onboarding_booking_v1', {
+        p_owner:owner, p_offer:selectedOffer.id, p_plan:selectedOffer.plan, p_terms:selectedOffer.terms
+      });
+      if (leaving) return;
+      if (result.error || (!result.data?.ok && result.data?.code !== 'OFFER_CHANGED')) throw Error('Booking unavailable');
+      changedOffer = result.data?.code === 'OFFER_CHANGED';
+    }
     const result = await client.rpc('sma_onboarding_plan_choice_v1', {
       p_owner: owner, p_plan: plan, p_expected_plan: plan ? saved : null
     });
@@ -64,9 +107,17 @@ async function request(plan = null) {
       status.textContent = saved ? names[saved] + ' ist für dein Konto vorgemerkt.' : 'Du hast noch kein Paket vorgemerkt.';
       if (value.linked === true) status.textContent += ' Dein SMA-Kundenkonto ist zugeordnet.';
     }
+    if (value.linked === true) {
+      const current = await client.rpc('sma_onboarding_booking_v1', {p_owner:owner});
+      if (leaving) return;
+      if (current.error) throw current.error;
+      displayOffer(current.data);
+    }
+    if (changedOffer) status.textContent = 'Dein Zahlungsangebot hat sich geändert. Prüfe den aktuellen Stand.';
   } catch {
     if (leaving) return;
     form.hidden = true;
+    offer = null;
     status.textContent = 'Der Stand deiner Vormerkung konnte nicht bestätigt werden. Bitte lade ihn erneut.';
     retry.hidden = false;
   } finally {
@@ -80,6 +131,9 @@ form.addEventListener('change', syncSubmit);
 form.addEventListener('submit', event => {
   event.preventDefault();
   if (!form.hidden && !submit.disabled) void request(form.elements.plan.value);
+});
+book.addEventListener('click', () => {
+  if (!booking.hidden && !book.disabled && offer?.state === 'offered') void request(null, offer);
 });
 retry.addEventListener('click', () => request());
 document.querySelector('#logout').addEventListener('click', async () => {

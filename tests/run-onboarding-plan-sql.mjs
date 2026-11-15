@@ -27,6 +27,8 @@ try {
   await db.exec(await readFile('supabase/migrations/20261115144202_onboarding_plan_choice_v1.sql','utf8'));
   const [linkMigration] = (await readdir('supabase/migrations')).filter(name => name.endsWith('_onboarding_n8n_link_v1.sql'));
   await db.exec(await readFile('supabase/migrations/' + linkMigration, 'utf8'));
+  const [bookingMigration]=(await readdir('supabase/migrations')).filter(name=>name.endsWith('_onboarding_package_booking_v1.sql'));
+  await db.exec(await readFile('supabase/migrations/'+bookingMigration,'utf8'));
   const baseline=(await one('select jsonb_agg(to_jsonb(c) order by id) as customers from public.sma_kunden c')).customers;
   await db.exec('set role authenticated');await session(first);
   assert.deepEqual(await call(first),{ok:true,plan:null});
@@ -135,6 +137,57 @@ try {
   assert.equal(checked.stdout.includes(address),false);
   assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'LINKED');
   assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'ALREADY_LINKED');
+  const booking=async(owner,offer=null,plan=null,terms=offer?'2026-11-15-v1':null)=>(await one('select public.sma_onboarding_booking_v1($1,$2,$3,$4) as result',[owner,offer,plan,terms])).result;
+  const sync=async(p,row=null)=>(await one('select sma_private.sync_onboarding_booking_v1($1,$2) as result',[p,row])).result;
+  const future=new Date(Date.now()+3600_000).toISOString();
+  const receipt={id:'tr_initial',ref:alpha.n8n_ref,plan:'alpha',customer:'cst_example',mode:'live',sequence:'first',
+    currency:'EUR',value:'100.00',status:'open',expires:future,checkout:'https://www.mollie.com/checkout/select-method/fixture',reversed:false};
+  const paid={...receipt,status:'paid',paid_at:new Date(Date.now()+5000).toISOString()};
+  for(const role of ['anon','authenticated','service_role']){
+    await db.exec('set role '+role);await assert.rejects(sync(receipt),/permission denied/);
+    await assert.rejects(db.query('select * from sma_private.onboarding_package_bookings_v1'),/permission denied/);
+    if(role!=='authenticated') await assert.rejects(booking(first),/permission denied/);
+    await db.exec('reset role');
+  }
+  for(const change of [{mode:'test'},{sequence:'recurring'},{currency:'USD'},{value:'99.99'},{reversed:null}]){
+    assert.equal(await sync({...receipt,...change}),'INVALID_RECEIPT');
+  }
+  assert.equal(await sync({...receipt,checkout:'https://example.invalid/checkout/bad'}),'INVALID_OFFER');
+  assert.equal(await sync({...receipt,expires:'2020-01-01T00:00:00Z'}),'INVALID_OFFER');
+  assert.equal(await sync(paid),'NO_BOOKING');
+  assert.equal(await sync(receipt),'OFFERED');
+  assert.equal(await sync(receipt),'OFFERED');
+  assert.equal(await sync({...receipt,id:'tr_other'}),'OFFER_CONFLICT');
+  await db.exec('set role authenticated');await session(first);
+  const offer=(await booking(first)).offer; assert.equal(offer.checkout,null);
+  assert.equal((await booking(second,offer.id,'alpha')).code,'ACCOUNT_UNAVAILABLE');
+  await session(second);assert.equal((await booking(second,offer.id,'alpha')).code,'OFFER_CHANGED');await session(first);
+  assert.equal((await booking(first,offer.id,'beta')).code,'OFFER_CHANGED');
+  assert.equal((await booking(first,offer.id,'alpha','old')).code,'OFFER_CHANGED');
+  await db.exec('begin');await call(first,'delta','alpha');assert.equal((await booking(first,offer.id,'alpha')).code,'OFFER_CHANGED');await db.exec('rollback');
+  await db.exec('reset role');await db.exec('begin');assert.equal(await sync(paid),'UNMATCHED_PAYMENT');
+  assert.equal(await sync(paid),'CLOSED');await db.exec('rollback');
+  await db.exec('set role authenticated');await session(first);
+  const confirmed=(await booking(first,offer.id,'alpha')).offer;
+  assert.equal(confirmed.state,'booked');assert.equal(confirmed.checkout,receipt.checkout);
+  assert.deepEqual((await booking(first,offer.id,'alpha')).offer,confirmed);
+  await assert.rejects(call(first,'delta','alpha'),/BOOKING_IN_PROGRESS/);await db.exec('reset role');
+  assert.equal((await profile(first)).aktiv,false);
+  assert.equal(await sync({...paid,paid_at:'2000-01-01T00:00:00Z'}),'UNMATCHED_PAYMENT');
+  assert.equal(await sync({...paid,customer:'cst_different'}),'RECEIPT_CONFLICT');
+  assert.equal(await sync({...receipt,status:'pending'}),'BOOKED');
+  assert.equal(await sync(paid),'PAID');
+  const activeRow={id:123,kunde_id:alpha.n8n_ref,kunde_email:alpha.kunde_email,paket:'alpha',mollie_customer_id:'cst_example',
+    mollie_subscription_id:'sub_example',zugang_aktiv:true,zahlung_bestaetigt:true,demo_delta_aktiv:false,has_access_token:true};
+  for(const change of [{id:124},{kunde_email:'else@example.invalid'},{has_access_token:false},{demo_delta_aktiv:true}]){
+    assert.equal(await sync(paid,{...activeRow,...change}),'N8N_PENDING');assert.equal((await profile(first)).aktiv,false);
+  }
+  assert.equal(await sync(paid,activeRow),'ACTIVE');assert.equal(await sync(paid,activeRow),'ACTIVE');
+  assert.deepEqual(await profile(first),{...original,n8n_kunde_id:alpha.n8n_ref,aktiv:true,zahlung_bestaetigt:true,paket:'alpha'});
+  assert.equal((await profile(second)).aktiv,false);
+  assert.equal(await sync({...paid,reversed:true}),'REVERSED');assert.equal(await sync(paid,activeRow),'REVERSED');
+  assert.equal((await profile(first)).aktiv,false);
+  console.log('Paketbuchung: ausdrücklicher Auftrag, Kontentrennung, Erstzahlung, n8n-Nachweis, Wiederholung und Rückbuchung geprüft.');
   console.log('Kontozuordnung: Berechtigungen, eindeutige Nachweise, Adresswechsel, Wiederholung, konkurrierende Zuordnung und unveränderte Zugangssperren geprüft.');
   console.log('Paketvormerkung: Neuzugang, drei Paketoptionen, Wiederholung, Konflikt, Kontentrennung und Zugangssperren geprüft.');
 } finally {await db.close();}

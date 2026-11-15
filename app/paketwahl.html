@@ -25,7 +25,7 @@
   <header>SMA</header>
   <main>
     <h1>Dein SMA-Paket vormerken</h1>
-    <p>Die Vormerkung ist unverbindlich. Eine Buchung ist über diese Seite noch nicht möglich.</p>
+    <p>Deine Vormerkung ist unverbindlich. Sobald dein Zahlungsangebot vorliegt, kannst du das vorgemerkte Paket separat buchen.</p>
     <form id="choice" hidden>
       <fieldset><legend>Paket auswählen</legend><div class="plans">
         <label><input type="radio" name="plan" value="alpha" required><strong>Alpha</strong><span>100 € / Monat</span><small>Social-Media-Posting und Portalverbindungen</small></label>
@@ -34,10 +34,16 @@
       </div></fieldset>
       <button type="submit">Auswahl vormerken</button>
     </form>
+    <section id="booking" hidden aria-labelledby="booking-title">
+      <h2 id="booking-title">Dein Zahlungsangebot</h2>
+      <p id="booking-terms"></p>
+      <button type="button" id="book">Zahlungspflichtig buchen</button>
+      <a id="checkout" hidden>Bei Mollie bezahlen</a>
+    </section>
     <p id="status" role="status">Dein Konto wird geprüft …</p>
     <button id="retry" hidden>Erneut laden</button>
     <nav><a href="dashboard.html">Dashboard-Zugang prüfen</a><button id="logout">Abmelden</button></nav>
   </main>
-  <script type="module" src="./assets/onboarding-plan.mjs?v=2"></script>
+  <script type="module" src="./assets/onboarding-plan.mjs?v=3"></script>
 </body>
 </html>
