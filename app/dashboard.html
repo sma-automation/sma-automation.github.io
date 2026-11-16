@@ -23,11 +23,13 @@ import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders}
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=2';
 import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=5';
+import {tabDraftStore} from './assets/publication-tab-draft.mjs?v=3';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
 const frame=document.getElementById('dashboard');
 const galleryReload=galleryReloadStore(window);
+const publicationDrafts=tabDraftStore(window);
 const state=document.getElementById('state');
 const portalNames={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok'};
 let optimizerFrames=null,optimizerPage=null,optimizerHeading=null,optimizerHeader=null,publishingPage=null;
@@ -960,7 +962,8 @@ async function load(){
   })().finally(()=>pending=null);
   return pending;
 }
-async function logout(){galleryReload.clear();signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');await supabase.auth.signOut();window.location.replace('index.html');}
+// Purge after frame removal: departing editors may still checkpoint during pagehide.
+async function logout(){const previousOwner=dashboardOwnerId;galleryReload.clear();signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -995,8 +998,9 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='sma-dashboard-logout')logout();
 });
 function leaveDashboard(){
+ const previousOwner=dashboardOwnerId;
  delete document.documentElement.dataset.smaCustomerMedia;
- galleryReload.clear();signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');window.location.replace('index.html');
+ galleryReload.clear();signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);window.location.replace('index.html');
 }
 supabase.auth.onAuthStateChange((event,s)=>{
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
