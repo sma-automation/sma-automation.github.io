@@ -42,7 +42,7 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 const focused=locator=>locator.evaluate(el=>el.ownerDocument.activeElement===el);
 
-async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
+async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false,startAtLogin=false}={}){
  const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
  const errors=[],unexpected=[],calls=[];
  const ownedFiles=structuredClone(files).map(file=>({...file,verified_at:new Date().toISOString()}));
@@ -51,10 +51,10 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
  let catalog=ownedFiles.slice(),nextCatalogGate=null,nextDraftGate=null,nextSignOutGate=null,nextLostSave=null,closing=false;
  const unreadableDrafts=new Set();
  const gates=[];
- await context.addInitScript(()=>{
+ await context.addInitScript(startAtLogin=>{
   if(window!==window.top||location.origin==='null')return;
   const key='sma.fixture.owner',stored=sessionStorage.getItem(key);
-  window.smaFixtureAuth={owner:stored===null?'fixture':stored||null,listeners:new Set(),
+  window.smaFixtureAuth={owner:stored===null?(startAtLogin?null:'fixture'):stored||null,listeners:new Set(),
    session(){return this.owner?{user:{id:this.owner},access_token:this.owner}:null;},
    emit(event,owner){
     this.owner=owner;sessionStorage.setItem(key,owner||'');
@@ -62,7 +62,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
     for(const listener of [...this.listeners])if(listener.window===window&&this.listeners.has(listener))listener.callback(event,this.session());
    }
   };
- });
+ },startAtLogin);
  await context.routeWebSocket('**/*',socket=>{unexpected.push('WebSocket '+socket.url());socket.close();});
  await context.route('**/*',async route=>{
   const request=route.request(),address=new URL(request.url()),path=address.pathname;
@@ -78,6 +78,11 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
     if(address.origin==='https://johnmusic.app.n8n.cloud'&&path==='/webhook/sma-dashboard-session'){
      const owner=request.headers().authorization?.replace(/^Bearer /,'');assert.ok(['fixture','second'].includes(owner));
      return await reply({html:shell.replace('data-sma-customer-id="fixture"','data-sma-customer-id="'+owner+'"')});
+    }
+    if(address.origin==='https://johnmusic.app.n8n.cloud'&&path==='/webhook/sma-publication-files-v1'){
+     assert.ok(startAtLogin,'only the new-customer entry requests a folder refresh');
+     assert.equal(request.headers().authorization,'Bearer second');
+     calls.push({path,args:null,owner:'second'});return await reply({ok:true});
     }
     const args=request.postDataJSON(),owner=request.headers()['x-fixture-owner'];calls.push({path,args,owner});
     if(address.origin===site&&path==='/fixture/sign-out'){
@@ -136,14 +141,15 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
  });
  const page=await context.newPage();page.setDefaultTimeout(6000);page.on('pageerror',error=>errors.push(error.message));
  t.after(async()=>{closing=true;for(const gate of gates)gate.released.resolve();await context.close();assert.deepEqual(unexpected,[],'all requests are isolated and allowlisted');assert.deepEqual(errors,[],'no browser errors');});
- await page.goto(url);
+ await page.goto(startAtLogin?site+'/app/index.html':url);
  const dashboard=page.frameLocator('#dashboard');
- const account=dashboard.getByRole('tab',{name:'Konto & Paket'});await account.click();
+ const account=dashboard.getByRole('tab',{name:'Konto & Paket'});
  const launcher=mobile?dashboard.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):dashboard.locator('#smaGlobalQuickFind');
- await launcher.click();
  const dialog=dashboard.getByRole('dialog',{name:'SMA durchsuchen'}),input=dialog.getByRole('searchbox');
- await input.fill(query);
- const hit=dialog.locator('[data-quick-file="'+wanted+'"]');await hit.waitFor();
+ const hit=dialog.locator('[data-quick-file="'+wanted+'"]');
+ if(!startAtLogin){
+  await account.click();await launcher.click();await input.fill(query);await hit.waitFor();
+ }
  const editor=dashboard.frameLocator('iframe[data-portal="youtube"]');
  const previewBack=editor.locator('#workspacePreviewBack'),body=editor.locator('#youtube-body');
  async function open(){
@@ -275,6 +281,56 @@ async function showPreview(editor,f){
 
 for(const mobile of [false,true]){
  const label=mobile?'mobile':'desktop';
+ test(label+': a new signed-in customer reaches the empty catalogue and first file preparation through real navigation',{timeout:45000},async t=>{
+  const f=await fixture(t,mobile,{startAtLogin:true});
+  await f.signIn('second');
+  await f.page.waitForFunction(()=>document.getElementById('dashboard')?.contentDocument?.querySelector('.sma-file-toolbar button')?.disabled===false);
+  await f.dashboard.getByRole('tab',{name:'Arbeitsbereich',selected:true}).waitFor();
+  await f.dashboard.getByRole('button',{name:'Beitrag vorbereiten',exact:true}).click();
+  const portals=f.dashboard.getByRole('tab',{name:'Portale',exact:true});
+  const fileTab=f.dashboard.getByRole('tab',{name:'Dateien',exact:true});
+  assert.equal(await portals.getAttribute('aria-selected'),'true');
+  await fileTab.click();
+  const emptyCatalogue=f.dashboard.getByText('Noch keine Bild- oder Videodateien in der gespeicherten Liste.',{exact:true});
+  await emptyCatalogue.waitFor();
+  assert.equal(await f.dashboard.locator('.sma-file-grid .sma-file-row').count(),0);
+  assert.equal(await f.dashboard.locator('iframe[data-portal]').count(),0);
+  await f.launcher.click();await f.input.fill(query);
+  await f.dialog.getByText('Keine Treffer. Versuche einen kürzeren Begriff.',{exact:true}).waitFor();
+  assert.equal(await f.dialog.locator('[data-quick-file]').count(),0);
+  await f.input.press('Escape');await f.dialog.waitFor({state:'hidden'});
+  assert.equal(await fileTab.getAttribute('aria-selected'),'true');
+  assert(await emptyCatalogue.isVisible());assert(await focused(f.launcher));
+  await portals.click();await f.dashboard.locator('.sma-optimize[data-portal="youtube"]').click();
+  const firstUpload=f.editor.getByRole('button',{name:'Leere Dateivorschau für den ersten Upload öffnen'});
+  await firstUpload.waitFor();
+  assert.equal(await f.editor.locator('#filePickerCount').textContent(),'Noch keine Dateien in deiner Galerie.');
+  await firstUpload.click();await waitForWorkspaceView(f,f.editor,'preview');
+  await f.editor.getByRole('heading',{name:'Datei für YouTube vorbereiten',exact:true}).waitFor();
+  assert(await f.editor.locator('#workspaceUploadIntro').isVisible());
+  assert.equal(await f.editor.locator('#workspaceEditPost').isVisible(),false);
+  assert.equal(await f.editor.locator('#preparePublicationOrder').isVisible(),false);
+  const add=f.editor.getByRole('button',{name:'Datei hinzufügen',exact:true});
+  const [picker]=await Promise.all([f.page.waitForEvent('filechooser'),add.click()]);
+  assert.equal(await picker.element().getAttribute('accept'),'video/*');
+  await picker.setFiles([]);
+  await f.previewBack.click();await firstUpload.waitFor();
+  await f.page.waitForFunction(()=>history.state?.smaOptimization&&history.state.view==='files'&&!history.state.assetId);
+  await f.dashboard.getByRole('button',{name:'Zurück zur Veröffentlichung',exact:true}).click();
+  await f.dashboard.locator('#smaOptimizationPage').waitFor({state:'hidden'});
+  assert.equal(await portals.getAttribute('aria-selected'),'true');
+  await f.page.goForward();await firstUpload.waitFor();
+  await f.page.goForward();await waitForWorkspaceView(f,f.editor,'preview');
+  await f.page.goBack();await firstUpload.waitFor();
+  assert(await focused(firstUpload));
+  const fileReads=f.calls.filter(call=>call.path==='/fixture/sma_publication_files_v1');
+  assert.ok(fileReads.some(call=>call.args.p_input?.dashboard_labels));
+  assert.ok(fileReads.some(call=>call.args.p_input?.platform==='youtube'));
+  assert.ok(fileReads.every(call=>call.owner==='second'&&call.args.p_action==='list'));
+  assert.equal(f.calls.filter(call=>call.path==='/webhook/sma-publication-files-v1').length,1);
+  assert.deepEqual(f.calls.filter(call=>!['/fixture/sign-in','/fixture/sma_publication_files_v1','/fixture/sma_publication_preview_v1','/rest/v1/rpc/sma_gallery_music_v1','/webhook/sma-publication-files-v1'].includes(call.path)),[],
+   'opening and cancelling the file picker never fetches, uploads, edits or publishes media');
+ });
  for(const departure of ['logout','account-change'])test(label+': '+departure+' clears both file checkpoints before re-entry even with a late save receipt',{timeout:45000},async t=>{
   const f=await fixture(t,mobile,{distinctDrafts:true,allowDraftSave:true}),other=uuid(2);
   const editorA=editorFor(f,wanted),editorB=editorFor(f,other),bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
