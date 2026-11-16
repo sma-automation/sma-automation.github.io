@@ -9,7 +9,7 @@ workflow remains outside the five and must be unpublished after testing.
 ## Required evidence before the window
 
 - Complete fresh source/active-version pins, unchanged original exports and the
-  five reviewed candidate hashes. Current private build: `integrated-v3`.
+  five reviewed candidate hashes. Current private build: `integrated-v4`.
 - Native fixed-phase parent probe **7127** succeeded, including current
   resume-item binding, error/success acknowledgement paths and replay rejection.
   It and successful thumbnail probe **7112** are recorded in
@@ -82,8 +82,18 @@ No target is published alongside another published owner of the same method/path
 
 ## Readback and reopening
 
-Use `verify_import.py` against fresh exports. It ignores only regenerated node
-UUIDs/positions. Require exact paths, callback IDs, parameters, credentials,
+The n8n 2.47.7 UI regenerates Form Trigger webhook IDs during import. The builder
+pins Form Trigger 2.6 public paths explicitly and records them in provenance
+`form_routes`. If that path equals the old webhook ID, the importer also changes
+the path: restore its exact **Options → Form Path** value after import, without
+reimporting the graph. Keep already custom paths unchanged. The verifier accepts
+a regenerated Form Trigger 2.6 ID only when both graphs contain the exact same
+explicit static public path and use no trigger authentication. Missing/different
+paths, authenticated triggers, Form-page IDs and Wait callback IDs remain strict.
+
+Use `verify_import.py` against fresh exports. Besides the narrowly proven
+version-specific defaults and Form Trigger rule above, it ignores only
+regenerated node UUIDs/positions. Require exact paths, callback IDs, parameters, credentials,
 connections, execution/error flags and settings. `--published` requires active
 version evidence; an editor-only match is insufficient. The hourly Schedule
 needs full metadata proving its reviewed state under the final node name.

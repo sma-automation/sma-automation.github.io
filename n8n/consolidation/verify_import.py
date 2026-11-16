@@ -5,6 +5,7 @@ import argparse
 import copy
 import json
 from pathlib import Path
+import re
 import sys
 
 
@@ -58,6 +59,12 @@ def normalized_nodes(nodes):
         if node.get('type') == 'n8n-nodes-base.wait' and node.get('typeVersion') == 1.1 \
                 and node.get('parameters', {}).get('incomingAuthentication') == 'none':
             del node['parameters']['incomingAuthentication']
+        # Set v3.4: SetV2.node.ts declares options default {} and execution uses
+        # getNodeParameter('options', i, {}). Do not erase nonempty/invalid values.
+        options = node.get('parameters', {}).get('options')
+        if node.get('type') == 'n8n-nodes-base.set' and node.get('typeVersion') == 3.4 \
+                and type(options) is dict and not options:
+            del node['parameters']['options']
         # workflow-execute.ts continuesOnError only permits the two continue
         # modes or legacy continueOnFail=true. An absent Code-v2 onError stops
         # just as explicit stopWorkflow does; never erase a continue setting.
@@ -80,6 +87,39 @@ def normalized_connections(connections):
         if not outputs:
             del result[name]
     return result
+
+
+def normalize_explicit_form_route_ids(expected_nodes, actual_nodes):
+    """Compare Form Trigger 2.6 IDs only after proving an identical static route.
+
+    Both dictionaries contain normalized copies. n8n 2.47.7 imports regenerate
+    form-trigger webhookIds; GET and POST use path || options.path || webhookId.
+    Never permit the generated ID to replace a formerly public implicit route.
+    Authenticated forms and all Form/Wait callback IDs remain strict.
+    """
+    equivalences = []
+    uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    for name, expected in expected_nodes.items():
+        actual = actual_nodes.get(name)
+        if not actual or expected.get('webhookId') == actual.get('webhookId'):
+            continue
+        nodes = (expected, actual)
+        if not all(node.get('type') == 'n8n-nodes-base.formTrigger' and node.get('typeVersion') == 2.6
+                   and node.get('parameters', {}).get('authentication', 'none') == 'none'
+                   and isinstance(node.get('webhookId'), str)
+                   and re.fullmatch(uuid_pattern, node['webhookId']) for node in nodes):
+            continue
+        if not all(isinstance(node.get('parameters', {}).get('options', {}), dict) for node in nodes):
+            continue
+        routes = [node.get('parameters', {}).get('path')
+                  or node.get('parameters', {}).get('options', {}).get('path') for node in nodes]
+        if not isinstance(routes[0], str) or not re.fullmatch(r'[A-Za-z0-9_-]+', routes[0]) \
+                or routes[0] != routes[1]:
+            continue
+        actual['webhookId'] = expected['webhookId']
+        equivalences.append({'node': name, 'equivalence': 'regenerated_form_trigger_id_with_exact_explicit_route',
+                             'verified_n8n_version': '2.47.7'})
+    return equivalences
 
 
 def normalized_settings(settings):
@@ -114,7 +154,9 @@ def verify(candidate, readback, published=False):
     problems.extend('candidate.' + error for error in errors)
     actual_nodes, errors = normalized_nodes(actual_graph.get('nodes'))
     problems.extend('readback.' + error for error in errors)
+    form_route_equivalences = []
     if expected_nodes is not None and actual_nodes is not None:
+        form_route_equivalences = normalize_explicit_form_route_ids(expected_nodes, actual_nodes)
         problems.extend(differences(expected_nodes, actual_nodes, 'nodes'))
     problems.extend(differences(normalized_connections(candidate.get('connections', {})),
                                 normalized_connections(actual_graph.get('connections', {})), 'connections'))
@@ -139,8 +181,10 @@ def verify(candidate, readback, published=False):
             'ignored_import_fields': ['node.id', 'node.position'],
             'verified_graph_normalizations': ['code_v2.default_all_items_mode', 'trailing_empty_connection_lanes',
                 'execute_workflow_v1_3.default_database_source', 'execute_workflow_v1_3.default_once_mode',
-                'wait_v1_1.default_no_incoming_authentication', 'code_v2.default_stop_on_error'],
+                'wait_v1_1.default_no_incoming_authentication', 'code_v2.default_stop_on_error',
+                'set_v3_4.default_empty_options'],
             'verified_default_equivalences': default_equivalences,
+            'verified_form_route_equivalences': form_route_equivalences,
             'differences': sorted(set(problems)),
             'runtime_verified': False}
 

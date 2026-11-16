@@ -156,6 +156,31 @@ class BuilderContracts(unittest.TestCase):
         self.review['effective_source_pins'] = builder.source_pins({'fixture-a': overlay})
         self.rejects('OVERLAY_EXTERNAL_ENTRY_CHANGED', effective_sources={'fixture-a': overlay})
 
+    def test_form_v2_6_public_route_is_explicit_and_preexisting_custom_route_is_preserved(self):
+        form = self.sources['fixture-c']['nodes'][0]
+        form['typeVersion'] = 2.6
+        self.refresh()
+        candidates, provenance = self.build()
+        copied = next(n for n in candidates['fixture-c']['nodes'] if n['name'] == 'fixture-c · Form')
+        self.assertEqual(copied['parameters']['options']['path'], 'fixture-form')
+        self.assertEqual(copied['webhookId'], form['webhookId'])
+        self.assertNotIn('options', form['parameters'])
+        self.assertTrue(provenance['form_routes'][0]['restore_form_path_after_ui_import'])
+        form['parameters']['options'] = {'path': 'existing-login', 'buttonLabel': 'Login'}
+        self.refresh()
+        candidates, provenance = self.build()
+        copied = next(n for n in candidates['fixture-c']['nodes'] if n['name'] == 'fixture-c · Form')
+        self.assertEqual(copied['parameters'], form['parameters'])
+        self.assertEqual(provenance['form_routes'][0]['public_path'], 'existing-login')
+        self.assertFalse(provenance['form_routes'][0]['restore_form_path_after_ui_import'])
+        form['parameters']['options']['path'] = '={{ $json.route }}'
+        self.refresh()
+        self.rejects('FORM_STATIC_PUBLIC_PATH_REQUIRED')
+        form['parameters']['options']['path'] = 'existing-login'
+        form['parameters']['authentication'] = 'n8nUserAuth'
+        self.refresh()
+        self.rejects('FORM_AUTH_IDENTITY_REVIEW_REQUIRED')
+
     def test_declared_or_mapped_inputs_are_not_silently_dropped(self):
         self.sources['fixture-a']['nodes'][1]['parameters']['workflowInputs'] = {
             'mappingMode': 'defineBelow', 'value': {'different': '={{ $json.secret }}'}, 'schema': []}

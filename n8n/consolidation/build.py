@@ -684,6 +684,35 @@ def instrument_deadlines(sources, allocated, candidates, copied, names, internal
     return markers_by_node
 
 
+def form_entry_route(node):
+    parameters = node.get('parameters', {})
+    return parameters.get('path') or parameters.get('options', {}).get('path') or node.get('webhookId')
+
+
+def pin_form_entry_routes(copied, provenance):
+    """Keep Form Trigger 2.6 public URLs explicit across UI webhookId regeneration.
+
+    n8n 2.47.7 imports regenerate FormTrigger.webhookId, including an explicit
+    path equal to that old ID. The operator must restore this exact Form Path
+    after import. The readback verifier requires the explicit path on both sides.
+    """
+    provenance['form_routes'] = []
+    for (source, original_name), node in sorted(copied.items()):
+        if node['type'] != 'n8n-nodes-base.formTrigger' or node.get('typeVersion') != 2.6:
+            continue
+        parameters = node['parameters']
+        need(parameters.get('authentication', 'none') == 'none',
+             'FORM_AUTH_IDENTITY_REVIEW_REQUIRED', node['name'])
+        path = form_entry_route(node)
+        need(isinstance(path, str) and re.fullmatch(r'[A-Za-z0-9_-]+', path),
+             'FORM_STATIC_PUBLIC_PATH_REQUIRED', node['name'])
+        if not parameters.get('path') and not parameters.get('options', {}).get('path'):
+            parameters.setdefault('options', {})['path'] = path
+        provenance['form_routes'].append({'source': source, 'source_node': original_name,
+            'target_node': node['name'], 'public_path': path, 'source_webhook_id': node.get('webhookId'),
+            'restore_form_path_after_ui_import': path == node.get('webhookId')})
+
+
 def consolidate_manual_entries(candidates, copied, provenance):
     """n8n 2.47.7 permits one ManualTrigger per workflow (maxNodes: 1).
 
@@ -851,6 +880,7 @@ def build(plan, original_sources, review, effective_sources=None, metadata_sourc
 
     markers_by_node = instrument_deadlines(sources, allocated, candidates, copied, names,
                                            internal_entries, runtime, provenance)
+    pin_form_entry_routes(copied, provenance)
     consolidate_manual_entries(candidates, copied, provenance)
 
     used_call_deadlines = set()
@@ -969,6 +999,9 @@ def build(plan, original_sources, review, effective_sources=None, metadata_sourc
                     result.append(('webhook', p.get('httpMethod', 'GET'), p.get('path'), node.get('webhookId'),
                                    p.get('responseMode', 'onReceived'), p.get('authentication', 'none'),
                                    p.get('options', {}).get('rawBody', False)))
+                elif node['type'] == 'n8n-nodes-base.formTrigger' and node.get('typeVersion') == 2.6:
+                    result.append((node['type'], node['id'], node.get('webhookId'), form_entry_route(node),
+                                   node.get('parameters', {}).get('authentication', 'none')))
                 elif node['type'] in PROTECTED_IDS:
                     result.append((node['type'], node['id'], node.get('webhookId')))
         return sorted(result, key=repr)

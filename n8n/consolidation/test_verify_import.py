@@ -146,6 +146,67 @@ class ImportReadbackContracts(unittest.TestCase):
         expected['typeVersion'] = actual['typeVersion'] = 1
         self.assertFalse(verify(self.candidate, self.readback)['ok'])
 
+    def test_set_v3_4_only_empty_options_object_is_equivalent_to_absence(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.set', typeVersion=3.4,
+                        parameters={'assignments': {'assignments': []}})
+        actual['parameters']['options'] = {}
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        for invalid in (False, None, [], {'stripBinary': True}, {'ignoreConversionErrors': False}):
+            actual['parameters']['options'] = invalid
+            self.assertEqual(verify(self.candidate, self.readback)['differences'], ['nodes.Wait.parameters.options'])
+        del actual['parameters']['options']
+        expected['parameters']['options'] = {}
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        expected['typeVersion'] = actual['typeVersion'] = 3.3
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
+    def test_regenerated_form_trigger_id_requires_the_same_explicit_static_public_path(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.formTrigger', typeVersion=2.6,
+                        parameters={'options': {'path': 'original-form-route'}})
+        expected['webhookId'] = '11111111-1111-4111-8111-111111111111'
+        actual['webhookId'] = '22222222-2222-4222-8222-222222222222'
+        result = verify(self.candidate, self.readback)
+        self.assertTrue(result['ok'])
+        self.assertEqual(len(result['verified_form_route_equivalences']), 1)
+        for invalid in ('changed-route', '', None, False, '={{ $json.route }}'):
+            actual['parameters']['options']['path'] = invalid
+            self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        del actual['parameters']['options']['path']
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        del expected['parameters']['options']['path']
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
+    def test_form_identity_exception_never_applies_to_auth_callbacks_or_other_versions(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.formTrigger', typeVersion=2.6,
+                        parameters={'options': {'path': 'same-route'}})
+        expected['webhookId'] = '11111111-1111-4111-8111-111111111111'
+        actual['webhookId'] = '22222222-2222-4222-8222-222222222222'
+        for auth in ('n8nUserAuth', 'basicAuth', False, None):
+            for node in (expected, actual):
+                node['parameters']['authentication'] = auth
+            self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        for node in (expected, actual):
+            del node['parameters']['authentication']
+        for kind, version in [('n8n-nodes-base.form', 2.6), ('n8n-nodes-base.wait', 1.1),
+                              ('n8n-nodes-base.formTrigger', 2.5)]:
+            for node in (expected, actual):
+                node['type'], node['typeVersion'] = kind, version
+            self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        for node in (expected, actual):
+            node['type'], node['typeVersion'] = 'n8n-nodes-base.formTrigger', 2.6
+        for invalid in ('', 'not-an-id', None, False):
+            actual['webhookId'] = invalid
+            self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
 
 if __name__ == '__main__':
     unittest.main()
