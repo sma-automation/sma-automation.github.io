@@ -18,6 +18,17 @@ test('Optimieren replaces the publishing content with a full page while retainin
  assert.equal(v.optimizerPage.hidden,false);assert.equal(p.original.classes.has('sma-publishing-hidden'),true);assert.equal(p.page.children.includes(v.optimizerPage),true);
  const url=new URL(v.optimizerFrames.children[0].src);assert.equal(url.searchParams.get('wide'),'1');assert.equal(url.searchParams.get('asset'),'own-asset');assert.equal(url.searchParams.get('portal'),'instagram');assert.equal(p.history.state.smaOptimization,true);
 });
+test('newly restored editor waits for child readiness before accepting initialization view changes',()=>{
+ const p=setup();p.select('own-asset');
+ p.history.state={smaOptimization:true,portal:'youtube',assetId:'own-asset',view:'source'};
+ p.openOptimizer('youtube',p.trigger,true);const v=p.view(),frame=v.optimizerFrames.children[0];
+ assert.equal(frame.dataset.restoring,'true');assert.equal(frame.dataset.view,'source');
+ p.optimizerWorkspaceView(frame,'preview');
+ assert.equal(p.history.state.view,'source');assert.equal(frame.dataset.view,'source');assert.equal(v.optimizerHeader.hidden,false);
+ p.optimizerWorkspaceView(frame,'files',false,true);
+ assert.equal(p.history.state.view,'files','a deliberate navigation while loading becomes the current view');
+ p.optimizerWorkspaceView(frame,'preview');assert.equal(p.history.state.view,'files','late automatic initialization cannot overwrite that choice');
+});
 test('back and forward restore the same editor frame instead of discarding edits or uploads',()=>{
  const p=setup();p.openOptimizer('instagram',p.trigger);const frame=p.view().optimizerFrames.children[0];frame.unsaved='customer draft';
  p.closeOptimizer();assert.equal(p.view().optimizerPage.hidden,true);assert.equal(p.original.classes.has('sma-publishing-hidden'),false);assert.equal(p.trigger.focused,true);

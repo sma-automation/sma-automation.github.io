@@ -22,7 +22,7 @@ import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './as
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=14';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=2';
-import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=4';
+import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=5';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-dashboard-session';
@@ -89,6 +89,13 @@ function closeOptimizer(){
  if(origin?.global)origin.dismissed=false;
  history.back();
 }
+function restoreOptimizerView(preview){
+ const view=['preview','source'].includes(history.state?.view)?history.state.view:'files';
+ preview.dataset.view=view;optimizerHeader.hidden=view==='preview';
+ const restoreFocus=publishingPage?.ownerDocument?.getElementById?.('smaQuickFindDialog')?.hidden!==false;
+ // A newly restored frame applies the requested view only after its own reads finish.
+ if(preview.dataset.restoring!=='true')preview.contentWindow?.postMessage({type:'sma-publication-show-view',view,restoreFocus},window.location.origin);
+}
 function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  returningFromPreview=null;
  if(!optimizerPage)return;optimizerTrigger=trigger;optimizerHeading.textContent=portalNames[portal]+' optimieren';
@@ -100,7 +107,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','48');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','49');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -116,7 +123,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
   if(reused)preview.contentWindow?.postMessage({type:'sma-publication-open-search-file',assetId:selectedFileId},window.location.origin);
   return;
  }
- if(restoring){const view=['preview','source'].includes(history.state?.view)?history.state.view:'files';preview.dataset.view=view;optimizerHeader.hidden=view==='preview';preview.contentWindow?.postMessage({type:'sma-publication-show-view',view},window.location.origin);}
+ if(restoring)restoreOptimizerView(preview);
  if(!restoring){
   const route={smaOptimization:true,portal,assetId:selectedFileId,view:preview.dataset.view==='source'?'source':'files'};
   if(!history.state?.smaOptimization)history.pushState(route,'','#optimieren/'+portal);
@@ -125,8 +132,8 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  }
 }
 function clearOptimizer(keepRoute=false){fileSearchReturns.clear();optimizerFrameObserver?.disconnect();optimizerFrames?.replaceChildren();showPublishing();optimizerTrigger=null;selectedFileId=null;if(!keepRoute&&(history.state?.smaOptimization||history.state?.smaSearchResults))history.replaceState(null,'',location.pathname+location.search);}
-function optimizerWorkspaceView(preview,view,previewUnavailable=false){
- if(preview.hidden||optimizerPage.hidden||!['files','source','preview'].includes(view))return;
+function optimizerWorkspaceView(preview,view,previewUnavailable=false,userInitiated=false){
+ if(preview.hidden||optimizerPage.hidden||preview.dataset.restoring==='true'&&!userInitiated||!['files','source','preview'].includes(view))return;
  if(previewUnavailable){
   const route=history.state;
   if(route?.smaOptimization&&route.portal===preview.dataset.portal&&route.view==='preview'&&view==='files'){
@@ -957,6 +964,15 @@ async function logout(){galleryReload.clear();signedOut=true;cancelDashboardRead
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-workspace-ready'){
+    const preview=[...(optimizerFrames?.children||[])].find(el=>el.contentWindow===event.source);
+    if(!preview||preview.dataset.restoring!=='true')return;
+    delete preview.dataset.restoring;
+    const route=history.state;
+    if(!signedOut&&!frame.hidden&&publishingPage?.classList.contains('active')&&optimizerPage&&!optimizerPage.hidden&&!preview.hidden&&
+       route?.smaOptimization&&preview.dataset.key===route.portal+':'+(route.assetId||'template'))restoreOptimizerView(preview);
+    return;
+  }
   // Only the visible workspace may navigate; hidden editors retain their drafts.
   if(['sma-publication-preview-close','sma-publication-search-return','sma-publication-order-open','sma-publication-workspace-view'].includes(event.data?.type)){
     const source=[...(optimizerFrames?.children||[])].find(el=>el.contentWindow===event.source);
@@ -968,7 +984,7 @@ window.addEventListener('message',event=>{
     return;
   }
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-order-open'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview&&!preview.hidden&&!optimizerPage.hidden){optimizerPage.scrollIntoView({block:'start'});preview.contentWindow.postMessage({type:'sma-publication-order-viewport',height:Math.max(240,Math.min(720,window.innerHeight-140))},window.location.origin);}return;}
-  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-workspace-view'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview)optimizerWorkspaceView(preview,event.data.view,event.data.previewUnavailable===true);return;}
+  if(event.origin===window.location.origin&&event.data?.type==='sma-publication-workspace-view'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);if(preview)optimizerWorkspaceView(preview,event.data.view,event.data.previewUnavailable===true,event.data.userInitiated===true);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-height'){const preview=[...(optimizerFrames?.children||[])].find(el=>event.source===el.contentWindow);const height=event.data.height;if(preview&&Number.isFinite(height)&&height>=300&&height<=30000)preview.style.height=Math.ceil(height)+'px';return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-file-updated'&&[...(optimizerFrames?.children||[])].some(el=>event.source===el.contentWindow)){fileView?.load(false);return;}
   if(event.origin===window.location.origin&&event.data?.type==='sma-publication-preview-close'&&[...(optimizerFrames?.children||[])].some(el=>event.source===el.contentWindow)){

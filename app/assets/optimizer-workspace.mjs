@@ -30,10 +30,11 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   main.append(toolbar, files, source);
   const buttons = {};
   let active = 'files';
+  let deferInitialFocus = Boolean(options.deferInitialFocus);
   let selectedFile = null;
   let lastPreviewWasEmpty = false;
   for (const [key, label] of [['files', 'Datei'], ['source', 'Inhalt und Ziel']]) {
-    buttons[key] = button('workspaceTab-' + key, label, () => show(key));
+    buttons[key] = button('workspaceTab-' + key, label, event => show(key,undefined,{userInitiated:event?.isTrusted===true}));
     buttons[key].setAttribute('aria-controls', panels[key].id);
     buttons[key].setAttribute('aria-pressed', 'false');
     buttons[key].setAttribute('role','tab');
@@ -43,7 +44,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   toolbar.addEventListener('keydown', event => {
     const keys=Object.keys(buttons),index=keys.findIndex(key=>buttons[key]===event.target);if(index<0)return;
     let next;if(event.key==='ArrowRight')next=(index+1)%keys.length;else if(event.key==='ArrowLeft')next=(index+keys.length-1)%keys.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=keys.length-1;else return;
-    event.preventDefault();show(keys[next]);buttons[keys[next]].focus();
+    event.preventDefault();show(keys[next],undefined,{userInitiated:event.isTrusted});buttons[keys[next]].focus();
   });
 
   const galleryHeader = make('div', 'workspaceGalleryHeader');
@@ -300,7 +301,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   statusRow.append($('portalStatus'));
   main.append(toolbar, statusRow, $('magicReplaceNotice'), files, source, preview);
 
-  function show(key, requestedView) {
+  function show(key, requestedView, {userInitiated=false,focus=true}={}) {
     const firstUpload = key === 'upload';
     if (firstUpload) key = 'preview';
     if (key === 'text') key = 'source';
@@ -332,22 +333,24 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       detailView.hidden = true;
       previewHeading.textContent = uploadOnly ? 'Datei für ' + portalName + ' vorbereiten' : 'Vorschau für ' + portalName;
       if (!uploadOnly) { refreshPreview(); previewTab('post'); }
-      previewBack.focus();
+      if(focus&&(!deferInitialFocus||userInitiated))previewBack.focus();
     }
     if (changed && key === 'files') onGallery();
-    if (changed || requestedView) options.onView?.(key, requestedView);
+    if (changed || requestedView || userInitiated) options.onView?.(key, requestedView, userInitiated);
   }
   show('files');
   return {
     show,
+    finishInitialLoad() { deferInitialFocus=false; },
     setSearchReturn(value) { fromSearch = value; previewBack.textContent = backText(); },
-    restoreView(requestedView) {
+    restoreView(requestedView,restoreFocus=true) {
+      deferInitialFocus=false;
       let view = requestedView;
       if (view === 'preview' && !selectedFile) {
         view = lastPreviewWasEmpty && firstUploadEntry() ? 'upload' : 'files';
       }
-      show(view, requestedView);
-      if (view === 'files') focusGalleryEntry();
+      show(view, requestedView, {focus:restoreFocus});
+      if (view === 'files'&&restoreFocus) focusGalleryEntry();
     },
     galleryVisible: () => active === 'files',
     openEmptyPreview() { if (!selectedFile) show('upload'); },

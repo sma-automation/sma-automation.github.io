@@ -18,6 +18,7 @@ function fixture(){
   publishingPage:{classList:{contains:name=>name==='active'&&active}},frame:{hidden:false,contentWindow:{}},
   fileSearchReturns:new Map([['search-1',{}]]),history:{state:{searchKey:'search-1'}},
   closeOptimizer:()=>calls.push(['close']),optimizerWorkspaceView:(preview,view,unavailable)=>calls.push(['view',preview.dataset.portal,view,unavailable]),
+  restoreOptimizerView:preview=>calls.push(['restore',preview.dataset.portal]),
   fileView:{load:sync=>calls.push(['files',sync])},load:()=>calls.push(['reload']),logout:()=>calls.push(['logout'])};
  vm.runInNewContext(source,env);
  return {env,calls,visible,hidden,active:value=>{active=value;},send(type,from=visible,patch={}){
@@ -46,6 +47,25 @@ test('active preview keeps close, search return, order viewport and workspace na
  assert.deepEqual(JSON.parse(JSON.stringify(f.calls.shift())),['post',{type:'sma-publication-order-viewport',height:660},'https://sma.test']);
  f.send(types[3]);assert.deepEqual(f.calls.pop(),['view','youtube','source',false]);
  f.env.history.state=null;f.send(types[1]);assert.deepEqual(f.calls,[]);
+});
+test('restored child readiness applies the current route only to its active editor',()=>{
+ for(const state of ['active','hidden-frame','hidden-editor','inactive-section','hidden-dashboard','signed-out','missing-section','missing-editor','wrong-route','foreign-origin','detached']){
+  const f=fixture();f.visible.dataset.restoring='true';f.visible.dataset.key='youtube:own-file';
+  f.env.history.state={smaOptimization:true,portal:'youtube',assetId:'own-file',view:'source'};
+  let sender=f.visible,patch={};
+  if(state==='hidden-frame')f.visible.hidden=true;
+  if(state==='hidden-editor')f.env.optimizerPage.hidden=true;
+  if(state==='inactive-section')f.active(false);
+  if(state==='hidden-dashboard')f.env.frame.hidden=true;
+  if(state==='signed-out')f.env.signedOut=true;
+  if(state==='missing-section')f.env.publishingPage=null;
+  if(state==='missing-editor')f.env.optimizerPage=null;
+  if(state==='wrong-route')f.env.history.state.assetId='other-file';
+  if(state==='foreign-origin')patch.origin='https://foreign.invalid';
+  if(state==='detached')sender={contentWindow:{}};
+  f.send('sma-publication-workspace-ready',sender,patch);
+  assert.deepEqual(f.calls,state==='active'?[['restore','youtube']]:[],state);
+ }
 });
 test('a late old portal cannot navigate after switching; returning makes its current messages usable again',()=>{
  const f=fixture();f.visible.hidden=true;f.hidden.hidden=false;
