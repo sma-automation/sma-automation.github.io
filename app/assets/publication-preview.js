@@ -1502,7 +1502,7 @@ $('compareDraft').addEventListener('click',async()=>{
   card.querySelector('[data-field=hashtags]').value=values.hashtags.map(tag=>'#'+tag).join(' ');
   pendingLink=values.product_id===(remote.product_id??null)?undefined:stagedLink;
   refreshDraftLink?.();workspace?.refreshPreview();
-  if(retained&&hasDraftEdits())keepRecoveredForm(retained,latest);
+  if(retained&&(hasDraftEdits()||hasSourceEdits()))keepRecoveredForm(retained,latest);
   status(hasDraftEdits()?'Auswahl übernommen. Prüfe den Entwurf und speichere deine Änderungen.':'Der Entwurf entspricht dem gespeicherten Stand.');
  }catch(e){if(!signedOut)status(e.message,true);}
  finally{lock(false);}

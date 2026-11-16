@@ -1726,6 +1726,43 @@ test('a newer saved revision requires comparison before ordinary restored edits 
  assert.match(restored.get('drafts').querySelector('textarea').value,/lokaler Zwischenstand/);
  await restored.save();assert.equal(f.writes.length,0);
 });
+for(const portal of ['youtube','tiktok'])test(portal+': choosing saved portal fields preserves local source edits and the other file checkpoint',async()=>{
+ const a=sharedDraft(portal),b=sharedDraft(portal,'60600000-0000-4000-8000-000000000052','60600000-0000-4000-8000-000000000053');
+ const sessionStorage=tabStorage(),options={sessionStorage,newUuid:require('node:crypto').randomUUID};
+ const first=await a.open(a.rpc,options),second=await b.open(b.rpc,options);
+ const description='Meine noch offene Inhaltsbeschreibung bleibt trotz Textvergleich erhalten.';
+ editPortalField(first,'title','Lokaler Titel vor dem Vergleich');
+ editPortalField(first,'body','Lokaler Beitrag vor der ausdrücklichen Auswahl.');
+ editPortalField(first,'hashtags','#Lokal');await first.get('draftLinkShop').click();
+ first.get('source_text').value=description;first.get('previewForm').events.input();
+ first.get('language').value='en';first.get('language').events.change();
+ editPortalField(second,'body','Die unabhängigen Eingaben der zweiten Datei bleiben offen.');
+ const otherEntry=[...sessionStorage.rows].find(([,raw])=>JSON.parse(raw).fileId==='60600000-0000-4000-8000-000000000052');
+ assert.ok(otherEntry);assert.equal(sessionStorage.rows.size,2);
+ a.change({title:'Gespeicherter neuer Titel',body:'Die neuere gespeicherte Fassung vom zweiten Editor.',hashtags:['Gespeichert'],product_id:'neuer-artikel'});
+ const restored=await a.open(a.rpc,options);
+ assert.equal(restored.get('compareDraft').hidden,false);assert.equal(restored.get('save').disabled,true);
+ const choosing=restored.get('compareDraft').click();await compareTick();
+ assert.equal(restored.get('draftConflictDialog').open,true);assert.equal(restored.get('draftConflictApply').disabled,true);
+ for(const field of restored.get('draftConflictFields').children){
+  const radios=field.querySelectorAll('input');if(!radios.length)continue;
+  radios[1].checked=true;radios[1].events.change();
+ }
+ await restored.get('draftConflictApply').click();await choosing;
+ assert.equal(restored.get('drafts').querySelector('textarea').value,a.view().preview.drafts[0].body);
+ assert.equal(restored.get('source_text').value,description);assert.equal(restored.get('language').value,'en');
+ assert.equal(restored.workspaceOptions.getPreview().draftStep.target,'source_text');
+ assert.equal(sessionStorage.getItem(otherEntry[0]),otherEntry[1],'comparison must not alter the other file checkpoint');
+ assert.equal(a.writes.length+b.writes.length,0,'choosing fields is not a server save');
+ const again=await a.open(a.rpc,options);
+ assert.equal(again.get('source_text').value,description,'the remaining local source must survive another reload');
+ assert.equal(again.get('language').value,'en');assert.equal(again.get('compareDraft').hidden,true);
+ assert.equal(again.workspaceOptions.getPreview().draftStep.target,'source_text');
+ assert.equal(again.get('save').disabled,true);assert.equal(sessionStorage.rows.size,2);
+ const other=await b.open(b.rpc,options);
+ assert.equal(other.get('drafts').querySelector('textarea').value,'Die unabhängigen Eingaben der zweiten Datei bleiben offen.');
+ assert.equal(a.writes.length+b.writes.length,0);
+});
 test('reloading an interrupted save restores the correct file and waits for an explicit save',async()=>{
  for(const portal of ['youtube','tiktok']){
   const f=interruptedDraft(portal,false),old=await f.first();
