@@ -8,9 +8,40 @@ const pages = new Map([
   [site + '/app/index.html', await readFile('app/index.html')]
 ]);
 const authModule = `export function createClient() {
+  const query = new URLSearchParams(location.search);
+  let session = query.get('type') === 'recovery' && !query.has('error_code')
+    ? {user:{id:'recovery-customer',email:'reset@example.invalid'}} : null;
+  let authChange;
+  function signedOut(result = {error:null}) {
+    if (!result.error) { session = null; authChange?.('SIGNED_OUT', null); }
+    return result;
+  }
   return {auth: {
-    onAuthStateChange() {},
-    async getSession() { return {data: {session: null}}; },
+    onAuthStateChange(callback) {
+      authChange = callback;
+      window.emitAuthEvent = event => callback(event, session);
+    },
+    async getSession() {
+      window.recoveryCalls.session++;
+      if (window.sessionResult === 'offline') throw Error('simulated session interruption');
+      return {data:{session:window.sessionResult === 'missing' ? null : session}};
+    },
+    async updateUser(args) {
+      window.recoveryCalls.update++;
+      window.recoveryCalls.passwordMatches = args.password === 'Recovery909!';
+      if (window.updateResult === 'offline') throw Error('simulated update interruption');
+      if (window.updateResult === 'pending') return new Promise(resolve => {
+        window.finishUpdate = () => resolve({data:{user:session.user},error:null});
+      });
+      return {data:{user:session.user},error:null};
+    },
+    async signOut() {
+      window.recoveryCalls.signOut++;
+      if (window.signOutResult === 'pending') return new Promise(resolve => {
+        window.finishSignOut = result => resolve(signedOut(result));
+      });
+      return signedOut();
+    },
     async signUp() { window.authCalls.push('signUp'); return {data: {session: null}}; },
     async signInWithPassword() { window.authCalls.push('signIn'); return {error: {message: 'Testanmeldung',code:window.loginCode}}; },
     async resend(args) {
@@ -33,7 +64,10 @@ try {
     const context = await browser.newContext({viewport, isMobile: mobile, hasTouch: mobile, serviceWorkers: 'block'});
     const page = await context.newPage();
     const unexpected = [];
-    await page.addInitScript(() => { window.authCalls = []; });
+    await page.addInitScript(() => {
+      window.authCalls = [];
+      window.recoveryCalls = {session:0,update:0,signOut:0,passwordMatches:false};
+    });
     page.on('pageerror', error => unexpected.push(error.message));
     await page.route('**/*', async route => {
       const request = route.request();
@@ -111,6 +145,93 @@ try {
     await page.getByRole('button',{name:'Wiederherstellungslink senden'}).click();
     await page.getByText(/Link zum Zurücksetzen/).waitFor();
     assert.deepEqual(await page.evaluate(()=>window.authCalls),[{reset:'reset@example.invalid',options:{redirectTo:'https://sma-automation.com/app/'}}]);
+
+    const newPassword = page.getByLabel('Neues Passwort', {exact:true});
+    const confirmation = page.getByLabel('Neues Passwort wiederholen', {exact:true});
+    const savePassword = page.getByRole('button', {name:'Neues Passwort speichern', exact:true});
+    async function openRecovery() {
+      await page.goto(site+'/app/index.html?type=recovery#type=recovery');
+      await page.getByRole('heading', {name:'Neues Passwort', exact:true}).waitFor();
+      await page.waitForFunction(() => window.recoveryCalls.session === 1 && !document.getElementById('authSubmit').disabled);
+      await newPassword.fill('Recovery909!');
+      await confirmation.fill('Recovery909!');
+    }
+    async function activate(button) {
+      if (mobile) await button.tap();
+      else await button.press('Enter');
+    }
+
+    // A link may expire after the password form is already open. The visible
+    // replacement-link form must work without a password write or a page reload.
+    await openRecovery();
+    await page.evaluate(() => {window.sessionResult = 'missing';});
+    await activate(savePassword);
+    await page.locator('#forgotView').waitFor({state:'visible'});
+    assert.equal(await page.locator('#resetView').isVisible(), false);
+    assert.deepEqual(await page.evaluate(() => window.recoveryCalls), {
+      session:2,update:0,signOut:0,passwordMatches:false
+    });
+    await mail.fill('reset@example.invalid');
+    await activate(page.getByRole('button', {name:'Wiederherstellungslink senden', exact:true}));
+    await page.getByText(/Link zum Zurücksetzen/).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.authCalls), [{
+      reset:'reset@example.invalid',options:{redirectTo:'https://sma-automation.com/app/'}
+    }]);
+
+    // Both reads and writes can reject. Inputs stay available until the write
+    // is confirmed; a failed sign-out must then retry only that remaining step.
+    await openRecovery();
+    for (const stage of ['session', 'update']) {
+      await page.evaluate(stage => {
+        window.sessionResult = stage === 'session' ? 'offline' : 'ok';
+        window.updateResult = stage === 'update' ? 'offline' : 'ok';
+      }, stage);
+      await activate(savePassword);
+      await page.waitForFunction(() => !document.getElementById('savePasswordButton').disabled && document.getElementById('status').classList.contains('error'));
+      assert.equal(await newPassword.inputValue(), 'Recovery909!');
+      assert.equal(await confirmation.inputValue(), 'Recovery909!');
+      assert.equal(await savePassword.isEnabled(), true);
+      assert.equal(await page.locator('#loginView').isVisible(), false);
+      assert.equal(await page.evaluate(() => window.recoveryCalls.signOut), 0);
+    }
+    assert.deepEqual(await page.evaluate(() => window.recoveryCalls), {
+      session:3,update:1,signOut:0,passwordMatches:true
+    });
+
+    await page.evaluate(() => {window.updateResult='pending';window.signOutResult='pending';});
+    await activate(savePassword);
+    await page.waitForFunction(() => typeof window.finishUpdate === 'function');
+    assert.equal(await savePassword.isDisabled(), true);
+    await page.locator('#resetForm').dispatchEvent('submit');
+    assert.equal(await page.evaluate(() => window.recoveryCalls.update), 2);
+    await page.evaluate(() => window.finishUpdate());
+    await page.waitForFunction(() => typeof window.finishSignOut === 'function');
+    await page.locator('#resetForm').dispatchEvent('submit');
+    assert.equal(await page.evaluate(() => window.recoveryCalls.signOut), 1);
+    await page.evaluate(() => window.finishSignOut({error:{message:'simulated sign-out interruption'}}));
+    const retrySignOut = page.getByRole('button', {name:'Abmeldung erneut versuchen', exact:true});
+    await page.waitForFunction(() => !document.getElementById('savePasswordButton').disabled);
+    const confirmedStatus = await page.locator('#status').textContent();
+    await page.evaluate(() => window.emitAuthEvent('PASSWORD_RECOVERY'));
+    assert.equal(await page.locator('#status').textContent(), confirmedStatus);
+    assert.equal(await retrySignOut.isVisible(), true);
+    assert.equal(await newPassword.inputValue(), '');
+    assert.equal(await confirmation.inputValue(), '');
+    assert.equal(await newPassword.isDisabled(), true);
+    assert.equal(await confirmation.isDisabled(), true);
+    assert.match(await page.locator('#status').textContent(), /Passwort.*geändert/);
+    assert.equal(await page.locator('#loginView').isVisible(), false);
+    await page.evaluate(() => {window.signOutResult='ok';});
+    await activate(retrySignOut);
+    await page.getByRole('heading', {name:'Kundenbereich', exact:true}).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.recoveryCalls), {
+      session:4,update:2,signOut:2,passwordMatches:true
+    });
+    assert.equal(new URL(page.url()).search, '');
+    assert.equal(new URL(page.url()).hash, '');
+    assert.equal(await page.getByLabel('Passwort', {exact:true}).inputValue(), '');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    console.log(mobile ? 'Passwort-Wiederherstellung auf dem Handy bestanden.' : 'Passwort-Wiederherstellung per Tastatur bestanden.');
     assert.deepEqual(unexpected, []);
     console.log(mobile ? 'Kundeneinstieg auf dem Handy bestanden.' : 'Kundeneinstieg per Tastatur bestanden.');
     await context.close();
