@@ -81,6 +81,71 @@ class ImportReadbackContracts(unittest.TestCase):
         self.readback['connections'] = {}
         self.assertFalse(verify(self.candidate, self.readback)['ok'])
 
+    def test_execute_workflow_v1_3_database_source_default_is_exact(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.executeWorkflow', typeVersion=1.3,
+                        parameters={'workflowId': {'value': 'existing-child'}})
+        expected['parameters']['source'] = 'database'
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        for invalid in ('parameter', 'localFile', False, None):
+            actual['parameters']['source'] = invalid
+            self.assertEqual(verify(self.candidate, self.readback)['differences'], ['nodes.Wait.parameters.source'])
+        del actual['parameters']['source']
+        expected['typeVersion'] = actual['typeVersion'] = 1.2
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
+    def test_execute_workflow_v1_3_once_mode_does_not_hide_per_item_or_missing_nodes(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.executeWorkflow', typeVersion=1.3,
+                        parameters={'workflowId': {'value': 'existing-child'}})
+        expected['parameters']['mode'] = 'once'
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        for invalid in ('each', False, None):
+            actual['parameters']['mode'] = invalid
+            self.assertEqual(verify(self.candidate, self.readback)['differences'], ['nodes.Wait.parameters.mode'])
+        del actual['parameters']['mode']
+        expected['parameters']['mode'] = 'each'
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        expected['parameters']['mode'] = 'once'
+        self.readback['nodes'] = []
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
+    def test_wait_v1_1_no_authentication_default_does_not_hide_auth_changes(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        expected['parameters']['incomingAuthentication'] = 'none'
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        for invalid in ('basicAuth', 'headerAuth', 'jwtAuth', False, None):
+            actual['parameters']['incomingAuthentication'] = invalid
+            self.assertEqual(verify(self.candidate, self.readback)['differences'], ['nodes.Wait.parameters.incomingAuthentication'])
+        del actual['parameters']['incomingAuthentication']
+        expected['parameters']['incomingAuthentication'] = 'headerAuth'
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        expected['parameters']['incomingAuthentication'] = 'none'
+        expected['typeVersion'] = actual['typeVersion'] = 1
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
+    def test_code_v2_stop_on_error_default_keeps_continue_flags_strict(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.code', typeVersion=2, parameters={'jsCode': 'throw Error("synthetic");'})
+        expected['onError'] = 'stopWorkflow'
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        for invalid in ('continueRegularOutput', 'continueErrorOutput', False, None):
+            actual['onError'] = invalid
+            self.assertEqual(verify(self.candidate, self.readback)['differences'], ['nodes.Wait.onError'])
+        del actual['onError']
+        actual['continueOnFail'] = True
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        del actual['continueOnFail']
+        expected['typeVersion'] = actual['typeVersion'] = 1
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
 
 if __name__ == '__main__':
     unittest.main()

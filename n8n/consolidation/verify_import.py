@@ -47,6 +47,23 @@ def normalized_nodes(nodes):
         if node.get('type') == 'n8n-nodes-base.code' and node.get('typeVersion') == 2 \
                 and node.get('parameters', {}).get('mode') == 'runOnceForAllItems':
             del node['parameters']['mode']
+        # 2.47.7 ExecuteWorkflow.node.ts: source defaults to database (v1.3),
+        # mode to once. Keep parameter-based workflows and per-item calls exact.
+        if node.get('type') == 'n8n-nodes-base.executeWorkflow' and node.get('typeVersion') == 1.3:
+            for field, default in (('source', 'database'), ('mode', 'once')):
+                if node.get('parameters', {}).get(field) == default:
+                    del node['parameters'][field]
+        # Wait v1.1 uses Webhook/description.ts authenticationProperty(), whose
+        # default is none. Any explicit auth method, false or null stays strict.
+        if node.get('type') == 'n8n-nodes-base.wait' and node.get('typeVersion') == 1.1 \
+                and node.get('parameters', {}).get('incomingAuthentication') == 'none':
+            del node['parameters']['incomingAuthentication']
+        # workflow-execute.ts continuesOnError only permits the two continue
+        # modes or legacy continueOnFail=true. An absent Code-v2 onError stops
+        # just as explicit stopWorkflow does; never erase a continue setting.
+        if node.get('type') == 'n8n-nodes-base.code' and node.get('typeVersion') == 2 \
+                and node.get('onError') == 'stopWorkflow' and node.get('continueOnFail') is not True:
+            del node['onError']
     return result, []
 
 
@@ -120,7 +137,9 @@ def verify(candidate, readback, published=False):
     return {'ok': not problems, 'scope': 'published_active_graph' if published else 'editor_graph_only',
             'workflow_id': candidate.get('id'), 'node_count': len(candidate.get('nodes', [])),
             'ignored_import_fields': ['node.id', 'node.position'],
-            'verified_graph_normalizations': ['code_v2.default_all_items_mode', 'trailing_empty_connection_lanes'],
+            'verified_graph_normalizations': ['code_v2.default_all_items_mode', 'trailing_empty_connection_lanes',
+                'execute_workflow_v1_3.default_database_source', 'execute_workflow_v1_3.default_once_mode',
+                'wait_v1_1.default_no_incoming_authentication', 'code_v2.default_stop_on_error'],
             'verified_default_equivalences': default_equivalences,
             'differences': sorted(set(problems)),
             'runtime_verified': False}
