@@ -135,11 +135,11 @@ function accountResponseError(status){
 // a new ID; the database additionally prevents duplicates across tabs/reloads.
 export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomUUID(),command=null}) {
   let attempt=null;
-  async function call(action,input) {
+  async function call(action,input,options) {
     const auth=await session();
     let response,r;
     try{
-      response=command?await command(action,input):await fetcher(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
+      response=command?await command(action,input,options):await fetcher(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
         body:JSON.stringify({action,input}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(145000)});
       r=await response.json();
     }catch(error){
@@ -164,14 +164,14 @@ export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomU
   }
   return {
     account:platform=>call('account',{id:uuid(),platform}),
-    prepare(binding,choices,savedId,expectedTargetId) {
+    prepare(binding,choices,savedId,expectedTargetId,options) {
       const input={...binding,choices};
       if(expectedTargetId)input.expected_target_id=expectedTargetId;
       const signature=JSON.stringify(input);
       if(savedId)attempt={signature,id:savedId};
       else if(!attempt||attempt.signature!==signature)attempt={signature,id:uuid()};
       const id=attempt.id;
-      return call('prepare',{id,...input}).catch(error=>{
+      return call('prepare',{id,...input},options).catch(error=>{
         if(error?.rejected){
           if(error.code==='DUPLICATE_PUBLICATION'&&expectedTargetId)error.duplicateRequestId=id;
           throw error;
@@ -236,7 +236,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,retryAccount,restart,statusButton,cancel,close);
   dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
-  const client=createOrderClient({session,...(command?{command:(action,input)=>command(action,input,context?.binding)}:{})});let order=null,context=null,working=false,epoch=0,account=null;
+  const client=createOrderClient({session,...(command?{command:(action,input,options)=>command(action,input,context?.binding,options)}:{})});let order=null,context=null,working=false,epoch=0,account=null;
   let recovery=null,preparationToResume=null,opening=false;
   const pendingAccounts=new Map();
   const unresolvedMessage='Der gespeicherte Freigabestand ist noch unklar. Lade den Status erneut oder öffne unter History den Auftrag.';
@@ -523,7 +523,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       if(!pendingTarget(stored))checkStoredState(stored);
       if(!checkAccount||!pendingTarget(stored)||preparationEnded(stored)||stored.check_error)return stored;
       await checkSavedDraft(generation,true);
-      return client.prepare(context.binding,stored.choices,stored.id);
+      return client.prepare(context.binding,stored.choices,stored.id,undefined,{retryAfter:'TARGET_CHECK_UNAVAILABLE'});
     },{choices:checkAccount?previous.choices:null});
   }
   async function readRecovery(generation){

@@ -29,7 +29,7 @@ function abortable(promise,signal){
 }
 
 export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.randomUUID(),now=Date.now,wait=delay}){
- const jobs=new Map(),commands=new Map(),controllers=new Set();let epoch=0;
+ const jobs=new Map(),commands=new Map(),controllers=new Set();let epoch=0,commandGeneration=0;
  const guard=context=>{
   context?.signal?.throwIfAborted();
   if(context&&(context.epoch!==epoch||context.binding?.retired))throw cancelled();
@@ -63,7 +63,9 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
   return job.view;
  }
  async function request({anchor,operation,input,signal,timeoutMs=145000,retryAfter}){
-  if(!operations.has(operation)||retryAfter!==undefined&&retryAfter!=='FILE_REFRESH_REQUIRED')fail('INVALID_INPUT');
+  if(!operations.has(operation)||retryAfter!==undefined&&retryAfter!=='FILE_REFRESH_REQUIRED'&&
+     !(operation==='order_prepare'&&retryAfter==='TARGET_CHECK_UNAVAILABLE'))fail('INVALID_INPUT');
+  const entryGeneration=commandGeneration;
   const controller=new AbortController();controllers.add(controller);
   const limit=AbortSignal.timeout(timeoutMs),combined=AbortSignal.any([controller.signal,limit,...(signal?[signal]:[])]);
   const context={epoch,signal:combined,binding:null};
@@ -73,11 +75,18 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
    job=await join(anchor,owner,combined,context);
    const identity=job.job_id+'\n'+operation+'\n'+JSON.stringify(input);
    command=commands.get(identity);
+   // An explicit target retry may replace only the command that already
+   // existed when this call began, never its own newly submitted replacement.
+   let retryCommand=retryAfter==='TARGET_CHECK_UNAVAILABLE'&&command?.generation<=entryGeneration?command:null;
+   const newCommand=()=>{
+    if(commands.size>=256)commands.delete([...commands.keys()][0]);
+    const next={id:uuid(),generation:++commandGeneration,submissions:0,acknowledged:false,observed:false,retryableCode:null};
+    commands.set(identity,next);return next;
+   };
    // A deliberate retry may replace only a confirmed non-work rejection.
    // Unknown transport, pending work and successful results retain their ID.
    if(!command||retryAfter==='FILE_REFRESH_REQUIRED'&&command.retryableCode===retryAfter){
-    if(commands.size>=256)commands.delete([...commands.keys()][0]);
-    command={id:uuid(),submissions:0,acknowledged:false,observed:false,retryableCode:null};commands.set(identity,command);
+    command=newCommand();
    }
    const submit=async()=>{
     // Mark before transmission. Reconciliation always keeps this command ID;
@@ -102,6 +111,21 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
      if(!Number.isInteger(r.status)||r.status<200||r.status>599||!record(r.body))fail('FILE_JOB_UNAVAILABLE');
      await auth(owner,context);guard(context);
      command.retryableCode=r.status===200&&r.body.ok===false&&r.body.code==='FILE_REFRESH_REQUIRED'&&!operation.startsWith('upload_')?'FILE_REFRESH_REQUIRED':null;
+     // The public reply can precede the worker's final state. A fresh failed
+     // receipt is required before retrying this one non-approving operation.
+     if(command===retryCommand&&item.state==='failed'&&r.status===200&&
+        r.body.ok===false&&r.body.code==='TARGET_CHECK_UNAVAILABLE'&&
+        ['queued','running','waiting'].includes(view.state)&&
+        Number.isFinite(Date.parse(view.deadline_at))&&Date.parse(view.deadline_at)>now()){
+      const current=commands.get(identity);
+      if(!current)fail('FILE_JOB_UNAVAILABLE');
+      // Parallel explicit retries share the first replacement. No await may
+      // separate this identity check from installing that replacement.
+      command=current===retryCommand?newCommand():current;
+      retryCommand=null;
+      if(command.submissions===0)await submit();
+      continue;
+     }
      return new Response(JSON.stringify(r.body),{status:r.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
     }
     if(['failed','uncertain'].includes(item?.state)||['failed','uncertain','start_uncertain'].includes(view.state))fail('FILE_JOB_UNCERTAIN');

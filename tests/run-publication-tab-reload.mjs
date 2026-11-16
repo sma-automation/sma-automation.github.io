@@ -18,6 +18,12 @@ let offline=false;
 export function createClient(){return {auth:{onAuthStateChange(){},getSession:async()=>({data:{session:{user:{id:'fixture-owner'},access_token:'fixture'}}})},
  rpc(name,args){
   const call=(async()=>{
+   if(name==='sma_publication_order_v1'){
+    const order=window.fixtureTargetOrder;
+    if(args.p_action!=='get'||!order||args.p_input?.id!==order.id||Object.keys(args.p_input).length!==1)throw Error('Unexpected synthetic stored-order action');
+    sessionStorage.fixtureStoredOrderReads=String(Number(sessionStorage.fixtureStoredOrderReads||0)+1);
+    return {data:structuredClone(order)};
+   }
    if(name==='sma_publication_history_order_page_v1'){
     const stored=sessionStorage.fixtureTransferStatus;
     const status=stored?.startsWith('uncertain')?'uncertain':stored;
@@ -51,7 +57,8 @@ export function createClient(){return {auth:{onAuthStateChange(){},getSession:as
  }};}`;
 
 // Keep the real file-job client. Only its transport is local: commands have
-// immutable stored responses, and status reads never repeat the account work.
+// immutable stored responses. A deliberate retry is a new command in the same
+// job; direct order-status reads never repeat the account or preparation work.
 const fileJobTransport=`
 const fixtureJobs=new Map(),fixtureCommands=new Map();
 const fixtureCount=name=>{sessionStorage[name]=String(Number(sessionStorage[name]||0)+1);};
@@ -76,7 +83,7 @@ async function fixtureFileJobFetch(url,options){
   if(command&&command.job_id!==job.job_id)throw Error('Synthetic command belongs to another job');
   return Response.json({...job,commands:command?[{command_id:input.command_id,operation:command.operation,state:command.state,response:command.response}]:[]});
  }
- if(path!=='/functions/v1/sma-file-job'||body.operation!=='account')throw Error('Unexpected synthetic order action');
+ if(path!=='/functions/v1/sma-file-job'||!['account','order_prepare'].includes(body.operation))throw Error('Unexpected synthetic order action');
  if(![...fixtureJobs.values()].some(j=>j.job_id===body.job_id))throw Error('Unknown synthetic command job');
  const signature=JSON.stringify({job_id:body.job_id,operation:body.operation,input:body.input});
  let command=fixtureCommands.get(body.command_id);
@@ -84,8 +91,24 @@ async function fixtureFileJobFetch(url,options){
  if(!command){
   command={signature,job_id:body.job_id,operation:body.operation,state:'running',response:null};
   fixtureCommands.set(body.command_id,command);fixtureCount('fixtureJobCommands');
-  sessionStorage.fixtureOrderActions=[sessionStorage.fixtureOrderActions,'account'].filter(Boolean).join(',');
-  if(sessionStorage.fixtureFailAccount){
+  sessionStorage.fixtureOrderActions=[sessionStorage.fixtureOrderActions,body.operation].filter(Boolean).join(',');
+  if(body.operation==='order_prepare'){
+   const order=window.fixtureTargetOrder,attempts=JSON.parse(sessionStorage.fixturePrepareCommands||'[]');
+   if(!order||signature!==JSON.stringify({job_id:body.job_id,operation:'order_prepare',input:{id:order.id,...order.binding,choices:order.choices}}))throw Error('Unexpected synthetic prepare binding');
+   if(attempts.length>=2)throw Error('Unexpected additional preparation command');
+   attempts.push({job_id:body.job_id,command_id:body.command_id,input:body.input});
+   sessionStorage.fixturePrepareCommands=JSON.stringify(attempts);
+   if(attempts.length===1){
+    command.state='failed';command.response={status:200,body:{ok:false,can_upload:false,can_publish:false,code:'TARGET_CHECK_UNAVAILABLE'}};
+   }else{
+    window.fixtureTargetOrder={...order,state:'prepared',preparation_window:null,
+     target:{id:'fixture-channel',platform:'youtube',name:'Testkanal'},
+     account_check:{target_id:'fixture-channel',platform:'youtube',display_name:'Testkanal',policy:{}},
+     approval_policy:'media-consent-2026-11-03.1',approval_token:'synthetic-order-token',
+     approval_window:{status:'active',expires_at:new Date(Date.now()+1800000).toISOString()}};
+    command.state='completed';command.response={status:200,body:structuredClone(window.fixtureTargetOrder)};
+   }
+  }else if(sessionStorage.fixtureFailAccount){
    sessionStorage.removeItem('fixtureFailAccount');command.state='failed';
    command.response={status:200,body:{ok:false,code:'TARGET_CHECK_UNAVAILABLE'}};
   }else{
@@ -176,7 +199,7 @@ try{
   report.savedInPreview=offered&&!$('workspacePreview').hidden&&action.hidden&&!prepare.hidden&&!prepare.disabled&&
    $('workspacePostCaption').textContent===newText&&$('workspaceDraftNotice').textContent==='Gespeicherter Entwurf'&&
    !$('publicationOrderDialog').open&&Number(sessionStorage.fixtureWrites)===2;
-  // The real file-job path has only an in-memory account worker. Other actions fail the test.
+  // The real file-job path has local account and explicitly bound preparation workers.
   const review=$('publicationOrderDialog'),reviewButton=text=>[...review.querySelectorAll('button')].find(b=>b.textContent===text);
   const retry=reviewButton('Zielkonto erneut prüfen'),close=reviewButton('Schließen');
   sessionStorage.fixtureFailAccount='1';prepare.click();await until(()=>!retry.hidden&&!retry.disabled);
@@ -195,6 +218,34 @@ try{
   review.querySelector('form').requestSubmit();await until(()=>!review.open);
   report.staleStopped=document.activeElement===$('loadLatest')&&$('sourcePanel').open&&!$('workspaceSource').hidden&&
    $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account,account';
+  sessionStorage.removeItem('fixtureNewerPost');
+  const storedPost=current.preview.drafts.find(draft=>draft.platform===selectedPortal);
+  window.fixtureTargetOrder={ok:true,id:'a7700000-0000-4000-8000-000000000044',
+   binding:{...fileContext(),preview_id:current.id,preview_revision:current.revision},
+   choices:{visibility:'private',made_for_kids:false,contains_synthetic_media:false},
+   draft:{title:storedPost.title,caption:storedPost.caption},state:'preparing',approved_at:null,
+   target:null,account_check:null,approval_token:null,approval_window:null,can_upload:false,can_publish:false,
+   preparation_window:{status:'active',expires_at:new Date(Date.now()+1800000).toISOString()}};
+  if(!orderReview.resumePrepared(structuredClone(window.fixtureTargetOrder)))throw Error('Pending history order did not open');
+  const checkTarget=reviewButton('Zielkonto prüfen'),reloadOrder=reviewButton('Status erneut laden'),approve=reviewButton('Veröffentlichung freigeben');
+  if(!review.open||checkTarget.disabled||!approve.hidden)throw Error('Pending order offers the wrong customer action');
+  checkTarget.click();await until(()=>!reloadOrder.disabled);
+  if(!review.textContent.includes('Bitte versuche es später erneut')||Number(sessionStorage.fixtureJobCommands)!==3||
+   window.fixtureTargetOrder.state!=='preparing')throw Error('First target check did not preserve the pending order');
+  const directReads=Number(sessionStorage.fixtureStoredOrderReads),jobReads=Number(sessionStorage.fixtureJobReads);
+  reloadOrder.click();await until(()=>!reloadOrder.disabled);
+  const statusReadOnly=Number(sessionStorage.fixtureStoredOrderReads)===directReads+1&&
+   Number(sessionStorage.fixtureJobReads)===jobReads&&Number(sessionStorage.fixtureJobCommands)===3;
+  if(!statusReadOnly)throw Error('Order status refresh repeated preparation work');
+  if(checkTarget.disabled)throw Error('Confirmed target failure cannot be retried');
+  checkTarget.click();checkTarget.click();await until(()=>!reloadOrder.disabled);
+  const attempts=JSON.parse(sessionStorage.fixturePrepareCommands||'[]');
+  report.targetRetry={prepared:window.fixtureTargetOrder.state==='prepared',statusReadOnly,
+   sameJob:attempts.length===2&&attempts[0].job_id===attempts[1].job_id,
+   sameOrder:attempts.length===2&&JSON.stringify(attempts[0].input)===JSON.stringify(attempts[1].input)&&attempts[1].input.id===window.fixtureTargetOrder.id,
+   newCommand:attempts.length===2&&attempts[0].command_id!==attempts[1].command_id,
+   unapproved:!approve.hidden&&approve.disabled&&!$('order-final-consent').checked&&window.fixtureTargetOrder.approved_at===null};
+  if(sessionStorage.fixtureOrderActions!=='account,account,order_prepare,order_prepare')throw Error('Target recovery started an unexpected order action');
   report.fileJobs={starts:Number(sessionStorage.fixtureJobStarts),commands:Number(sessionStorage.fixtureJobCommands),reads:Number(sessionStorage.fixtureJobReads)};
   const historyId='a7700000-0000-4000-8000-000000000033';
   for(const [stored,expected,canContinue] of [['checked','noch kein Übertragungsversuch',true],['private_complete','Privat abgeschlossen',true],['uncertain_blocked','Ergebnis unklar',false],['uncertain','Ergebnis unklar',false],['uncertain_resumable','Ergebnis unklar',false]]){
@@ -254,6 +305,7 @@ try{
  const result=JSON.parse(match[1]);assert.equal(result.restored,true,JSON.stringify(result));assert.equal(result.ready,true);
  assert.match(result.notice,/wiederhergestellt/);assert.equal(result.writes,1);
  assert.ok(result.previewShown&&result.kept&&result.loaded&&result.savedInPreview&&result.reviewedStoredPost&&result.staleStopped,JSON.stringify(result));
- assert.equal(result.fileJobs.starts,1);assert.equal(result.fileJobs.commands,2);assert.ok(result.fileJobs.reads>=2);
- console.log('Chromium distinguished a lost save from a confirmed preview save and kept order preparation separate.');
+ assert.deepEqual(result.targetRetry,{prepared:true,statusReadOnly:true,sameJob:true,sameOrder:true,newCommand:true,unapproved:true});
+ assert.equal(result.fileJobs.starts,1);assert.equal(result.fileJobs.commands,4);assert.ok(result.fileJobs.reads>=5);
+ console.log('Chromium preserved preview edits and recovered a target check through the real page adapter without another file job or approval.');
 }finally{server.close();await rm(profile,{recursive:true,force:true});}
