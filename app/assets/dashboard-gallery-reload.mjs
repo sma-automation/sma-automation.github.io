@@ -2,11 +2,13 @@
 const key='sma.dashboard.gallery-reload.v1';
 const portals=new Set(['all','youtube','tiktok','instagram','facebook']);
 const controls=new Set(['search','filter','file','select','next','back']);
+const workspaceViews=new Set(['source','preview']);
 const validId=id=>id===null||typeof id==='string'&&id.length>0&&id.length<=128;
 
 const isToken=value=>typeof value==='string'&&value.length>0&&value.length<=128;
 function validPreview(v){
  if(!isToken(v.key)||!isToken(v.id)||!portals.has(v.portal)||v.portal==='all')return false;
+ if(v.view!==undefined&&!workspaceViews.has(v.view))return false;
  const origin=v.origin;
  if(!origin||typeof origin.query!=='string')return false;
  if(origin.global===true)return isToken(origin.page)&&(origin.chapter===null||isToken(origin.chapter))&&
@@ -15,13 +17,13 @@ function validPreview(v){
 }
 
 export function previewMatchesHistory(v,route){
- return v?.kind==='preview'&&route?.smaOptimization===true&&route.view==='preview'&&
+ return v?.kind==='preview'&&route?.smaOptimization===true&&workspaceViews.has(route.view)&&route.view===(v.view??'preview')&&
   route.searchKey===v.key&&route.assetId===v.id&&route.portal===v.portal;
 }
 
 export function previewReloadSnapshot(route,origin){
  if(!route?.searchKey||!origin||origin.id!==route.assetId)return null;
- const view={kind:'preview',key:route.searchKey,id:origin.id,portal:route.portal,
+ const view={kind:'preview',view:route.view,key:route.searchKey,id:origin.id,portal:route.portal,
   origin:origin.global?{global:true,query:origin.query,page:origin.page,chapter:origin.chapter??null,
    launcherId:origin.launcher?.id||null,mobile:origin.launcher?.dataset?.smaMobileTarget==='search'}:
    {global:false,query:origin.query,page:origin.page,portal:origin.portal}};

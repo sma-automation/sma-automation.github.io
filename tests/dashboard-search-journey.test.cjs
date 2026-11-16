@@ -15,6 +15,7 @@ test.after(async()=>{await browser?.close();});
 const site='https://sma.test',url=site+'/app/dashboard.html';
 const uuid=n=>'a9900000-0000-4000-8000-'+String(n).padStart(12,'0');
 const wanted=uuid(1),query='Suchweg',pending='Meine ungesicherte Änderung im Suchweg.';
+const pendingSource='Isolierte Beschreibung für den Reload-Test: ein fiktives Reisevideo ohne echte Kundendatei.';
 const files=Array.from({length:14},(_,i)=>({id:uuid(i+1),name:'Suchweg Datei '+(i+1)+'.mp4',
  revision:'synthetic:'+i,media_kind:'video',mime_type:'video/mp4',duration_ms:3000,width_px:160,height_px:90,size_bytes:100,
  modified_at:'2026-11-16T00:00:00Z',assignments:[{platform:'youtube',revision:1,status:'assigned',title:'Suchweg Beitrag '+(i+1)}]}));
@@ -38,7 +39,7 @@ const focused=locator=>locator.evaluate(el=>el.ownerDocument.activeElement===el)
 async function fixture(t,mobile){
  const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
  const errors=[],unexpected=[],calls=[];
- let catalog=files.slice(),nextCatalogGate=null,closing=false;
+ let catalog=files.slice(),nextCatalogGate=null,nextDraftGate=null,closing=false;
  const gates=[];
  await context.routeWebSocket('**/*',socket=>{unexpected.push('WebSocket '+socket.url());socket.close();});
  await context.route('**/*',async route=>{
@@ -64,8 +65,12 @@ async function fixture(t,mobile){
       assert.equal(args.p_input?.platform,'youtube');return await reply({ok:true,files});
      }
      const file=files.find(f=>f.id===args.p_input?.asset_id);assert.ok(file,'only synthetic files');
-     if(args.p_action==='get')return await reply({ok:true,status:'completed',id:uuid(100),revision:1,assignment_revision:1,
-      preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',drafts:[{platform:'youtube',title:file.assignments[0].title,body:'Gespeicherter Suchweg-Text.',hashtags:[],review_notes:[],caption:'Gespeicherter Suchweg-Text.'}]}});
+     if(args.p_action==='get'){
+      const gate=nextDraftGate;nextDraftGate=null;
+      if(gate){gate.started.resolve();await gate.released.promise;}
+      return await reply({ok:true,status:'completed',id:uuid(100),revision:1,assignment_revision:1,
+       preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',drafts:[{platform:'youtube',title:file.assignments[0].title,body:'Gespeicherter Suchweg-Text.',hashtags:[],review_notes:[],caption:'Gespeicherter Suchweg-Text.'}]}});
+     }
      if(args.p_action==='check')return await reply({ok:true});
     }
     if(address.origin===site&&path==='/fixture/sma_publication_preview_v1'&&args.p_action==='latest')return await reply({ok:true,status:'empty'});
@@ -107,19 +112,27 @@ async function fixture(t,mobile){
   await editor.locator('#workspacePreviewEdits').click();await previewBack.click();await dialog.waitFor();
   assert.equal(await input.inputValue(),query);
  }
- async function refreshCatalog(updated){
+ function holdCatalog(updated=catalog){
   catalog=updated;
   const gate={started:deferred(),released:deferred()};gates.push(gate);nextCatalogGate=gate;
+  return {started:gate.started.promise,release:async()=>{
+   gate.released.resolve();
+   await page.waitForFunction(()=>document.getElementById('dashboard').contentDocument.querySelector('.sma-file-toolbar button')?.disabled===false);
+  }};
+ }
+ async function refreshCatalog(updated){
+  const gate=holdCatalog(updated);
   // This is the existing event the real editor emits after its file metadata changes.
   // Sending it from the actual editor window keeps the production source/origin checks.
   await body.evaluate(()=>window.top.postMessage({type:'sma-publication-file-updated'},location.origin));
-  await gate.started.promise;
-  return async()=>{
-   gate.released.resolve();
-   await page.waitForFunction(()=>document.getElementById('dashboard').contentDocument.querySelector('.sma-file-toolbar button')?.disabled===false);
-  };
+  await gate.started;
+  return gate.release;
  }
- return {page,dashboard,dialog,input,hit,editor,body,previewBack,launcher,account,open,edit,returnToSearch,refreshCatalog,calls};
+ function holdDraft(){
+  const gate={started:deferred(),released:deferred()};gates.push(gate);nextDraftGate=gate;
+  return {started:gate.started.promise,release:()=>gate.released.resolve()};
+ }
+ return {page,dashboard,dialog,input,hit,editor,body,previewBack,launcher,account,open,edit,returnToSearch,refreshCatalog,holdCatalog,holdDraft,calls};
 }
 
 for(const mobile of [false,true]){
@@ -184,5 +197,122 @@ for(const mobile of [false,true]){
   assert.equal(await f.page.evaluate(()=>Boolean(history.state?.smaOptimization)),false);
   assert.equal(await f.input.inputValue(),query);assert(await focused(f.input));
   assert.equal(await f.dashboard.locator('#smaOptimizationPage').isVisible(),false);
+ });
+ for(const view of ['source','preview'])for(const delayed of [false,true]){
+  test(label+': full reload preserves an ordinary unsaved '+view+' view'+(delayed?' after slow catalog and draft reads':'')+' and its search history',{timeout:30000},async t=>{
+   const f=await fixture(t,mobile);await f.open();await f.edit();
+   const source=f.editor.locator('#source_text'),language=f.editor.locator('#language');
+   if(await f.editor.locator('#sourcePanel').getAttribute('open')===null)await f.editor.locator('#sourceSummary').click();
+   await source.fill(pendingSource);await language.selectOption('en');
+   if(view==='preview'){
+    await f.editor.locator('#workspacePreviewEdits').click();
+    await f.page.waitForFunction(()=>history.state?.view==='preview');
+   }
+   const originalRoute=await f.page.evaluate(()=>history.state);
+   const gate=delayed?f.holdCatalog([...files.slice(1),files[0]]):null;
+   const draftGate=delayed?f.holdDraft():null;
+   await f.page.reload({waitUntil:'domcontentloaded'});
+   if(gate){
+    await gate.started;
+    assert.equal(await f.dashboard.locator('iframe[data-portal]').count(),0,'restore waits for the current owned catalog');
+    await gate.release();
+   }
+   if(draftGate){
+    // The new child has its scripts but not its saved draft yet. Releasing this
+    // separately exercises restoration after the parent's early navigation message.
+    await draftGate.started;draftGate.release();
+   }
+   await f.body.waitFor({state:'attached'});
+   await f.page.waitForFunction(()=>{
+    const dashboard=document.getElementById('dashboard').contentDocument;
+    return dashboard?.querySelector('iframe[data-portal="youtube"]')?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+   });
+   assert.equal(await f.body.inputValue(),pending,'ordinary typing is restored without a server save');
+   assert.equal(await source.inputValue(),pendingSource,'the unsaved file description survives reload');
+   assert.equal(await language.inputValue(),'en','the unsaved language selection survives reload');
+   await f.editor.locator(view==='source'?'#workspaceSource':'#workspacePreview').waitFor();
+   await f.page.waitForFunction(expected=>history.state?.view===expected,view);
+   const restored=await f.page.evaluate(()=>history.state);
+   for(const key of ['searchKey','assetId','portal','view'])assert.equal(restored?.[key],originalRoute[key],'reload keeps '+key);
+   assert.equal(await f.editor.locator(view==='source'?'#workspaceSource':'#workspacePreview').isVisible(),true,'reload keeps the visible workspace');
+   if(view==='preview')assert.equal(await f.editor.locator('#workspacePostCaption').textContent(),pending);
+   const restoredFrame=await f.dashboard.locator('iframe[data-portal="youtube"]').elementHandle();
+   await f.page.goBack();await f.dialog.waitFor();
+   assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit));
+   assert.equal(await f.account.getAttribute('aria-selected'),'true');
+   await f.page.goForward();
+   await f.editor.locator(view==='source'?'#workspaceSource':'#workspacePreview').waitFor();
+   assert.equal(await f.body.inputValue(),pending);
+   assert.equal(await source.inputValue(),pendingSource);
+   assert.equal(await language.inputValue(),'en');
+   assert.equal(await f.page.evaluate(()=>history.state?.searchKey),originalRoute.searchKey);
+   assert(await restoredFrame.evaluate(el=>el===el.ownerDocument.querySelector('iframe[data-portal="youtube"]')),'Back and Forward reuse the restored editor');
+   if(view==='source')await f.editor.locator('#workspacePreviewEdits').click();
+   await f.previewBack.click();await f.dialog.waitFor();assert(await focused(f.hit));
+   await f.page.keyboard.press('Escape');assert(await focused(f.launcher));
+  });
+ }
+ test(label+': a new search during slow reload cancels the old preview restore and keeps edits bound to their file',{timeout:30000},async t=>{
+  const f=await fixture(t,mobile);await f.open();await f.edit();
+  await f.editor.locator('#workspacePreviewEdits').click();
+  await f.page.waitForFunction(()=>history.state?.view==='preview');
+  const portalReads=()=>f.calls.filter(call=>call.path==='/fixture/sma_publication_files_v1'&&call.args.p_action==='list'&&call.args.p_input?.platform).length;
+  const readsBefore=portalReads(),gate=f.holdCatalog();
+  await f.page.reload({waitUntil:'domcontentloaded'});await gate.started;
+  await f.account.click();await f.launcher.click();await f.input.fill('Suchweg Beitrag 14');
+  await gate.release();
+  assert.equal(await f.input.inputValue(),'Suchweg Beitrag 14');assert(await focused(f.input));
+  assert.equal(await f.dashboard.locator('iframe[data-portal]').count(),0,'late catalog cannot reopen the cancelled preview');
+  assert.equal(portalReads(),readsBefore,'cancellation does not read the old portal draft');
+  assert.equal(await f.page.evaluate(()=>Boolean(history.state?.smaOptimization)),false);
+  const otherHit=f.dialog.locator('[data-quick-file="'+uuid(14)+'"]');await otherHit.click();
+  await f.editor.locator('#workspaceEditPost').waitFor();
+  assert.equal(await f.body.inputValue(),'Gespeicherter Suchweg-Text.','unsaved text from another file must not leak into the new selection');
+  assert.equal(await f.page.evaluate(()=>history.state?.assetId),uuid(14));
+  await f.previewBack.click();await f.dialog.waitFor();
+  assert.equal(await f.input.inputValue(),'Suchweg Beitrag 14');assert(await focused(otherHit));
+ });
+ test(label+': a deliberate workspace tab change during a slow child reload wins over the saved preview view',{timeout:30000},async t=>{
+  const f=await fixture(t,mobile);await f.open();await f.edit();
+  await f.editor.locator('#workspacePreviewEdits').click();
+  await f.page.waitForFunction(()=>history.state?.view==='preview');
+  const catalogGate=f.holdCatalog(),draftGate=f.holdDraft();
+  await f.page.reload({waitUntil:'domcontentloaded'});await catalogGate.started;
+  await catalogGate.release();await draftGate.started;
+  const sourceTab=f.editor.locator('#workspaceTab-source');
+  assert.equal(await sourceTab.isEnabled(),true,'workspace navigation remains usable while the draft read is pending');
+  await sourceTab.click();await f.page.waitForFunction(()=>history.state?.view==='source');
+  draftGate.release();
+  await f.body.waitFor();
+  await f.page.waitForFunction(()=>{
+   const editor=document.getElementById('dashboard').contentDocument.querySelector('iframe[data-portal="youtube"]');
+   return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+  });
+  assert.equal(await f.page.evaluate(()=>history.state?.view),'source');
+  assert.equal(await f.editor.locator('#workspaceSource').isVisible(),true);
+  assert.equal(await f.editor.locator('#workspacePreview').isVisible(),false);
+  assert.equal(await f.body.inputValue(),pending,'the newer view choice does not lose the restored local text');
+ });
+ test(label+': child readiness cannot take focus away from a newer global search opened during reload',{timeout:30000},async t=>{
+  const f=await fixture(t,mobile);await f.open();await f.edit();
+  await f.editor.locator('#workspacePreviewEdits').click();
+  await f.page.waitForFunction(()=>history.state?.view==='preview');
+  const catalogGate=f.holdCatalog(),draftGate=f.holdDraft();
+  await f.page.reload({waitUntil:'domcontentloaded'});await catalogGate.started;
+  await catalogGate.release();await draftGate.started;
+  await f.launcher.click();await f.input.fill('Suchweg Beitrag 14');
+  assert(await focused(f.input));
+  draftGate.release();
+  await f.body.waitFor({state:'attached'});
+  await f.page.waitForFunction(()=>{
+   const editor=document.getElementById('dashboard').contentDocument.querySelector('iframe[data-portal="youtube"]');
+   return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+  });
+  await f.editor.locator('#workspacePreview').waitFor();
+  assert.equal(await f.dialog.isVisible(),true);
+  assert.equal(await f.input.inputValue(),'Suchweg Beitrag 14');
+  assert(await focused(f.input),'restoring the background preview must not focus its return button behind the modal');
+  assert.equal(await f.dialog.locator('[data-quick-file="'+uuid(14)+'"]').count(),1);
+  assert.equal(await f.body.inputValue(),pending);
  });
 }

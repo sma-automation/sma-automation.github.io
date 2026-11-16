@@ -1580,6 +1580,86 @@ function interruptedDraft(portal,commit,extra={}){
  },options);
  return {...f,sessionStorage,first,reload:(rpc=f.rpc)=>f.open(rpc,options)};
 }
+test('ordinary portal edits survive reload without a save attempt or server write',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=sharedDraft(portal),sessionStorage=tabStorage(),options={sessionStorage};
+  const old=await f.open(f.rpc,options);
+  editPortalField(old,'title','Mein lokal bearbeiteter Titel');
+  editPortalField(old,'body','Mein Text vor dem ersten Speicherversuch.');
+  editPortalField(old,'hashtags','#Neu #Noch-offen');
+  await old.get('draftLinkShop').click();
+  old.get('source_text').value='Meine noch nicht übernommene Inhaltsbeschreibung.';
+  old.get('previewForm').events.input();
+  old.get('language').value='en';old.get('language').events.change();
+  assert.equal(sessionStorage.rows.size,1);
+  const record=JSON.parse([...sessionStorage.rows.values()][0]);
+  assert.equal(record.kind,'edit');assert.equal(record.sent,undefined);
+  assert.deepEqual(record.form.source,{text:old.get('source_text').value,language:'en'});
+  const restored=await f.open(f.rpc,options),card=restored.get('drafts').children[0];
+  assert.equal(card.querySelector('[data-field=title]').value,record.form.title);
+  assert.equal(card.querySelector('[data-field=body]').value,record.form.body);
+  assert.equal(card.querySelector('[data-field=hashtags]').value,'#Neu #Noch-offen');
+  assert.equal(restored.get('source_text').value,record.form.source.text);assert.equal(restored.get('language').value,'en');
+  assert.equal(restored.get('shopLink').href,result.preview.shop_url);
+  assert.equal(f.writes.length,0);assert(restored.calls.every(c=>!c.url&&['list','get','check'].includes(c.p_action)));
+  assert.match(restored.get('status').textContent,/wiederhergestellt/);
+  assert.doesNotMatch(restored.get('status').textContent,/als Entwurf gespeichert/);
+  assert.throws(()=>restored.orderOptions.getContext(),/speichere/);
+ }
+});
+test('source-only edits are restored as unconsumed input and never treated as a saved contribution',async()=>{
+ const f=sharedDraft('youtube'),sessionStorage=tabStorage(),options={sessionStorage};
+ const old=await f.open(f.rpc,options);
+ old.get('source_text').value='Neue Beobachtung für eine spätere Texterstellung.';old.get('previewForm').events.input();
+ assert.equal(sessionStorage.rows.size,1);
+ const restored=await f.open(f.rpc,options);
+ assert.equal(restored.get('source_text').value,old.get('source_text').value);
+ assert.equal(restored.get('drafts').querySelector('textarea').value,f.view().preview.drafts[0].body);
+ assert.equal(restored.workspaceOptions.getPreview().draftStep.target,'source_text');
+ assert.equal(restored.get('save').disabled,true);assert.equal(f.writes.length,0);
+ assert.throws(()=>restored.orderOptions.getContext(),/speichere/);
+});
+test('reverting, saving, discarding and signing out clear ordinary edit checkpoints',async()=>{
+ for(const cleanup of ['revert','save','discard','logout']){
+  const f=sharedDraft('youtube'),sessionStorage=tabStorage(),p=await f.open(f.rpc,{sessionStorage});
+  editPortalField(p,'body','Meine offene, noch nicht gesendete Bearbeitung.');assert.equal(sessionStorage.rows.size,1);
+  if(cleanup==='revert')editPortalField(p,'body',f.view().preview.drafts[0].body);
+  if(cleanup==='save')await p.save();
+  if(cleanup==='discard'){
+   const reading=p.get('loadLatest').click();await compareTick();await p.get('useStoredDraft').click();await reading;
+  }
+  if(cleanup==='logout')p.signOut();
+  assert.equal(sessionStorage.rows.size,0,cleanup);assert.equal(f.writes.length,cleanup==='save'?1:0);
+ }
+ const f=sharedDraft('tiktok'),sessionStorage=tabStorage(),p=await f.open(f.rpc,{sessionStorage});
+ const initial=p.get('source_text').value;
+ p.get('source_text').value='Eine offene Inhaltsänderung.';p.get('previewForm').events.input();assert.equal(sessionStorage.rows.size,1);
+ p.get('source_text').value=initial;p.get('previewForm').events.input();assert.equal(sessionStorage.rows.size,0);
+});
+test('ordinary checkpoint recovery remains bound to owner, route, file version and assigned draft',async()=>{
+ for(const change of ['owner','route','file','draft']){
+  const f=sharedDraft('youtube'),sessionStorage=tabStorage(),old=await f.open(f.rpc,{sessionStorage});
+  editPortalField(old,'body','Private Eingabe der ursprünglichen Dateizuordnung.');
+  old.get('source_text').value='Private Inhaltsbeschreibung.';old.get('previewForm').events.input();
+  assert.equal(sessionStorage.rows.size,1,'the rejected recovery must start with a real local edit checkpoint');
+  if(change==='file')f.replaceFile();if(change==='draft')f.replacePreview();
+  const options={sessionStorage,...(change==='owner'?{ownerId:'other-owner'}:change==='route'?{asset:'another-file'}:{})};
+  const restored=await f.open(f.rpc,options);
+  assert.doesNotMatch(restored.get('drafts').querySelector('textarea')?.value||'',/Private Eingabe/);
+  assert.notEqual(restored.get('source_text').value,'Private Inhaltsbeschreibung.');
+  assert.equal(f.writes.length,0);
+  if(change!=='route')assert.equal(sessionStorage.rows.size,0);
+ }
+});
+test('a newer saved revision requires comparison before ordinary restored edits can be written',async()=>{
+ const f=sharedDraft('tiktok'),sessionStorage=tabStorage(),options={sessionStorage};
+ const old=await f.open(f.rpc,options);editPortalField(old,'body','Mein erster lokaler Zwischenstand.');
+ f.change({title:'Später serverseitig gespeicherter Titel'});
+ const restored=await f.open(f.rpc,options);
+ assert.equal(restored.get('compareDraft').hidden,false);assert.equal(restored.get('save').disabled,true);
+ assert.match(restored.get('drafts').querySelector('textarea').value,/lokaler Zwischenstand/);
+ await restored.save();assert.equal(f.writes.length,0);
+});
 test('reloading an interrupted save restores the correct file and waits for an explicit save',async()=>{
  for(const portal of ['youtube','tiktok']){
   const f=interruptedDraft(portal,false),old=await f.first();

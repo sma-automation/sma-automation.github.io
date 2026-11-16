@@ -60,3 +60,22 @@ test('portal return restores just the platform and control for the same customer
  }
  same.save('first',view);assert.equal(same.take('second'),null);
 });
+test('a search editor reload retains its exact source view and rejects a different history entry',async()=>{
+ const {galleryReloadStore,previewReloadSnapshot,previewMatchesHistory}=await modulePromise;
+ const origin={global:true,id:'clip-a',page:'overview',chapter:'account',query:'Werkstatt',launcher:{id:'search',dataset:{}}};
+ for(const view of ['source','preview']){
+  const route={smaOptimization:true,view,portal:'youtube',assetId:'clip-a',searchKey:'original-search'};
+  const snapshot=previewReloadSnapshot(route,origin);
+  assert(snapshot);assert.equal(snapshot.view,view);assert(previewMatchesHistory(snapshot,route));
+  const win=tab(),store=galleryReloadStore(win);store.save('owner',snapshot);
+  assert.deepEqual(store.take('owner'),snapshot);
+  for(const change of [{view:view==='source'?'preview':'source'},{searchKey:'new-search'},{assetId:'clip-b'},{portal:'tiktok'}]){
+   assert.equal(previewMatchesHistory(snapshot,{...route,...change}),false);
+  }
+ }
+ const route={smaOptimization:true,view:'files',portal:'youtube',assetId:'clip-a',searchKey:'original-search'};
+ assert.equal(previewReloadSnapshot(route,origin),null);
+ const snapshot=previewReloadSnapshot({...route,view:'preview'},origin);
+ delete snapshot.view;assert(previewMatchesHistory(snapshot,{...route,view:'preview'}),'older preview-only snapshots remain compatible');
+ const store=galleryReloadStore(tab());store.save('owner',{...snapshot,view:'publish'});assert.equal(store.take('owner'),null);
+});

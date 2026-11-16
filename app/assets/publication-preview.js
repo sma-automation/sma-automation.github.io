@@ -9,10 +9,10 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=2';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {tabDraftStore} from './publication-tab-draft.mjs?v=1';
+import {tabDraftStore} from './publication-tab-draft.mjs?v=2';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=25';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=26';
 import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=27';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
@@ -56,6 +56,7 @@ if(selectedPortal){
 
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
  fromSearch:window.parent!==window&&params.get('fromSearch')==='1',
+ deferInitialFocus:params.get('restoring')==='1',
  onSearchReturn:()=>window.top.postMessage({type:'sma-publication-search-return'},location.origin),
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
@@ -69,11 +70,11 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
    facts:selectedMediaFacts,source:$('source_text').value,language:current?.preview?.language||$('language').value,
    draftStep,invalidHashtags,draftStatus:draftStep?.note||(draft?'Gespeicherter Entwurf':'')};
  },
- onView:(view,requestedView)=>{
+ onView:(view,requestedView,userInitiated)=>{
   if(view!=='source')choosingLinkFor=null;
   if(view!=='preview')originalVideo?.stop();
   if(window.parent!==window&&view!==requestedView){
-   window.top.postMessage({type:'sma-publication-workspace-view',view,previewUnavailable:requestedView==='preview'},location.origin);
+   window.top.postMessage({type:'sma-publication-workspace-view',view,previewUnavailable:requestedView==='preview',userInitiated:userInitiated===true},location.origin);
   }
  },
 }):null;
@@ -83,7 +84,7 @@ if(workspace){
   const data=event.data;
   if(data?.type==='sma-publication-search-context')workspace.setSearchReturn(data.fromSearch===true);
   if(data?.type==='sma-publication-open-search-file'&&data.assetId===params.get('asset'))void requestFileSelection(data.assetId);
-  if(data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(data.view))workspace.restoreView(data.view);
+  if(data?.type==='sma-publication-show-view'&&['preview','files','source'].includes(data.view))workspace.restoreView(data.view,data.restoreFocus!==false);
  });
  let heightQueued=false;
  const sendHeight=()=>{if(heightQueued)return;heightQueued=true;requestAnimationFrame(()=>{heightQueued=false;window.top.postMessage({type:'sma-publication-preview-height',height:Math.max(300,Math.ceil(document.querySelector('main').getBoundingClientRect().height)+20)},location.origin);});};
@@ -1202,9 +1203,9 @@ $('refreshFiles').addEventListener('click',()=>{
  return retryHistoryPreview?loadHistoryPreview():refreshFiles();
 });
 $('pickerRefresh').addEventListener('click',refreshFiles);
-$('previewForm').addEventListener('input',()=>{attempt=null;});
+$('previewForm').addEventListener('input',()=>{attempt=null;updateTabForm();});
 $('media_kind').addEventListener('change',syncMedia);
-$('language').addEventListener('change',()=>{attempt=null;});
+$('language').addEventListener('change',()=>{attempt=null;updateTabForm();});
 function closeReloadChoice(accepted){
  const settle=reloadChoice;reloadChoice=null;
  $('draftReloadPreview').replaceChildren();
@@ -1519,12 +1520,24 @@ function forgetTabAttempt(){
 function currentTabForm(){
  const card=$('drafts').children[0];
  return {title:card.querySelector('[data-field=title]').value,body:card.querySelector('[data-field=body]').value,
-  tags:card.querySelector('[data-field=hashtags]').value,link:pendingLink};
+  tags:card.querySelector('[data-field=hashtags]').value,link:pendingLink,
+  ...(hasSourceEdits()?{source:{text:$('source_text').value,language:$('language').value}}:{})};
 }
 function updateTabForm(){
- if(tabRecord&&!signedOut&&current?.id===tabRecord.previewId){
-  tabRecord.form=currentTabForm();tabDrafts.update(tabRecord);
+ if(signedOut||!previewOwnerId||!current||!selectedAsset||!['youtube','tiktok'].includes(selectedPortal)||!$('drafts').children[0])return;
+ if(tabRecord){
+  if(current.id!==tabRecord.previewId||previewOwnerId!==tabRecord.owner||selectedAsset.id!==tabRecord.fileId||selectedAsset.revision!==tabRecord.fileRevision)return;
+  if(tabRecord.kind==='edit'&&!hasFormChanges()&&!hasSourceEdits()){forgetTabAttempt();return;}
+  tabRecord.form=currentTabForm();tabDrafts.update(tabRecord);return;
  }
+ if(!hasFormChanges()&&!hasSourceEdits())return;
+ const draft=current.preview.drafts.find(d=>d.platform===selectedPortal);
+ if(!draft||current.preview.drafts.length!==1||!Number.isSafeInteger(assignmentRevision)||assignmentRevision<1)return;
+ // This is a local edit, not a save attempt or a server confirmation.
+ tabRecord={kind:'edit',token:crypto.randomUUID(),owner:previewOwnerId,portal:selectedPortal,route:draftRoute(),
+  fileId:selectedAsset.id,fileRevision:selectedAsset.revision,previewId:current.id,revision:current.revision,
+  assignment:assignmentRevision,shop:current.preview.shop_url,base:editableFields(draft),form:currentTabForm()};
+ tabDrafts.write(tabRecord);
 }
 function keepRecoveredForm(record,saved){
  tabRecord={...record,token:crypto.randomUUID(),base:editableFields(saved.preview.drafts[0]),
@@ -1549,13 +1562,14 @@ function restoreTabAttempt(saved,file){
     (saved.assignment_revision===record.assignment&&(saved.revision!==record.revision||!sameEditableDraft(record.base,draft)))){
   tabDrafts.forget(record);return {edited:false,message:'Für diese Datei ist eine andere Entwurfsfassung geladen. Die früheren Eingaben wurden nicht übernommen.'};
  }
- const form=record.form,confirmed=sameEditableDraft(record.sent,draft);
+ const form=record.form,confirmed=record.kind!=='edit'&&sameEditableDraft(record.sent,draft);
  // Without a staged link, the editor keeps the verified server destination.
  pendingLink=form.link===undefined||(form.link?.product_id??null)===(draft.product_id??null)?undefined:form.link;
  const card=$('drafts').children[0];
  card.querySelector('[data-field=title]').value=form.title;card.querySelector('[data-field=body]').value=form.body;
  card.querySelector('[data-field=hashtags]').value=form.tags;
- if(!hasDraftEdits()){
+ if(form.source){$('source_text').value=form.source.text;$('language').value=form.source.language;}
+ if(!hasDraftEdits()&&!hasSourceEdits()){
   tabDrafts.forget(record);
   return {edited:false,message:confirmed?'Die Fassung aus diesem Tab ist als Entwurf gespeichert.':'Die aktuelle Fassung ist geladen. Die Eingabefelder stimmen mit ihr überein.'};
  }
@@ -1577,6 +1591,7 @@ function finishDraftSave(result,context){
   if(!$('productChoiceField').hidden)$('productChoice').value=applied?.product_id||'';
  }
  fileChanged();
+ updateTabForm();
 }
 
 function sameEditableDraft(a,b){
@@ -1736,3 +1751,4 @@ try{
   if(ready)await loadLatest();
  }
 }catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
+finally{if(workspace&&!signedOut&&window.top!==window)window.top.postMessage({type:'sma-publication-workspace-ready'},location.origin);}

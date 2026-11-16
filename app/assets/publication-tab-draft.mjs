@@ -1,4 +1,4 @@
-// Session storage is optional. Keep a single interrupted save per portal in this tab.
+// Session storage is optional. Keep one edit or interrupted-save checkpoint per portal in this tab.
 const key=portal=>'sma.publication.pending-save.v1.'+portal;
 const portals=['youtube','tiktok'];
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -13,23 +13,28 @@ function validLink(v){
  return v===undefined||v===null||(object(v)&&Object.keys(v).every(k=>['source','product_id','name','purpose'].includes(k))&&['choice','matched','catalog'].includes(v.source)&&
   typeof v.product_id==='string'&&product(v.product_id)&&string(v.name,500)&&string(v.purpose,8000));
 }
+function validSource(v){
+ return v===undefined||(object(v)&&Object.keys(v).every(k=>['text','language'].includes(k))&&
+  string(v.text,8000)&&['de','en'].includes(v.language));
+}
 function valid(v,portal){
  return object(v)&&portals.includes(portal)&&v.portal===portal&&uuid(v.token)&&string(v.owner,128)&&v.owner.length>0&&
+  (v.kind===undefined||v.kind==='edit')&&
   string(v.route,200)&&uuid(v.fileId)&&string(v.fileRevision,250)&&v.fileRevision.length>0&&uuid(v.previewId)&&
   Number.isSafeInteger(v.assignment)&&v.assignment>0&&Number.isSafeInteger(v.revision)&&v.revision>0&&
   typeof v.shop==='string'&&/^https:\/\/sma-automation\.com\/app\/shop\.html\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v.shop)&&
-  validFields(v.base)&&validFields(v.sent)&&object(v.form)&&string(v.form.title,160)&&string(v.form.body,2400)&&
-  string(v.form.tags,1000)&&validLink(v.form.link);
+  validFields(v.base)&&(v.kind==='edit'?v.sent===undefined:validFields(v.sent))&&object(v.form)&&string(v.form.title,160)&&string(v.form.body,2400)&&
+  string(v.form.tags,1000)&&validLink(v.form.link)&&validSource(v.form.source);
 }
 // Only form edits may reuse the last persisted checkpoint after a storage failure.
 // A new attempt, owner, file, route, baseline or sent payload must never revive it.
 function sameAttempt(a,b){
  if(!a)return false;
- for(const field of ['token','owner','portal','route','fileId','fileRevision','previewId','assignment','revision','shop'])
+ for(const field of ['kind','token','owner','portal','route','fileId','fileRevision','previewId','assignment','revision','shop'])
   if(a[field]!==b[field])return false;
  const fields=v=>[v.title,v.body,v.hashtags,v.product_id];
  return JSON.stringify(fields(a.base))===JSON.stringify(fields(b.base))&&
-  JSON.stringify(fields(a.sent))===JSON.stringify(fields(b.sent));
+  (a.kind==='edit'||JSON.stringify(fields(a.sent))===JSON.stringify(fields(b.sent)));
 }
 // Optional browser-only notice. It never changes form fields or the server save status.
 // Track only the current attempt's identity, not a second in-memory draft copy.

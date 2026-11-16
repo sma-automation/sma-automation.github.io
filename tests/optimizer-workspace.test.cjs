@@ -72,6 +72,21 @@ test('Add File remains reachable inside the preview and its details tab, never i
  assert.equal(p.get('workspacePreview').hidden,true);
  assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles']);
 });
+test('restored workspace can finish loading behind another focused surface without taking focus',()=>{
+ const p=setup({}, {deferInitialFocus:true});
+ p.workspace.selection({id:'own-file',name:'Eigenes Video',media_kind:'video'});
+ p.workspace.show('preview');assert.notEqual(p.get('workspacePreviewBack').focused,true);
+ p.workspace.restoreView('preview',false);assert.notEqual(p.get('workspacePreviewBack').focused,true);
+ p.workspace.restoreView('files',false);assert.notEqual(p.get('workspaceTab-files').focused,true);
+ p.workspace.restoreView('preview');assert.equal(p.get('workspacePreviewBack').focused,true);
+});
+test('trusted workspace tab choices report user intent even when that tab is already visible',()=>{
+ const views=[],p=setup({}, {onView:(view,requested,user)=>views.push({view,user})});
+ p.get('workspaceTab-source').events.click({isTrusted:true});
+ p.get('workspaceTab-source').events.click({isTrusted:true});
+ assert.deepEqual(views,[{view:'source',user:true},{view:'source',user:true}]);
+ p.get('workspaceTab-files').click();assert.deepEqual(views.at(-1),{view:'files',user:false});
+});
 
 test('a customer with no files can reach the existing Add File control through an empty preview',()=>{
  const p=setup();
@@ -311,7 +326,7 @@ test('professional preview places only publication in the primary action host',(
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
  assert.ok(html.includes('optimizer-workspace.css?v=19'));
- assert.ok(html.includes('publication-preview.js?v=99'));
+ assert.ok(html.includes('publication-preview.js?v=100'));
 });
 
 test('empty preview exposes upload action and becomes a complete preview after file choice',()=>{
