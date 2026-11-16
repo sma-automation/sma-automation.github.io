@@ -12,13 +12,37 @@ const book = document.querySelector('#book');
 const checkout = document.querySelector('#checkout');
 const refreshPayment = document.querySelector('#refresh-payment');
 const prices = {alpha:100,beta:300,delta:500};
+const requestTimeout = 45000;
 let offer = null;
-let owner, saved = null, busy = false, leaving = false;
+let owner, activeRequest, saved = null, busy = false, leaving = false;
+
+// Bound the whole attempt, including APIs that cannot cancel their transport.
+// Cancelling a wait does not undo a server write; retries only read its state.
+function withinRequest(signal, start) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', cancel);
+      callback(value);
+    };
+    const cancel = () => finish(reject, Error('Package request cancelled'));
+    if (signal.aborted) return cancel();
+    signal.addEventListener('abort', cancel, {once:true});
+    Promise.resolve().then(() => {
+      if (signal.aborted) throw Error('Package request cancelled');
+      return start();
+    }).then(value => finish(resolve, value), error => finish(reject, error));
+  });
+}
 
 function leave(page) {
   leaving = true;
+  activeRequest?.abort();
   form.hidden = true;
   booking.hidden = true;
+  retry.hidden = true;
   status.textContent = '';
   location.replace(page);
 }
@@ -67,13 +91,23 @@ function displayOffer(value) {
 async function request(plan = null, selectedOffer = null, paymentOrder = null) {
   if (leaving || busy) return;
   busy = true;
+  const controller = new AbortController();
+  activeRequest = controller;
+  let timedOut = false, bookingConfirmed = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, requestTimeout);
+  const run = start => withinRequest(controller.signal, start);
+  const currentRequest = () => !leaving && activeRequest === controller && !controller.signal.aborted;
   offer = null;
   fields.disabled = true;
   syncSubmit();
   retry.hidden = true;
   status.textContent = plan ? 'Deine Auswahl wird gespeichert …' : 'Dein Konto wird geprüft …';
   try {
-    const {data, error} = await client.auth.getSession();
+    const {data, error} = await run(() => client.auth.getSession());
+    if (!currentRequest()) return;
     if (error) throw error;
     const current = data.session?.user?.id;
     if (!current) return leave('index.html');
@@ -81,26 +115,30 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
     owner = current;
     let changedOffer = false, paymentWaiting = false, paymentClosed = false;
     if (selectedOffer) {
-      const result = await client.rpc('sma_onboarding_booking_v1', {
+      const result = await run(() => client.rpc('sma_onboarding_booking_v1', {
         p_owner:owner, p_offer:selectedOffer.id, p_plan:selectedOffer.plan, p_terms:selectedOffer.terms
-      });
-      if (leaving) return;
+      }).abortSignal(controller.signal));
+      if (!currentRequest()) return;
       if (result.error || (!result.data?.ok && result.data?.code !== 'OFFER_CHANGED')) throw Error('Booking unavailable');
       changedOffer = result.data?.code === 'OFFER_CHANGED';
       const confirmed = result.data?.offer;
+      bookingConfirmed = !changedOffer && confirmed?.state === 'booked';
+      if (bookingConfirmed) status.textContent = 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft …';
       if (!changedOffer && confirmed?.automated === true && confirmed.state === 'booked') paymentOrder = confirmed.id;
     }
     if (paymentOrder) {
-      const payment = await client.functions.invoke('sma-package-payment',{body:{order:paymentOrder,owner}});
-      if (leaving) return;
+      // functions-js 2.4.6 has no invoke AbortSignal option. Ignore late results
+      // after the shared deadline without repeating its possible server action.
+      const payment = await run(() => client.functions.invoke('sma-package-payment',{body:{order:paymentOrder,owner}}));
+      if (!currentRequest()) return;
       if (payment.data?.code === 'ACTIVE') return leave('dashboard.html');
       paymentWaiting = !!payment.error;
       paymentClosed = payment.data?.code === 'CLOSED';
     }
-    const result = await client.rpc('sma_onboarding_plan_choice_v1', {
+    const result = await run(() => client.rpc('sma_onboarding_plan_choice_v1', {
       p_owner: owner, p_plan: plan, p_expected_plan: plan ? saved : null
-    });
-    if (leaving) return;
+    }).abortSignal(controller.signal));
+    if (!currentRequest()) return;
     if (result.error) throw result.error;
     const value = result.data;
     if (value?.code === 'ACCOUNT_UNAVAILABLE') {
@@ -121,8 +159,8 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       if (value.linked === true) status.textContent += ' Dein SMA-Kundenkonto ist zugeordnet.';
     }
     if (value.linked === true) {
-      const current = await client.rpc('sma_onboarding_booking_v1', {p_owner:owner});
-      if (leaving) return;
+      const current = await run(() => client.rpc('sma_onboarding_booking_v1', {p_owner:owner}).abortSignal(controller.signal));
+      if (!currentRequest()) return;
       if (current.error) throw current.error;
       displayOffer(current.data);
     }
@@ -130,15 +168,23 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
     if (paymentClosed && offer?.state === 'offered') status.textContent = 'Die vorherige Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du das Paket erneut buchen.';
     if (changedOffer) status.textContent = 'Dein Zahlungsangebot hat sich geändert. Prüfe den aktuellen Stand.';
   } catch {
-    if (leaving) return;
+    if (leaving || activeRequest !== controller) return;
     form.hidden = true;
     offer = null;
-    status.textContent = 'Der Stand deiner Vormerkung konnte nicht bestätigt werden. Bitte lade ihn erneut.';
+    status.textContent = bookingConfirmed
+      ? 'Deine Buchung ist gespeichert. Der aktuelle Zahlungsstand konnte nicht bestätigt werden. Bitte lade ihn erneut.'
+      : timedOut
+        ? 'Die Prüfung dauert zu lange. Bitte lade deinen Paket- und Zahlungsstand erneut.'
+        : 'Der Stand deiner Vormerkung konnte nicht bestätigt werden. Bitte lade ihn erneut.';
     retry.hidden = false;
   } finally {
-    busy = false;
-    fields.disabled = false;
-    syncSubmit();
+    clearTimeout(deadline);
+    if (activeRequest === controller) {
+      activeRequest = null;
+      busy = false;
+      fields.disabled = false;
+      syncSubmit();
+    }
   }
 }
 
@@ -160,7 +206,7 @@ document.querySelector('#logout').addEventListener('click', async () => {
     if (error) throw error;
     if (!leaving) leave('index.html');
   } catch {
-    status.textContent = 'Die Abmeldung ist fehlgeschlagen. Bitte versuche es erneut.';
+    if (!leaving) status.textContent = 'Die Abmeldung ist fehlgeschlagen. Bitte versuche es erneut.';
   }
 });
 await request();
