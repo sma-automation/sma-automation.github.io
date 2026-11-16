@@ -132,8 +132,18 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false,start
     }
     if(address.origin==='https://bnvnmdxosbnuzedokqgh.supabase.co'&&path==='/rest/v1/rpc/sma_gallery_music_v1'&&args.p_action==='claim')return await reply({ok:true,state:'idle'});
     if(address.origin==='https://johnmusic.app.n8n.cloud'&&path==='/webhook/sma-publication-asset-preview-v1'){
-     const file=files.find(f=>f.id===args.asset_id);assert.ok(file);
-     return await reply({ok:true,can_publish:false,asset_id:file.id,asset_revision:file.revision,media_kind:'video',mime_type:'image/png',image_base64:png});
+     assert.equal(request.headers().authorization,'Bearer fixture');
+     const batch=Object.hasOwn(args,'assets'),inputs=batch?args.assets:[args];
+     assert.deepEqual(Object.keys(args).sort(),batch?['assets']:['asset_id','asset_revision']);
+     assert.ok(Array.isArray(inputs)&&inputs.length>0&&inputs.length<=10);
+     assert.equal(new Set(inputs.map(input=>input.asset_id+'\n'+input.asset_revision)).size,inputs.length);
+     const images=inputs.map(input=>{
+      assert.deepEqual(Object.keys(input).sort(),['asset_id','asset_revision']);
+      const file=files.find(f=>f.id===input.asset_id);assert.ok(file,'only synthetic thumbnail files');
+      assert.equal(input.asset_revision,file.revision);
+      return {ok:true,can_publish:false,asset_id:file.id,asset_revision:file.revision,media_kind:'video',mime_type:'image/png',image_base64:png};
+     });
+     return await reply(batch?{ok:true,can_publish:false,assets:images}:images[0]);
     }
    }
    throw Error('Unexpected request '+request.method()+' '+address.origin+path);

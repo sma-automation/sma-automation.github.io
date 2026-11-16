@@ -3,22 +3,69 @@ const source=fs.readFileSync('app/assets/publication-preview.js','utf8').replace
 const originalVideoSource=fs.readFileSync('app/assets/original-video-preview.mjs','utf8').replace(/^export /gm,'');
 const hashtagSource=fs.readFileSync('app/assets/publication-hashtags.mjs','utf8').replace(/^export /gm,'');
 class Element{constructor(tag='div'){this.tag=tag;this.style={};this.children=[];this.events={};this.dataset={};this.value='';this.hidden=false;this.disabled=false;this.textContent='';this.classList={add(){},toggle(){}};}setCustomValidity(value){this.validationMessage=value}setAttribute(k,v){this[k]=v}removeAttribute(k){delete this[k]}pause(){this.paused=true}load(){this.loaded=true}showModal(){this.open=true}close(){this.open=false;this.events.close?.()}click(){this.clicked=true;return this.events.click?.()}focus(){this.focused=true}scrollIntoView(){this.scrolledIntoView=true}append(...els){this.children.push(...els)}replaceChildren(...els){this.children=els}addEventListener(k,f){this.events[k]=f}querySelectorAll(sel){const all=this.children.flatMap(c=>[c,...c.querySelectorAll('*')]);return all.filter(c=>sel==='*'||(sel==='input,textarea'&&['input','textarea'].includes(c.tag))||(sel==='textarea'&&c.tag==='textarea')||sel===c.tag||sel==='[data-field='+c.dataset.field+']')}querySelector(sel){return this.querySelectorAll(sel)[0]}}
-const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace(/^import .*;$/gm,'').replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace('export async function','async function');
+const thumbnailSource=fs.readFileSync('app/assets/asset-thumbnail.mjs','utf8').split('// One owner-scoped')[0].replace(/^import .*;$/gm,'').replace('const endpoint=','const thumbnailEndpoint=').replace('request(endpoint,','request(thumbnailEndpoint,').replace(/^export /gm,'');
+const thumbnailBatchSource='const {createSharedThumbnailClient,clearSharedThumbnailCache}=(()=>{'+fs.readFileSync('app/assets/thumbnail-batch.mjs','utf8').replace(/^import .*;$/gm,'').replace(/^export /gm,'')+';return {createSharedThumbnailClient,clearSharedThumbnailCache};})();';
 const metadataSource=fs.readFileSync('app/assets/media-metadata.mjs','utf8').split('// Existing owner-scoped')[0].replace(/^import .*;$/gm,'').replaceAll('export function','function');
 const result={ok:true,status:'completed',id:'own-id',revision:1,preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=sma-testkunde',drafts:[{platform:'youtube',title:'Testtitel',body:'Ein sachlicher Testtext.',hashtags:['Test'],caption:'Ein sachlicher Testtext.\n\n#Test\n\n🛒 Zum Shop: https://sma-automation.com/app/shop.html?shop=sma-testkunde',review_notes:[]}]}};
 function savedTextReceipt(previous,input){
  const draft={...previous.preview.drafts[0],title:input.title,body:input.body,hashtags:input.hashtags};
  return {...previous,revision:previous.revision+1,assignment_revision:input.assignment_revision+1,preview:{...previous.preview,drafts:[draft]}};
 }
-async function boot({onNavigate=()=>{},hash='',portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,transferView=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let stagedVariant=null,revealedVariantCount=0;const variantHistory=[],variantFeedbacks=[];let authChange,orderOptions,workspaceOptions,pageHide;const win={sessionStorage,addEventListener(type,handler){if(type==='pagehide')pageHide=handler;},postMessage(){}};win.parent=win;win.top=win;
+async function fileJobFixture(calls,fetchResponse,onRead,now=Date.now){
+ const real=await import('../app/assets/file-job-client.mjs'),transportCalls=[],jobs=new Map(),commands=new Map();let sequence=0;
+ // Command identities must be valid and independent of the page's request-ID
+ // fixture. Variant/retry tests intentionally control that separate UUID stream.
+ const uuid=()=>`b0000000-0000-4000-8000-${String(++sequence).padStart(12,'0')}`;
+ const deadline=()=>new Date(now()+86400000).toISOString();
+ const answer=value=>new Response(JSON.stringify(value),{status:200,headers:{'Content-Type':'application/json'}});
+ const workerPath={upload_start:'sma-publication-device-upload-v1',upload_finish:'sma-publication-device-upload-v1',
+  magic_photo:'sma-publication-magic-effect-v1',magic_video:'sma-publication-video-magic-effect-v1',review:'sma-publication-content-review-v1',
+  preview_prepare:'sma-publication-preview-v1',account:'sma-publication-order-v1',order_prepare:'sma-publication-order-v1',order_approve:'sma-publication-order-v1'};
+ async function fetcher(url,options){
+  const parsed=new URL(url),body=JSON.parse(options.body);transportCalls.push({url,options,source:'file-job'});
+  assert.equal(parsed.origin,'https://bnvnmdxosbnuzedokqgh.supabase.co');
+  assert.equal(options.method,'POST');assert.match(options.headers.Authorization,/^Bearer /);
+  if(parsed.pathname==='/rest/v1/rpc/sma_file_job_v1'){
+   if(body.p_action==='start'){
+    const requestId=body.p_input.request_id;
+    if(!jobs.has(requestId))jobs.set(requestId,{ok:true,job_id:uuid(),deadline_at:deadline(),state:'running',anchor:body.p_input.anchor});
+    return answer(jobs.get(requestId));
+   }
+   assert.equal(body.p_action,'get');
+   const job=[...jobs.values()].find(job=>job.job_id===body.p_input.job_id),command=commands.get(body.p_input.command_id);
+   assert.ok(job&&command,'every read is bound to an accepted fake command');assert.equal(command.job_id,job.job_id);
+   const completed=await command.work;await onRead?.({command,job,response:completed.body});if(completed.error)throw completed.error;
+   return answer({ok:true,job_id:job.job_id,deadline_at:job.deadline_at,state:'waiting',commands:[{
+    command_id:command.command_id,operation:command.operation,state:completed.body?.ok===false?'failed':'completed',
+    response:{status:200,body:completed.body},
+   }]});
+  }
+  assert.equal(parsed.pathname,'/functions/v1/sma-file-job');assert.ok(workerPath[body.operation],'fixed fake worker operation');
+  const job=[...jobs.values()].find(job=>job.job_id===body.job_id);assert.ok(job,'command requires its owned fake job');
+  if(!commands.has(body.command_id)){
+   const operation=body.operation,action={upload_start:'start',upload_finish:'finish',account:'account',order_prepare:'prepare',order_approve:'approve'}[operation];
+   const input=operation.startsWith('upload_')?{action,...body.input}:['account','order_prepare','order_approve'].includes(operation)?{action,input:body.input}:body.input;
+   // Existing assertions concern the business request, not its HTTP transport.
+   // Keep their callback projection explicit; no request is made to this alias.
+   const businessUrl='https://johnmusic.app.n8n.cloud/webhook/'+workerPath[operation],businessOptions={...options,body:JSON.stringify(input)};
+   calls.push({url:businessUrl,options:businessOptions,fixture:'queued-command'});
+   const work=Promise.resolve().then(()=>fetchResponse(businessUrl,businessOptions)).then(body=>({body}),error=>({error}));
+   commands.set(body.command_id,{...body,work});
+  }
+  return answer({ok:true,job_id:body.job_id,command_id:body.command_id,state:'accepted'});
+ }
+ return {transportCalls,bindings:{fileJobAnchor:real.fileJobAnchor,createFileJobClient:options=>real.createFileJobClient({...options,fetcher,uuid,now,wait:async()=>{}})}};
+}
+async function boot({onNavigate=()=>{},hash='',portal=null,asset=null,files=[],filesRpc=null,orderId=null,resume=false,transferView=false,sessionStorage=null,currentPost=false,ownerId='fixture-owner',newUuid=null,orderResponse=null,coverContext=async()=>null,magicResponse=async()=>({ok:false}),assetPreviewResponse=async()=>({ok:false}),signedIn=true,formTracksDom=false,latest={ok:true,status:'empty'},fetchResponse=async()=>result,saveResponse=result,timer=setTimeout,wide=false,beforeClientReady=null,fileJobRead=null,fileJobClock=Date.now}={}){const els=new Map();const get=id=>{if(!els.has(id))els.set(id,new Element());return els.get(id)};get('media_kind').value='video';get('language').value='de';get('result').hidden=true;const checks=['youtube','instagram','facebook','tiktok'].map(p=>Object.assign(new Element('input'),{value:p,checked:p==='youtube'}));const views=[],calls=[],mediaCalls=[],createdUrls=[],revokedUrls=[],workspaces=[];let stagedVariant=null,revealedVariantCount=0;const variantHistory=[],variantFeedbacks=[];let authChange,orderOptions,workspaceOptions,pageHide;const win={sessionStorage,addEventListener(type,handler){if(type==='pagehide')pageHide=handler;},postMessage(){}};win.parent=win;win.top=win;
  const client={auth:{getSession:async()=>({data:{session:signedIn?{access_token:'private-session-token',user:{id:ownerId}}:null}}),onAuthStateChange(fn){authChange=fn;}},rpc:async(name,args)=>{calls.push({name,...args});return {data:name==='sma_publication_order_v1'?(typeof orderResponse==='function'?await orderResponse(args):orderResponse):['sma_publication_magic_v1','sma_publication_video_magic_v1'].includes(name)?await magicResponse(args):name==='sma_publication_files_v1'?(filesRpc?await filesRpc(args):{ok:true,files}):args.p_action==='latest'?latest:saveResponse}}};
  const rpc=client.rpc;
  client.rpc=(...args)=>{const request=rpc(...args);request.abortSignal=()=>request;return request;};
  const values={source_text:'Dies ist eine sachliche Beschreibung des SMA Testartikels.',audience:'Testkunden',goal:'Shop kennenlernen',media_kind:'video',language:'de'};
  if(!formTracksDom)for(const [key,value] of Object.entries(values))get(key).value=value;
  class Data{get(k){return formTracksDom?get(k).value:values[k]}getAll(){return checks.filter(c=>c.checked).map(c=>c.value)}}
- await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+source+'})()',{...(await import('../app/assets/customer-media-routes.mjs')),...(await import('../app/assets/file-description.mjs')),...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),checkedHistoryOrder:(await import('../app/assets/publication-order.mjs')).checkedHistoryOrder,installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name,onGallery,opts)=>{workspaceOptions=opts;workspaces.push(name);return {galleryVisible:()=>true,finishInitialLoad(){},selection(){},textAvailable(){},refreshPreview(){},setVariant(d){stagedVariant=d;variantHistory.push(d);},setVariantFeedback(message,error){variantFeedbacks.push({message,error});},revealVariant(){revealedVariantCount++;},lockVariant(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{assign:onNavigate,hash,search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(transferView?'&view=transfer':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return {ok:true,json:()=>assetPreviewResponse(url,options)};}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:timer,console});
- return {orderOptions,workspaceOptions,get,calls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,pageHide:()=>pageHide?.(),variant:()=>stagedVariant,variantHistory,variantFeedbacks,reveals:()=>revealedVariantCount,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
+ const fileJob=await fileJobFixture(calls,fetchResponse,fileJobRead,fileJobClock);
+ await vm.runInNewContext('(async()=>{'+originalVideoSource+hashtagSource+metadataSource+thumbnailSource+thumbnailBatchSource+source+'})()',{...fileJob.bindings,...(await import('../app/assets/customer-media-routes.mjs')),...(await import('../app/assets/file-description.mjs')),...(await import('../app/assets/publication-tab-draft.mjs')),...(await import('../app/assets/publication-draft-conflict.mjs')),...(await import('../app/assets/publication-catalog-lookup.mjs')),draftDestination:(await import('../app/assets/publication-destination.mjs')).draftDestination,mountGalleryMusic:()=>({wake(){},destroy(){}}),mountExportCover:()=>({setContext:coverContext,clear(){},destroy(){}}),checkedHistoryOrder:(await import('../app/assets/publication-order.mjs')).checkedHistoryOrder,installOrderReview:(_doc,opts)=>{orderOptions=opts;return {lock(){},clear(){},rememberVideoChoices(order){opts.previousOrder=order;},resumePrepared(order){opts.resumeContext=opts.getContext();opts.resumeOrder=order;return true;}};},createMediaThumbnailLoader:()=>({observe(){},reset(){},clear(){}}),loadClientModule:async()=>{await beforeClientReady?.({get,calls,workspaces});return {createClient:()=>client};},createOptimizerWorkspace:(_doc,name,onGallery,opts)=>{workspaceOptions=opts;workspaces.push(name);return {galleryVisible:()=>true,finishInitialLoad(){},selection(){},textAvailable(){},refreshPreview(){},setVariant(d){stagedVariant=d;variantHistory.push(d);},setVariantFeedback(message,error){variantFeedbacks.push({message,error});},revealVariant(){revealedVariantCount++;},lockVariant(){},show(view){views.push(view)}};},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>{},document:{getElementById:get,createElement:t=>new Element(t),querySelectorAll:()=>checks,querySelector:sel=>sel==='h1'?get('title'):checks[0],body:new Element()},window:win,location:{assign:onNavigate,hash,search:portal?'?embedded=1&portal='+portal+(wide?'&wide=1':'')+(asset?'&asset='+asset:'')+(orderId!==null?'&order='+orderId:'')+(resume?'&resume=1':'')+(transferView?'&view=transfer':'')+(currentPost?'&view=current':''):'',origin:'https://sma-automation.com'},URLSearchParams,Blob,atob,TextDecoder,Response,clearTimeout,URL:{createObjectURL(blob){const url='blob:preview-'+createdUrls.length;createdUrls.push({blob,url});return url;},revokeObjectURL(url){revokedUrls.push(url);}},FormData:Data,crypto:{randomUUID:newUuid||(()=> '12345678-1234-4123-8123-123456789abc')},AbortSignal,AbortController,deviceFileMetadata:(f,p)=>{if(!f.size)throw Error("UPLOAD_SIZE");return {name:f.name,mime_type:f.type,size_bytes:f.size}},transferDeviceFile:async({onProgress,file})=>onProgress(file.size,file.size),fetch:async(url,options)=>{fileJob.transportCalls.push({url,options,source:'page'});if(url.endsWith('/sma-publication-asset-preview-v1')){mediaCalls.push({url,options});return new Response(JSON.stringify({ok:true,can_publish:false,assets:[await assetPreviewResponse(url,options)]}));}calls.push({url,options});return {ok:true,json:()=>fetchResponse(url,options)}},setTimeout:(fn,delay)=>{if(delay===16){queueMicrotask(fn);return 0;}return timer(fn,delay);},console});
+ return {orderOptions,workspaceOptions,get,calls,setSessionReader:reader=>{client.auth.getSession=reader;},transportCalls:fileJob.transportCalls,views,workspaces,mediaCalls,createdUrls,revokedUrls,checks,pageHide:()=>pageHide?.(),variant:()=>stagedVariant,variantHistory,variantFeedbacks,reveals:()=>revealedVariantCount,run:()=>get('previewForm').events.submit({preventDefault(){}}),save:()=>get('save').events.click(),signOut:()=>authChange('SIGNED_OUT'),switchOwner:()=>authChange('SIGNED_IN',{user:{id:'other-owner'}})};}
 test('signed-out users cannot generate or display saved customer data',async()=>{const p=await boot({signedIn:false});assert.equal(p.calls.length,0);assert.equal(p.get('inputFields').disabled,true);assert.equal(p.get('result').hidden,true);assert.match(p.get('status').textContent,/melde dich/);});
 test('one generation for concurrent clicks; body contains no tenant or shop override',async()=>{let release;const p=await boot({fetchResponse:()=>new Promise(r=>release=r)});const first=p.run();await Promise.resolve();await p.run();await new Promise(r=>setImmediate(r));assert.equal(p.calls.filter(c=>c.url).length,1);assert.equal(p.get('inputFields').disabled,true);release(result);await first;assert.equal(p.get('result').hidden,false);const request=JSON.parse(p.calls.find(c=>c.url).options.body);assert.equal(request.request_id,'12345678-1234-4123-8123-123456789abc');assert.ok(!('shop_url' in request));assert.ok(!('customer_id' in request));assert.equal(p.get('inputFields').disabled,false);});
 test('saved edits retain server revision, sign-out hides content',async()=>{const p=await boot({latest:result,saveResponse:{...result,revision:2}});const body=p.get('drafts').children[0].querySelector('textarea');body.value='Ein korrigierter sachlicher Testtext.';await p.save();const call=p.calls.find(c=>c.p_action==='save');assert.equal(call.p_id,'own-id');assert.equal(call.p_input.revision,1);assert.equal(call.p_input.drafts[0].body,body.value);assert.ok(!('caption' in call.p_input.drafts[0]));p.signOut();assert.equal(p.get('result').hidden,true);assert.equal(p.get('inputFields').disabled,true);});
@@ -118,6 +165,19 @@ test('Magic Effect starts automatically for a selected new photo and fills its r
  assert.match(call.url,/sma-publication-magic-effect-v1$/);assert.deepEqual(JSON.parse(call.options.body),{asset_id:photo.id,asset_revision:photo.revision});
  assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);assert.match(p.get('magicSummary').textContent,/Material nicht sicher/);assert.equal(p.get('recognizePhoto').disabled,true);
  p.signOut();assert.equal(p.get('source_text').value,'');assert.equal(p.get('magicSummary').textContent,'');
+});
+test('a real file-action client queues one command through Supabase and never fetches the former Magic webhook',async()=>{
+ const p=await boot({portal:'instagram',asset:photo.id,filesRpc:photoFiles,
+  magicResponse:async()=>({ok:true,analysis:{...magicAnalysis,status:'unrecognized',result:null}}),fetchResponse:async()=>({ok:true,analysis:magicAnalysis})});
+ const actual=p.transportCalls.filter(call=>call.source==='file-job');
+ assert.deepEqual(actual.map(call=>new URL(call.url).pathname),['/rest/v1/rpc/sma_file_job_v1','/functions/v1/sma-file-job','/rest/v1/rpc/sma_file_job_v1']);
+ const start=JSON.parse(actual[0].options.body),queued=JSON.parse(actual[1].options.body),read=JSON.parse(actual[2].options.body);
+ assert.equal(start.p_action,'start');assert.deepEqual(start.p_input.anchor,{kind:'asset',asset_id:photo.id,asset_revision:photo.revision});
+ assert.equal(queued.operation,'magic_photo');assert.deepEqual(queued.input,{asset_id:photo.id,asset_revision:photo.revision});
+ assert.equal(read.p_action,'get');assert.equal(read.p_input.command_id,queued.command_id);assert.equal(read.p_input.job_id,queued.job_id);
+ assert.ok(actual.every(call=>call.options.headers.Authorization==='Bearer private-session-token'));
+ assert.equal(p.transportCalls.some(call=>/\/sma-publication-(?:video-)?magic-effect-v1$/.test(call.url)),false);
+ assert.equal(p.calls.filter(call=>call.fixture==='queued-command').length,1);assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);
 });
 test('cached photo analysis never overwrites an existing customer description automatically',async()=>{
  const saved={...result,input:{source_text:'Meine gesicherte eigene Beschreibung dieses Motivs.',audience:'Kunden',goal:'Informieren',language:'de',media_kind:'image',platforms:['instagram']},preview:{...result.preview,drafts:[{...result.preview.drafts[0],platform:'instagram'}]}};
@@ -282,7 +342,20 @@ test('a delayed catalog response after sign-out cannot reopen or refill customer
 
 test('device browse opens native chooser directly for all portals without changing text',async()=>{for(const portal of ['instagram','facebook','youtube','tiktok']){const p=await boot({portal});p.get('source_text').value='Mein Text';p.get('deviceBrowse').events.click();assert.equal(p.get('deviceFile').clicked,true);assert.equal(p.get('deviceFile').accept,['youtube','tiktok'].includes(portal)?'video/*':'image/*,video/*');assert.equal(p.get('source_text').value,'Mein Text');assert.equal(p.get('filePicker').open,undefined);}});
 test('successful device upload selects the returned owned file and runs existing Magic Effect',async()=>{let done=false;const id='12345678-1234-4123-8123-123456789abc';const p=await boot({portal:'instagram',filesRpc:async a=>a.p_action==='list'?{ok:true,files:done?[photo]:[]}:{ok:true,status:'empty'},magicResponse:async()=>({ok:true,analysis:magicAnalysis}),fetchResponse:async(url,options)=>{const b=JSON.parse(options.body);if(b.action==='finish'){done=true;return {ok:true,status:'completed',upload_id:id,asset_id:photo.id,can_publish:false};}return {ok:true,status:'ready',upload_id:id,upload_url:'test',can_publish:false};}});p.get('deviceFile').files=[{name:'Foto.jpg',type:'image/jpeg',size:42}];await p.get('deviceFile').events.change();assert.equal(p.get('selectedFileName').textContent,photo.name);assert.equal(p.get('source_text').value,magicAnalysis.result.source_text);assert.equal(p.get('uploadProgress').value,100);assert.equal(p.get('retryUpload').hidden,true);assert.equal(p.get('deviceBrowse').disabled,false);const calls=p.calls.filter(c=>c.url?.includes('device-upload'));assert.deepEqual(calls.map(c=>JSON.parse(c.options.body).action),['start','finish']);assert.ok(calls.every(c=>c.options.headers.Authorization.startsWith('Bearer ')));});
-test('retrying upload initialization preserves upload identity and dirty customer text',async()=>{let first=true,done=false;const p=await boot({portal:'instagram',filesRpc:async a=>a.p_action==='list'?{ok:true,files:done?[photo]:[]}:{ok:true,status:'empty'},fetchResponse:async(url,options)=>{const b=JSON.parse(options.body);if(first){first=false;throw Error('lost network');}done=true;return {ok:true,status:'completed',upload_id:b.upload_id,asset_id:photo.id,can_publish:false};}});p.get('source_text').value='Nicht überschreiben';p.get('previewForm').events.input();p.get('deviceFile').files=[{name:'Foto.jpg',type:'image/jpeg',size:42}];await p.get('deviceFile').events.change();assert.equal(p.get('retryUpload').hidden,false);await p.get('retryUpload').events.click();assert.equal(p.get('source_text').value,'Nicht überschreiben');assert.equal(p.get('fileSwitchNotice').hidden,false);const calls=p.calls.filter(c=>c.url?.includes('device-upload'));assert.equal(JSON.parse(calls[0].options.body).upload_id,JSON.parse(calls[1].options.body).upload_id);});
+test('retrying upload initialization reads the same accepted command and preserves dirty customer text',async()=>{
+ let first=true,done=false;
+ const p=await boot({portal:'instagram',filesRpc:async a=>a.p_action==='list'?{ok:true,files:done?[photo]:[]}:{ok:true,status:'empty'},
+  fileJobRead:()=>{if(first){first=false;throw Error('lost network');}},
+  fetchResponse:async(_url,options)=>{const b=JSON.parse(options.body);done=true;return {ok:true,status:'completed',upload_id:b.upload_id,asset_id:photo.id,can_publish:false};}});
+ p.get('source_text').value='Nicht überschreiben';p.get('previewForm').events.input();p.get('deviceFile').files=[{name:'Foto.jpg',type:'image/jpeg',size:42}];
+ await p.get('deviceFile').events.change();assert.equal(p.get('retryUpload').hidden,false);await p.get('retryUpload').events.click();
+ assert.equal(p.get('source_text').value,'Nicht überschreiben');assert.equal(p.get('fileSwitchNotice').hidden,false);
+ const business=p.calls.filter(c=>c.url?.includes('device-upload'));assert.equal(business.length,1,'a lost mailbox read must not start another upload worker');
+ const edge=p.transportCalls.filter(c=>c.url.endsWith('/functions/v1/sma-file-job'));assert.equal(edge.length,1);
+ const reads=p.transportCalls.filter(c=>c.url.endsWith('/rest/v1/rpc/sma_file_job_v1')).map(c=>JSON.parse(c.options.body)).filter(c=>c.p_action==='get');
+ assert.equal(reads.length,2);assert.deepEqual(reads[0].p_input,reads[1].p_input);
+ assert.equal(JSON.parse(business[0].options.body).upload_id,'12345678-1234-4123-8123-123456789abc');
+});
 test('logout aborts an in-flight upload and rejects a late completion',async()=>{let release;const p=await boot({portal:'instagram',fetchResponse:()=>new Promise(r=>release=r)});p.get('deviceFile').files=[{name:'Foto.jpg',type:'image/jpeg',size:42}];const work=p.get('deviceFile').events.change();await new Promise(r=>setImmediate(r));p.signOut();release({ok:true,status:'completed',upload_id:'12345678-1234-4123-8123-123456789abc',asset_id:photo.id,can_publish:false});await work;assert.equal(p.get('uploadPanel').hidden,true);assert.equal(p.get('source_text').value,'');assert.equal(p.get('deviceBrowse').disabled,true);assert.notEqual(p.get('selectedFileName').textContent,photo.name);});
 
 const thumbnail={ok:true,asset_id:ownFile.id,asset_revision:ownFile.revision,media_kind:'video',mime_type:'image/png',image_base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',can_publish:false};
@@ -290,7 +363,7 @@ test('selected media is displayed visually with collapsed filename and revoked o
  const p=await boot({portal:'instagram',asset:ownFile.id,files:[ownFile],assetPreviewResponse:async()=>thumbnail});await new Promise(r=>setImmediate(r));
  assert.equal(p.get('fileDetails').open,false);assert.equal(p.get('selectedFileName').textContent,ownFile.name);
  assert.equal(p.get('assetPreviewMedia').children[0].tag,'img');assert.equal(p.get('assetPreviewKind').textContent,'Video');assert.equal(p.createdUrls.length,1);
- const request=JSON.parse(p.mediaCalls[0].options.body);assert.deepEqual(request,{asset_id:ownFile.id,asset_revision:ownFile.revision});
+ const request=JSON.parse(p.mediaCalls[0].options.body);assert.deepEqual(request,{assets:[{asset_id:ownFile.id,asset_revision:ownFile.revision}]});
  p.signOut();assert.equal(p.get('assetPreviewMedia').children.length,0);assert.deepEqual(p.revokedUrls,['blob:preview-0']);
 });
 test('wrong-asset, stale, active-content and oversized preview responses never render',async()=>{
@@ -704,8 +777,8 @@ test('server freshness rejection refreshes and retries the same assignment once 
  }
 });
 test('retry after a failed assignment reuses the completed caption; an intentional new generation is separate',async()=>{
- let assigns=0;
- const p=await boot({portal:'youtube',asset:ownFile.id,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile()]}:a.p_action==='assign'?(++assigns===1?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:{...result,assignment_revision:assigns}):{ok:true,status:'empty'}});
+ let assigns=0,nonce=0;
+ const p=await boot({portal:'youtube',asset:ownFile.id,newUuid:()=>`12345678-1234-4123-8123-${String(++nonce).padStart(12,'0')}`,filesRpc:async a=>a.p_action==='list'?{ok:true,files:[freshFile()]}:a.p_action==='assign'?(++assigns===1?{ok:false,code:'FILE_SYNC_UNAVAILABLE'}:{...result,assignment_revision:assigns}):{ok:true,status:'empty'}});
  await p.run();assert.equal(p.get('result').hidden,true);await p.run();
  assert.equal(p.calls.filter(c=>isCaption(c.url)).length,1);const binds=p.calls.filter(c=>c.p_action==='assign');assert.deepEqual(binds[0].p_input,binds[1].p_input);assert.equal(p.get('result').hidden,false);
  await p.run();assert.equal(p.calls.filter(c=>isCaption(c.url)).length,2);
@@ -2138,5 +2211,61 @@ test('order preparation re-reads a plain shop draft and matches the full display
   await assert.rejects(options.verifySavedDraft(context),{code:'ASSIGNMENT_CHANGED'});
   options.onOutdatedDraft();assert.equal(p.views.at(-1),'source');assert.equal(p.get('loadLatest').focused,true);
   assert.ok(p.calls.slice(before).every(c=>!c.url&&c.p_action==='get'));assert.equal(f.writes.length,0);
+ }
+});
+test('owned order get through the command adapter remains a direct read without joining or resuming a file job',async()=>{
+ const p=await boot({portal:'youtube',orderResponse:historyOrder});
+ const before=p.calls.length,transports=p.transportCalls.length;
+ await assert.rejects(p.orderOptions.command('unbekannt',{}, {asset_id:ownFile.id,asset_revision:ownFile.revision}),{code:'INVALID_INPUT'});
+ assert.equal(p.calls.length,before);assert.equal(p.transportCalls.length,transports);
+ const response=await p.orderOptions.command('get',{id:historyOrderId});assert.equal(response.status,200);
+ assert.equal((await response.json()).id,historyOrderId);
+ assert.deepEqual(JSON.parse(JSON.stringify(p.calls.slice(before))),[{name:'sma_publication_order_v1',p_action:'get',p_input:{id:historyOrderId}}]);
+ assert.equal(p.transportCalls.length,transports);assert.equal(p.calls.some(call=>call.fixture==='queued-command'),false);
+ p.signOut();await assert.rejects(p.orderOptions.command('get',{id:historyOrderId}));
+ assert.equal(p.calls.length,before+1,'logout cannot start another read or a worker');
+});
+
+test('an expired file job needs an explicit selection of the same file before one new job can start',async()=>{
+ let clock=Date.now(),nonce=0;
+ const p=await boot({portal:'youtube',wide:true,asset:ownFile.id,fileJobClock:()=>clock,
+  saveResponse:{ok:true,status:'empty'},
+  newUuid:()=>`ca000000-0000-4000-8000-${String(++nonce).padStart(12,'0')}`,
+  filesRpc:async a=>a.p_action==='list'?{ok:true,files:[ownFile]}:a.p_action==='assign'?{...result,assignment_revision:1}:{ok:true,status:'empty'}});
+ const starts=()=>p.transportCalls.filter(c=>c.source==='file-job'&&JSON.parse(c.options.body).p_action==='start');
+ const queued=()=>p.transportCalls.filter(c=>c.source==='file-job'&&new URL(c.url).pathname==='/functions/v1/sma-file-job');
+ await p.run();assert.equal(starts().length,1);assert.equal(queued().length,1);
+ clock+=86400001;
+ await p.run();assert.equal(starts().length,1);assert.equal(queued().length,1,'an ordinary retry cannot silently replace an expired job');
+ assert.match(p.get('status').textContent,/abgelaufen/);
+ await p.get('filePickerList').children[0].querySelector('button').events.click();
+ await p.run();assert.equal(starts().length,2);assert.equal(queued().length,2);
+ const first=JSON.parse(queued()[0].options.body),second=JSON.parse(queued()[1].options.body);
+ assert.notEqual(first.job_id,second.job_id);assert.notEqual(first.command_id,second.command_id);
+ assert.deepEqual(starts().map(c=>JSON.parse(c.options.body).p_input.anchor),[0,1].map(()=>({kind:'asset',asset_id:ownFile.id,asset_revision:ownFile.revision})));
+ assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+ownFile.name);assert.equal(p.get('result').hidden,false);
+});
+
+test('late authentication from a file selection cannot replace a newer selection or restore content after logout',async()=>{
+ for(const action of ['second-selection','logout']){
+  const other={...ownFile,id:'fa110000-0000-4000-8000-000000000002',name:'Zweite Datei.mp4'};
+  const p=await boot({portal:'tiktok',wide:true,files:[ownFile,other]});
+  const session={data:{session:{access_token:'private-session-token',user:{id:'fixture-owner'}}}};
+  let release,first=true;
+  p.setSessionReader(()=>first?(first=false,new Promise(resolve=>{release=resolve;})):Promise.resolve(session));
+  const old=p.get('filePickerList').children[0].querySelector('button').events.click();
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(typeof release,'function');
+  if(action==='second-selection')await p.get('filePickerList').children[1].querySelector('button').events.click();
+  else p.signOut();
+  release(session);await old;
+  assert.equal(p.transportCalls.filter(c=>c.source==='file-job').length,0,'selecting a file cannot enqueue a worker');
+  const reads=p.calls.filter(c=>c.name==='sma_publication_files_v1'&&c.p_action==='get');
+  if(action==='second-selection'){
+   assert.equal(p.get('selectedFileName').textContent,'Dateiname: '+other.name);
+   assert.deepEqual(reads.map(c=>c.p_input.asset_id),[other.id]);assert.equal(p.views.at(-1),'preview');
+  }else{
+   assert.equal(reads.length,0);assert.equal(p.get('selectedFileName').textContent,'');
+   assert.equal(p.get('source_text').value,'');assert.equal(p.get('result').hidden,true);assert.equal(p.get('filePickerList').children.length,0);
+  }
  }
 });

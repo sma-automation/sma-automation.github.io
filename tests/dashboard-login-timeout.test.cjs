@@ -33,6 +33,7 @@ function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false,se
   return stage('plan',{data:{ok:onboarding}});
  }})};
  const env={AbortController,AbortSignal,URLSearchParams,Response,supabase:client,
+  clearSharedThumbnailCache(){calls.push('clear-thumbnail-cache');},
   document:{getElementById:node,documentElement:{dataset:{}}},
   window:{sessionStorage,location:{replace:path=>{onTeardown('redirect');redirects.push(path);}}},location:{search:pilot?'?kundenmedien=pilot':''},
   endpoint:'https://fixture.invalid/dashboard',dashboardOwnerId:null,startupView:null,
@@ -117,7 +118,7 @@ test('actual sign-out and account-change handlers cancel every pending dashboard
   await f.release();assert.equal(f.node('dashboard').srcdoc,'');assert.deepEqual(f.redirects,['index.html']);
  }
  const first=setup({hold:'initial'});const run=first.start();await flush();await first.logout();await run;
- assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial']);
+ assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial','clear-thumbnail-cache']);
  assert.deepEqual(first.redirects,['index.html']);
 });
 

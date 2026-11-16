@@ -2,9 +2,9 @@ import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
 
 // One deadline covers even non-abortable auth, transport and response-body reads.
 // Late replies are consumed, never allowed to resume a cancelled view.
-function thumbnailReadScope(parent){
+export function thumbnailReadScope(parent,deadline=true){
  const controller=new AbortController();
- const signal=AbortSignal.any([controller.signal,...(parent?[parent]:[]),AbortSignal.timeout(45000)]);
+ const signal=AbortSignal.any([controller.signal,...(parent?[parent]:[]),...(deadline?[AbortSignal.timeout(45000)]:[])]);
  function read(start){
   return new Promise((resolve,reject)=>{
    let settled=false;
@@ -18,20 +18,24 @@ function thumbnailReadScope(parent){
  }
  return {controller,signal,read,close(){controller.abort();}};
 }
+export function decodeAssetThumbnail(file,r){
+ if(r?.ok!==true||r.can_publish!==false||r.asset_id!==file.id||r.asset_revision!==file.revision||r.media_kind!==file.media_kind||!['image/jpeg','image/png','image/webp'].includes(r.mime_type)||typeof r.image_base64!=='string'||r.image_base64.length>2666668||!/^[A-Za-z0-9+/]+={0,2}$/.test(r.image_base64))throw Error('PREVIEW_UNAVAILABLE');
+ const bytes=Uint8Array.from(atob(r.image_base64),c=>c.charCodeAt(0));if(bytes.length<12||bytes.length>2000000)throw Error('PREVIEW_UNAVAILABLE');
+ return new Blob([bytes],{type:r.mime_type});
+}
 export async function fetchAssetThumbnail(file,token,signal,request=fetch){
  signal?.throwIfAborted();
  const scope=thumbnailReadScope(signal);
  try{
   const response=await scope.read(()=>request(customerMediaEndpoint('thumbnail'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',redirect:'error',cache:'no-store',signal:scope.signal}));
   const r=await scope.read(()=>response.json());scope.signal.throwIfAborted();
-  if(!response.ok||r?.ok!==true||r.can_publish!==false||r.asset_id!==file.id||r.asset_revision!==file.revision||r.media_kind!==file.media_kind||!['image/jpeg','image/png','image/webp'].includes(r.mime_type)||typeof r.image_base64!=='string'||r.image_base64.length>2666668||!/^[A-Za-z0-9+/]+={0,2}$/.test(r.image_base64))throw Error('PREVIEW_UNAVAILABLE');
-  const bytes=Uint8Array.from(atob(r.image_base64),c=>c.charCodeAt(0));if(bytes.length<12||bytes.length>2000000)throw Error('PREVIEW_UNAVAILABLE');
-  return new Blob([bytes],{type:r.mime_type});
+  if(!response.ok)throw Error('PREVIEW_UNAVAILABLE');
+  return decodeAssetThumbnail(file,r);
  }finally{scope.close();}
 }
 // One owner-scoped loader per view; at most three concurrent preview requests.
 // Object URLs and responses live only in memory and are cleared at logout/reload.
-export function createMediaThumbnailLoader(getToken){
+export function createMediaThumbnailLoader(getToken,{client=null}={}){
  let generation=0,owner=0,active=0,queue=[],observer=null;
  const cache=new Map(),urls=new Set(),pending=new Map(),wanted=new Set();
  function reset(){
@@ -53,14 +57,20 @@ export function createMediaThumbnailLoader(getToken){
   img.addEventListener('error',()=>{if(version!==generation)return;host.textContent=file.media_kind==='video'?'Video':'Bild';URL.revokeObjectURL(url);urls.delete(url);});host.replaceChildren(img);
  }
  function drain(){
-  while(active<3&&queue.length){const job=queue.shift();if(pending.get(job.key)!==job)continue;active++;job.scope=thumbnailReadScope();void run(job);}
+  // The shared client limits whole batches globally; submitting all visible
+  // identities here lets ten thumbnails use one request instead of four.
+  while(active<(client?Infinity:3)&&queue.length){const job=queue.shift();if(pending.get(job.key)!==job)continue;active++;job.scope=thumbnailReadScope(undefined,!client);void run(job);}
  }
  async function run(job){
   const {key,file,scope}=job;
   try{
-   const token=await scope.read(getToken),blob=await scope.read(()=>fetchAssetThumbnail(file,token,scope.signal));scope.signal.throwIfAborted();
+   let blob;
+   if(client)blob=await scope.read(()=>client.request(file,scope.signal));
+   else{const token=await scope.read(getToken);blob=await scope.read(()=>fetchAssetThumbnail(file,token,scope.signal));}
+   scope.signal.throwIfAborted();
    if(job.owner!==owner||pending.get(key)!==job)return;
-   const entry={blob,time:Date.now()};cache.delete(key);cache.set(key,entry);if(cache.size>20)cache.delete(cache.keys().next().value);
+   const entry={blob,time:Date.now()};
+   if(!client){cache.delete(key);cache.set(key,entry);if(cache.size>20)cache.delete(cache.keys().next().value);}
    for(const target of job.targets)show(target,entry);
   }catch{if(job.owner===owner)for(const target of job.targets)if(current(target))target.host.textContent='Vorschau folgt';}
   finally{scope.close();if(pending.get(key)===job)pending.delete(key);active--;drain();}
@@ -70,7 +80,7 @@ export function createMediaThumbnailLoader(getToken){
   host.textContent=file.media_kind==='video'?'▶':'▧';const target={host,file,version:generation},key=JSON.stringify([file.id,file.revision,file.media_kind]);wanted.add(key);let queued=false;
   const enqueue=()=>{
    if(queued||!current(target))return;queued=true;
-   const entry=cache.get(key);if(entry&&Date.now()-entry.time<=60000){show(target,entry);return;}cache.delete(key);
+   const entry=cache.get(key);if(!client&&entry&&Date.now()-entry.time<=60000){show(target,entry);return;}cache.delete(key);
    let job=pending.get(key);
    if(!job||job.scope?.signal.aborted){job={key,file,owner,targets:[],scope:null};pending.set(key,job);queue.push(job);}
    job.targets.push(target);drain();

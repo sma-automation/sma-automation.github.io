@@ -1,0 +1,398 @@
+{
+  "name": "QA - native Wait Resume - synthetic - inherited timeout",
+  "active": false,
+  "nodes": [
+    {
+      "id": "a1100000-0000-4000-8000-000000000001",
+      "name": "Probe - manual start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000002",
+      "name": "Probe - initialize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const probe = (function createProbeRuntime() {\n  const probe = 'sma-native-wait-resume-v1';\n  const phases = ['upload_complete', 'edit_saved', 'approve', 'provider_complete'];\n  const ttlMs = 10 * 60 * 1000;\n\n  function fail(code) {\n    // Never include an incoming payload or a runtime resume URL in an error.\n    throw new Error('SYNTHETIC_PROBE_' + code);\n  }\n\n  function nextRequest(state) {\n    if (state.sequence === phases.length) return null;\n    const sequence = state.sequence + 1;\n    const body = {\n      probe,\n      synthetic: true,\n      execution_id: state.execution_id,\n      file_id: 'synthetic-file-001',\n      revision: 1,\n      manifest_id: 'synthetic-four-portals-v1',\n      phase: phases[state.sequence],\n      sequence,\n      event_id: 'synthetic-event-' + sequence,\n    };\n    if (body.phase === 'approve') body.approved = true;\n    if (body.phase === 'provider_complete') body.outcome = 'synthetic_complete';\n    return { method: 'POST', suffix: 'probe-' + sequence, body };\n  }\n\n  function output(state) {\n    return {\n      state,\n      next_request: nextRequest(state),\n      receipt: {\n        probe,\n        synthetic: true,\n        execution_id: state.execution_id,\n        accepted_count: state.sequence,\n        accepted_phases: state.audit.map((event) => event.phase),\n        observed_execution_ids: state.audit.map((event) => event.execution_id),\n        same_execution: state.audit.every((event) => event.execution_id === state.execution_id),\n        complete: state.sequence === phases.length,\n        external_effects: 0,\n      },\n    };\n  }\n\n  function initialize(executionId, now) {\n    const id = String(executionId ?? '');\n    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || !Number.isFinite(now)) fail('INVALID_CONTEXT');\n    return output({\n      probe,\n      synthetic: true,\n      execution_id: id,\n      started_at: now,\n      deadline_at: now + ttlMs,\n      sequence: 0,\n      accepted_event_ids: [],\n      audit: [],\n    });\n  }\n\n  function advance(previous, requestBody, executionId, expectedPhase, now) {\n    const state = previous?.state;\n    if (state?.probe !== probe || state.synthetic !== true) fail('INVALID_STATE');\n    if (String(executionId) !== state.execution_id) fail('EXECUTION_CHANGED');\n    if (!Number.isFinite(now) || now < state.started_at || now >= state.deadline_at) fail('EXPIRED');\n    if (!Number.isInteger(state.sequence) || state.sequence < 0 || state.sequence >= phases.length) fail('TERMINAL');\n    if (phases[state.sequence] !== expectedPhase) fail('WRONG_PHASE');\n    if (!Array.isArray(state.accepted_event_ids) || !Array.isArray(state.audit)\n      || state.accepted_event_ids.length !== state.sequence || state.audit.length !== state.sequence) fail('INVALID_STATE');\n    if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) fail('MISSING_BODY');\n    if (state.accepted_event_ids.includes(requestBody.event_id)) fail('REPLAY');\n\n    // Derive the allowed request from trusted saved state, never from the input\n    // received by Wait. Exact keys also reject URLs, credentials and real data.\n    const expected = nextRequest(state).body;\n    const keys = Object.keys(expected);\n    if (Object.keys(requestBody).length !== keys.length\n      || keys.some((key) => !Object.hasOwn(requestBody, key) || requestBody[key] !== expected[key])) fail('REQUEST_MISMATCH');\n\n    const event = {\n      phase: expectedPhase,\n      sequence: expected.sequence,\n      event_id: expected.event_id,\n      execution_id: String(executionId),\n      accepted_at: now,\n    };\n    return output({\n      ...state,\n      sequence: expected.sequence,\n      accepted_event_ids: [...state.accepted_event_ids, event.event_id],\n      audit: [...state.audit, event],\n    });\n  }\n\n  return { phases, ttlMs, initialize, advance };\n})();\nreturn [{ json: probe.initialize($execution.id, Date.now()) }];"
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000003",
+      "name": "Probe - wait 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "incomingAuthentication": "none",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "limitWaitTime": true,
+        "limitType": "atSpecifiedTime",
+        "maxDateAndTime": "={{ new Date($(\"Probe - initialize\").first().json.state.deadline_at).toISOString() }}",
+        "options": {
+          "webhookSuffix": "probe-1"
+        }
+      },
+      "webhookId": "a1200000-0000-4000-8000-000000000001",
+      "notes": "Synthetic only. Copy the current native resume URL from this waiting node. POST exactly the next_request.body of the preceding state Code node. Never publish this probe."
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000004",
+      "name": "Probe - accept 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        690,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const probe = (function createProbeRuntime() {\n  const probe = 'sma-native-wait-resume-v1';\n  const phases = ['upload_complete', 'edit_saved', 'approve', 'provider_complete'];\n  const ttlMs = 10 * 60 * 1000;\n\n  function fail(code) {\n    // Never include an incoming payload or a runtime resume URL in an error.\n    throw new Error('SYNTHETIC_PROBE_' + code);\n  }\n\n  function nextRequest(state) {\n    if (state.sequence === phases.length) return null;\n    const sequence = state.sequence + 1;\n    const body = {\n      probe,\n      synthetic: true,\n      execution_id: state.execution_id,\n      file_id: 'synthetic-file-001',\n      revision: 1,\n      manifest_id: 'synthetic-four-portals-v1',\n      phase: phases[state.sequence],\n      sequence,\n      event_id: 'synthetic-event-' + sequence,\n    };\n    if (body.phase === 'approve') body.approved = true;\n    if (body.phase === 'provider_complete') body.outcome = 'synthetic_complete';\n    return { method: 'POST', suffix: 'probe-' + sequence, body };\n  }\n\n  function output(state) {\n    return {\n      state,\n      next_request: nextRequest(state),\n      receipt: {\n        probe,\n        synthetic: true,\n        execution_id: state.execution_id,\n        accepted_count: state.sequence,\n        accepted_phases: state.audit.map((event) => event.phase),\n        observed_execution_ids: state.audit.map((event) => event.execution_id),\n        same_execution: state.audit.every((event) => event.execution_id === state.execution_id),\n        complete: state.sequence === phases.length,\n        external_effects: 0,\n      },\n    };\n  }\n\n  function initialize(executionId, now) {\n    const id = String(executionId ?? '');\n    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || !Number.isFinite(now)) fail('INVALID_CONTEXT');\n    return output({\n      probe,\n      synthetic: true,\n      execution_id: id,\n      started_at: now,\n      deadline_at: now + ttlMs,\n      sequence: 0,\n      accepted_event_ids: [],\n      audit: [],\n    });\n  }\n\n  function advance(previous, requestBody, executionId, expectedPhase, now) {\n    const state = previous?.state;\n    if (state?.probe !== probe || state.synthetic !== true) fail('INVALID_STATE');\n    if (String(executionId) !== state.execution_id) fail('EXECUTION_CHANGED');\n    if (!Number.isFinite(now) || now < state.started_at || now >= state.deadline_at) fail('EXPIRED');\n    if (!Number.isInteger(state.sequence) || state.sequence < 0 || state.sequence >= phases.length) fail('TERMINAL');\n    if (phases[state.sequence] !== expectedPhase) fail('WRONG_PHASE');\n    if (!Array.isArray(state.accepted_event_ids) || !Array.isArray(state.audit)\n      || state.accepted_event_ids.length !== state.sequence || state.audit.length !== state.sequence) fail('INVALID_STATE');\n    if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) fail('MISSING_BODY');\n    if (state.accepted_event_ids.includes(requestBody.event_id)) fail('REPLAY');\n\n    // Derive the allowed request from trusted saved state, never from the input\n    // received by Wait. Exact keys also reject URLs, credentials and real data.\n    const expected = nextRequest(state).body;\n    const keys = Object.keys(expected);\n    if (Object.keys(requestBody).length !== keys.length\n      || keys.some((key) => !Object.hasOwn(requestBody, key) || requestBody[key] !== expected[key])) fail('REQUEST_MISMATCH');\n\n    const event = {\n      phase: expectedPhase,\n      sequence: expected.sequence,\n      event_id: expected.event_id,\n      execution_id: String(executionId),\n      accepted_at: now,\n    };\n    return output({\n      ...state,\n      sequence: expected.sequence,\n      accepted_event_ids: [...state.accepted_event_ids, event.event_id],\n      audit: [...state.audit, event],\n    });\n  }\n\n  return { phases, ttlMs, initialize, advance };\n})();\nconst previous = $(\"Probe - initialize\").first().json;\nreturn [{ json: probe.advance(previous, $input.first().json.body, $execution.id, \"upload_complete\", Date.now()) }];"
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000005",
+      "name": "Probe - acknowledge 1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.receipt) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000006",
+      "name": "Probe - wait 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1150,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "incomingAuthentication": "none",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "limitWaitTime": true,
+        "limitType": "atSpecifiedTime",
+        "maxDateAndTime": "={{ new Date($(\"Probe - accept 1\").first().json.state.deadline_at).toISOString() }}",
+        "options": {
+          "webhookSuffix": "probe-2"
+        }
+      },
+      "webhookId": "a1200000-0000-4000-8000-000000000002",
+      "notes": "Synthetic only. Copy the current native resume URL from this waiting node. POST exactly the next_request.body of the preceding state Code node. Never publish this probe."
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000007",
+      "name": "Probe - accept 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const probe = (function createProbeRuntime() {\n  const probe = 'sma-native-wait-resume-v1';\n  const phases = ['upload_complete', 'edit_saved', 'approve', 'provider_complete'];\n  const ttlMs = 10 * 60 * 1000;\n\n  function fail(code) {\n    // Never include an incoming payload or a runtime resume URL in an error.\n    throw new Error('SYNTHETIC_PROBE_' + code);\n  }\n\n  function nextRequest(state) {\n    if (state.sequence === phases.length) return null;\n    const sequence = state.sequence + 1;\n    const body = {\n      probe,\n      synthetic: true,\n      execution_id: state.execution_id,\n      file_id: 'synthetic-file-001',\n      revision: 1,\n      manifest_id: 'synthetic-four-portals-v1',\n      phase: phases[state.sequence],\n      sequence,\n      event_id: 'synthetic-event-' + sequence,\n    };\n    if (body.phase === 'approve') body.approved = true;\n    if (body.phase === 'provider_complete') body.outcome = 'synthetic_complete';\n    return { method: 'POST', suffix: 'probe-' + sequence, body };\n  }\n\n  function output(state) {\n    return {\n      state,\n      next_request: nextRequest(state),\n      receipt: {\n        probe,\n        synthetic: true,\n        execution_id: state.execution_id,\n        accepted_count: state.sequence,\n        accepted_phases: state.audit.map((event) => event.phase),\n        observed_execution_ids: state.audit.map((event) => event.execution_id),\n        same_execution: state.audit.every((event) => event.execution_id === state.execution_id),\n        complete: state.sequence === phases.length,\n        external_effects: 0,\n      },\n    };\n  }\n\n  function initialize(executionId, now) {\n    const id = String(executionId ?? '');\n    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || !Number.isFinite(now)) fail('INVALID_CONTEXT');\n    return output({\n      probe,\n      synthetic: true,\n      execution_id: id,\n      started_at: now,\n      deadline_at: now + ttlMs,\n      sequence: 0,\n      accepted_event_ids: [],\n      audit: [],\n    });\n  }\n\n  function advance(previous, requestBody, executionId, expectedPhase, now) {\n    const state = previous?.state;\n    if (state?.probe !== probe || state.synthetic !== true) fail('INVALID_STATE');\n    if (String(executionId) !== state.execution_id) fail('EXECUTION_CHANGED');\n    if (!Number.isFinite(now) || now < state.started_at || now >= state.deadline_at) fail('EXPIRED');\n    if (!Number.isInteger(state.sequence) || state.sequence < 0 || state.sequence >= phases.length) fail('TERMINAL');\n    if (phases[state.sequence] !== expectedPhase) fail('WRONG_PHASE');\n    if (!Array.isArray(state.accepted_event_ids) || !Array.isArray(state.audit)\n      || state.accepted_event_ids.length !== state.sequence || state.audit.length !== state.sequence) fail('INVALID_STATE');\n    if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) fail('MISSING_BODY');\n    if (state.accepted_event_ids.includes(requestBody.event_id)) fail('REPLAY');\n\n    // Derive the allowed request from trusted saved state, never from the input\n    // received by Wait. Exact keys also reject URLs, credentials and real data.\n    const expected = nextRequest(state).body;\n    const keys = Object.keys(expected);\n    if (Object.keys(requestBody).length !== keys.length\n      || keys.some((key) => !Object.hasOwn(requestBody, key) || requestBody[key] !== expected[key])) fail('REQUEST_MISMATCH');\n\n    const event = {\n      phase: expectedPhase,\n      sequence: expected.sequence,\n      event_id: expected.event_id,\n      execution_id: String(executionId),\n      accepted_at: now,\n    };\n    return output({\n      ...state,\n      sequence: expected.sequence,\n      accepted_event_ids: [...state.accepted_event_ids, event.event_id],\n      audit: [...state.audit, event],\n    });\n  }\n\n  return { phases, ttlMs, initialize, advance };\n})();\nconst previous = $(\"Probe - accept 1\").first().json;\nreturn [{ json: probe.advance(previous, $input.first().json.body, $execution.id, \"edit_saved\", Date.now()) }];"
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000008",
+      "name": "Probe - acknowledge 2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1610,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.receipt) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000009",
+      "name": "Probe - wait 3",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "incomingAuthentication": "none",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "limitWaitTime": true,
+        "limitType": "atSpecifiedTime",
+        "maxDateAndTime": "={{ new Date($(\"Probe - accept 2\").first().json.state.deadline_at).toISOString() }}",
+        "options": {
+          "webhookSuffix": "probe-3"
+        }
+      },
+      "webhookId": "a1200000-0000-4000-8000-000000000003",
+      "notes": "Synthetic only. Copy the current native resume URL from this waiting node. POST exactly the next_request.body of the preceding state Code node. Never publish this probe."
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000010",
+      "name": "Probe - accept 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2070,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const probe = (function createProbeRuntime() {\n  const probe = 'sma-native-wait-resume-v1';\n  const phases = ['upload_complete', 'edit_saved', 'approve', 'provider_complete'];\n  const ttlMs = 10 * 60 * 1000;\n\n  function fail(code) {\n    // Never include an incoming payload or a runtime resume URL in an error.\n    throw new Error('SYNTHETIC_PROBE_' + code);\n  }\n\n  function nextRequest(state) {\n    if (state.sequence === phases.length) return null;\n    const sequence = state.sequence + 1;\n    const body = {\n      probe,\n      synthetic: true,\n      execution_id: state.execution_id,\n      file_id: 'synthetic-file-001',\n      revision: 1,\n      manifest_id: 'synthetic-four-portals-v1',\n      phase: phases[state.sequence],\n      sequence,\n      event_id: 'synthetic-event-' + sequence,\n    };\n    if (body.phase === 'approve') body.approved = true;\n    if (body.phase === 'provider_complete') body.outcome = 'synthetic_complete';\n    return { method: 'POST', suffix: 'probe-' + sequence, body };\n  }\n\n  function output(state) {\n    return {\n      state,\n      next_request: nextRequest(state),\n      receipt: {\n        probe,\n        synthetic: true,\n        execution_id: state.execution_id,\n        accepted_count: state.sequence,\n        accepted_phases: state.audit.map((event) => event.phase),\n        observed_execution_ids: state.audit.map((event) => event.execution_id),\n        same_execution: state.audit.every((event) => event.execution_id === state.execution_id),\n        complete: state.sequence === phases.length,\n        external_effects: 0,\n      },\n    };\n  }\n\n  function initialize(executionId, now) {\n    const id = String(executionId ?? '');\n    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || !Number.isFinite(now)) fail('INVALID_CONTEXT');\n    return output({\n      probe,\n      synthetic: true,\n      execution_id: id,\n      started_at: now,\n      deadline_at: now + ttlMs,\n      sequence: 0,\n      accepted_event_ids: [],\n      audit: [],\n    });\n  }\n\n  function advance(previous, requestBody, executionId, expectedPhase, now) {\n    const state = previous?.state;\n    if (state?.probe !== probe || state.synthetic !== true) fail('INVALID_STATE');\n    if (String(executionId) !== state.execution_id) fail('EXECUTION_CHANGED');\n    if (!Number.isFinite(now) || now < state.started_at || now >= state.deadline_at) fail('EXPIRED');\n    if (!Number.isInteger(state.sequence) || state.sequence < 0 || state.sequence >= phases.length) fail('TERMINAL');\n    if (phases[state.sequence] !== expectedPhase) fail('WRONG_PHASE');\n    if (!Array.isArray(state.accepted_event_ids) || !Array.isArray(state.audit)\n      || state.accepted_event_ids.length !== state.sequence || state.audit.length !== state.sequence) fail('INVALID_STATE');\n    if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) fail('MISSING_BODY');\n    if (state.accepted_event_ids.includes(requestBody.event_id)) fail('REPLAY');\n\n    // Derive the allowed request from trusted saved state, never from the input\n    // received by Wait. Exact keys also reject URLs, credentials and real data.\n    const expected = nextRequest(state).body;\n    const keys = Object.keys(expected);\n    if (Object.keys(requestBody).length !== keys.length\n      || keys.some((key) => !Object.hasOwn(requestBody, key) || requestBody[key] !== expected[key])) fail('REQUEST_MISMATCH');\n\n    const event = {\n      phase: expectedPhase,\n      sequence: expected.sequence,\n      event_id: expected.event_id,\n      execution_id: String(executionId),\n      accepted_at: now,\n    };\n    return output({\n      ...state,\n      sequence: expected.sequence,\n      accepted_event_ids: [...state.accepted_event_ids, event.event_id],\n      audit: [...state.audit, event],\n    });\n  }\n\n  return { phases, ttlMs, initialize, advance };\n})();\nconst previous = $(\"Probe - accept 2\").first().json;\nreturn [{ json: probe.advance(previous, $input.first().json.body, $execution.id, \"approve\", Date.now()) }];"
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000011",
+      "name": "Probe - acknowledge 3",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2300,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.receipt) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000012",
+      "name": "Probe - wait 4",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2530,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "incomingAuthentication": "none",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "limitWaitTime": true,
+        "limitType": "atSpecifiedTime",
+        "maxDateAndTime": "={{ new Date($(\"Probe - accept 3\").first().json.state.deadline_at).toISOString() }}",
+        "options": {
+          "webhookSuffix": "probe-4"
+        }
+      },
+      "webhookId": "a1200000-0000-4000-8000-000000000004",
+      "notes": "Synthetic only. Copy the current native resume URL from this waiting node. POST exactly the next_request.body of the preceding state Code node. Never publish this probe."
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000013",
+      "name": "Probe - accept 4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const probe = (function createProbeRuntime() {\n  const probe = 'sma-native-wait-resume-v1';\n  const phases = ['upload_complete', 'edit_saved', 'approve', 'provider_complete'];\n  const ttlMs = 10 * 60 * 1000;\n\n  function fail(code) {\n    // Never include an incoming payload or a runtime resume URL in an error.\n    throw new Error('SYNTHETIC_PROBE_' + code);\n  }\n\n  function nextRequest(state) {\n    if (state.sequence === phases.length) return null;\n    const sequence = state.sequence + 1;\n    const body = {\n      probe,\n      synthetic: true,\n      execution_id: state.execution_id,\n      file_id: 'synthetic-file-001',\n      revision: 1,\n      manifest_id: 'synthetic-four-portals-v1',\n      phase: phases[state.sequence],\n      sequence,\n      event_id: 'synthetic-event-' + sequence,\n    };\n    if (body.phase === 'approve') body.approved = true;\n    if (body.phase === 'provider_complete') body.outcome = 'synthetic_complete';\n    return { method: 'POST', suffix: 'probe-' + sequence, body };\n  }\n\n  function output(state) {\n    return {\n      state,\n      next_request: nextRequest(state),\n      receipt: {\n        probe,\n        synthetic: true,\n        execution_id: state.execution_id,\n        accepted_count: state.sequence,\n        accepted_phases: state.audit.map((event) => event.phase),\n        observed_execution_ids: state.audit.map((event) => event.execution_id),\n        same_execution: state.audit.every((event) => event.execution_id === state.execution_id),\n        complete: state.sequence === phases.length,\n        external_effects: 0,\n      },\n    };\n  }\n\n  function initialize(executionId, now) {\n    const id = String(executionId ?? '');\n    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || !Number.isFinite(now)) fail('INVALID_CONTEXT');\n    return output({\n      probe,\n      synthetic: true,\n      execution_id: id,\n      started_at: now,\n      deadline_at: now + ttlMs,\n      sequence: 0,\n      accepted_event_ids: [],\n      audit: [],\n    });\n  }\n\n  function advance(previous, requestBody, executionId, expectedPhase, now) {\n    const state = previous?.state;\n    if (state?.probe !== probe || state.synthetic !== true) fail('INVALID_STATE');\n    if (String(executionId) !== state.execution_id) fail('EXECUTION_CHANGED');\n    if (!Number.isFinite(now) || now < state.started_at || now >= state.deadline_at) fail('EXPIRED');\n    if (!Number.isInteger(state.sequence) || state.sequence < 0 || state.sequence >= phases.length) fail('TERMINAL');\n    if (phases[state.sequence] !== expectedPhase) fail('WRONG_PHASE');\n    if (!Array.isArray(state.accepted_event_ids) || !Array.isArray(state.audit)\n      || state.accepted_event_ids.length !== state.sequence || state.audit.length !== state.sequence) fail('INVALID_STATE');\n    if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) fail('MISSING_BODY');\n    if (state.accepted_event_ids.includes(requestBody.event_id)) fail('REPLAY');\n\n    // Derive the allowed request from trusted saved state, never from the input\n    // received by Wait. Exact keys also reject URLs, credentials and real data.\n    const expected = nextRequest(state).body;\n    const keys = Object.keys(expected);\n    if (Object.keys(requestBody).length !== keys.length\n      || keys.some((key) => !Object.hasOwn(requestBody, key) || requestBody[key] !== expected[key])) fail('REQUEST_MISMATCH');\n\n    const event = {\n      phase: expectedPhase,\n      sequence: expected.sequence,\n      event_id: expected.event_id,\n      execution_id: String(executionId),\n      accepted_at: now,\n    };\n    return output({\n      ...state,\n      sequence: expected.sequence,\n      accepted_event_ids: [...state.accepted_event_ids, event.event_id],\n      audit: [...state.audit, event],\n    });\n  }\n\n  return { phases, ttlMs, initialize, advance };\n})();\nconst previous = $(\"Probe - accept 3\").first().json;\nreturn [{ json: probe.advance(previous, $input.first().json.body, $execution.id, \"provider_complete\", Date.now()) }];"
+      }
+    },
+    {
+      "id": "a1100000-0000-4000-8000-000000000014",
+      "name": "Probe - acknowledge 4",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2990,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.receipt) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Probe - manual start": {
+      "main": [
+        [
+          {
+            "node": "Probe - initialize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - initialize": {
+      "main": [
+        [
+          {
+            "node": "Probe - wait 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - wait 1": {
+      "main": [
+        [
+          {
+            "node": "Probe - accept 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - accept 1": {
+      "main": [
+        [
+          {
+            "node": "Probe - acknowledge 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - acknowledge 1": {
+      "main": [
+        [
+          {
+            "node": "Probe - wait 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - wait 2": {
+      "main": [
+        [
+          {
+            "node": "Probe - accept 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - accept 2": {
+      "main": [
+        [
+          {
+            "node": "Probe - acknowledge 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - acknowledge 2": {
+      "main": [
+        [
+          {
+            "node": "Probe - wait 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - wait 3": {
+      "main": [
+        [
+          {
+            "node": "Probe - accept 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - accept 3": {
+      "main": [
+        [
+          {
+            "node": "Probe - acknowledge 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - acknowledge 3": {
+      "main": [
+        [
+          {
+            "node": "Probe - wait 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - wait 4": {
+      "main": [
+        [
+          {
+            "node": "Probe - accept 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe - accept 4": {
+      "main": [
+        [
+          {
+            "node": "Probe - acknowledge 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {}
+}

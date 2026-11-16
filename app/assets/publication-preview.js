@@ -1,19 +1,21 @@
 import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
-import {mountGalleryMusic} from './gallery-music-worker.mjs?v=2';
+import {mountGalleryMusic} from './gallery-music-worker.mjs?v=3';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=2';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
-import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=3';
+import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
+import {createSharedThumbnailClient,clearSharedThumbnailCache} from './thumbnail-batch.mjs?v=1';
+import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=1';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=26';
-import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=27';
+import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=28';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -38,13 +40,12 @@ let magicLoadTicket=0;
 let loadingVideoDraft=false,magicPreparationError=null;
 let pendingProductFocus=null;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
-const videoMagicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-video-magic-effect-v1';
-const magicEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-magic-effect-v1';
-const reviewEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-content-review-v1';
+let fileSelectionTicket=0,fileSelectionController=null;
 Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
 messages.INVALID_HASHTAGS=hashtagMessage;
 
 Object.assign(messages,{FILE_UNAVAILABLE:'Diese Datei ist nicht mehr im zugeordneten Kundenordner verfügbar.',FILE_CHANGED:'Die Datei wurde geändert. Aktualisiere die Dateiliste und erstelle einen neuen passenden Text.',FILE_REFRESH_REQUIRED:'Bitte aktualisiere zuerst die Dateiliste.',ASSIGNMENT_CHANGED:'Der zugeordnete Text wurde außerhalb dieser Datei geändert. Bitte erstelle einen neuen Text für die Datei.',ASSIGNMENT_CONFLICT:'Die Zuordnung wurde inzwischen geändert. Lade den gespeicherten Text erneut.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.',FILE_SYNC_UNAVAILABLE:'Die Dateiliste konnte nicht aktualisiert werden. Bitte versuche es erneut.',FILE_SYNC_RUNNING:'Die Dateiliste wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_RATE_LIMITED:'Bitte warte kurz, bevor du die Dateien erneut aktualisierst.',FILE_CATALOG_TOO_LARGE:'Der Kundenordner enthält mehr Dateien als diese Ansicht vollständig laden kann.',FILE_METADATA_INVALID:'Die Dateiinformationen sind unvollständig. Bitte prüfe die Dateien im Kundenordner.',PORTAL_REQUIRES_VIDEO:'Für dieses Portal wird derzeit eine Videodatei benötigt.',TEXT_ALREADY_ASSIGNED:'Dieser Text gehört bereits zu einer anderen Datei. Bitte erstelle einen eigenen Text.',FILE_FORMAT_MISMATCH:'Die Textvorbereitung passt nicht zur ausgewählten Dateiart.'});
+Object.assign(messages,{FILE_JOB_EXPIRED:'Der Datei-Auftrag ist abgelaufen. Wähle die Datei in der Galerie erneut aus und starte dann die gewünschte Verarbeitung.',FILE_JOB_PENDING:'Die Verarbeitung läuft weiter. Lade den gespeicherten Status erneut.',FILE_JOB_UNCERTAIN:'Die Rückmeldung wird geprüft. Starte dieselbe Verarbeitung bitte nicht erneut.'});
 const params=new URLSearchParams(location.search);
 const requestedPortal=params.get('portal');
 const selectedPortal=Object.hasOwn(names,requestedPortal)?requestedPortal:null;
@@ -93,11 +94,12 @@ if(workspace){
 
 function status(text,error=false){for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
-function lock(value){value=value||signedOut||automaticMode!==null;busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
+function lock(value){value=value||signedOut||automaticMode!==null;if(value&&fileSelectionController){fileSelectionController.abort();fileSelectionController=null;fileSelectionTicket++;}busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
  if(workspace){$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
+const fileJobs=createFileJobClient({session});
 async function rpc(action,input={},id=null,signal){const request=supabase.rpc('sma_publication_preview_v1',{p_action:action,p_input:input,p_id:id});
  const {data,error}=await (signal?request.abortSignal(signal):request);if(error)throw Error('Die Vorschau konnte nicht geladen oder gespeichert werden.');if(!data?.ok)throw Error(errorText(data));return data;}
 // Read controlled fields directly: FormData omits the disabled fields during a Magic run.
@@ -362,6 +364,7 @@ function render(data){
  if(selectedAsset){assignmentRevision=data.assignment_revision??assignmentRevision;selectedAsset.assignments=(selectedAsset.assignments||[]).filter(a=>a.platform!==selectedPortal).concat([{platform:selectedPortal,revision:assignmentRevision,status:'assigned'}]);}$('result').hidden=false;workspace?.textAvailable(true);$('saveStatus').textContent=selectedAsset?'Dieser Datei und diesem Portal zugeordnet':'Textvorlage gespeichert';if(selectedPortal&&!workspace)$('sourcePanel').open=false;
 }
 async function waitForResult(id){for(let i=0;i<50;i++){const r=await rpc('get',{},id);if(r.status==='completed')return r;if(r.status==='failed')throw Error(errorText(r));if(r.status==='empty')throw Error('Die Anfrage ist noch nicht angekommen. Du kannst sie erneut versuchen.');await new Promise(resolve=>setTimeout(resolve,3000));}throw Error('Die Erstellung läuft noch. Bitte lade gleich die letzte Vorschau.');}
+function canReadPreviewStatus(error){return error?.name!=='AbortError'&&(!error?.code||['FILE_JOB_PENDING','FILE_JOB_UNAVAILABLE'].includes(error.code));}
 function fileError(code){return Object.assign(Error(errorText({code})),{code});}
 async function fileRpc(action,input={},signal){
  const request=supabase.rpc('sma_publication_files_v1',{p_action:action,p_input:input});
@@ -408,13 +411,14 @@ async function withFreshFile(context,action){
  catch(error){
   if(!context||error.code!=='FILE_REFRESH_REQUIRED')throw error;
   // One bounded retry also covers clock differences and a long-running request.
-  await ensureFreshFile(context,true);const result=await action();assertFileContext(context);return result;
+  await ensureFreshFile(context,true);const result=await action('FILE_REFRESH_REQUIRED');assertFileContext(context);return result;
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
 function clearDraft(){discardTextVariant();closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=!workspace;$('source_text').value='';fillInput(null);}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
-const pickerThumbnails=createMediaThumbnailLoader(async()=>(await session()).access_token);
+const previewThumbnails=createSharedThumbnailClient({getOwnerId:()=>signedOut?null:previewOwnerId,getSession:async()=>{const auth=await session();if(signedOut||auth.user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);return auth;}});
+const pickerThumbnails=createMediaThumbnailLoader(null,{client:previewThumbnails});
 let localMedia=null,mediaViewKey='',mediaViewUrl=null,mediaViewController=null;
 function clearAssetPreview(){
  originalVideo?.setPoster(selectedAsset,null);
@@ -453,8 +457,8 @@ async function loadAssetPreview({retry=false,refresh=false}={}){
    if(result?.cover){showAssetMedia(result.blob,'image',key,result.cover);return;}
   }
   if(localMedia?.id===file.id&&localMedia.revision===file.revision&&!retry){showAssetMedia(localMedia.file,file.media_kind,key);return;}
-  const auth=await session();controller.signal.throwIfAborted();
-  const blob=await fetchAssetThumbnail(file,auth.access_token,controller.signal);
+  controller.signal.throwIfAborted();
+  const blob=await previewThumbnails.request(file,controller.signal);
   showAssetMedia(blob,'image',key);
  }catch(e){
   if(!signedOut&&!controller.signal.aborted&&mediaViewKey===key){
@@ -464,7 +468,7 @@ async function loadAssetPreview({retry=false,refresh=false}={}){
  }finally{if(mediaViewController===controller)mediaViewController=null;}
 }
 $('retryAssetPreview').addEventListener('click',()=>loadAssetPreview({retry:true}));
-window.addEventListener('pagehide',()=>{updateTabForm();galleryMusic?.destroy();originalVideo?.destroy();coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();localMedia=null;});
+window.addEventListener('pagehide',()=>{updateTabForm();galleryMusic?.destroy();originalVideo?.destroy();coverView?.destroy();clearAssetPreview();pickerThumbnails.clear();previewThumbnails.dispose();localMedia=null;});
 function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
@@ -549,10 +553,31 @@ function openFilePicker(trigger){
  if(!$('filePicker').open)$('filePicker').showModal();renderFilePicker();$('fileSearch').focus();
 }
 async function requestFileSelection(id,discard=false){
- if(busy)return;const file=id?assets.find(f=>f.id===id):null;
+ if(busy||signedOut)return;let file=id?assets.find(f=>f.id===id):null;
  if(id&&(!file||!fileFitsPortal(file)))return;
- if((selectedAsset?.id||'')===id){if(workspace&&id)workspace.show('preview');else if(!workspace)$('filePicker').close();return;}
- if((hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
+ const ticket=++fileSelectionTicket;fileSelectionController?.abort();fileSelectionController=null;
+ if((selectedAsset?.id||'')!==id&&(hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
+ const controller=new AbortController();fileSelectionController=controller;
+ let reopened=false;
+ try{
+  // Only an explicit selection may retire an expired local binding. This does
+  // not start a job; the next requested action still joins through the server.
+  if(file){
+   const anchor=fileJobAnchor(file);
+   reopened=await fileJobs.beginNewWork(anchor,{signal:controller.signal});
+   if(controller.signal.aborted||ticket!==fileSelectionTicket||signedOut)return;
+   file=assets.find(f=>f.id===id);
+   if(!file||file.revision!==anchor.asset_revision||!fileFitsPortal(file))throw fileError('FILE_CHANGED');
+  }
+  if(controller.signal.aborted||ticket!==fileSelectionTicket||signedOut)return;
+ }catch(error){
+  if(!controller.signal.aborted&&ticket===fileSelectionTicket&&!signedOut){status(error.message,true);$('filePickerStatus').textContent=error.message;}
+  return;
+ }finally{if(fileSelectionController===controller)fileSelectionController=null;}
+ if((selectedAsset?.id||'')===id){
+  if(reopened){magicPreparationError=null;status('Datei wieder geöffnet. Du kannst die gewünschte Verarbeitung erneut starten.');}
+  if(workspace&&id)workspace.show('preview');else if(!workspace)$('filePicker').close();return;
+ }
  pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
  // Show the file preview immediately, but keep Magic disabled until the
@@ -561,17 +586,19 @@ async function requestFileSelection(id,discard=false){
  await loadLatest();
  // The card click itself opens the preview after its matching saved draft is loaded.
  // Keep the existing unsaved-edits confirmation and never navigate a stale/foreign file.
- if(workspace&&file&&file.media_kind!=='video'&&!signedOut&&selectedAsset?.id===file.id&&selectedAsset.revision===file.revision)workspace.show('preview');
+ if(workspace&&file&&file.media_kind!=='video'&&ticket===fileSelectionTicket&&!signedOut&&selectedAsset?.id===file.id&&selectedAsset.revision===file.revision)workspace.show('preview');
 }
-const uploadEndpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-device-upload-v1';
 Object.assign(messages,{UPLOAD_FORMAT:'Bitte wähle eine Bild- oder Videodatei, zum Beispiel JPG, PNG, HEIC, MP4 oder MOV. Dokumentdateien wie PDF oder Word können über diesen Veröffentlichungsweg nicht gepostet werden.',UPLOAD_SIZE:'Bitte wähle eine nicht leere Datei bis 4 GB.',UPLOAD_RATE_LIMITED:'Das Uploadlimit ist erreicht (30 Dateien pro Stunde, 20 GB pro Tag). Bitte versuche es später erneut.',UPLOAD_UNAVAILABLE:'Der Upload ist momentan nicht erreichbar. Du kannst die Übertragung erneut versuchen.',UPLOAD_NETWORK:'Die Verbindung wurde unterbrochen. Klicke auf „Upload fortsetzen“.',UPLOAD_EXPIRED:'Die Uploadsitzung ist abgelaufen. Bitte wähle die Datei erneut über „Dateien durchsuchen“.',UPLOAD_INITIALIZING:'Der Upload wird noch vorbereitet. Bitte versuche „Upload fortsetzen“ in zwei Minuten erneut.',UPLOAD_INCOMPLETE:'Die hochgeladene Datei konnte noch nicht bestätigt werden. Bitte klicke auf „Upload fortsetzen“.',UPLOAD_CONFLICT:'Die Datei hat sich geändert. Bitte wähle sie erneut aus.'});
 let deviceUpload=null,uploadController=null;
 function chooseDeviceFile(){if(busy||signedOut||!selectedPortal)return;$('deviceFile').value='';$('deviceFile').accept=['youtube','tiktok'].includes(selectedPortal)?'video/*':'image/*,video/*';$('deviceFile').click();}
 $('deviceBrowse').addEventListener('click',chooseDeviceFile);
 $('deviceBrowseResult').addEventListener('click',chooseDeviceFile);
-async function uploadCall(body,signal){
- const auth=await session();signal.throwIfAborted();
- const response=await fetch(uploadEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify(body),credentials:'omit',cache:'no-store',signal:AbortSignal.any([signal,AbortSignal.timeout(90000)])});
+async function uploadCall(body,signal,job){
+ signal.throwIfAborted();
+ const {action,...input}=body;
+ const operations={start:'upload_start',finish:'upload_finish'};
+ if(!Object.hasOwn(operations,action))throw fileError('INVALID_INPUT');
+ const response=await fileJobs.request({anchor:{kind:'upload',upload_id:job.id,...job.meta},operation:operations[action],input,signal,timeoutMs:90000});
  const data=await response.json();signal.throwIfAborted();if(!response.ok||!data?.ok)throw Error(data?.code||'UPLOAD_UNAVAILABLE');
  if(data.upload_id!==body.upload_id||data.can_publish!==false)throw Error('UPLOAD_UNAVAILABLE');return data;
 }
@@ -581,12 +608,12 @@ async function runDeviceUpload(){
  $('uploadPanel').hidden=false;$('uploadKeepOpen').hidden=false;$('uploadProgress').hidden=false;$('retryUpload').hidden=true;$('cancelUpload').hidden=false;$('uploadStatus').textContent='Upload wird vorbereitet …';
  let completed=null;
  try{
-  let data=await uploadCall({action:'start',upload_id:job.id,...job.meta},controller.signal);
+  let data=await uploadCall({action:'start',upload_id:job.id,...job.meta},controller.signal,job);
   if(data.status!=='completed'){
    if(data.status!=='ready')throw Error('UPLOAD_UNAVAILABLE');
    await transferDeviceFile({file:job.file,url:data.upload_url,mime:job.meta.mime_type,signal:controller.signal,onProgress:(bytes,total)=>{if(signedOut||controller.signal.aborted)return;const percent=Math.floor(bytes/total*100);$('uploadProgress').value=percent;$('uploadStatus').textContent=percent+' % hochgeladen';}});
    $('uploadStatus').textContent='Übertragung abgeschlossen. Die Datei wird deinem Kundenordner zugeordnet …';
-   data=await uploadCall({action:'finish',upload_id:job.id},controller.signal);
+   data=await uploadCall({action:'finish',upload_id:job.id},controller.signal,job);
   }
   if(data.status!=='completed'||typeof data.asset_id!=='string')throw Error('UPLOAD_INCOMPLETE');
   await loadFiles();controller.signal.throwIfAborted();
@@ -594,7 +621,7 @@ async function runDeviceUpload(){
   completed=data.asset_id;const uploaded=assets.find(f=>f.id===completed);localMedia={id:completed,revision:uploaded.revision,file:job.file};deviceUpload=null;$('deviceFile').value='';$('uploadProgress').value=100;
   $('uploadStatus').textContent='✓ Datei hochgeladen';$('uploadKeepOpen').hidden=true;$('uploadProgress').hidden=true;fileChanged();
  }catch(e){
-  if(!signedOut){$('uploadStatus').textContent=controller.signal.aborted?'Upload angehalten. Mit „Upload fortsetzen“ kannst du weitermachen.':errorText({code:e.message});$('retryUpload').hidden=false;}
+  if(!signedOut){$('uploadStatus').textContent=controller.signal.aborted?'Upload angehalten. Mit „Upload fortsetzen“ kannst du weitermachen.':errorText({code:e.code||e.message});$('retryUpload').hidden=false;}
  }finally{uploadController=null;$('cancelUpload').hidden=true;lock(false);}
  if(completed&&!signedOut){if(hasDraftEdits()||hasSourceEdits())openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
 }
@@ -684,7 +711,7 @@ function renderReview(r,file){
 $('reviewContent').addEventListener('click',async()=>{
  if(busy||!selectedAsset||selectedAsset.media_kind==='video'||['processing','completed'].includes(reviewStatus))return;const file=selectedAsset;lock(true);$('contentReviewStatus').textContent='Die visuelle Sicherheitsprüfung wird gestartet …';
  try{
-  const auth=await session();const response=await fetch(reviewEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(45000)});
+  const response=await fileJobs.request({anchor:fileJobAnchor(file),operation:'review',input:{asset_id:file.id,asset_revision:file.revision},timeoutMs:45000});
   const d=await response.json();if(!response.ok||!d?.ok)throw Error(errorText(d));renderReview(d.review,file);
   for(let i=0;i<48&&reviewStatus==='processing';i++){
    await new Promise(resolve=>setTimeout(resolve,5000));if(selectedAsset?.id!==file.id||selectedAsset?.revision!==file.revision)return;
@@ -711,10 +738,7 @@ async function readTransferStatus(id,platform){
  const entry=readPublicationCoverHistory(data).entries.find(row=>row.id===id&&row.platform===platform);
  if(!entry)throw Error('HISTORY_UNAVAILABLE');
  if(entry.status==='uncertain'){
-  const canContinue=data.can_reconcile_transfer===true;
-  return {canContinue,message:canContinue
-   ? 'Ergebnis unklar. Du kannst den bestehenden Vorgang mit dem Portal abgleichen.'
-   : 'Ergebnis unklar. Die Übertragung muss geprüft werden. Hier kannst du den gespeicherten Stand aktualisieren.'};
+  return {canContinue:false,message:'Ergebnis unklar. Die Übertragung muss geprüft werden. Hier kannst du den gespeicherten Stand aktualisieren.'};
  }
  const message=entry.status==='checked'?'Für diesen Auftrag ist noch kein Übertragungsversuch gespeichert.'
   : historyStatuses[entry.status][0]+'. '+historyStatuses[entry.status][1];
@@ -1020,9 +1044,9 @@ async function recognizePhoto({withinAutomatic=false}={}){
  try{
   await ensureFreshFile(context);
   if(magicState?.status!=='processing'){
-   const d=await withFreshFile(context,async()=>{
-    const auth=await session();assertFileContext(context);
-    const response=await fetch(file.media_kind==='video'?videoMagicEndpoint:magicEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({asset_id:file.id,asset_revision:file.revision}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(25000)});
+   const d=await withFreshFile(context,async retryAfter=>{
+    await session();assertFileContext(context);
+    const response=await fileJobs.request({anchor:fileJobAnchor(file),operation:file.media_kind==='video'?'magic_video':'magic_photo',input:{asset_id:file.id,asset_revision:file.revision},timeoutMs:25000,retryAfter});
     const data=await response.json();if(!response.ok||!data?.ok)throw Object.assign(Error(magicErrorText(data?.code)),{code:data?.code});return data;
    });
    if(!showMagic(d.analysis,file))return;
@@ -1296,8 +1320,8 @@ async function generatePreview({withinAutomatic=false}={}){
   if(!data){
    const auth=await session();assertFileContext(context);
    status('Eigene Texte je Portal werden erstellt und der Shop-Link wird geprüft …');
-   try{const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({...draftInput,request_id:request.id}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(110000)});if(!response.ok)throw Error('NETWORK');data=await response.json();}
-   catch{assertFileContext(context);status('Die Rückmeldung dauert länger. Der gespeicherte Status wird geprüft …');data=await waitForResult(request.id);}
+   try{const response=context?await fileJobs.request({anchor:fileJobAnchor(context),operation:'preview_prepare',input:{...draftInput,request_id:request.id},timeoutMs:110000}):await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},body:JSON.stringify({...draftInput,request_id:request.id}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(110000)});if(!response.ok)throw Error('NETWORK');data=await response.json();}
+   catch(error){if(!canReadPreviewStatus(error))throw error;assertFileContext(context);status('Die Rückmeldung dauert länger. Der gespeicherte Status wird geprüft …');data=await waitForResult(request.id);}
    if(!data?.ok){request.finished=true;throw Error(errorText(data));}if(data.status==='processing')data=await waitForResult(data.id);
    assertFileContext(context);
    if(data.status==='failed'){request.finished=true;throw Error(errorText(data));}
@@ -1351,11 +1375,11 @@ async function generateTextVariant(){
   if(!data){
    const auth=await session();assertVariantBaseline(snapshot);
    try{
-    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
-     body:JSON.stringify({...draftInput,request_id:request.id}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(110000)});
+    const response=await fileJobs.request({anchor:fileJobAnchor(snapshot.binding),operation:'preview_prepare',input:{...draftInput,request_id:request.id},timeoutMs:110000});
     if(!response.ok)throw Error('NETWORK');
     data=await response.json();
-   }catch{
+   }catch(error){
+    if(!canReadPreviewStatus(error))throw error;
     assertVariantBaseline(snapshot);
     status('Die Rückmeldung dauert länger. SMA prüft den Erstellungsstatus …');
     data=await waitForResult(request.id);
@@ -1707,6 +1731,13 @@ async function saveDraft(){
 $('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
+ command:async(action,input,binding)=>{
+  if(action==='get')return new Response(JSON.stringify(await readStoredOrder(input.id)),{status:200,headers:{'Content-Type':'application/json'}});
+  const operations={account:'account',prepare:'order_prepare',approve:'order_approve'};
+  if(!Object.hasOwn(operations,action))throw fileError('INVALID_INPUT');
+  if(!binding?.asset_id||!binding.asset_revision)throw Error('Bitte wähle zuerst den aktuellen Dateistand.');
+  return fileJobs.request({anchor:fileJobAnchor(binding),operation:operations[action],input,timeoutMs:145000});
+ },
  getContext:()=>{
   if(signedOut)throw Error(messages.AUTH_REQUIRED);
   if(busy)throw Error('Bitte warte, bis die laufende Vorbereitung abgeschlossen ist.');
@@ -1726,7 +1757,7 @@ syncMedia();sourceBaseline=sourceFormKey();lock(true);status('Deine Dateien werd
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
@@ -1735,12 +1766,12 @@ try{
   });
  }
  coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
-  if(!['youtube','tiktok'].includes(selectedPortal))return fetchAssetThumbnail(f,(await session()).access_token,signal);
-  const blob=await (await import('./media-editor-api.mjs?v=7')).editorSource(f,signal,coverOwner);
+  if(!['youtube','tiktok'].includes(selectedPortal))return previewThumbnails.request(f,signal);
+  const blob=await (await import('./media-editor-api.mjs?v=11')).editorSource(f,signal,coverOwner);
   if(blob.type!=='image/png'||(f.size_bytes!=null&&blob.size!==f.size_bytes))throw Error('COVER_UNAVAILABLE');
   return blob;
  }});
- originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=7')).editorSource(f,signal,coverOwner)});
+ originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=11')).editorSource(f,signal,coverOwner)});
  if(params.has('order')||startupDraft){
   await loadHistoryPreview();
  }else{

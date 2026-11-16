@@ -124,7 +124,7 @@ test('actual preview retry recovers on desktop and mobile without losing the sel
      request:async()=>{f.calls++;return wait('lookup',{ok:true,version:1,can_publish:false,asset_id:file.id,asset_revision:file.revision,cover});},
      loadImage:()=>wait('image',new Blob([Uint8Array.from(atob(png),c=>c.charCodeAt(0))],{type:'image/png'}))});
     const session=async()=>{throw Error('Unexpected fallback authentication');};
-    const fetchAssetThumbnail=()=>{throw Error('A timed-out cover must not fall back to another frame');};
+    const previewThumbnails={request(){throw Error('A timed-out cover must not fall back to another frame');}};
     `+previewCode+`\n
     f.begin=()=>loadAssetPreview();f.finishOld=()=>{for(const release of f.gates)release();};
     f.clear=()=>{coverView.clear();clearAssetPreview();};f.selected=()=>selectedAsset.id;

@@ -133,13 +133,13 @@ function accountResponseError(status){
 }
 // Reuse the exact request ID after a lost response. A different selection gets
 // a new ID; the database additionally prevents duplicates across tabs/reloads.
-export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomUUID()}) {
+export function createOrderClient({session,fetcher=fetch,uuid=()=>crypto.randomUUID(),command=null}) {
   let attempt=null;
   async function call(action,input) {
     const auth=await session();
     let response,r;
     try{
-      response=await fetcher(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
+      response=command?await command(action,input):await fetcher(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth.access_token},
         body:JSON.stringify({action,input}),credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(145000)});
       r=await response.json();
     }catch(error){
@@ -196,7 +196,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,readTransferStatus,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -236,7 +236,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,retryAccount,restart,statusButton,cancel,close);
   dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
-  const client=createOrderClient({session});let order=null,context=null,working=false,epoch=0,account=null;
+  const client=createOrderClient({session,...(command?{command:(action,input)=>command(action,input,context?.binding)}:{})});let order=null,context=null,working=false,epoch=0,account=null;
   let recovery=null,preparationToResume=null,opening=false;
   const pendingAccounts=new Map();
   const unresolvedMessage='Der gespeicherte Freigabestand ist noch unklar. Lade den Status erneut oder öffne unter History den Auftrag.';
