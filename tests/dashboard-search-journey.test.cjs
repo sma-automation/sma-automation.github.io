@@ -255,7 +255,10 @@ for(const mobile of [false,true]){
   assert.equal(await bodyB.inputValue(),textB,'B recovers its unchanged checkpoint through the original search');
   await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
-  assert.equal(await f.account.getAttribute('aria-selected'),'true');
+  // This later search was opened from the editor's publishing page, not the
+  // initial account chapter. Its own origin must remain active behind the dialog.
+  assert.equal(await f.dashboard.locator('#page-publishing').isVisible(),true);
+  assert.equal(await f.dashboard.locator('#sma-publishing-tab-files').getAttribute('aria-selected'),'true');
  });
  test(label+': a slow conflicting reload of A cannot replace newer edits or history in B',{timeout:45000},async t=>{
   const f=await fixture(t,mobile,{distinctDrafts:true}),other=uuid(2);
