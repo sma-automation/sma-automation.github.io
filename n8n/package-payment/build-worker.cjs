@@ -34,7 +34,7 @@ function build(source,{renewalOnly=false}={}){
 const r=$input.first()?.json||{};
 if(op==='account'){
  if($input.all().length!==1||!Number.isSafeInteger(r.id))return [{json:{ok:false}}];
- const vals={};for(const k of ['id','kunde_id','kunde_email','paket','mollie_customer_id','mollie_subscription_id','zugang_aktiv','zahlung_bestaetigt','demo_delta_aktiv'])vals[k]=r[k]??null;
+ const vals={};for(const k of ['id','kunde_id','kunde_email','paket','mollie_customer_id','mollie_subscription_id','zugang_aktiv','zahlung_bestaetigt','demo_delta_aktiv','upload_folder_id','processing_folder_id'])vals[k]=r[k]??null;
  vals.has_access_token=typeof r.zugangs_token==='string'&&r.zugangs_token.length>0;
  return [{json:{ok:true,value:vals}}];
 }
@@ -67,14 +67,24 @@ return [{json:{ok:true,value:vals}}];`},1330,0);
       let params={operation:op==='account'?'get':'update',dataTableId:table,matchType:'allConditions',filters};
       if(op!=='account'){
         filters.conditions.push({keyName:'demo_delta_aktiv',condition:'isFalse'},{keyName:'zugang_aktiv',condition:op==='activate'?'isFalse':'isTrue'},{keyName:'zahlung_bestaetigt',condition:op==='activate'?'isFalse':'isTrue'});
-        if(op==='activate')for(const keyName of ['paket','mollie_customer_id','mollie_subscription_id','zugangs_token'])filters.conditions.push({keyName,condition:'isEmpty'});
+        if(op==='activate'){
+          for(const keyName of ['paket','mollie_customer_id','mollie_subscription_id','zugangs_token'])filters.conditions.push({keyName,condition:'isEmpty'});
+          for(const keyName of ['upload_folder_id','processing_folder_id'])filters.conditions.push({keyName,keyValue:'={{ $json.data.'+keyName+' }}'});
+        }
         params.columns={mappingMode:'defineBelow',value:op==='activate'?{paket:'={{ $json.data.plan }}',mollie_customer_id:'={{ $json.data.customer }}',mollie_subscription_id:'={{ $json.data.subscription }}',
           zugang_aktiv:true,zahlung_bestaetigt:true,zugangs_token:'={{ $json.data.token }}'}:{zugang_aktiv:false,zahlung_bestaetigt:false},matchingColumns:[],schema:[],attemptToConvertTypes:false,convertFieldsToString:false};
         params.options={};
       }else params.limit=2;
       n=node('Kundenzeile '+op,'dataTable',1.1,params,1060,(i-4)*165,{alwaysOutputData:true});
     }
-    edge(split,n,i);edge(n,short);
+    if(op==='activate'){
+      const validate=node('Ordnerzuordnung vor Aktivierung prüfen','code',2,{jsCode:`const job=$input.first().json;
+const data=job.data;
+if(!['upload_folder_id','processing_folder_id'].every(key=>typeof data?.[key]==='string'&&/^[A-Za-z0-9_-]{10,200}$/.test(data[key]))||data.upload_folder_id===data.processing_folder_id)throw Error('FOLDER_UNAVAILABLE');
+return [{json:job}];`},840,(i-4)*165);
+      edge(split,validate,i);edge(validate,n);
+    }else edge(split,n,i);
+    edge(n,short);
   }
   const originalCount=nodes.length;
   const start=node('Folgeabgleich','webhook',2.1,{httpMethod:'POST',path:'sma-paket-folge-dienst-v1',responseMode:'responseNode',options:{}},0,1400,{webhookId:randomUUID()});

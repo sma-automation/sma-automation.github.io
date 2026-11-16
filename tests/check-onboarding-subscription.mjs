@@ -21,7 +21,8 @@ export async function checkScheduledSubscription({db,order,receipt,account}) {
   const payment={id:receipt.id,mode:'live',customerId:receipt.customer,sequenceType:'first',status:'paid',
     amount:{currency:'EUR',value:receipt.value},paidAt:receipt.paid_at,
     metadata:{order, paket:receipt.plan, sma_onboarding_ref:receipt.ref}};
-  const row={...account,demo_delta_aktiv:false,zahlung_bestaetigt:false,zugang_aktiv:false};
+  const row={...account,demo_delta_aktiv:false,zahlung_bestaetigt:false,zugang_aktiv:false,
+    upload_folder_id:'fixture_upload_folder',processing_folder_id:'fixture_processing_folder'};
   let subscription, dueDate=null, creations=0, activations=0, restores=0, disables=0;
   let time=Date.now(), payments=[], loseRestore=false, loseDisable=false, loseList=false;
   const projectList=new Function('$','$input',node('Folgebelege begrenzen').parameters.jsCode);
@@ -50,6 +51,14 @@ export async function checkScheduledSubscription({db,order,receipt,account}) {
         assert.equal(data.subscription,subscription.id);disables++;
         Object.assign(row,{zugang_aktiv:false,zahlung_bestaetigt:false});result=row;break;
       case 'activate':
+        // Use the real service-only SQL ticket contract for the exact job the
+        // Edge bridge sends, then execute the generated n8n activation guard.
+        const {rows:[{ticket}]}=await db.query('select public.sma_package_ticket_v1(null,$1) as ticket',[{op,data}]);
+        const {rows:[{job}]}=await db.query('select public.sma_package_ticket_v1($1,null) as job',[ticket]);
+        assert.deepEqual(job,{op,data});
+        const validate=new Function('$input',node('Ordnerzuordnung vor Aktivierung prüfen').parameters.jsCode);
+        assert.deepEqual(validate({first:()=>({json:job})})[0].json,job);
+        for(const key of ['upload_folder_id','processing_folder_id'])assert.equal(job.data[key],row[key]);
         activations++;
         Object.assign(row,{paket:data.plan,mollie_customer_id:data.customer,mollie_subscription_id:data.subscription,
           zugang_aktiv:true,zahlung_bestaetigt:true,zugangs_token:data.token});
@@ -98,6 +107,9 @@ export async function checkScheduledSubscription({db,order,receipt,account}) {
   assert.deepEqual(await (await notify()).json(),{code:'ACTIVE'});
   assert.deepEqual(await (await notify()).json(),{code:'ACTIVE'});
   assert.equal(creations,1);assert.equal(activations,1);
+  // Existing paid accounts must remain suspendable/restorable even when a
+  // later folder configuration is missing. Every renewal path below uses it.
+  delete row.upload_folder_id;delete row.processing_folder_id;
   const bill=(id,status)=>({id,mode:'live',sequenceType:'recurring',subscriptionId:subscription.id,customerId:receipt.customer,
     amount:payment.amount,createdAt:new Date(time).toISOString(),status,...(status==='paid'?{paidAt:new Date(time).toISOString()}:{})});
   const cycle=(id,url=subscription.webhookUrl)=>handler(new Request(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+id}));

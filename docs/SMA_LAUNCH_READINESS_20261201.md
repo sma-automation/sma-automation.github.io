@@ -85,6 +85,50 @@ Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
    Eindeutigkeit und Status erneut prüfen. Beide Konten bleiben inaktiv.
    Bei einem späteren Adresswechsel müssen Website und n8n erneut abgeglichen werden.
 
+### Kundenordner vor der ersten Buchung prüfen (16.11.2026)
+
+Die Kontozuordnung allein richtet keine Drive-Ordner ein. Vor der ersten
+automatischen Zahlung müssen in derselben geprüften `SMA_Kunden`-Zeile
+`upload_folder_id` und `processing_folder_id` auf die beiden vorhandenen,
+kundeneigenen Ordner zeigen. Fehlt die Einrichtung, zunächst den bestehenden
+Kundenordner-Ablauf abschließen und dessen gespeicherte Zuordnung prüfen.
+Die IDs müssen verschieden sein; zulässig sind jeweils 10–200 Zeichen aus
+Buchstaben, Ziffern, Unterstrich und Bindestrich.
+
+Mit der für den Dateikatalog eingerichteten Google-Drive-Verbindung beide IDs
+prüfen: Ordner vorhanden, nicht gelöscht und `canListChildren=true`.
+Der Verarbeitungsordner muss außerdem `canAddChildren=true` erlauben.
+`upload_folder_id` bezeichnet **01 Upload – Eingang**;
+`processing_folder_id` bezeichnet **02 Verarbeitung**. Manuelle Dashboard-Dateien
+gehen in den Verarbeitungsordner. Der Eingang gehört zum bisherigen automatischen
+Veröffentlichungsablauf. Eine leere, erreichbare Galerie ist ein gültiger Start;
+ein fehlender oder nicht erreichbarer Ordner ist keine leere Galerie.
+
+Der Zahlungsabgleich prüft die gespeicherten IDs vor neuer
+Mollie-Kunden-/Erstzahlungsanlage und vor der Erstaktivierung. Sie liest die
+Zuordnung nach den Anbieterprüfungen erneut. Der Aktivierungsauftrag bindet
+die Tabellenänderung an genau dieses Paar; das Rücklesen muss dasselbe Paar
+bestätigen, bevor der Website-Zugang aktiv wird. Diese Prüfung bewertet die
+Zuordnung, sie ersetzt keine Drive-Berechtigungsprüfung. Bestehende
+Rückerstattungen, Rückbuchungen, Zugangssperren und Folgezahlungs-Wiederherstellungen
+bleiben von den Ordnerfeldern unabhängig.
+
+**Koordinierte Bereitstellung:** Die private `account`-Antwort des Zahlungsdiensts
+muss beide Ordnerfelder liefern. Der n8n-Worker und die Edge Function
+`sma-package-payment` werden deshalb koordiniert umgestellt. Zuerst den
+vorbereiteten n8n-Worker veröffentlichen und dessen private Antwort bestätigen;
+direkt danach den zugehörigen Edge-Stand bereitstellen. Zwischen diesen beiden
+Schritten kann der neue Worker Erstaktivierungen des alten Handlers ohne
+gebundene Ordner-IDs ablehnen. Diesen Übergang vor neuen Kundenbuchungen
+abschließen. Der neue Stand darf erst nach Prüfung beider Komponenten als
+bereitgestellt gelten. Es wird keine automatische Drive-Provisionierung ergänzt.
+
+Isolierte Abnahme: `tests/automatic-package-payment.test.cjs` verbindet
+Zahlungsaktivierung, tatsächliche n8n-Antwortprojektion und Katalog-Ordnerprüfung.
+`tests/run-onboarding-plan-sql.mjs` prüft zusätzlich den bestehenden SQL-Ticketweg
+mit den neuen Aktivierungsfeldern sowie die Folgeabrechnung eines Bestandskontos
+ohne Ordnerfelder. Diese Prüfungen verwenden ausschließlich synthetische Daten.
+
 ### Paketbuchung im betreuten Pilotbetrieb
 
 Für das zugeordnete Website-Konto kann der Betreiber eine bereits vorhandene,
