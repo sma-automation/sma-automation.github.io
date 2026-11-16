@@ -7,7 +7,7 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const file=id=>({id,revision:'revision:1',media_kind:'video'});
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0b8AAAAASUVORK5CYII=';
 function fixture({hold=null,intersection=false}={}){
- let clock=0,next=0,holding=hold,tokens=0;
+ let clock=0,next=0,holding=hold,tokens=0,token='fixture';
  const timers=new Map(),held=[],requests=[],created=[],revoked=[],observers=[];
  const stage=(name,value)=>holding===name?new Promise((resolve,reject)=>held.push({name,value,resolve,reject})):Promise.resolve(value);
  class Element{
@@ -23,10 +23,10 @@ function fixture({hold=null,intersection=false}={}){
  const doc={defaultView:intersection?{IntersectionObserver:Observer}:{},createElement:()=>new Element(doc)};
  const request=(url,options)=>{
   assert.equal(url,'fixture:thumbnail');assert.equal(options.method,'POST');
-  assert.equal(options.headers.Authorization,'Bearer fixture');assert.equal(options.credentials,'omit');
+  assert.equal(options.headers.Authorization,'Bearer '+token);assert.equal(options.credentials,'omit');
   assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
   const input=JSON.parse(options.body);assert.deepEqual(Object.keys(input).sort(),['asset_id','asset_revision']);
-  requests.push({input,signal:options.signal});
+  requests.push({input,signal:options.signal,authorization:options.headers.Authorization});
   const body={ok:true,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,media_kind:'video',mime_type:'image/png',image_base64:png};
   return stage('http',{ok:true,json:()=>stage('body',body)});
  };
@@ -38,9 +38,9 @@ function fixture({hold=null,intersection=false}={}){
   customerMediaEndpoint:kind=>{assert.equal(kind,'thumbnail');return 'fixture:thumbnail';},
   setTimeout:(fn,delay)=>{const id=++next;timers.set(id,{fn,at:clock+delay});return id;},clearTimeout:id=>timers.delete(id)};
  vm.createContext(env);vm.runInContext(source,env);
- const loader=env.createMediaThumbnailLoader(()=>{tokens++;return stage('token','fixture');});
+ const loader=env.createMediaThumbnailLoader(()=>{tokens++;return stage('token',token);});
  return {loader,env,held,requests,created,revoked,observers,timers,tokenCount:()=>tokens,
-  host:()=>new Element(doc),hold:value=>{holding=value;},
+  host:()=>new Element(doc),hold:value=>{holding=value;},token:value=>{token=value;},
   async advance(ms){clock+=ms;for(const [id,timer] of [...timers])if(timer.at<=clock){timers.delete(id);timer.fn();}await flush();},
   async release(i,error=false){const h=held[i];assert.ok(h);if(error)h.reject(Error('late failure'));else h.resolve(h.value);await flush();}
  };
@@ -55,6 +55,64 @@ for(const phase of ['token','http','body'])test('three stalled '+phase+' reads r
  assert.equal(hosts[3].children.length,1);assert.equal(f.created.length,1);
  const requests=f.requests.length;for(let i=0;i<3;i++)await f.release(i,i===1);
  assert.equal(f.requests.length,requests);assert.equal(f.created.length,1);f.loader.clear();
+});
+test('one slow thumbnail survives three gallery redraws without another n8n POST',async()=>{
+ const f=fixture({hold:'http'}),selected=file('unchanged'),hosts=[f.host()];
+ f.loader.observe(hosts[0],selected);await flush();
+ for(const query of ['b','bi','bil']){
+  // Both gallery renderers reset their loader and observe matching files again
+  // after each search/filter redraw. This asset remains visible and unchanged.
+  f.loader.reset();const host=f.host();hosts.push(host);f.loader.observe(host,selected);await flush();
+ }
+ assert.equal(f.requests.length,1,'three redraws must reuse the already-started thumbnail request');
+ assert.equal(f.tokenCount(),1);assert.equal(f.requests[0].signal.aborted,false);
+ f.hold(null);await f.release(0);
+ assert.equal(hosts.at(-1).children.length,1);
+ for(const host of hosts.slice(0,-1))assert.equal(host.children.length,0,'only the current gallery receives the result');
+ assert.equal(f.created.length,1);f.loader.clear();
+});
+test('duplicate thumbnail hosts share a request without occupying another concurrency slot',async()=>{
+ const f=fixture({hold:'http'}),ids=['same','same','same','second','third','fourth'],hosts=ids.map(()=>f.host());
+ hosts.forEach((host,i)=>f.loader.observe(host,file(ids[i])));await flush();
+ assert.deepEqual(f.requests.map(r=>r.input.asset_id),['same','second','third']);assert.equal(f.tokenCount(),3);
+ await f.release(0);
+ assert.equal(f.created.length,3);assert.equal(f.requests.length,4);
+ assert.equal(f.requests.filter(r=>!r.signal.aborted).length,3,'only three unique requests may be active');
+ f.hold(null);for(let i=1;i<4;i++)await f.release(i);
+ assert.equal(f.created.length,6);assert.equal(f.requests.length,4);f.loader.clear();
+});
+test('redraw keeps a re-observed thumbnail until the new intersection callback',async()=>{
+ const f=fixture({hold:'http',intersection:true}),old=f.host();f.loader.observe(old,file('same'));
+ f.observers[0].callback([{target:old,isIntersecting:true}]);await flush();
+ f.loader.reset();const current=f.host();f.loader.observe(current,file('same'));await flush();
+ assert.equal(f.requests[0].signal.aborted,false,'observation must preserve pending work before intersection');
+ const observer=f.observers[1];observer.callback([{target:current,isIntersecting:true}]);observer.callback([{target:current,isIntersecting:true}]);await flush();
+ assert.equal(f.requests.length,1);f.hold(null);await f.release(0);
+ assert.equal(old.children.length,0);assert.equal(current.children.length,1);assert.equal(f.created.length,1);f.loader.clear();
+});
+test('redraw does not renew the deadline and an explicit retry starts one fresh request',async()=>{
+ const f=fixture({hold:'http'}),selected=file('same'),old=f.host();f.loader.observe(old,selected);await flush();await f.advance(44000);
+ const current=f.host();for(let i=0;i<3;i++){f.loader.reset();f.loader.observe(i===2?current:f.host(),selected);await flush();}
+ await f.advance(1000);
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].signal.aborted,true);assert.equal(current.textContent,'Vorschau folgt');
+ f.hold(null);f.loader.reset();const retry=f.host();f.loader.observe(retry,selected);await flush();
+ assert.equal(f.requests.length,2);assert.equal(retry.children.length,1);assert.equal(f.created.length,1);
+ await f.release(0);assert.equal(f.requests.length,2);assert.equal(f.created.length,1);assert.equal(old.children.length,0);assert.equal(current.children.length,0);f.loader.clear();
+});
+test('a new revision cannot inherit an old pending request or cache entry',async()=>{
+ const f=fixture({hold:'body'}),selected=file('same'),old=f.host();f.loader.observe(old,selected);await flush();
+ f.loader.reset();f.hold(null);const revised={...selected,revision:'revision:2'},current=f.host();f.loader.observe(current,revised);await flush();
+ assert.deepEqual(f.requests.map(r=>r.input.asset_revision),['revision:1','revision:2']);assert.equal(f.requests[0].signal.aborted,true);
+ assert.equal(current.children.length,1);await f.release(0);assert.equal(old.children.length,0);assert.equal(f.created.length,1);
+ f.loader.reset();f.loader.observe(f.host(),revised);await flush();assert.equal(f.requests.length,2);f.loader.clear();
+});
+test('clear isolates a new owner from a pending request and its late response',async()=>{
+ const f=fixture({hold:'http'}),selected=file('same'),old=f.host();f.loader.observe(old,selected);await flush();
+ f.loader.clear();f.token('fixture-owner-two');f.hold(null);const current=f.host();f.loader.observe(current,selected);await flush();
+ assert.equal(f.requests.length,2);assert.equal(f.requests[0].signal.aborted,true);
+ assert.deepEqual(f.requests.map(r=>r.authorization),['Bearer fixture','Bearer fixture-owner-two']);assert.equal(current.children.length,1);
+ await f.release(0);assert.equal(old.children.length,0);assert.equal(f.created.length,1);
+ f.loader.reset();f.loader.observe(f.host(),selected);await flush();assert.equal(f.requests.length,2,'only the new owner response may be cached');f.loader.clear();
 });
 for(const phase of ['token','http','body'])test('page reset cancels stale '+phase+' work and starts the new view immediately',async()=>{
  const f=fixture({hold:phase}),old=Array.from({length:4},()=>f.host());old.forEach((h,i)=>f.loader.observe(h,file('old-'+i)));await flush();

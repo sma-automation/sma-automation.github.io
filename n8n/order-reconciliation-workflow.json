@@ -6,14 +6,15 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 15
+              "field": "hours",
+              "hoursInterval": 1,
+              "triggerAtMinute": 0
             }
           ]
         }
       },
       "id": "fd00a11d-e9d5-467e-bc87-2027a492bf3e",
-      "name": "Alle 15 Minuten",
+      "name": "Stündlicher Kontrollabgleich",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -467,7 +468,7 @@
     }
   ],
   "connections": {
-    "Alle 15 Minuten": {
+    "Stündlicher Kontrollabgleich": {
       "main": [
         [
           {
