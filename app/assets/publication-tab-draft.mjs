@@ -1,10 +1,15 @@
-// Session storage is optional. Keep one edit or interrupted-save checkpoint per portal in this tab.
-const key=portal=>'sma.publication.pending-save.v1.'+portal;
+// Session storage is optional. Keep independent checkpoints for each owner and exact editor route.
+const legacyKey=portal=>'sma.publication.pending-save.v1.'+portal;
+const ownerPrefix=(portal,owner)=>'sma.publication.pending-save.v2.'+portal+':'+encodeURIComponent(owner)+':';
 const portals=['youtube','tiktok'];
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const string=(v,max)=>typeof v==='string'&&v.length<=max;
 const uuid=v=>typeof v==='string'&&/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(v);
 const product=v=>v===null||(typeof v==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(v));
+function key(portal,owner,route){
+ if(!portals.includes(portal)||!string(owner,128)||!owner||!string(route,200))return null;
+ try{return ownerPrefix(portal,owner)+encodeURIComponent(route);}catch{return null;}
+}
 function validFields(v){
  return object(v)&&string(v.title,160)&&string(v.body,2400)&&Array.isArray(v.hashtags)&&v.hashtags.length<=3&&
   v.hashtags.every(tag=>typeof tag==='string'&&/^[\p{L}\p{N}_]{1,50}$/u.test(tag))&&product(v.product_id);
@@ -27,11 +32,12 @@ function valid(v,portal){
   string(v.form.tags,1000)&&validLink(v.form.link)&&validSource(v.form.source);
 }
 // Only form edits may reuse the last persisted checkpoint after a storage failure.
-// A new attempt, owner, file, route, baseline or sent payload must never revive it.
-function sameAttempt(a,b){
+// A legacy migration may hand the same verified checkpoint to a fresh editor token;
+// a different owner, file, route, baseline or sent payload must never revive it.
+function sameAttempt(a,b,migration=false){
  if(!a)return false;
  for(const field of ['kind','token','owner','portal','route','fileId','fileRevision','previewId','assignment','revision','shop'])
-  if(a[field]!==b[field])return false;
+  if(!(migration&&field==='token')&&a[field]!==b[field])return false;
  const fields=v=>[v.title,v.body,v.hashtags,v.product_id];
  return JSON.stringify(fields(a.base))===JSON.stringify(fields(b.base))&&
   (a.kind==='edit'||JSON.stringify(fields(a.sent))===JSON.stringify(fields(b.sent)));
@@ -149,53 +155,112 @@ function checkpointNotice(win){
 }
 export function tabDraftStore(win){
  const notice=checkpointNotice(win);
- function read(portal){
-  if(!portals.includes(portal))return null;
+ // A recovered legacy record receives a fresh editor token. Remember only that token handoff
+ // while a failed migration awaits storage; never keep a second copy of its draft text.
+ const migrations=new Map();
+ function slot(storageKey,portal,owner,route){
+  const raw=win.sessionStorage.getItem(storageKey);
+  if(raw===null)return {key:storageKey,present:false,value:null};
+  let value;
+  if(typeof raw==='string'&&raw.length<=32000)try{value=JSON.parse(raw);}catch{}
+  if(!valid(value,portal)||(owner!==undefined&&(value.owner!==owner||value.route!==route)))value=null;
+  return {key:storageKey,present:true,value};
+ }
+ function legacy(portal,owner,route){
+  const saved=slot(legacyKey(portal),portal);
+  return saved.value?.owner===owner&&saved.value.route===route?saved:null;
+ }
+ function removeLegacy(portal,owner,route){
+  const saved=legacy(portal,owner,route);
+  if(saved)win.sessionStorage.removeItem(saved.key);
+ }
+ function read(portal,owner,route){
+  const storageKey=key(portal,owner,route);if(!storageKey)return null;
   try{
-   const raw=win.sessionStorage.getItem(key(portal));if(raw===null)return null;
-   if(raw.length<=32000){
-    let v;try{v=JSON.parse(raw);}catch{}
-    if(valid(v,portal))return v;
+   const saved=slot(storageKey,portal,owner,route);
+   if(saved.present){
+    if(saved.value)return saved;
+    // Even a damaged v2 slot supersedes v1. Keep that shadow if legacy cleanup fails,
+    // rather than making an older checkpoint look current on the next read or reload.
+    removeLegacy(portal,owner,route);
+    win.sessionStorage.removeItem(storageKey);
+    return null;
    }
-   win.sessionStorage.removeItem(key(portal));
+   return legacy(portal,owner,route);
   }catch{/* Storage may be unavailable in an embedded preview. */}
   return null;
  }
+ function owns(v,saved){
+  if(!v||!saved?.value)return false;
+  if(saved.value.token===v.token)return true;
+  const migration=migrations.get(key(v.portal,v.owner,v.route));
+  return saved.key===legacyKey(v.portal)&&migration?.from===saved.value.token&&migration.to===v.token&&
+   sameAttempt(saved.value,v,true);
+ }
  return {
-  read(portal,owner,route){
-   const v=read(portal);
-   if(v&&v.owner!==owner){this.forget(v);return null;}
-   return v?.route===route?v:null;
-  },
-  matches(v){return !!v&&read(v.portal)?.token===v.token;},
+  read(portal,owner,route){return read(portal,owner,route)?.value??null;},
+  matches(v){return !!v&&owns(v,read(v.portal,v.owner,v.route));},
   write(v){
    notice.begin(v);
+   const storageKey=key(v?.portal,v?.owner,v?.route);
+   let validWrite=false;
    try{
     const raw=JSON.stringify(v);
-    if(valid(v,v.portal)&&raw.length<=32000){
-     try{win.sessionStorage.setItem(key(v.portal),raw);notice.saved(v);return;}
-     catch{
-      // setItem failed: keep only a validated checkpoint of this exact attempt.
-      // This does not claim that the newer form reached storage or the server.
-      if(sameAttempt(read(v.portal),v)){notice.failed(v);return;}
-     }
+    validWrite=!!storageKey&&valid(v,v.portal)&&raw.length<=32000;
+    if(validWrite){
+     win.sessionStorage.setItem(storageKey,raw);migrations.delete(storageKey);
+     // Migration is committed only after v2 is stored. A leftover v1 is shadowed by v2.
+     try{removeLegacy(v.portal,v.owner,v.route);}catch{}
+     notice.saved(v);return;
     }
    }catch{}
-   try{win.sessionStorage.removeItem(key(v.portal));}catch{}
+   if(storageKey)try{
+    const saved=slot(storageKey,v.portal,v.owner,v.route);
+    if(validWrite&&saved.value&&sameAttempt(saved.value,v)){notice.failed(v);return;}
+    if(!saved.present){
+     const old=legacy(v.portal,v.owner,v.route);
+     if(validWrite&&old&&sameAttempt(old.value,v,true)){
+      migrations.set(storageKey,{from:old.value.token,to:v.token});notice.failed(v);return;
+     }
+    }
+    // Incompatible attempts cannot revive an old save payload. Invalidate only this
+    // route, removing its legacy shadow first; never evict another file to free space.
+    removeLegacy(v.portal,v.owner,v.route);win.sessionStorage.removeItem(storageKey);
+    migrations.delete(storageKey);
+   }catch{}
    notice.failed(v);
   },
   update(v){
-   const saved=read(v.portal);
-   if(saved?.token===v.token)this.write(v);
+   if(!v)return;
+   const saved=read(v.portal,v.owner,v.route);
+   if(owns(v,saved))this.write(v);
    else if(!saved)notice.failed(v);
   },
   forget(v){
    notice.forget(v);
-   try{if(v&&read(v.portal)?.token===v.token)win.sessionStorage.removeItem(key(v.portal));}catch{}
+   if(!v)return;
+   try{
+    const saved=read(v.portal,v.owner,v.route);
+    if(owns(v,saved)){
+     removeLegacy(v.portal,v.owner,v.route);
+     if(saved.key!==legacyKey(v.portal))win.sessionStorage.removeItem(saved.key);
+     migrations.delete(key(v.portal,v.owner,v.route));
+    }
+   }catch{}
   },
   clearOwner(owner){
    notice.clearOwner(owner);
-   for(const portal of portals){const v=read(portal);if(v&&v.owner===owner)this.forget(v);}
+   if(!string(owner,128)||!owner)return;
+   for(const portal of portals){
+    try{
+     const prefix=ownerPrefix(portal,owner),storage=win.sessionStorage,keys=[];
+     for(const name of migrations.keys())if(name.startsWith(prefix))migrations.delete(name);
+     // Remove legacy first so a denied cleanup cannot uncover an older owner record.
+     const old=slot(legacyKey(portal),portal);if(old.value?.owner===owner)storage.removeItem(old.key);
+     for(let i=0;i<storage.length;i++){const name=storage.key(i);if(name?.startsWith(prefix))keys.push(name);}
+     for(const name of keys)try{storage.removeItem(name);}catch{}
+    }catch{}
+   }
   }
  };
 }

@@ -25,7 +25,8 @@ function fixture({events=true,brokenEvents=false}={}){
   const node=new Element();node.value=value;node.textContent=value;nodes.set(id,node);
  }
  const win={document:{querySelector:()=>main,getElementById:id=>nodes.get(id),createElement:()=>new Element()},
-  sessionStorage:{getItem(k){reads++;return entries.get(k)??null;},setItem(k,v){writes++;if(denied)throw Error('quota');entries.set(k,v);},removeItem(k){writes++;entries.delete(k);}},
+  sessionStorage:{get length(){return entries.size;},key:i=>[...entries.keys()][i]??null,
+   getItem(k){reads++;return entries.get(k)??null;},setItem(k,v){writes++;if(denied)throw Error('quota');entries.set(k,v);},removeItem(k){writes++;entries.delete(k);}},
   navigator:{clipboard:{writeText:async text=>{copied.push(text);}}},setTimeout:()=>1,clearTimeout(){}};
  if(events){
   win.addEventListener=(name,fn)=>{if(brokenEvents)throw Error('unavailable');assert.equal(name,'beforeunload');adds++;handlers.add(fn);};
@@ -61,7 +62,11 @@ test('discard, logout and account replacement remove only the matching leave gua
  for(const action of ['discard','logout','owner']){
   const f=fixture(),v=record();f.store.write(v);f.deny(true);f.store.update(v);assert.equal(f.handlers.size,1);
   f.store.clearOwner('unrelated-owner');assert.equal(f.handlers.size,1);
-  if(action==='discard')f.store.forget(v);else if(action==='logout')f.store.clearOwner(v.owner);else f.store.read(v.portal,'other-owner',v.route);
+  if(action==='discard')f.store.forget(v);
+  else{
+   if(action==='owner'){assert.equal(f.store.read(v.portal,'other-owner',v.route),null);assert.equal(f.handlers.size,1);}
+   f.store.clearOwner(v.owner);
+  }
   assert.equal(f.handlers.size,0);assert.equal(f.leave().prevented,false);
  }
 });
@@ -103,7 +108,8 @@ test('desktop and mobile confirm reload and closing for standalone and embedded 
    const adapter={document,navigator:{clipboard:{writeText:async()=>{window.clipboardWrites++;}}},
     addEventListener:window.addEventListener.bind(window),removeEventListener:window.removeEventListener.bind(window),
     setTimeout:window.setTimeout.bind(window),clearTimeout:window.clearTimeout.bind(window),
-    sessionStorage:{getItem:k=>entries.get(k)??null,setItem(k,v){if(window.failCheckpoint)throw Error('quota');entries.set(k,v);},removeItem:k=>entries.delete(k)}};
+    sessionStorage:{get length(){return entries.size;},key:i=>[...entries.keys()][i]??null,
+     getItem:k=>entries.get(k)??null,setItem(k,v){if(window.failCheckpoint)throw Error('quota');entries.set(k,v);},removeItem:k=>entries.delete(k)}};
    window.store=Function('win',source.replace('export function tabDraftStore','function tabDraftStore')+';return tabDraftStore(win)')(adapter);
    window.fixtureRecord=initial;
    for(const [id,value] of Object.entries({'youtube-title':initial.form.title,'youtube-body':initial.form.body,'youtube-hashtags':initial.form.tags,source_text:'Inhaltsbeschreibung'}))document.getElementById(id).value=value;

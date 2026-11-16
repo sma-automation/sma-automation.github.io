@@ -4,7 +4,8 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const {pathToFileURL}=require('node:url');
 const source=fs.readFileSync('app/assets/publication-tab-draft.mjs','utf8');
-const storageKey=portal=>'sma.publication.pending-save.v1.'+portal;
+const storageKey=(portal,owner='fixture-owner',route='[null,null,null,null]')=>
+ 'sma.publication.pending-save.v2.'+portal+':'+encodeURIComponent(owner)+':'+encodeURIComponent(route);
 const clone=value=>JSON.parse(JSON.stringify(value));
 function record(portal='youtube'){
  const fields={title:'Gespeicherter Titel',body:'Mein letzter vollständiger Beitrag.',hashtags:['SMA'],product_id:null};
@@ -15,7 +16,8 @@ function record(portal='youtube'){
 }
 function fixture(){
  const entries=new Map();let failWrite=false,failRead=false,failRemove=false;
- const win={sessionStorage:{getItem(key){if(failRead)throw Error('storage denied');return entries.get(key)??null;},
+ const win={sessionStorage:{get length(){return entries.size;},key:i=>[...entries.keys()][i]??null,
+  getItem(key){if(failRead)throw Error('storage denied');return entries.get(key)??null;},
   setItem(key,value){if(failWrite)throw Object.assign(Error('storage full'),{name:'QuotaExceededError'});entries.set(key,value);},
   removeItem(key){if(failRemove)throw Error('storage denied');entries.delete(key);}}};
  const {tabDraftStore}=vm.runInNewContext(source.replace('export function tabDraftStore','function tabDraftStore')+'\n({tabDraftStore})');
@@ -43,8 +45,10 @@ test('a failed write cannot retain a different account, file, route, attempt, re
   v=>v.assignment++,v=>v.revision++,v=>v.shop='https://sma-automation.com/app/shop.html?shop=other',
   v=>v.base.title='Andere Basis',v=>v.base.body='Andere Basisbeschreibung',v=>v.base.hashtags=['Andere'],v=>v.base.product_id='other',
   v=>v.sent.title='Anderer gesendeter Titel',v=>v.sent.body='Andere gesendete Beschreibung',v=>v.sent.hashtags=['Andere'],v=>v.sent.product_id='other'];
- for(const change of changes){const f=fixture(),v=record();f.store.write(v);change(v);f.failWrite(true);f.store.write(v);
-  assert.equal(f.entries.has(storageKey(v.portal)),false,String(change));}
+ for(const change of changes){const f=fixture(),v=record();f.store.write(v);const originalKey=storageKey(v.portal,v.owner,v.route);
+  change(v);f.failWrite(true);f.store.write(v);const changedKey=storageKey(v.portal,v.owner,v.route);
+  assert.equal(f.store.read(v.portal,v.owner,v.route),null,String(change));
+  assert.equal(f.entries.has(originalKey),originalKey!==changedKey,String(change));}
 });
 test('equivalent immutable fields in a different property order still describe the same pending save',()=>{
  const f=fixture(),v=record();f.store.write(v);f.failWrite(true);
@@ -64,7 +68,10 @@ test('another route cannot read the fallback and an account switch or logout cle
   const f=fixture(),v=record();f.store.write(v);f.failWrite(true);v.form.body='Später';f.store.update(v);
   assert.ok(f.entries.has(storageKey(v.portal)));
   assert.equal(f.reload().read(v.portal,v.owner,'other-route'),null);
-  if(action==='switch')assert.equal(f.reload().read(v.portal,'other-owner',v.route),null);
+  if(action==='switch'){
+   assert.equal(f.reload().read(v.portal,'other-owner',v.route),null);assert.ok(f.entries.has(storageKey(v.portal)));
+   f.store.clearOwner(v.owner);
+  }
   else if(action==='logout')f.store.clearOwner(v.owner);else f.store.forget(v);
   assert.equal(f.entries.has(storageKey(v.portal)),false);
  }

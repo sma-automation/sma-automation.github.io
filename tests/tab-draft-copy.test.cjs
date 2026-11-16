@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const {pathToFileURL}=require('node:url');
 const source=fs.readFileSync(process.env.SMA_DRAFT_SOURCE||'app/assets/publication-tab-draft.mjs','utf8');
+const storageKey=p=>'sma.publication.pending-save.v2.'+p+':fixture-owner:'+encodeURIComponent('[null,null,null,null]');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function record(portal='youtube'){
  const fields={title:'Alter Titel',body:'Alter gesicherter Beitrag.',hashtags:['SMA'],product_id:null};
@@ -33,11 +34,12 @@ function fixture(portal='youtube'){
  }
  const desc=new Element('textarea');desc.value=current.description;nodes.set('source_text',desc);
  const win={document:{querySelector:s=>s==='main'?main:null,getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag)},
- sessionStorage:{getItem:k=>entries.get(k)??null,setItem(k,v){if(denyWrite)throw Error('storage full');entries.set(k,v);},removeItem:k=>entries.delete(k)},
+ sessionStorage:{get length(){return entries.size;},key:i=>[...entries.keys()][i]??null,
+  getItem:k=>entries.get(k)??null,setItem(k,v){if(denyWrite)throw Error('storage full');entries.set(k,v);},removeItem:k=>entries.delete(k)},
  navigator:{clipboard:{writeText(text){calls.push(text);return write?write(text):Promise.resolve();}}},
  setTimeout(fn,ms){assert.equal(ms,10000);const id=++sequence;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id)};
  const store=vm.runInNewContext(source.replace('export function tabDraftStore','function tabDraftStore')+';tabDraftStore')(win);
- const v=record(portal);store.write(v);const saved=entries.get('sma.publication.pending-save.v1.'+portal);
+ const v=record(portal);store.write(v);const saved=entries.get(storageKey(portal));
  const fail=()=>{denyWrite=true;store.update(v);};fail();
  return {store,v,win,nodes,calls,entries,saved,fail,denyWrite:value=>denyWrite=value,setWrite:fn=>write=fn,
   el:id=>nodes.get(id),copy:()=>{const button=nodes.get('tabDraftCopy');assert.ok(button,'copy action is available');return button.click();},
@@ -47,7 +49,7 @@ for(const portal of ['youtube','tiktok'])test(portal+': explicit copy reads late
  const f=fixture(portal);assert.equal(f.calls.length,0);assert.equal(f.el('tabDraftCopy')?.textContent,'Aktuelle Texte kopieren');
  f.copy();await tick();assert.deepEqual(f.calls,[expected]);
  assert.equal(f.el(portal+'-body').value,current.body);assert.equal(f.el('saveStatus').textContent,'Speicherstand bei SMA ungeklärt.');
- assert.equal(f.entries.get('sma.publication.pending-save.v1.'+portal),f.saved);
+ assert.equal(f.entries.get(storageKey(portal)),f.saved);
  for(const forbidden of [f.v.owner,f.v.token,f.v.fileId,f.v.previewId,f.v.shop,'Fremdes Portal','Alter gesicherter Beitrag'])assert.ok(!f.calls[0].includes(forbidden));
  assert.match(f.el('tabDraftCopyStatus').textContent,/kopiert.*keine Speicherung/);assert.equal(f.el('tabDraftManualCopy').value,'');
 });
