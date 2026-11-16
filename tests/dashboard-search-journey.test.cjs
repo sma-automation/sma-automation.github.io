@@ -210,11 +210,26 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
 
 const editorFor=(f,id)=>f.dashboard.frameLocator('iframe[data-key="youtube:'+id+'"]');
 async function waitForFile(f,id){
- await f.page.waitForFunction(id=>{
-  const dashboard=document.getElementById('dashboard').contentDocument;
-  const editor=dashboard?.querySelector('iframe[data-key="youtube:'+id+'"]');
-  return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
- },id);
+ try{
+  await f.page.waitForFunction(id=>{
+   const dashboard=document.getElementById('dashboard').contentDocument;
+   const editor=dashboard?.querySelector('iframe[data-key="youtube:'+id+'"]');
+   return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+  },id);
+ }catch(error){
+  const state=await f.page.evaluate(()=>{
+   const frame=document.getElementById('dashboard'),doc=frame?.contentDocument;
+   return {url:location.href,route:history.state,rootMessage:document.getElementById('message')?.textContent,
+    dashboardHidden:frame?.hidden,editors:[...(doc?.querySelectorAll('iframe[data-key]')||[])].map(editor=>{
+     const content=editor.contentDocument;
+     return {key:editor.dataset.key,restoring:editor.dataset.restoring,hidden:editor.hidden,src:editor.src,
+      status:content?.getElementById('status')?.textContent,saveStatus:content?.getElementById('saveStatus')?.textContent,
+      assetStatus:content?.getElementById('assetStatus')?.textContent,bodyDisabled:content?.getElementById('youtube-body')?.disabled};
+    })};
+  }).catch(reason=>({diagnosticError:reason.message}));
+  const requests=f.calls.slice(-12).map(call=>({path:call.path,owner:call.owner,action:call.args?.p_action,file:call.args?.p_input?.asset_id}));
+  throw new Error('File workspace did not become ready: '+JSON.stringify({id,state,requests}),{cause:error});
+ }
 }
 async function openSearchFile(f,id){
  await f.launcher.click();await f.input.fill(query);
@@ -342,6 +357,8 @@ for(const mobile of [false,true]){
   },other),'a background receipt leaves the keyboard focus in B');
   assert.equal(draftWrites(f).length,1);assert.equal(f.savedDraft(wanted).revision,before.revision+1);
   await openSearchFile(f,wanted);await showSource(editorA);
+  // The child view posts its navigation update asynchronously to the top window.
+  await f.page.waitForFunction(id=>history.state?.smaOptimization&&history.state.assetId===id&&history.state.view==='source',wanted);
   await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA);
   assert.equal(await bodyA.inputValue(),later);assert.equal(await editorA.locator('#youtube-hashtags').inputValue(),rawTags);
   assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource);assert.equal(await editorA.locator('#language').inputValue(),'en');
