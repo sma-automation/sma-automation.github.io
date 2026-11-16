@@ -68,6 +68,9 @@ async function fixture({url = 'https://sma.test/app/index.html#type=recovery&acc
     window, document, location, URL, URLSearchParams, createClient: () => ({auth}),
     setTimeout, clearTimeout, console
   });
+  // Page initialization now wires controls without awaiting the session read.
+  // Let immediately settled startup reads finish before checking this fixture.
+  await new Promise(resolve => setImmediate(resolve));
   const node = id => {
     const found = document.getElementById(id);
     assert.ok(found, 'Expected existing customer control: ' + id);

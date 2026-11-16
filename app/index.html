@@ -547,7 +547,40 @@ let recoveryMode =
   urlHash.get('type') === 'recovery' ||
   urlQuery.get('type') === 'recovery';
 
+const expiredLink = [urlHash, urlQuery].some(params => params.get('error_code') === 'otp_expired');
 let passwordChangeConfirmed = false;
+let recoveryEventsAllowed = !expiredLink;
+let initialSessionRead = null;
+
+// A session read may wait on auth initialization or a refresh indefinitely.
+// Bound the UI's wait and consume late answers without cancelling auth itself.
+function readSessionWithinDeadline() {
+  let finish;
+  const result = new Promise(resolve => {
+    let pending = true;
+    let timer;
+    finish = value => {
+      if (!pending) return;
+      pending = false;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    timer = setTimeout(() => finish({
+      error: new Error('Die Sitzungsprüfung dauert zu lange.'), timedOut: true
+    }), 15000);
+    Promise.resolve().then(() => supabase.auth.getSession())
+      .then(finish, error => finish({error}));
+  });
+  return {result, cancel: () => finish({cancelled: true})};
+}
+
+function dismissInitialSession() {
+  recoveryEventsAllowed = false;
+  if (!initialSessionRead) return;
+  initialSessionRead.cancel();
+  initialSessionRead = null;
+  authSubmit.disabled = false;
+}
 
 // STATUSANZEIGE
 
@@ -692,7 +725,9 @@ document.querySelectorAll('.eye-toggle').forEach(
 
 supabase.auth.onAuthStateChange((event) => {
 
-  if (event === 'PASSWORD_RECOVERY' && !passwordChangeConfirmed) {
+  if (event === 'SIGNED_OUT') dismissInitialSession();
+
+  if (event === 'PASSWORD_RECOVERY' && recoveryEventsAllowed && !passwordChangeConfirmed) {
 
     recoveryMode = true;
 
@@ -706,7 +741,6 @@ supabase.auth.onAuthStateChange((event) => {
 
 });
 
-const expiredLink = [urlHash, urlQuery].some(params => params.get('error_code') === 'otp_expired');
 if (expiredLink) {
   const signup = [urlHash, urlQuery].some(params => params.get('type') === 'signup');
   showView(recoveryMode ? 'forgot' : signup ? 'confirm' : 'login');
@@ -736,30 +770,36 @@ function openDashboard() {
   window.location.replace(pilot ? 'dashboard.html?kundenmedien=pilot' : 'dashboard.html');
 }
 
-let sessionData;
-let sessionError;
-try {
-  ({ data: sessionData, error: sessionError } = await supabase.auth.getSession());
-} catch (error) {
-  sessionError = error;
-}
+async function checkExistingSession() {
+  const read = readSessionWithinDeadline();
+  initialSessionRead = read;
+  const result = await read.result;
+  // A help choice, password submission or sign-out owns the page from then on.
+  if (initialSessionRead !== read || result.cancelled) return;
+  initialSessionRead = null;
+  authSubmit.disabled = false;
 
-if (sessionError && recoveryMode) {
-  if (recoverySessionExpired(sessionError)) {
+  const {data: sessionData, error: sessionError, timedOut} = result;
+  if (timedOut) {
+    recoveryEventsAllowed = false;
+    if (!expiredLink) setStatus(recoveryMode
+      ? 'Der Wiederherstellungslink konnte noch nicht geprüft werden. Bitte versuche das Speichern erneut.'
+      : 'Deine Anmeldung konnte noch nicht geprüft werden. Du kannst dich anmelden oder die Passwort-Hilfe nutzen.', 'error');
+  } else if (sessionError && recoveryMode) {
+    if (recoverySessionExpired(sessionError)) {
+      requestNewRecoveryLink();
+    } else {
+      setStatus('Der Wiederherstellungslink konnte gerade nicht geprüft werden. Bitte versuche es erneut.', 'error');
+    }
+  } else if (!sessionError && !sessionData?.session && recoveryMode) {
     requestNewRecoveryLink();
-  } else {
-    setStatus('Der Wiederherstellungslink konnte gerade nicht geprüft werden. Bitte versuche es erneut.', 'error');
+  } else if (sessionError && !expiredLink) {
+    setStatus('SMA ist gerade nicht erreichbar. Bitte versuche es erneut.', 'error');
   }
-} else if (!sessionError && !sessionData?.session && recoveryMode) {
-  requestNewRecoveryLink();
-} else if (sessionError && !expiredLink) {
-  setStatus('SMA ist gerade nicht erreichbar. Bitte versuche es erneut.', 'error');
-}
 
-if (!sessionError && sessionData?.session && !recoveryMode && !expiredLink) {
-
-  openDashboard();
-
+  if (!sessionError && sessionData?.session && !recoveryMode && !expiredLink) {
+    openDashboard();
+  }
 }
 
 // ANMELDUNG UND REGISTRIERUNG
@@ -767,6 +807,7 @@ if (!sessionError && sessionData?.session && !recoveryMode && !expiredLink) {
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (authSubmit.disabled || recoveryMode || !['login', 'register'].includes(currentView)) return;
+  dismissInitialSession();
 
   const registering = currentView === 'register';
   const email = emailInput.value.trim();
@@ -809,9 +850,9 @@ form.addEventListener('submit', async (event) => {
     setBusy(false);
   }
 });
-authSubmit.disabled = false;
 
 function openLinkForm(view, email) {
+  dismissInitialSession();
   showView(view);
   forgotEmail.value = email;
   passwordInput.value = '';
@@ -826,6 +867,7 @@ document.getElementById('confirmationButton').addEventListener('click', () => op
 document.getElementById('backToLoginButton')
   .addEventListener('click', () => {
 
+    dismissInitialSession();
     showView('login');
     emailInput.value = forgotEmail.value.trim();
     emailInput.focus();
@@ -838,6 +880,7 @@ document.getElementById('forgotForm')
   .addEventListener('submit', async (event) => {
     event.preventDefault();
     if (sendResetButton.disabled || !['confirm', 'forgot'].includes(currentView)) return;
+    dismissInitialSession();
     const view = currentView;
     const confirm = view === 'confirm';
     const email = forgotEmail.value.trim();
@@ -902,6 +945,7 @@ document.getElementById('resetForm')
 
     event.preventDefault();
     if (savePasswordButton.disabled || !recoveryMode || currentView !== 'reset') return;
+    dismissInitialSession();
 
     const newPassword =
       document.getElementById('newPassword').value;
@@ -937,7 +981,7 @@ document.getElementById('resetForm')
       if (!passwordChangeConfirmed) {
         setStatus('Neues Passwort wird gespeichert ...');
 
-        const { data: currentSession, error: sessionCheckError } = await supabase.auth.getSession();
+        const { data: currentSession, error: sessionCheckError } = await readSessionWithinDeadline().result;
         if (sessionCheckError) throw sessionCheckError;
         if (!currentSession?.session) {
           requestNewRecoveryLink();
@@ -982,6 +1026,10 @@ document.getElementById('resetForm')
     }
 
   });
+
+// Wire every customer control before starting the optional automatic redirect.
+// Do not make module initialization wait for the authentication service.
+void checkExistingSession();
 
 </script>
 
