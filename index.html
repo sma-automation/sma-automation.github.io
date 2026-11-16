@@ -131,6 +131,9 @@ h2{font-size:clamp(32px,4vw,50px);line-height:1.08;margin:10px 0 14px;letter-spa
 }
 footer{padding:38px 0 46px;border-top:1px solid #17243a;color:#8795ac;font-size:13px}
 .footerrow{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.footerlinks{display:flex;flex-wrap:wrap;gap:8px 16px;color:inherit;font-size:inherit}
+.footerlinks a{text-decoration:underline;text-underline-offset:3px}
+.footerlinks a:focus-visible{outline:2px solid var(--blue2);outline-offset:4px;border-radius:2px}
 @media(max-width:900px){
   nav{display:none}
   .hero{grid-template-columns:1fr;padding-top:62px}
@@ -306,7 +309,12 @@ footer{padding:38px 0 46px;border-top:1px solid #17243a;color:#8795ac;font-size:
 <footer>
   <div class="container footerrow">
     <div>© 2026 SMA · Social Media Automation</div>
-    <div>Impressum · Datenschutz · AGB · Support</div>
+    <nav class="footerlinks" aria-label="Rechtliches und Support">
+      <span>Impressum</span>
+      <a href="/datenschutz/">Datenschutz</a>
+      <a href="/nutzungsbedingungen/">Nutzungsbedingungen</a>
+      <a href="mailto:sma.automation.office@gmail.com">Support</a>
+    </nav>
   </div>
 </footer>
 </body>
