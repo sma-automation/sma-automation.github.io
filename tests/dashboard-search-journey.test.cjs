@@ -188,6 +188,64 @@ async function showPreview(editor){
 
 for(const mobile of [false,true]){
  const label=mobile?'mobile':'desktop';
+ test(label+': a second server change during comparison requires another choice after real reload and preserves B',{timeout:45000},async t=>{
+  const f=await fixture(t,mobile,{distinctDrafts:true,allowDraftSave:true}),other=uuid(2);
+  const editorA=editorFor(f,wanted),editorB=editorFor(f,other);
+  const bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
+  const localA='Meine lokalen Eingaben von A bleiben bis zur bewussten Übernahme erhalten.';
+  const localB='Die offenen Eingaben von B bleiben während weiterer A-Versionen erhalten.';
+  await f.open();await f.edit();await bodyA.fill(localA);
+  if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
+  await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
+  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill(localB);
+  const otherCheckpoint=await checkpoint(f,other);assert.ok(otherCheckpoint);
+  await openSearchFile(f,wanted);
+  const first=f.advanceDraft(wanted,{title:'Suchweg erste externe Änderung',body:'Die erste externe Änderung am Beitrag von Datei A.'});
+  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA);
+  assert.equal(await bodyA.inputValue(),localA);assert.equal(await editorA.locator('#save').isDisabled(),true);
+  const compare=editorA.locator('#compareDraft'),dialog=editorA.locator('#draftConflictDialog');
+  await compare.click();await dialog.waitFor();
+  assert.match(await dialog.textContent(),new RegExp(first.preview.drafts[0].body));
+  const second=f.advanceDraft(wanted,{title:'Suchweg zweite externe Änderung',body:'Die zweite externe Änderung entstand während des offenen Vergleichs.'});
+  await dialog.locator('input[name="draft-conflict-body"]').nth(0).check();
+  await editorA.locator('#draftConflictApply').click();await dialog.waitFor({state:'hidden'});await waitForFile(f,wanted);
+  assert.equal(draftWrites(f).length,0,'accepting an earlier comparison does not write');
+  await editorA.locator('#save').click();
+  await editorA.locator('#saveStatus').getByText('Änderungen noch nicht gespeichert',{exact:true}).waitFor();
+  assert.equal(draftWrites(f).length,1);
+  assert.equal(draftWrites(f)[0].args.p_input.assignment_revision,first.assignment_revision);
+  assert.deepEqual(f.savedDraft(wanted),second,'the server refuses the now-stale assignment without overwriting it');
+  assert.equal(await bodyA.inputValue(),localA);assert.equal(await compare.isVisible(),true);
+  assert.equal(await checkpoint(f,other),otherCheckpoint);
+  // Use the browser's actual reload, including the existing pagehide checkpoint.
+  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA);
+  assert.equal(await bodyA.inputValue(),localA);assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource);
+  assert.equal(await editorA.locator('#language').inputValue(),'en');
+  assert.equal(await editorA.locator('#save').isDisabled(),true,'reload still requires comparison against the latest baseline');
+  assert.equal(await checkpoint(f,other),otherCheckpoint);assert.equal(draftWrites(f).length,1);
+  await compare.click();await dialog.waitFor();
+  assert.match(await dialog.textContent(),new RegExp(second.preview.drafts[0].body));
+  assert.equal(await editorA.locator('#draftConflictApply').isDisabled(),true);
+  await dialog.locator('input[name="draft-conflict-body"]').nth(0).check();
+  await editorA.locator('#draftConflictApply').click();await dialog.waitFor({state:'hidden'});await waitForFile(f,wanted);
+  assert.equal(draftWrites(f).length,1,'the second selection still needs an explicit save');
+  await editorA.locator('#save').click();
+  await editorA.locator('#saveStatus').getByText('Dieser Datei und diesem Portal zugeordnet',{exact:true}).waitFor();
+  assert.equal(draftWrites(f).length,2);assert.equal(draftWrites(f)[1].args.p_input.assignment_revision,second.assignment_revision);
+  assert.equal(f.savedDraft(wanted).revision,second.revision+1,'only the accepted save advances the server revision');
+  assert.equal(f.savedDraft(wanted).preview.drafts[0].body,localA);
+  assert.equal(f.savedDraft(wanted).preview.drafts[0].title,second.preview.drafts[0].title);
+  assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource,'saving the post retains its separate source input');
+  assert.equal(await checkpoint(f,other),otherCheckpoint);
+  await showPreview(editorA);await editorA.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  assert(await focused(f.hit));assert.equal(await f.input.inputValue(),query);
+  await f.page.goForward();await editorA.locator('#workspacePreview').waitFor();assert.equal(await bodyA.inputValue(),localA);
+  await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
+  await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);
+  assert.equal(await bodyB.inputValue(),localB);
+  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
+ });
  for(const choice of ['local','stored'])test(label+': two file checkpoints survive a newer server draft, explicit '+choice+' comparison and real history',{timeout:45000},async t=>{
   const f=await fixture(t,mobile,{distinctDrafts:true,allowDraftSave:choice==='local'}),other=uuid(2);
   const editorA=editorFor(f,wanted),editorB=editorFor(f,other);
