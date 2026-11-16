@@ -37,6 +37,54 @@ async function fixture({areas=['overview','files','publishing'],fileState='ready
  return {doc,window,view,calls,openedFiles,get:id=>doc.getElementById(id),setFileStatus:s=>{fileStatus=s;},setFiles:f=>{fileList=f;}};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
+test('returning search keeps a matching file beyond ten without changing counts or exposing other files',async()=>{
+ const {quickFindMatches}=await imported;
+ const many=Array.from({length:14},(_,i)=>({id:'own-'+i,name:'Suchweg '+i+'.mp4',media_kind:'video'}));
+ const result=quickFindMatches('Suchweg',[],many,'own-13');
+ assert.equal(result.files.length,10);assert.equal(result.fileCount,14);
+ assert(result.files.some(file=>file.id==='own-13'));
+ assert.equal(new Set(result.files.map(file=>file.id)).size,10);
+ for(const id of ['foreign-file','removed-file']){
+  assert.deepEqual(quickFindMatches('Suchweg',[],many,id).files,many.slice(0,10));
+ }
+ assert.deepEqual(quickFindMatches('anderer Begriff',[],many,'own-13').files,[]);
+ assert.deepEqual(quickFindMatches('s',[],many,'own-13').files,[]);
+});
+test('restored result survives another refresh and action focus, then resets for a changed or new search',async()=>{
+ const f=await fixture();let active=null;
+ Object.defineProperty(f.doc,'activeElement',{get:()=>active});
+ f.window.HTMLElement.prototype.focus=function(){active=this;};
+ const many=Array.from({length:14},(_,i)=>({id:'own-'+i,name:'Suchweg '+i+'.mp4',media_kind:'video'}));
+ f.setFiles(many);f.view.restore('Suchweg','own-13');
+ assert.equal(active?.dataset.quickFile,'own-13');
+ const all=f.get('smaQuickFindResults').querySelector('[data-quick-action="all-files"]');
+ all.focus();f.view.refresh();
+ assert.equal(active?.dataset.quickAction,'all-files');
+ assert(f.get('smaQuickFindResults').querySelector('[data-quick-file="own-13"]'));
+ f.view.restore('Suchweg','own-12');
+ assert.equal(active?.dataset.quickFile,'own-12');
+ f.view.restore('Suchweg','own-13');
+ assert.equal(active?.dataset.quickFile,'own-13','an explicit return replaces the previously focused ID');
+ const input=f.get('smaQuickFindInput');input.focus();input.value='Suchweg ';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ assert.equal(f.get('smaQuickFindResults').querySelector('[data-quick-file="own-13"]'),null);
+ f.view.restore('Suchweg','own-13');f.view.hide();f.view.show();input.value='Suchweg';
+ input.dispatchEvent(new f.window.Event('input',{bubbles:true}));
+ assert.equal(f.get('smaQuickFindResults').querySelector('[data-quick-file="own-13"]'),null);
+ f.view.destroy();
+});
+test('a retained result removed from the current matching catalog falls back to the search field',async()=>{
+ const f=await fixture();let active=null;
+ Object.defineProperty(f.doc,'activeElement',{get:()=>active});
+ f.window.HTMLElement.prototype.focus=function(){active=this;};
+ f.setFiles([{id:'own',name:'Suchweg.mp4',media_kind:'video'}]);f.view.restore('Suchweg','own');
+ assert.equal(active?.dataset.quickFile,'own');
+ f.setFiles([{id:'own',name:'Anderes Thema.mp4',media_kind:'video'}]);f.view.refresh();
+ assert.equal(active?.id,'smaQuickFindInput');
+ assert.equal(f.get('smaQuickFindResults').querySelector('[data-quick-file="own"]'),null);
+ f.view.restore('Suchweg','missing');assert.equal(active?.id,'smaQuickFindInput');
+ f.view.destroy();
+});
 test('task names point to their available chapters and never offer hidden history views',async()=>{
  const {quickFindMatches,sectionCatalog}=await imported;
  for(const [query,key] of [['Freigabe','approval-status'],['Portaltexte','saved-texts'],['Textvarianten','saved-texts'],['Portale','portals'],['Social Media','portals'],['verbinden','portals'],['TikTok','portals']]){

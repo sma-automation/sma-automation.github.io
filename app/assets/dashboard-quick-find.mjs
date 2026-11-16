@@ -27,13 +27,20 @@ export function canSearchOrders(value){
  const q=typeof value==='string'?value.trim():'';
  return q.length>=2&&q.length<=60&&/^[\p{L}\p{N} #./-]*$/u.test(q);
 }
-export function quickFindMatches(query,areas,files){
+export function quickFindMatches(query,areas,files,retainedFileId=null){
  const q=normalize(query);
  const nav=Array.isArray(areas)?areas:[];
  const matchedFiles=q.length>=2?filterDashboardFiles(files||[],q):[];
+ const visibleFiles=matchedFiles.slice(0,10);
+ // A catalog refresh may move the open result beyond the compact list.
+ // Retain it only while it still matches the current owner's query.
+ if(retainedFileId&&!visibleFiles.some(file=>file.id===retainedFileId)){
+  const retained=matchedFiles.find(file=>file.id===retainedFileId);
+  if(retained)visibleFiles[visibleFiles.length-1]=retained;
+ }
  return {
   areas:nav.filter(a=>a&&typeof a.key==='string'&&typeof a.label==='string'&&(!q||normalize(a.label+' '+(a.hint||'')).includes(q))).slice(0,8),
-  files:matchedFiles.slice(0,10),
+  files:visibleFiles,
   fileCount:matchedFiles.length
  };
 }
@@ -81,7 +88,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  });
  const results=create('div');results.id='smaQuickFindResults';
  panel.append(head,input,status,retry,results);overlay.append(panel);doc.body.append(overlay);
- let disposed=false,launcher=button;
+ let disposed=false,launcher=button,retainedFileId=null;
  function focusLauncher(target=launcher){
   if(target&&target!==doc.body&&target!==doc.documentElement){
    target.focus?.();if(doc.activeElement===target)return;
@@ -89,7 +96,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   button.focus();
   if(doc.activeElement!==button)doc.querySelector('#smaMobileQuickNav [data-sma-mobile-target="search"]')?.focus();
  }
- function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';results.replaceChildren();if(restoreFocus)focusLauncher();}
+ function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';retainedFileId=null;results.replaceChildren();if(restoreFocus)focusLauncher();}
  function dismiss(){hide();onDismiss?.();}
  function item(title,subtitle,handler,restoreFocus=true,key=null){
   const el=create('button');el.type='button';el.className='sma-qf-item';
@@ -100,13 +107,14 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
    catch{status.textContent='Der Bereich konnte nicht geöffnet werden.';}
   });results.append(el);return el;
  }
- function render(){
+ function render(restoredFileId){
   if(disposed||overlay.hidden)return;
-  const focusedFile=doc.activeElement?.dataset?.quickFile;
-  const focusedAction=doc.activeElement?.dataset?.quickAction;
+  const focusedFile=restoredFileId===undefined?doc.activeElement?.dataset?.quickFile:restoredFileId;
+  const focusedAction=restoredFileId===undefined?doc.activeElement?.dataset?.quickAction:null;
+  if(focusedFile)retainedFileId=focusedFile;
   results.replaceChildren();
   const query=input.value.trim(),areas=getAreas();
-  const found=quickFindMatches(query,areas,getFiles());
+  const found=quickFindMatches(query,areas,getFiles(),retainedFileId);
   for(const a of found.areas)item(a.label,a.hint||'Dashboard-Bereich',()=>onNavigate(a.key),!a.page,'area:'+a.key);
   for(const file of found.files){
    const label=dashboardFileDescription(file,query);
@@ -154,7 +162,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   (hit||input).focus();
  }
  function restore(query,id,trigger=button){
-  if(disposed)return;launcher=trigger;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render();
+  if(disposed)return;launcher=trigger;retainedFileId=id;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render(id);
   focusFile(id);
  }
  function show(trigger=button){restore('',null,trigger);}
@@ -175,7 +183,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   if((e.ctrlKey||e.metaKey)&&e.key?.toLowerCase()==='k'){e.preventDefault();overlay.hidden?show(doc.activeElement||button):dismiss();}
  };
  const backdrop=e=>{if(e.target===overlay)dismiss();};
- const inputHandler=()=>render();
+ const inputHandler=()=>{retainedFileId=null;render();};
  button.addEventListener('click',openFromHeader);close.addEventListener('click',dismiss);
  overlay.addEventListener('click',backdrop);input.addEventListener('input',inputHandler);
  doc.addEventListener('keydown',keydown);
