@@ -547,6 +547,8 @@ let recoveryMode =
   urlHash.get('type') === 'recovery' ||
   urlQuery.get('type') === 'recovery';
 
+let passwordChangeConfirmed = false;
+
 // STATUSANZEIGE
 
 function setStatus(message, type = '') {
@@ -690,7 +692,7 @@ document.querySelectorAll('.eye-toggle').forEach(
 
 supabase.auth.onAuthStateChange((event) => {
 
-  if (event === 'PASSWORD_RECOVERY') {
+  if (event === 'PASSWORD_RECOVERY' && !passwordChangeConfirmed) {
 
     recoveryMode = true;
 
@@ -734,21 +736,27 @@ function openDashboard() {
   window.location.replace(pilot ? 'dashboard.html?kundenmedien=pilot' : 'dashboard.html');
 }
 
-const {
-  data: sessionData,
-  error: sessionError
-} = await supabase.auth.getSession();
-
-if (sessionError && recoveryMode) {
-
-  setStatus(
-    'Der Wiederherstellungslink konnte nicht geprüft werden. Bitte fordere einen neuen Link an.',
-    'error'
-  );
-
+let sessionData;
+let sessionError;
+try {
+  ({ data: sessionData, error: sessionError } = await supabase.auth.getSession());
+} catch (error) {
+  sessionError = error;
 }
 
-if (sessionData?.session && !recoveryMode && !expiredLink) {
+if (sessionError && recoveryMode) {
+  if (recoverySessionExpired(sessionError)) {
+    requestNewRecoveryLink();
+  } else {
+    setStatus('Der Wiederherstellungslink konnte gerade nicht geprüft werden. Bitte versuche es erneut.', 'error');
+  }
+} else if (!sessionError && !sessionData?.session && recoveryMode) {
+  requestNewRecoveryLink();
+} else if (sessionError && !expiredLink) {
+  setStatus('SMA ist gerade nicht erreichbar. Bitte versuche es erneut.', 'error');
+}
+
+if (!sessionError && sessionData?.session && !recoveryMode && !expiredLink) {
 
   openDashboard();
 
@@ -861,10 +869,39 @@ document.getElementById('forgotForm')
 
 // NEUES PASSWORT SPEICHERN
 
+function recoverySessionExpired(error) {
+  return error?.name === 'AuthSessionMissingError' || [
+    'session_expired', 'session_not_found',
+    'refresh_token_not_found', 'refresh_token_already_used'
+  ].includes(error?.code);
+}
+
+function clearRecoveryPasswords(disabled = false) {
+  for (const id of ['newPassword', 'confirmPassword']) {
+    const input = document.getElementById(id);
+    input.value = '';
+    input.disabled = disabled;
+  }
+  passwordInput.value = '';
+}
+
+function clearRecoveryUrl() {
+  window.history.replaceState(null, '', new URL('./', window.location.href).pathname);
+}
+
+function requestNewRecoveryLink() {
+  recoveryMode = false;
+  clearRecoveryPasswords();
+  clearRecoveryUrl();
+  openLinkForm('forgot', emailInput.value.trim());
+  setStatus('Der Wiederherstellungslink ist ungültig oder abgelaufen. Du kannst hier einen neuen Link anfordern.', 'error');
+}
+
 document.getElementById('resetForm')
   .addEventListener('submit', async (event) => {
 
     event.preventDefault();
+    if (savePasswordButton.disabled || !recoveryMode || currentView !== 'reset') return;
 
     const newPassword =
       document.getElementById('newPassword').value;
@@ -872,7 +909,7 @@ document.getElementById('resetForm')
     const confirmPassword =
       document.getElementById('confirmPassword').value;
 
-    if (!strongPassword(newPassword)) {
+    if (!passwordChangeConfirmed && !strongPassword(newPassword)) {
 
       setStatus(
         'Bitte verwende mindestens 10 Zeichen, Groß- und Kleinbuchstaben, eine Zahl und ein Sonderzeichen.',
@@ -883,7 +920,7 @@ document.getElementById('resetForm')
 
     }
 
-    if (newPassword !== confirmPassword) {
+    if (!passwordChangeConfirmed && newPassword !== confirmPassword) {
 
       setStatus(
         'Die beiden Passwörter stimmen nicht überein.',
@@ -896,70 +933,53 @@ document.getElementById('resetForm')
 
     setBusy(true);
 
-    setStatus(
-      'Neues Passwort wird gespeichert ...'
-    );
+    try {
+      if (!passwordChangeConfirmed) {
+        setStatus('Neues Passwort wird gespeichert ...');
 
-    const {
-      data: currentSession,
-      error: sessionCheckError
-    } = await supabase.auth.getSession();
+        const { data: currentSession, error: sessionCheckError } = await supabase.auth.getSession();
+        if (sessionCheckError) throw sessionCheckError;
+        if (!currentSession?.session) {
+          requestNewRecoveryLink();
+          return;
+        }
 
-    if (
-      sessionCheckError ||
-      !currentSession?.session
-    ) {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+          if (error.code === 'same_password') {
+            setStatus('Bitte verwende ein anderes Passwort als das bisherige.', 'error');
+          } else if (error.code === 'weak_password') {
+            setStatus('Das Passwort erfüllt die Sicherheitsanforderungen nicht. Bitte wähle ein anderes.', 'error');
+          } else throw error;
+          return;
+        }
 
-      setStatus(
-        'Der Wiederherstellungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen an.',
-        'error'
-      );
+        // A confirmed password change must not be submitted again if sign-out fails.
+        passwordChangeConfirmed = true;
+        clearRecoveryPasswords(true);
+        savePasswordButton.textContent = 'Abmeldung erneut versuchen';
+      }
 
+      setStatus('Dein Passwort wurde geändert. Die Abmeldung wird abgeschlossen …');
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
+
+      recoveryMode = false;
+      clearRecoveryUrl();
+      showView('login');
+      document.getElementById('viewTitle').focus();
+      setStatus('Dein Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.', 'success');
+    } catch (error) {
+      if (passwordChangeConfirmed) {
+        setStatus('Dein Passwort wurde geändert. Die Abmeldung konnte noch nicht bestätigt werden. Bitte versuche die Abmeldung erneut.', 'error');
+      } else if (recoverySessionExpired(error)) {
+        requestNewRecoveryLink();
+      } else {
+        setStatus('Die Passwortänderung konnte gerade nicht bestätigt werden. Bitte versuche es erneut.', 'error');
+      }
+    } finally {
       setBusy(false);
-      return;
-
     }
-
-    const { error } =
-      await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-    if (error) {
-
-      setStatus(
-        'Passwort konnte nicht geändert werden: ' +
-        error.message,
-        'error'
-      );
-
-      setBusy(false);
-      return;
-
-    }
-
-    await supabase.auth.signOut();
-
-    recoveryMode = false;
-
-    window.history.replaceState(
-      null,
-      '',
-      new URL('./', window.location.href).pathname
-    );
-
-    document.getElementById('newPassword').value = '';
-    document.getElementById('confirmPassword').value = '';
-    passwordInput.value = '';
-
-    showView('login');
-
-    setStatus(
-      'Dein Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.',
-      'success'
-    );
-
-    setBusy(false);
 
   });
 
