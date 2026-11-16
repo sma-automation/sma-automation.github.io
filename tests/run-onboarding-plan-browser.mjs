@@ -10,17 +10,41 @@ const fakeClient = `export function createClient(){return {
    signInWithPassword:async()=>{sessionStorage.removeItem('signedOut');return {data:{session:{user:{id:'fixture'}}}};} },
  functions:{invoke:async(name,options)=>{
   const response=await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)});
-  return response.ok?{data:await response.json()}:{error:{status:response.status}};
+  const result=response.ok?{data:await response.json()}:{error:{status:response.status}};
+  window.fixturePaymentsFinished=(window.fixturePaymentsFinished||0)+1;
+  return result;
  }},
  rpc:(name,params)=>{
   let signal;
   return {
    abortSignal(value){signal=value;return this;},
-   then(resolve,reject){return fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params),signal})
-    .then(response=>response.json()).then(data=>({data})).then(resolve,reject);}
+   then(resolve,reject){return fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(params),signal:window.ignoreRpcAbort?undefined:signal})
+    .then(response=>response.json()).then(data=>{
+      const finished=window.fixtureRpcFinished??={};finished[name]=(finished[name]||0)+1;
+      return {data};
+    }).then(resolve,reject);}
   };
  }
 };}`;
+async function waitForFixture(promise) {
+  let timer;
+  try {
+    return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Expected fixture request or response did not complete')),30000);})]);
+  } finally {clearTimeout(timer);}
+}
+function heldReply() {
+  let arrive,release,finish,fail;
+  const arrived=new Promise(resolve=>{arrive=resolve;}), response=new Promise(resolve=>{release=resolve;});
+  const finished=new Promise((resolve,reject)=>{finish=resolve;fail=reject;});
+  return {
+    wait:()=>waitForFixture(arrived),
+    async send(route,value){
+      arrive();const replacement=await response;
+      try {await route.fulfill({json:replacement??value});finish();} catch(error){fail(error);}
+    },
+    async release(value){release(value);await waitForFixture(finished);}
+  };
+}
 const browser = await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
 try {
   for (const mobile of [false,true]) {
@@ -31,6 +55,7 @@ try {
     const order='80000000-0000-4000-8000-000000000001';
     const returnUrl=site+'/app/paketwahl.html?buchung='+order;
     let paymentState='booked',statusReads=0,closeOnRefresh=false,pausedReads=0;
+    let holdBooking=null,holdPayment=null,holdChoiceRead=null;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -53,6 +78,7 @@ try {
         if (p_plan && p_expected_plan!==saved && p_plan!==saved)
           return route.fulfill({json:{ok:false,code:'CONFLICT',plan:saved}});
         if (p_plan) {saved=p_plan;writes++;}
+        if(!p_plan && holdChoiceRead){const held=holdChoiceRead;holdChoiceRead=null;return held.send(route,{ok:true,plan:saved,linked});}
         return route.fulfill({json:{ok:true,plan:saved,linked}});
       }
       if(req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_booking_v1'){
@@ -61,6 +87,7 @@ try {
           if(p_offer!==offer.id) return route.fulfill({json:{ok:false,code:'OFFER_CHANGED'}});
           assert.equal(p_plan,saved);assert.equal(p_terms,offer.terms);bookings++;
           offer={...offer,state:'booked',id:offer.automated?(p_offer==='retry-offer'?'retry-booking':'actual-booking'):offer.id,checkout:offer.automated?null:'https://www.mollie.com/checkout/fixture'};
+          if(holdBooking){const held=holdBooking;holdBooking=null;return held.send(route,{ok:true,offer:{...offer}});}
         }
         return route.fulfill({json:{ok:true,offer}});
       }
@@ -75,6 +102,7 @@ try {
           return route.fulfill({json:{code:'CLOSED'}});
         }
         offer={...offer,checkout:'https://www.mollie.com/checkout/'+(offer.id==='retry-booking'?'second':'fixture')};
+        if(holdPayment){const held=holdPayment;holdPayment=null;return held.send(route,{code:'BOOKED'});}
         return route.fulfill({json:{code:'BOOKED'}});
       }
       if(req.method()==='POST' && url.href===site+'/fixture/sma_onboarding_payment_status_v1'){
@@ -218,6 +246,58 @@ try {
     assert.equal(await pay.isHidden(),true);assert.equal(await book.isHidden(),true);
     assert.equal(bookings,countsBeforeReturn.bookings+1);
     console.log((mobile?'Handy':'Desktop')+': Bestätigte Zahlung bleibt bei unterbrochener Abo-Prüfung sichtbar.');
+
+    // Booking and payment share one deadline. The server has already stored
+    // both results while the client is still waiting for the payment reply.
+    offer={id:'timeout-offer',state:'offered',plan:saved,terms:'2026-11-15-v1',automated:true,checkout:null};
+    await page.goto(site+'/app/paketwahl.html');await book.waitFor();
+    const beforeTimeout={bookings,paymentCalls,writes,sessionReads};
+    const delayedBooking=heldReply(),delayedPayment=heldReply();
+    holdBooking=delayedBooking;holdPayment=delayedPayment;
+    if(mobile)await book.tap();else await book.press('Enter');
+    await delayedBooking.wait();
+    assert.equal(bookings,beforeTimeout.bookings+1);assert.equal(paymentCalls,beforeTimeout.paymentCalls);
+    await page.clock.fastForward(10000);
+    await delayedBooking.release();await delayedPayment.wait();
+    await page.clock.fastForward(35001);
+    const reloadState=page.getByRole('button',{name:'Erneut laden',exact:true});
+    assert.equal(await reloadState.isVisible(),true);
+    assert.equal(await reloadState.isEnabled(),true);
+    assert.equal(await book.isVisible(),false);
+    const delayedRead=heldReply();holdChoiceRead=delayedRead;
+    await reloadState.click();await delayedRead.wait();
+    await delayedPayment.release({code:'ACTIVE'});
+    await page.waitForFunction(()=>window.fixturePaymentsFinished===1);
+    assert.equal(page.url(),site+'/app/paketwahl.html');
+    assert.equal(sessionReads,beforeTimeout.sessionReads);
+    await delayedRead.release();await pay.waitFor();
+    assert.equal(await pay.getAttribute('href'),'https://www.mollie.com/checkout/fixture');
+    assert.deepEqual({bookings,paymentCalls,writes,sessionReads},{
+      ...beforeTimeout,bookings:beforeTimeout.bookings+1,paymentCalls:beforeTimeout.paymentCalls+1
+    });
+
+    // A transport may ignore abort after the booking has been stored. Retry
+    // reads that booking; its eventual old reply must not start payment work.
+    offer={id:'timeout-booking-offer',state:'offered',plan:saved,terms:'2026-11-15-v1',automated:true,checkout:null};
+    await page.reload();await book.waitFor();
+    await page.evaluate(()=>{window.ignoreRpcAbort=true;});
+    const beforeBookingTimeout={bookings,paymentCalls,writes,sessionReads};
+    const lostBooking=heldReply();holdBooking=lostBooking;
+    if(mobile)await book.tap();else await book.press('Enter');
+    await lostBooking.wait();await page.clock.fastForward(45001);
+    assert.equal(await reloadState.isVisible(),true);
+    await reloadState.click();
+    await page.getByText('Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.').waitFor();
+    assert.equal(await refresh.isVisible(),true);assert.equal(await pay.isHidden(),true);
+    const completedBookingReplies=await page.evaluate(()=>window.fixtureRpcFinished.sma_onboarding_booking_v1);
+    await lostBooking.release();
+    await page.waitForFunction(expected=>window.fixtureRpcFinished.sma_onboarding_booking_v1===expected,completedBookingReplies+1);
+    assert.equal(page.url(),site+'/app/paketwahl.html');
+    assert.equal(await refresh.isVisible(),true);assert.equal(await pay.isHidden(),true);
+    assert.deepEqual({bookings,paymentCalls,writes,sessionReads},{
+      ...beforeBookingTimeout,bookings:beforeBookingTimeout.bookings+1
+    });
+    console.log((mobile?'Handy':'Desktop')+': Hängende Buchungs-/Zahlungsantworten enden nach gemeinsamem Zeitlimit; erneutes Laden bleibt lesend und verspätete Antworten wirkungslos.');
     assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Desktop')+': Mollie-Rückkehr, verspätete und sofortige Freischaltung, Abbruch, Wiederanmeldung und begrenzte Statusabfragen bestanden.');
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');
