@@ -84,7 +84,9 @@ async function openLogin(search,auth,hash=''){
  const {document,window}=parseHTML(loginHtml);
  const redirects=[];
  const location={search,hash,replace:href=>redirects.push(href)};
- await vm.runInNewContext('(async()=>{'+script+'})()',{document,window:{location},URLSearchParams,createClient:()=>({auth})});
+ await vm.runInNewContext('(async()=>{'+script+'})()',{document,window:{location},URLSearchParams,setTimeout,clearTimeout,createClient:()=>({auth})});
+ // Customer controls initialize before the optional session lookup settles.
+ await new Promise(resolve=>setImmediate(resolve));
  async function submit(){
   document.getElementById('authForm').dispatchEvent(new window.Event('submit',{cancelable:true}));
   await new Promise(resolve=>setImmediate(resolve));
