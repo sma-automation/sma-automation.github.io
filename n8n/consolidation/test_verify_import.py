@@ -71,6 +71,25 @@ class ImportReadbackContracts(unittest.TestCase):
         actual['parameters']['mode'] = 'runOnceForEachItem'
         self.assertFalse(verify(self.candidate, self.readback)['ok'])
 
+    def test_only_fixed_time_saved_mode_is_equivalent_to_absence(self):
+        self.readback['settings']['timeSavedMode'] = 'fixed'
+        result = verify(self.candidate, self.readback)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['verified_default_equivalences'], [{
+            'setting': 'timeSavedMode', 'equivalence': 'absent_equals_fixed',
+            'verified_n8n_version': '2.47.7'}])
+        for invalid in ('dynamic', False, None, 0, 'FIXED', ''):
+            self.readback['settings']['timeSavedMode'] = invalid
+            self.assertEqual(verify(self.candidate, self.readback)['differences'], ['settings.timeSavedMode'])
+        self.candidate['settings']['timeSavedMode'] = 'fixed'
+        del self.readback['settings']['timeSavedMode']
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        self.candidate['settings']['timeSavedMode'] = 'dynamic'
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        self.candidate['settings']['timeSavedMode'] = 'fixed'
+        self.readback['settings']['timeSavedPerExecution'] = 5
+        self.assertEqual(verify(self.candidate, self.readback)['differences'], ['settings.timeSavedPerExecution'])
+
     def test_empty_terminal_lanes_are_normalized_without_reindexing_actual_edges(self):
         edge = {'node': 'Wait', 'type': 'main', 'index': 0}
         self.candidate['connections'] = {'Wait': {'main': [[], [edge], []]}, 'Empty': {'main': [[]]}}

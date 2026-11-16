@@ -127,9 +127,14 @@ def normalized_settings(settings):
     # Exactly n8n 2.47.7: WorkflowSettings.vue defaults this field to true and
     # materializes it on Save. Runtime uses `redactCallerExecutions !== false`.
     # Missing and true preserve the same caller redaction; false/null/other
-    # additions remain visible differences. No other setting is normalized.
+    # additions remain visible differences. No other redaction value is normalized.
     if result.get('redactCallerExecutions') is True:
         del result['redactCallerExecutions']
+    # Exactly 2.47.7: WorkflowSettings.vue materializes missing mode as fixed;
+    # backend executions/time-saved.ts uses the fixed value for legacy absence.
+    # Do not normalize dynamic/invalid values or timeSavedPerExecution itself.
+    if result.get('timeSavedMode') == 'fixed':
+        del result['timeSavedMode']
     return result
 
 
@@ -175,6 +180,10 @@ def verify(candidate, readback, published=False):
     if ('redactCallerExecutions' not in expected_settings and actual_settings.get('redactCallerExecutions') is True) \
             or ('redactCallerExecutions' not in actual_settings and expected_settings.get('redactCallerExecutions') is True):
         default_equivalences.append({'setting': 'redactCallerExecutions', 'equivalence': 'absent_equals_true',
+                                     'verified_n8n_version': '2.47.7'})
+    if ('timeSavedMode' not in expected_settings and actual_settings.get('timeSavedMode') == 'fixed') \
+            or ('timeSavedMode' not in actual_settings and expected_settings.get('timeSavedMode') == 'fixed'):
+        default_equivalences.append({'setting': 'timeSavedMode', 'equivalence': 'absent_equals_fixed',
                                      'verified_n8n_version': '2.47.7'})
     return {'ok': not problems, 'scope': 'published_active_graph' if published else 'editor_graph_only',
             'workflow_id': candidate.get('id'), 'node_count': len(candidate.get('nodes', [])),
