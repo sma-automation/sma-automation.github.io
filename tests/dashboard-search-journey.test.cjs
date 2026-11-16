@@ -36,10 +36,13 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 const focused=locator=>locator.evaluate(el=>el.ownerDocument.activeElement===el);
 
-async function fixture(t,mobile,{distinctDrafts=false}={}){
+async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
  const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
  const errors=[],unexpected=[],calls=[];
- let catalog=files.slice(),nextCatalogGate=null,nextDraftGate=null,closing=false;
+ const ownedFiles=structuredClone(files).map(file=>({...file,verified_at:new Date().toISOString()}));
+ const drafts=new Map(ownedFiles.map((file,i)=>[file.id,{ok:true,status:'completed',id:uuid(100+(distinctDrafts?i:0)),revision:1,assignment_revision:1,
+  preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',drafts:[{platform:'youtube',title:file.assignments[0].title,body:'Gespeicherter Suchweg-Text.',hashtags:[],review_notes:[],caption:'Gespeicherter Suchweg-Text.'}]}}]));
+ let catalog=ownedFiles.slice(),nextCatalogGate=null,nextDraftGate=null,closing=false;
  const gates=[];
  await context.routeWebSocket('**/*',socket=>{unexpected.push('WebSocket '+socket.url());socket.close();});
  await context.route('**/*',async route=>{
@@ -62,14 +65,20 @@ async function fixture(t,mobile,{distinctDrafts=false}={}){
        if(gate){gate.started.resolve();await gate.released.promise;}
        return await reply({ok:true,files:catalog,sync_state:'complete'});
       }
-      assert.equal(args.p_input?.platform,'youtube');return await reply({ok:true,files});
+      assert.equal(args.p_input?.platform,'youtube');return await reply({ok:true,files:ownedFiles});
      }
-     const file=files.find(f=>f.id===args.p_input?.asset_id);assert.ok(file,'only synthetic files');
+     const file=ownedFiles.find(f=>f.id===args.p_input?.asset_id);assert.ok(file,'only synthetic files');
      if(args.p_action==='get'){
+      const saved=structuredClone(drafts.get(file.id));
       const gate=nextDraftGate;nextDraftGate=null;
       if(gate){gate.started.resolve();await gate.released.promise;}
-      return await reply({ok:true,status:'completed',id:uuid(100+(distinctDrafts?files.indexOf(file):0)),revision:1,assignment_revision:1,
-       preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',drafts:[{platform:'youtube',title:file.assignments[0].title,body:'Gespeicherter Suchweg-Text.',hashtags:[],review_notes:[],caption:'Gespeicherter Suchweg-Text.'}]}});
+      return await reply(saved);
+     }
+     if(args.p_action==='save'&&allowDraftSave){
+      assert.equal(args.p_input.platform,'youtube');assert.equal(args.p_input.asset_revision,file.revision);
+      if(args.p_input.assignment_revision!==drafts.get(file.id).assignment_revision)return await reply({ok:false,code:'ASSIGNMENT_CONFLICT'});
+      const {title,body,hashtags}=args.p_input;
+      return await reply(advanceDraft(file.id,{title,body,hashtags}));
      }
      if(args.p_action==='check')return await reply({ok:true});
     }
@@ -132,11 +141,146 @@ async function fixture(t,mobile,{distinctDrafts=false}={}){
   const gate={started:deferred(),released:deferred()};gates.push(gate);nextDraftGate=gate;
   return {started:gate.started.promise,release:()=>gate.released.resolve()};
  }
- return {page,dashboard,dialog,input,hit,editor,body,previewBack,launcher,account,open,edit,returnToSearch,refreshCatalog,holdCatalog,holdDraft,calls};
+ function advanceDraft(id,fields){
+  const saved=drafts.get(id),file=ownedFiles.find(file=>file.id===id);assert.ok(saved&&file);
+  const draft=saved.preview.drafts[0];Object.assign(draft,structuredClone(fields));draft.caption=draft.body;
+  saved.revision++;saved.assignment_revision++;file.assignments[0].revision=saved.assignment_revision;
+  return structuredClone(saved);
+ }
+ return {page,dashboard,dialog,input,hit,editor,body,previewBack,launcher,account,open,edit,returnToSearch,refreshCatalog,holdCatalog,holdDraft,calls,
+  advanceDraft,savedDraft:id=>structuredClone(drafts.get(id))};
 }
+
+const editorFor=(f,id)=>f.dashboard.frameLocator('iframe[data-key="youtube:'+id+'"]');
+async function waitForFile(f,id){
+ await f.page.waitForFunction(id=>{
+  const dashboard=document.getElementById('dashboard').contentDocument;
+  const editor=dashboard?.querySelector('iframe[data-key="youtube:'+id+'"]');
+  return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+ },id);
+}
+async function openSearchFile(f,id){
+ await f.launcher.click();await f.input.fill(query);
+ await f.dialog.locator('[data-quick-file="'+id+'"]').click();await f.dialog.waitFor({state:'hidden'});
+ await waitForFile(f,id);
+ await f.page.waitForFunction(id=>history.state?.smaOptimization&&history.state.assetId===id&&['source','preview'].includes(history.state.view),id);
+}
+async function checkpoint(f,id){
+ return f.page.evaluate(id=>{
+  for(let i=0;i<sessionStorage.length;i++){
+   const raw=sessionStorage.getItem(sessionStorage.key(i));
+   try{if(JSON.parse(raw)?.fileId===id)return raw;}catch{}
+  }
+  return null;
+ },id);
+}
+const draftWrites=f=>f.calls.filter(call=>call.path==='/fixture/sma_publication_files_v1'&&call.args.p_action==='save');
 
 for(const mobile of [false,true]){
  const label=mobile?'mobile':'desktop';
+ for(const choice of ['local','stored'])test(label+': two file checkpoints survive a newer server draft, explicit '+choice+' comparison and real history',{timeout:45000},async t=>{
+  const f=await fixture(t,mobile,{distinctDrafts:true,allowDraftSave:choice==='local'}),other=uuid(2);
+  const editorA=editorFor(f,wanted),editorB=editorFor(f,other);
+  const bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
+  const textA='Meine offene Bearbeitung von Datei A vor dem Versionsvergleich.';
+  const textB='Die unabhängige offene Bearbeitung von Datei B bleibt erhalten.';
+  const remoteBody='Die inzwischen gespeicherte Fassung von Datei A aus einem zweiten Editor.';
+  await f.open();await f.edit();await bodyA.fill(textA);
+  if(choice==='stored'){
+   if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
+   await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
+  }
+  await openSearchFile(f,other);await editorB.locator('#workspaceTab-source').click();await bodyB.fill(textB);
+  const otherCheckpoint=await checkpoint(f,other);assert.ok(otherCheckpoint);
+  await openSearchFile(f,wanted);
+  const newer=f.advanceDraft(wanted,{title:'Suchweg neuer Titel vom zweiten Editor',body:remoteBody});
+  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);
+  await editorA.locator('#workspaceTab-source').click();
+  assert.equal(await bodyA.inputValue(),textA,'reload keeps the local body until a deliberate choice');
+  assert.equal(await editorA.locator('#save').isDisabled(),true,'a changed server baseline cannot be blindly saved');
+  assert.equal(await checkpoint(f,other),otherCheckpoint);
+  assert.equal(draftWrites(f).length,0);
+  const compare=editorA.locator('#compareDraft'),dialog=editorA.locator('#draftConflictDialog');
+  await compare.click();await dialog.waitFor();
+  assert.match(await dialog.textContent(),new RegExp(remoteBody));
+  assert.match(await dialog.textContent(),new RegExp(textA));
+  assert.equal(await editorA.locator('#draftConflictApply').isDisabled(),true,'conflicting body requires an explicit selection');
+  await editorA.locator('#draftConflictBack').click();await waitForFile(f,wanted);
+  assert.equal(await bodyA.inputValue(),textA,'cancelling comparison preserves the local text');
+  assert.equal(await checkpoint(f,other),otherCheckpoint);
+  assert.equal(draftWrites(f).length,0,'opening or cancelling comparison never saves');
+  await compare.click();await dialog.waitFor();
+  await dialog.locator('input[name="draft-conflict-body"]').nth(choice==='local'?0:1).check();
+  await editorA.locator('#draftConflictApply').click();await dialog.waitFor({state:'hidden'});await waitForFile(f,wanted);
+  assert.equal(draftWrites(f).length,0,'accepting comparison only stages the chosen fields');
+  assert.equal(await bodyA.inputValue(),choice==='local'?textA:remoteBody);
+  assert.equal(await editorA.locator('#youtube-title').inputValue(),newer.preview.drafts[0].title,'unchanged local title adopts the newer server title');
+  assert.equal(await checkpoint(f,other),otherCheckpoint,'comparison changes only A');
+  if(choice==='local'){
+   await editorA.locator('#save').click();
+   await editorA.locator('#saveStatus').getByText('Dieser Datei und diesem Portal zugeordnet',{exact:true}).waitFor();
+   assert.equal(draftWrites(f).length,1,'only the explicit save creates one synthetic write');
+   assert.equal(draftWrites(f)[0].args.p_input.assignment_revision,newer.assignment_revision);
+   assert.equal(f.savedDraft(wanted).preview.drafts[0].body,textA);
+   assert.equal(await checkpoint(f,wanted),null,'saving A clears only its completed checkpoint');
+  }else{
+   assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource);
+   assert.equal(await editorA.locator('#language').inputValue(),'en');
+   assert.ok(await checkpoint(f,wanted),'remaining source edits must keep a checkpoint after choosing all saved post fields');
+   await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);
+   assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource,'remaining description survives a second full reload');
+   assert.equal(await editorA.locator('#language').inputValue(),'en');
+   assert.equal(await bodyA.inputValue(),remoteBody);
+   assert.equal(await editorA.locator('#compareDraft').isVisible(),false,'the accepted server baseline needs no duplicate comparison');
+   assert.equal(draftWrites(f).length,0);
+  }
+  assert.equal(await checkpoint(f,other),otherCheckpoint,'save or reload of A leaves B byte-for-byte intact');
+  await editorA.locator('#workspaceTab-preview').click();await editorA.locator('#workspacePreviewBack').click();
+  await f.dialog.waitFor();assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit));
+  await f.page.goForward();await editorA.locator('#workspacePreview').waitFor();
+  assert.equal(await f.page.evaluate(()=>history.state.assetId),wanted);
+  assert.equal(await bodyA.inputValue(),choice==='local'?textA:remoteBody);
+  await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
+  await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);
+  assert.equal(await bodyB.inputValue(),textB,'B recovers its unchanged checkpoint through the original search');
+  await editorB.locator('#workspaceTab-preview').click();await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
+  assert.equal(await f.account.getAttribute('aria-selected'),'true');
+ });
+ test(label+': a slow conflicting reload of A cannot replace newer edits or history in B',{timeout:45000},async t=>{
+  const f=await fixture(t,mobile,{distinctDrafts:true}),other=uuid(2);
+  const editorA=editorFor(f,wanted),editorB=editorFor(f,other),bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
+  const textA='Die lokale Bearbeitung von A wartet auf den Versionsvergleich.';
+  const textB='Neuere Eingaben in B während die Antwort für A noch aussteht.';
+  await f.open();await f.edit();await bodyA.fill(textA);
+  await openSearchFile(f,other);await editorB.locator('#workspaceTab-source').click();await bodyB.fill('Frühere ungesicherte Eingaben in Datei B.');
+  await openSearchFile(f,wanted);
+  f.advanceDraft(wanted,{body:'Neue gespeicherte A-Fassung für den verzögerten Abruf.'});
+  const gate=f.holdDraft();await f.page.reload({waitUntil:'domcontentloaded'});await gate.started;
+  await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
+  await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);
+  await editorB.locator('#workspaceTab-source').click();await bodyB.fill(textB);
+  const before=await checkpoint(f,other),route=await f.page.evaluate(()=>JSON.stringify(history.state));
+  gate.release();await waitForFile(f,wanted);
+  assert.equal(await bodyA.inputValue(),textA);assert.equal(await editorA.locator('#compareDraft').getAttribute('hidden'),null);
+  assert.equal(await bodyB.inputValue(),textB);assert(await focused(bodyB));
+  assert(await f.page.evaluate(id=>{
+   const dashboard=document.getElementById('dashboard'),editor=dashboard.contentDocument.querySelector('iframe[data-key="youtube:'+id+'"]');
+   return document.activeElement===dashboard&&dashboard.contentDocument.activeElement===editor&&editor.contentDocument.activeElement?.id==='youtube-body';
+  },other),'late A restoration leaves the whole keyboard focus chain in B');
+  assert.equal(await checkpoint(f,other),before,'late A restoration cannot update B storage');
+  assert.equal(await f.page.evaluate(()=>JSON.stringify(history.state)),route,'late A restoration cannot replace B navigation');
+  assert.equal(draftWrites(f).length,0);
+  await editorB.locator('#workspaceTab-preview').click();await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
+  await f.page.goForward();await editorB.locator('#workspacePreview').waitFor();assert.equal(await bodyB.inputValue(),textB);
+  await f.page.goBack();await f.dialog.waitFor();
+  await f.hit.click();await editorA.locator('#workspaceTab-source').click();await editorA.locator('#compareDraft').click();
+  await editorA.locator('#draftConflictDialog').waitFor();
+  assert.equal(await editorA.locator('#draftConflictApply').isDisabled(),true);
+  await editorA.locator('#draftConflictBack').click();await waitForFile(f,wanted);
+  assert.equal(await bodyA.inputValue(),textA);assert.equal(await bodyB.inputValue(),textB);assert.equal(draftWrites(f).length,0);
+ });
  test(label+': real search, unsaved edits, preview, explicit return and browser history preserve one file',{timeout:30000},async t=>{
   const f=await fixture(t,mobile);await f.open();await f.edit();
   const originalFrame=await f.dashboard.locator('iframe[data-portal="youtube"]').elementHandle();
