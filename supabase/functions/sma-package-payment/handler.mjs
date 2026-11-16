@@ -39,6 +39,10 @@ function activated(row,o){
   return sameAccount(row,o)&&row.zugang_aktiv===true&&row.zahlung_bestaetigt===true&&row.has_access_token===true&&
     row.paket===o.plan&&row.mollie_customer_id===o.merchant_customer&&row.mollie_subscription_id===o.subscription_id;
 }
+function hasFolderMapping(row){
+  return ['upload_folder_id','processing_folder_id'].every(key=>typeof row?.[key]==='string'&&/^[A-Za-z0-9_-]{10,200}$/.test(row[key]))&&
+    row.upload_folder_id!==row.processing_folder_id;
+}
 function matchingSub(sub,o){
   return sub && sid.test(sub.id) && sub.mode==='live' && sub.customerId===o.merchant_customer &&
     sub.metadata?.order===o.id && sub.metadata?.kunde_id===o.n8n_ref && sub.metadata?.paket===o.plan &&
@@ -94,7 +98,7 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
       if(event && !o.merchant_customer)return response(503,'RETRY');
       const account=()=>bridge('account',{row:o.n8n_row_id,ref:o.n8n_ref,email:o.email});
       if(!o.payment_id&&!event){
-        const row=await account();requireValue(sameAccount(row,o)&&dormant(row));
+        const row=await account();requireValue(sameAccount(row,o)&&dormant(row)&&hasFolderMapping(row));
         eligibleTime(o.first_started,now);
         if(!o.merchant_customer){
           const c=await bridge('customer',{order:id,ref:o.n8n_ref,email:o.email});
@@ -111,6 +115,8 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         const requested=cycle?o.payment_id:(event||o.payment_id);
         p=await bridge('payment',{payment:requested});requireValue(p.id===requested);
       }else{
+        // Customer creation may have taken time; recheck before creating the first payment.
+        const row=await account();requireValue(sameAccount(row,o)&&dormant(row)&&hasFolderMapping(row));
         eligibleTime(o.first_started,now);
         p=await bridge('first',{order:id,body:{customerId:o.merchant_customer,amount,sequenceType:'first',
           description:'SMA '+o.plan.toUpperCase()+' – Monatsabo',redirectUrl:site+'/app/paketwahl.html?buchung='+id,
@@ -170,7 +176,7 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
       requireValue(state==='PAID' && receipt.status==='paid' && !receipt.reversed && typeof receipt.paid_at==='string');
       const startDate=nextMonth(receipt.paid_at);
       let row=await account();
-      requireValue(sameAccount(row,o)&&(dormant(row)||activated(row,o)));
+      requireValue(sameAccount(row,o)&&(dormant(row)||activated(row,o))&&hasFolderMapping(row));
       if(!o.subscription_id){
         requireValue(startDate>new Date(now()).toISOString().slice(0,10));
         o=await write('begin_subscription');
@@ -195,12 +201,17 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         if(scheduled){checkOn=null;return await finish('PAID');}
         return event ? response(503,'RETRY') : response(200,'PAID');
       }
+      // First activation needs the current mapping after the provider calls.
+      // Existing active, reversal and renewal paths above remain independent of it.
+      row=await account();
+      requireValue(sameAccount(row,o)&&(dormant(row)||activated(row,o))&&hasFolderMapping(row));
+      const folders={upload_folder_id:row.upload_folder_id,processing_folder_id:row.processing_folder_id};
       if(!activated(row,o)){
         await bridge('activate',{row:o.n8n_row_id,ref:o.n8n_ref,email:o.email,customer:o.merchant_customer,
-          subscription:o.subscription_id,plan:o.plan,token:newId()+newId()});
+          subscription:o.subscription_id,plan:o.plan,token:newId()+newId(),...folders});
         row=await account();
       }
-      requireValue(activated(row,o));
+      requireValue(activated(row,o)&&row.upload_folder_id===folders.upload_folder_id&&row.processing_folder_id===folders.processing_folder_id);
       const final=await write('receipt',{receipt,row});
       requireValue(final.state==='ACTIVE');
       if(firstMonthPaid)checkOn=startDate;
