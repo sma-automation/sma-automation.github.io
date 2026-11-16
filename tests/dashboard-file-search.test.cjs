@@ -100,7 +100,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  const calls=[];
  const env={AbortController,setTimeout,clearTimeout,dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
   portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
-  createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
+  createSharedThumbnailClient:()=>({dispose(){}}),createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
   dashboardSession:read=>(read||((fn)=>fn()))(async()=>({user:{id:'owner'}})),
   supabase:{rpc:(name,args)=>({abortSignal:async signal=>{assert.equal(signal.aborted,false);calls.push([name,args.p_action]);return {data:{ok:true,files}};}})}};
  const attach=require('node:vm').runInNewContext(source+'\nattachFileList',env);

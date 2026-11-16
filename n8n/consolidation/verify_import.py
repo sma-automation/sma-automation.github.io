@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Compare an n8n UI readback with a private candidate, without contacting n8n."""
+
+import argparse
+import copy
+import json
+from pathlib import Path
+import sys
+
+
+def differences(expected, actual, location=''):
+    """Return paths only: values may contain private credential or ticket data."""
+    result = []
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        for key in sorted(set(expected) | set(actual)):
+            field = location + '.' + key if location else key
+            if key not in expected or key not in actual:
+                result.append(field)
+            else:
+                result.extend(differences(expected[key], actual[key], field))
+    elif isinstance(expected, list) and isinstance(actual, list):
+        if len(expected) != len(actual):
+            result.append(location + '.length')
+        for index, (left, right) in enumerate(zip(expected, actual)):
+            result.extend(differences(left, right, location + '[' + str(index) + ']'))
+    elif type(expected) is not type(actual) or expected != actual:
+        result.append(location)
+    return result
+
+
+def normalized_nodes(nodes):
+    if not isinstance(nodes, list) or not nodes:
+        return None, ['nodes.required']
+    names = [node.get('name') for node in nodes]
+    ids = [node.get('id') for node in nodes]
+    if any(not isinstance(name, str) for name in names) or len(set(names)) != len(names):
+        return None, ['nodes.unique_names_required']
+    if any(not isinstance(identity, str) for identity in ids) or len(set(ids)) != len(ids):
+        return None, ['nodes.unique_ids_required']
+    # The 2.47.7 UI regenerates node UUIDs during import. Node names, parameters,
+    # credential references, callback IDs and execution/error flags stay strict.
+    return {node['name']: {key: copy.deepcopy(value) for key, value in node.items()
+                          if key not in ('id', 'position')} for node in nodes}, []
+
+
+def normalized_settings(settings):
+    result = copy.deepcopy(settings)
+    # Exactly n8n 2.47.7: WorkflowSettings.vue defaults this field to true and
+    # materializes it on Save. Runtime uses `redactCallerExecutions !== false`.
+    # Missing and true preserve the same caller redaction; false/null/other
+    # additions remain visible differences. No other setting is normalized.
+    if result.get('redactCallerExecutions') is True:
+        del result['redactCallerExecutions']
+    return result
+
+
+def verify(candidate, readback, published=False):
+    problems = []
+    if candidate.get('id') != readback.get('id'):
+        problems.append('id')
+    if candidate.get('name') != readback.get('name'):
+        problems.append('name')
+    actual_graph = readback
+    if published:
+        version = readback.get('activeVersionId')
+        if readback.get('active') is not True or not version:
+            problems.append('published.active_version_evidence_required')
+        elif readback.get('versionId') == version:
+            actual_graph = readback
+        elif readback.get('activeVersion', {}).get('versionId') == version:
+            actual_graph = readback['activeVersion']
+        else:
+            problems.append('published.active_graph_evidence_required')
+    expected_nodes, errors = normalized_nodes(candidate.get('nodes'))
+    problems.extend('candidate.' + error for error in errors)
+    actual_nodes, errors = normalized_nodes(actual_graph.get('nodes'))
+    problems.extend('readback.' + error for error in errors)
+    if expected_nodes is not None and actual_nodes is not None:
+        problems.extend(differences(expected_nodes, actual_nodes, 'nodes'))
+    problems.extend(differences(candidate.get('connections', {}), actual_graph.get('connections', {}), 'connections'))
+    expected_settings, actual_settings = candidate.get('settings', {}), readback.get('settings', {})
+    problems.extend(differences(normalized_settings(expected_settings), normalized_settings(actual_settings), 'settings'))
+    if readback.get('pinData') or actual_graph.get('pinData'):
+        problems.append('pinData.must_be_empty')
+    if candidate.get('staticData'):
+        if 'staticData' not in readback:
+            problems.append('staticData.full_metadata_evidence_required')
+        else:
+            problems.extend(differences(candidate['staticData'], readback['staticData'], 'staticData'))
+    elif readback.get('staticData'):
+        problems.append('staticData.unexpected_nonempty_state')
+    default_equivalences = []
+    if ('redactCallerExecutions' not in expected_settings and actual_settings.get('redactCallerExecutions') is True) \
+            or ('redactCallerExecutions' not in actual_settings and expected_settings.get('redactCallerExecutions') is True):
+        default_equivalences.append({'setting': 'redactCallerExecutions', 'equivalence': 'absent_equals_true',
+                                     'verified_n8n_version': '2.47.7'})
+    return {'ok': not problems, 'scope': 'published_active_graph' if published else 'editor_graph_only',
+            'workflow_id': candidate.get('id'), 'node_count': len(candidate.get('nodes', [])),
+            'ignored_import_fields': ['node.id', 'node.position'],
+            'verified_default_equivalences': default_equivalences,
+            'differences': sorted(set(problems)),
+            'runtime_verified': False}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--candidate', type=Path, required=True)
+    parser.add_argument('--readback', type=Path, required=True)
+    parser.add_argument('--published', action='store_true', help='Require active-version metadata, not just the editable draft')
+    args = parser.parse_args()
+    result = verify(json.loads(args.candidate.read_text()), json.loads(args.readback.read_text()), args.published)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result['ok']:
+        raise SystemExit(2)
+
+
+if __name__ == '__main__':
+    main()

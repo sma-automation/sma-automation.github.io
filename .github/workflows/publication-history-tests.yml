@@ -3,6 +3,19 @@ on:
   push:
     branches: [publication-history-v1, publication-history-months, publication-text-history, publication-assignment-history, compact-history-orders, compact-history-spacing, website-v1]
     paths:
+      - app/assets/file-job-client.mjs
+      - app/assets/asset-thumbnail.mjs
+      - app/assets/thumbnail-batch.mjs
+      - supabase/functions/sma-file-job/**
+      - supabase/sql/file-command-mailbox.sql
+      - tests/file-job-*.test.mjs
+      - tests/file-command-*.test.mjs
+      - tests/thumbnail-batch.test.cjs
+      - tests/sql-runtime/file-job-*.json
+      - n8n/consolidation/**
+      - n8n/file-command/**
+      - n8n/thumbnail-batch/**
+      - n8n/publishing/*workflow.json
       - supabase/sql/launch-readiness-readonly.sql
       - tests/run-launch-readiness-sql.mjs
       - supabase/migrations/*_onboarding_plan_choice_v1.sql
@@ -209,7 +222,7 @@ on:
       - .github/workflows/publication-history-tests.yml
   pull_request:
     branches: [website-v1]
-    paths: ['app/**', 'supabase/**', 'tests/**', 'n8n/confirm-onboarding-row.cjs', 'n8n/sync-onboarding-payment.mjs', 'n8n/package-payment/**', '.github/workflows/publication-history-tests.yml']
+    paths: ['app/**', 'supabase/**', 'tests/**', 'n8n/confirm-onboarding-row.cjs', 'n8n/sync-onboarding-payment.mjs', 'n8n/package-payment/**', 'n8n/consolidation/**', 'n8n/file-command/**', 'n8n/thumbnail-batch/**', 'n8n/publishing/*workflow.json', '.github/workflows/publication-history-tests.yml']
 permissions: {}
 jobs:
   test:
@@ -228,6 +241,11 @@ jobs:
           npm ci --prefix tests/dom-runtime --ignore-scripts
           npm ci --prefix tests/media-runtime --ignore-scripts
           npm ci --prefix n8n/private-gallery-runtime --ignore-scripts
+      - name: Test file job transport, mailbox and native workflow contracts
+        run: |
+          node --test tests/file-job-*.test.mjs tests/file-command-*.test.mjs \
+            n8n/consolidation/*.test.cjs n8n/file-command/*.test.cjs n8n/thumbnail-batch/*.test.cjs
+          python3 -m unittest discover -s n8n/consolidation -p 'test_*.py'
       - name: Ensure FFmpeg and FFprobe for the saved-video sound check
         run: |
           # Hosted runners may not include either binary, and Ubuntu apt

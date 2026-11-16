@@ -149,7 +149,7 @@ try{
   report.staleStopped=document.activeElement===$('loadLatest')&&$('sourcePanel').open&&!$('workspaceSource').hidden&&
    $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account,account';
   const historyId='a7700000-0000-4000-8000-000000000033';
-  for(const [stored,expected,canContinue] of [['checked','noch kein Übertragungsversuch',true],['private_complete','Privat abgeschlossen',true],['uncertain_blocked','Ergebnis unklar',false],['uncertain','Ergebnis unklar',false],['uncertain_resumable','abgleichen',true]]){
+  for(const [stored,expected,canContinue] of [['checked','noch kein Übertragungsversuch',true],['private_complete','Privat abgeschlossen',true],['uncertain_blocked','Ergebnis unklar',false],['uncertain','Ergebnis unklar',false],['uncertain_resumable','Ergebnis unklar',false]]){
    sessionStorage.fixtureTransferStatus=stored;
    const state=await readTransferStatus(historyId,'youtube');
    if(!state.message.includes(expected)||state.canContinue!==canContinue)throw Error('Wrong transfer status: '+stored);

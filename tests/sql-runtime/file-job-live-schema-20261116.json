@@ -1,0 +1,365 @@
+{
+  "columns": [
+    {
+      "type": "uuid",
+      "table": "publication_provider_attempts_v1",
+      "column": "order_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "fingerprint",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "platform",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "target_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "visibility",
+      "nullable": "NO"
+    },
+    {
+      "type": "int8",
+      "table": "publication_provider_attempts_v1",
+      "column": "size_bytes",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "state",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "provider_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "session_url",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_attempts_v1",
+      "column": "session_expires_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "int8",
+      "table": "publication_provider_attempts_v1",
+      "column": "received_bytes",
+      "nullable": "NO"
+    },
+    {
+      "type": "int4",
+      "table": "publication_provider_attempts_v1",
+      "column": "sequence",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "publication_provider_attempts_v1",
+      "column": "lease_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_attempts_v1",
+      "column": "lease_until",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_attempts_v1",
+      "column": "last_operation",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "publication_provider_attempts_v1",
+      "column": "result",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_attempts_v1",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_attempts_v1",
+      "column": "updated_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "publication_provider_covers_v1",
+      "column": "order_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_covers_v1",
+      "column": "fingerprint",
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "publication_provider_covers_v1",
+      "column": "plan",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_covers_v1",
+      "column": "state",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "publication_provider_covers_v1",
+      "column": "lease_id",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_covers_v1",
+      "column": "sent_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_covers_v1",
+      "column": "finished_at",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_covers_v1",
+      "column": "code",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_covers_v1",
+      "column": "created_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "publication_provider_permissions_v1",
+      "column": "order_id",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "publication_provider_permissions_v1",
+      "column": "fingerprint",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_permissions_v1",
+      "column": "expires_at",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "publication_provider_permissions_v1",
+      "column": "created_at",
+      "nullable": "NO"
+    }
+  ],
+  "functions": [
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "9de89c2d2cf0c7c90447c3d4d2916609",
+      "name": "publication_account_context_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_platform text",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "72781c1093f3d1458af579a8a299154e",
+      "name": "publication_asset_preview_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_asset_id uuid, p_revision text",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "8caea19dd1a963c2033dbb771a9a894b",
+      "name": "publication_magic_request_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_action text, p_input jsonb",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "4c2b8f52a86916deb123cf2d70ed2526",
+      "name": "publication_order_request_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_action text, p_input jsonb",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "06ff4f585d793a32126010611ad4d515",
+      "name": "publication_preview_request_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_action text, p_input jsonb, p_id uuid",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "hash": "5867545f1bdb0e8a7523609fdbbb4a57",
+      "name": "publication_provider_fingerprint_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": false,
+      "arguments": "j sma_private.publication_orders_v1",
+      "volatility": "i"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "b758915bb25230419cd046eb75918d90",
+      "name": "publication_review_request_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_action text, p_input jsonb",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "7faa29962bc995db7b6c3dc0e88edef1",
+      "name": "publication_upload_request_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_action text, p_input jsonb",
+      "volatility": "v"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "hash": "e9a5f30c768f86a1f08a19fc4bd5de5d",
+      "name": "publication_video_magic_request_v1",
+      "config": [
+        "search_path=\"\""
+      ],
+      "schema": "sma_private",
+      "definer": true,
+      "arguments": "p_action text, p_input jsonb",
+      "volatility": "v"
+    }
+  ],
+  "public_grants": [
+    {
+      "anon": false,
+      "name": "sma_publication_magic_finish_v1",
+      "arguments": "p_asset_id uuid, p_lease_id uuid, p_result jsonb, p_sha256 text, p_error text",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_order_worker_v1",
+      "arguments": "p_action text, p_id uuid, p_lease uuid, p_data jsonb",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_preview_finish_v1",
+      "arguments": "p_id uuid, p_lease uuid, p_preview jsonb, p_error text",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_provider_cover_v1",
+      "arguments": "p_action text, p_id uuid, p_lease uuid, p_data jsonb",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_provider_v1",
+      "arguments": "p_action text, p_id uuid, p_lease uuid, p_data jsonb",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_review_finish_v1",
+      "arguments": "p_asset_id uuid, p_lease_id uuid, p_result jsonb, p_sha256 text, p_error text",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_upload_bind_v1",
+      "arguments": "p_id uuid, p_lease_id uuid, p_drive_file_id text, p_folder_id text, p_upload_url text",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_upload_finish_v1",
+      "arguments": "p_id uuid, p_file jsonb",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "name": "sma_publication_video_magic_finish_v1",
+      "arguments": "p_asset_id uuid, p_lease_id uuid, p_result jsonb, p_sha256 text, p_error text",
+      "service_role": true,
+      "authenticated": false
+    }
+  ]
+}
