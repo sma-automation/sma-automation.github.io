@@ -97,7 +97,8 @@ try{
   sessionStorage.fixtureReload='1';location.reload();
  }else{
   const report={type:'reload-result',restored:body?.value===pending,notice:$('saveStatus').textContent,ready:!busy&&!$('save').disabled};
-  const dialog=$('draftReloadDialog'),recordKey='sma.publication.pending-save.v1.youtube';
+  const dialog=$('draftReloadDialog');
+  const checkpoint=()=>tabDrafts.read(selectedPortal,previewOwnerId,draftRoute());
   async function openChoice(){
    $('loadLatest').click();await until(()=>dialog.open||!busy);
    if(!dialog.open)throw Error('Missing reload choice: '+$('status').textContent);
@@ -105,9 +106,9 @@ try{
   await openChoice();
   report.previewShown=$('draftReloadPreview').textContent.includes('Mein früherer Beitragstext.')&&document.activeElement===$('keepDraftEdits');
   $('keepDraftEdits').click();await until(()=>!busy);
-  report.kept=body.value===pending&&!!sessionStorage.getItem(recordKey)&&!dialog.open;
+  report.kept=body.value===pending&&checkpoint()?.form.body===pending&&!dialog.open;
   await openChoice();$('useStoredDraft').click();await until(()=>!busy);
-  report.loaded=$('youtube-body').value==='Mein früherer Beitragstext.'&&!sessionStorage.getItem(recordKey)&&!dialog.open;
+  report.loaded=$('youtube-body').value==='Mein früherer Beitragstext.'&&!checkpoint()&&!dialog.open;
   report.writes=Number(sessionStorage.fixtureWrites);
   const updated=$('youtube-body'),newText='Jetzt ausdrücklich in der Vorschau gespeichert.';
   const tags=$('youtube-hashtags');
