@@ -9,7 +9,7 @@ workflow remains outside the five and must be unpublished after testing.
 ## Required evidence before the window
 
 - Complete fresh source/active-version pins, unchanged original exports and the
-  five reviewed candidate hashes. Current private build: `integrated-v2`.
+  five reviewed candidate hashes. Current private build: `integrated-v3`.
 - Native fixed-phase parent probe **7127** succeeded, including current
   resume-item binding, error/success acknowledgement paths and replay rejection.
   It and successful thumbnail probe **7112** are recorded in

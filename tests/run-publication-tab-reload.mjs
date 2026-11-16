@@ -50,6 +50,53 @@ export function createClient(){return {auth:{onAuthStateChange(){},getSession:as
   call.abortSignal=()=>call;return call;
  }};}`;
 
+// Keep the real file-job client. Only its transport is local: commands have
+// immutable stored responses, and status reads never repeat the account work.
+const fileJobTransport=`
+const fixtureJobs=new Map(),fixtureCommands=new Map();
+const fixtureCount=name=>{sessionStorage[name]=String(Number(sessionStorage[name]||0)+1);};
+async function fixtureFileJobFetch(url,options){
+ const path=new URL(url).pathname,body=JSON.parse(options.body);
+ if(path==='/rest/v1/rpc/sma_file_job_v1'){
+  const input=body.p_input;
+  if(body.p_action==='start'){
+   if(input.anchor?.kind!=='asset'||input.anchor.asset_id!=='${fileId}'||input.anchor.asset_revision!=='version:1')throw Error('Unexpected synthetic file binding');
+   const key=JSON.stringify(input.anchor);
+   if(!fixtureJobs.has(key)){
+    fixtureCount('fixtureJobStarts');
+    fixtureJobs.set(key,{ok:true,job_id:crypto.randomUUID(),state:'running',deadline_at:new Date(Date.now()+86400000).toISOString()});
+   }
+   return Response.json({...fixtureJobs.get(key),commands:[]});
+  }
+  if(body.p_action!=='get')throw Error('Unexpected synthetic job action');
+  const job=[...fixtureJobs.values()].find(j=>j.job_id===input.job_id);
+  if(!job)throw Error('Unknown synthetic job');
+  fixtureCount('fixtureJobReads');
+  const command=fixtureCommands.get(input.command_id);
+  if(command&&command.job_id!==job.job_id)throw Error('Synthetic command belongs to another job');
+  return Response.json({...job,commands:command?[{command_id:input.command_id,operation:command.operation,state:command.state,response:command.response}]:[]});
+ }
+ if(path!=='/functions/v1/sma-file-job'||body.operation!=='account')throw Error('Unexpected synthetic order action');
+ if(![...fixtureJobs.values()].some(j=>j.job_id===body.job_id))throw Error('Unknown synthetic command job');
+ const signature=JSON.stringify({job_id:body.job_id,operation:body.operation,input:body.input});
+ let command=fixtureCommands.get(body.command_id);
+ if(command&&command.signature!==signature)throw Error('Synthetic command conflict');
+ if(!command){
+  command={signature,job_id:body.job_id,operation:body.operation,state:'running',response:null};
+  fixtureCommands.set(body.command_id,command);fixtureCount('fixtureJobCommands');
+  sessionStorage.fixtureOrderActions=[sessionStorage.fixtureOrderActions,'account'].filter(Boolean).join(',');
+  if(sessionStorage.fixtureFailAccount){
+   sessionStorage.removeItem('fixtureFailAccount');command.state='failed';
+   command.response={status:200,body:{ok:false,code:'TARGET_CHECK_UNAVAILABLE'}};
+  }else{
+   if(window.fixtureAccountHold){window.fixtureAccountStarted();await window.fixtureAccountHold;}
+   command.state='completed';command.response={status:200,body:{ok:true,id:body.input.id,stage:'account',can_upload:false,can_publish:false,
+    target:{id:'fixture-channel',platform:'youtube'},account_check:{target_id:'fixture-channel',display_name:'Testkanal',policy:{}}}};
+  }
+ }
+ return Response.json({ok:true,job_id:body.job_id,command_id:body.command_id,accepted:true});
+}`;
+
 const exercise=`
 try{
  const body=document.getElementById('youtube-body'),pending='Lokale Korrektur aus dem vorherigen Seitenaufruf.';
@@ -129,7 +176,7 @@ try{
   report.savedInPreview=offered&&!$('workspacePreview').hidden&&action.hidden&&!prepare.hidden&&!prepare.disabled&&
    $('workspacePostCaption').textContent===newText&&$('workspaceDraftNotice').textContent==='Gespeicherter Entwurf'&&
    !$('publicationOrderDialog').open&&Number(sessionStorage.fixtureWrites)===2;
-  // The fixture's order client has only an in-memory account response. Other actions fail the test.
+  // The real file-job path has only an in-memory account worker. Other actions fail the test.
   const review=$('publicationOrderDialog'),reviewButton=text=>[...review.querySelectorAll('button')].find(b=>b.textContent===text);
   const retry=reviewButton('Zielkonto erneut prüfen'),close=reviewButton('Schließen');
   sessionStorage.fixtureFailAccount='1';prepare.click();await until(()=>!retry.hidden&&!retry.disabled);
@@ -148,6 +195,7 @@ try{
   review.querySelector('form').requestSubmit();await until(()=>!review.open);
   report.staleStopped=document.activeElement===$('loadLatest')&&$('sourcePanel').open&&!$('workspaceSource').hidden&&
    $('youtube-title').value!=='Späterer Titel'&&sessionStorage.fixtureOrderActions==='account,account';
+  report.fileJobs={starts:Number(sessionStorage.fixtureJobStarts),commands:Number(sessionStorage.fixtureJobCommands),reads:Number(sessionStorage.fixtureJobReads)};
   const historyId='a7700000-0000-4000-8000-000000000033';
   for(const [stored,expected,canContinue] of [['checked','noch kein Übertragungsversuch',true],['private_complete','Privat abgeschlossen',true],['uncertain_blocked','Ergebnis unklar',false],['uncertain','Ergebnis unklar',false],['uncertain_resumable','Ergebnis unklar',false]]){
    sessionStorage.fixtureTransferStatus=stored;
@@ -187,15 +235,10 @@ const server=createServer(async(req,res)=>{
   if(path==='/client.mjs')return send('text/javascript',client);
   if(path!=='/app/publication-preview.html'&&!/^\/app\/assets\/[\w.-]+\.(css|m?js)$/.test(path)){res.writeHead(404).end();return;}
   let source=await readFile(new URL('..'+path,import.meta.url),'utf8');
-  if(path==='/app/assets/publication-order.mjs')source=source.replace('fetcher=fetch','fetcher=fixtureOrderFetch')+`
-async function fixtureOrderFetch(_url,options){
- const {action,input}=JSON.parse(options.body);sessionStorage.fixtureOrderActions=[sessionStorage.fixtureOrderActions,action].filter(Boolean).join(',');
- if(action!=='account')throw Error('Unexpected synthetic order action');
- if(sessionStorage.fixtureFailAccount){sessionStorage.removeItem('fixtureFailAccount');throw new TypeError('Synthetic network failure');}
- if(window.fixtureAccountHold){window.fixtureAccountStarted();await window.fixtureAccountHold;}
- return {ok:true,json:async()=>({ok:true,id:input.id,stage:'account',can_upload:false,can_publish:false,
-  target:{id:'fixture-channel',platform:'youtube'},account_check:{target_id:'fixture-channel',display_name:'Testkanal',policy:{}}})};
-}`;
+  if(path==='/app/assets/file-job-client.mjs'){
+   assert.equal(source.split('fetcher=fetch').length,2,'File-job transport injection must match exactly once');
+   source=source.replace('fetcher=fetch','fetcher=fixtureFileJobFetch')+fileJobTransport;
+  }
   if(path==='/app/assets/publication-preview.js')source=source.replace("import('https://esm.sh/@supabase/supabase-js@2')","import('/client.mjs')")+exercise;
   send(path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript',source);
  }catch{res.writeHead(500).end();}
@@ -211,5 +254,6 @@ try{
  const result=JSON.parse(match[1]);assert.equal(result.restored,true,JSON.stringify(result));assert.equal(result.ready,true);
  assert.match(result.notice,/wiederhergestellt/);assert.equal(result.writes,1);
  assert.ok(result.previewShown&&result.kept&&result.loaded&&result.savedInPreview&&result.reviewedStoredPost&&result.staleStopped,JSON.stringify(result));
+ assert.equal(result.fileJobs.starts,1);assert.equal(result.fileJobs.commands,2);assert.ok(result.fileJobs.reads>=2);
  console.log('Chromium distinguished a lost save from a confirmed preview save and kept order preparation separate.');
 }finally{server.close();await rm(profile,{recursive:true,force:true});}

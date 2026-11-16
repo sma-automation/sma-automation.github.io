@@ -447,6 +447,53 @@ extra=clock-1;assert.throws(execute,/OPERATION_TIMEOUT/);
         self.review['call_deadline_inputs']['fixture-a/nonexistent'] = self.review['call_deadline_inputs']['fixture-a/Call']
         self.rejects('STALE_CALL_DEADLINE_INPUT_POLICY')
 
+    def test_multiple_manual_entries_require_one_exact_explicit_selection(self):
+        source = self.sources['fixture-a']
+        for number in range(1, 4):
+            name = 'Admin ' + str(number)
+            source['nodes'].extend([node(name, 'n8n-nodes-base.manualTrigger'),
+                                   node(name + ' work', 'n8n-nodes-base.code', {'jsCode': 'return $input.all();'})])
+            source['connections'][name] = links(name + ' work')
+        self.refresh()
+        candidates, provenance = self.build()
+        target = candidates['fixture-a']
+        self.assertEqual(sum(node['type'] == 'n8n-nodes-base.manualTrigger' for node in target['nodes']), 1)
+        self.assertEqual(sum(node['type'] == builder.INTERNAL_TRIGGER for node in target['nodes']), 1)
+        policy = provenance['manual_entry_consolidation']['fixture-a']
+        nodes = {node['name']: node for node in target['nodes']}
+        assignments = nodes[policy['selector']]['parameters']['assignments']['assignments']
+        self.assertEqual(assignments[0]['name'], 'manual_operation')
+        self.assertEqual(assignments[0]['value'], '')
+        rules = nodes[policy['router']]['parameters']['rules']['values']
+        self.assertEqual(len(rules), 3)
+        self.assertEqual(nodes[policy['router']]['parameters']['options']['fallbackOutput'], 'extra')
+        for index, operation in enumerate(policy['operations']):
+            self.assertEqual(target['connections'][policy['router']]['main'][index], [builder.edge(operation['target_bridge'])])
+            self.assertEqual(rules[index]['conditions']['conditions'][0]['rightValue'], operation['operation'])
+            self.assertEqual(target['connections'][operation['target_bridge']], links(operation['target_bridge'] + ' · Operationsfrist'))
+        public = builder.reachable(['fixture-a · API'], builder.graph(target)[0])
+        self.assertNotIn(policy['selector'], public)
+        self.assertTrue(all(operation['target_bridge'] not in public for operation in policy['operations']))
+        script = r'''
+const vm=require('node:vm'),assert=require('node:assert/strict');
+const {policy,nodes,rules}=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+const route=value=>rules.map((rule,index)=>rule.conditions.conditions[0].rightValue===value?index:-1).filter(index=>index>=0);
+const execute=(name,json)=>vm.runInNewContext('(function(){'+nodes[name].parameters.jsCode+'})()',{$input:{all:()=>[{json}]}});
+for(const value of ['', 'unknown', 'all']){
+ assert.equal(route(value).length,0);assert.throws(()=>execute(policy.reject,{manual_operation:value}),/MANUAL_SELECTION_REQUIRED/);
+}
+for(const [index,operation] of policy.operations.entries()){
+ assert.deepEqual(route(operation.operation),[index]);
+ const output=execute(operation.target_bridge,{manual_operation:operation.operation});
+ assert.equal(JSON.stringify(output[0].json),'{}');assert.equal(output[0].pairedItem.item,0);
+ assert.throws(()=>execute(operation.target_bridge,{manual_operation:policy.operations[(index+1)%3].operation}),/MANUAL_SELECTION_INVALID/);
+ assert.throws(()=>execute(operation.target_bridge,{manual_operation:operation.operation,extra:true}),/MANUAL_SELECTION_INVALID/);
+}
+'''
+        completed = subprocess.run(['node', '-e', script], input=json.dumps({'policy': policy, 'nodes': nodes, 'rules': rules}),
+                                   text=True, capture_output=True)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_incomplete_exports_and_unsafe_output_path_fail_without_writes(self):
         del self.sources['fixture-helper']
         self.rejects('INCOMPLETE_LIVE_EXPORTS')

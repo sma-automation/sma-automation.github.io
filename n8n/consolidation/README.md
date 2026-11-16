@@ -161,6 +161,16 @@ Both quote styles are supported. Unknown dynamic node/workflow references fail;
 the few reviewed finite literal selectors are rewritten explicitly. The checker
 flags references across assigned destinations, form/Wait identifiers,
 execution-based identities and dynamic-reference limits.
+
+n8n 2.47.7 permits only one ManualTrigger per workflow. The commerce sources had
+three; a real UI import removed two surplus triggers. The builder now retains
+their entry names and business branches as guarded Code bridges behind one
+ManualTrigger and an Edit Fields selector. `manual_operation` defaults to an
+empty string, which stops without running any administrative branch. Only an
+exact operation listed in the selector note routes to one original branch;
+there is no fan-out. Clear the selection after an intentional manual run. The
+single existing audio test trigger is unchanged, and every target has exactly
+one native subworkflow trigger.
 The stock draft's `$workflow.id` and `$execution.id` participate in its idempotency
 key; moving it requires preserving the one-operation-per-execution behavior.
 Static-data field absence is not evidence of emptiness. Stateful triggers need
@@ -184,6 +194,12 @@ settings strictly. It prints differing paths without private values. The default
 mode verifies only the editor graph. `--published` requires active-version
 metadata so an unpublished draft cannot pass as the active graph. The hourly
 static-data value requires full metadata after import.
+Observed UI serialization also omits Code v2's default
+`mode: runOnceForAllItems` and empty terminal/trailing connection lanes. The
+verifier normalizes exactly these equivalents; it never removes an actual edge,
+reindexes an interior empty lane, accepts per-item execution as all-items, or
+ignores a missing node. The n8n 2.47.7 absent/true `redactCallerExecutions`
+default equivalence is recorded separately, with false still treated as a change.
 
 ```sh
 python n8n/consolidation/verify_import.py \

@@ -39,8 +39,30 @@ def normalized_nodes(nodes):
         return None, ['nodes.unique_ids_required']
     # The 2.47.7 UI regenerates node UUIDs during import. Node names, parameters,
     # credential references, callback IDs and execution/error flags stay strict.
-    return {node['name']: {key: copy.deepcopy(value) for key, value in node.items()
-                          if key not in ('id', 'position')} for node in nodes}, []
+    result = {node['name']: {key: copy.deepcopy(value) for key, value in node.items()
+                            if key not in ('id', 'position')} for node in nodes}
+    for node in result.values():
+        # Code v2's documented 2.47.7 default is runOnceForAllItems. UI import
+        # strips this explicit default; per-item mode is never normalized away.
+        if node.get('type') == 'n8n-nodes-base.code' and node.get('typeVersion') == 2 \
+                and node.get('parameters', {}).get('mode') == 'runOnceForAllItems':
+            del node['parameters']['mode']
+    return result, []
+
+
+def normalized_connections(connections):
+    result = copy.deepcopy(connections)
+    for name, outputs in list(result.items()):
+        for channel, lanes in list(outputs.items()):
+            # Omitted terminal connections and trailing empty output lanes have
+            # no edge. Keep interior lane positions and every actual edge exact.
+            while lanes and lanes[-1] == []:
+                lanes.pop()
+            if not lanes:
+                del outputs[channel]
+        if not outputs:
+            del result[name]
+    return result
 
 
 def normalized_settings(settings):
@@ -77,7 +99,8 @@ def verify(candidate, readback, published=False):
     problems.extend('readback.' + error for error in errors)
     if expected_nodes is not None and actual_nodes is not None:
         problems.extend(differences(expected_nodes, actual_nodes, 'nodes'))
-    problems.extend(differences(candidate.get('connections', {}), actual_graph.get('connections', {}), 'connections'))
+    problems.extend(differences(normalized_connections(candidate.get('connections', {})),
+                                normalized_connections(actual_graph.get('connections', {})), 'connections'))
     expected_settings, actual_settings = candidate.get('settings', {}), readback.get('settings', {})
     problems.extend(differences(normalized_settings(expected_settings), normalized_settings(actual_settings), 'settings'))
     if readback.get('pinData') or actual_graph.get('pinData'):
@@ -97,6 +120,7 @@ def verify(candidate, readback, published=False):
     return {'ok': not problems, 'scope': 'published_active_graph' if published else 'editor_graph_only',
             'workflow_id': candidate.get('id'), 'node_count': len(candidate.get('nodes', [])),
             'ignored_import_fields': ['node.id', 'node.position'],
+            'verified_graph_normalizations': ['code_v2.default_all_items_mode', 'trailing_empty_connection_lanes'],
             'verified_default_equivalences': default_equivalences,
             'differences': sorted(set(problems)),
             'runtime_verified': False}

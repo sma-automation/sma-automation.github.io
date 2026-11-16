@@ -61,6 +61,26 @@ class ImportReadbackContracts(unittest.TestCase):
         self.candidate['settings']['redactCallerExecutions'] = False
         self.assertFalse(verify(self.candidate, self.readback)['ok'])
 
+    def test_code_v2_all_item_default_is_equal_to_omission_but_not_per_item(self):
+        expected = self.candidate['nodes'][0]
+        actual = self.readback['nodes'][0]
+        for node in (expected, actual):
+            node.update(type='n8n-nodes-base.code', typeVersion=2, parameters={'jsCode': 'return $input.all();'})
+        expected['parameters']['mode'] = 'runOnceForAllItems'
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        actual['parameters']['mode'] = 'runOnceForEachItem'
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
+    def test_empty_terminal_lanes_are_normalized_without_reindexing_actual_edges(self):
+        edge = {'node': 'Wait', 'type': 'main', 'index': 0}
+        self.candidate['connections'] = {'Wait': {'main': [[], [edge], []]}, 'Empty': {'main': [[]]}}
+        self.readback['connections'] = {'Wait': {'main': [[], [edge]]}}
+        self.assertTrue(verify(self.candidate, self.readback)['ok'])
+        self.readback['connections'] = {'Wait': {'main': [[edge]]}}
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+        self.readback['connections'] = {}
+        self.assertFalse(verify(self.candidate, self.readback)['ok'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -684,6 +684,73 @@ def instrument_deadlines(sources, allocated, candidates, copied, names, internal
     return markers_by_node
 
 
+def consolidate_manual_entries(candidates, copied, provenance):
+    """n8n 2.47.7 permits one ManualTrigger per workflow (maxNodes: 1).
+
+    Retain each original entry's name and outgoing graph as a guarded Code
+    bridge. A single UI-editable, empty-by-default selector routes exactly one
+    operation. It must never fan out into several administrative operations.
+    """
+    manual_type = 'n8n-nodes-base.manualTrigger'
+    source_by_name = {node['name']: (source, old_name) for (source, old_name), node in copied.items()}
+    provenance['manual_entry_consolidation'] = {}
+    for target, candidate in candidates.items():
+        entries = sorted([node for node in candidate['nodes'] if node['type'] == manual_type and not node.get('disabled')],
+                         key=lambda node: node['name'])
+        if len(entries) <= 1:
+            continue
+        trigger = 'SMA · Manuellen Vorgang starten'
+        selector = 'SMA · Manuellen Vorgang auswählen'
+        router = 'SMA · Manuellen Vorgang zuordnen'
+        reject = 'SMA · Manuelle Auswahl erforderlich'
+        field = 'manual_operation'
+        operations = []
+        for node in entries:
+            source, original_name = source_by_name[node['name']]
+            operation = source + ' / ' + original_name
+            operations.append({'operation': operation, 'source': source, 'original_node': original_name,
+                               'target_bridge': node['name']})
+            # The native ManualTrigger emits exactly one empty JSON item.
+            # Keep that Fachinput, without leaking the selector field downstream.
+            node['type'], node['typeVersion'] = 'n8n-nodes-base.code', 2
+            node['parameters'] = {'jsCode':
+                'const items = $input.all();\n' +
+                'if (items.length !== 1 || Object.keys(items[0].json).join(",") !== ' + json.dumps(field) +
+                ' || items[0].json.' + field + ' !== ' + json.dumps(operation, ensure_ascii=False) +
+                ') throw Error("CONSOLIDATION_MANUAL_SELECTION_INVALID");\n' +
+                'return [{json: {}, pairedItem: {item: 0}}];'}
+            node.pop('webhookId', None)
+        candidate['nodes'].append({'id': stable_id(target, trigger), 'name': trigger,
+            'type': manual_type, 'typeVersion': 1, 'position': [-1300, -1400], 'parameters': {}})
+        choices = '\n'.join(value['operation'] for value in operations)
+        candidate['nodes'].append({'id': stable_id(target, selector), 'name': selector,
+            'type': 'n8n-nodes-base.set', 'typeVersion': 3.4, 'position': [-1050, -1400],
+            'parameters': {'assignments': {'assignments': [{'id': stable_id(target, selector, field),
+                'name': field, 'value': '', 'type': 'string'}]}},
+            'notesInFlow': True,
+            'notes': 'Standard: leer = Abbruch ohne Fachaktion. Für einen bewussten manuellen Lauf genau einen Wert in manual_operation eintragen:\n'
+                     + choices + '\nNach dem Lauf die Auswahl wieder leeren. Öffentliche und geplante Aufrufe benutzen diesen Einstieg nicht.'})
+        rules = [{'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'strict', 'version': 3},
+                    'conditions': [{'id': stable_id(target, router, entry['operation']),
+                        'leftValue': '={{ $json.' + field + ' }}', 'rightValue': entry['operation'],
+                        'operator': {'type': 'string', 'operation': 'equals'}}], 'combinator': 'and'},
+                  'renameOutput': True, 'outputKey': entry['original_node']} for entry in operations]
+        candidate['nodes'].append({'id': stable_id(target, router), 'name': router,
+            'type': 'n8n-nodes-base.switch', 'typeVersion': 3.4, 'position': [-800, -1400],
+            'parameters': {'rules': {'values': rules}, 'options': {'fallbackOutput': 'extra'}}})
+        candidate['nodes'].append(code_node(target, reject,
+            'throw Error(' + json.dumps('CONSOLIDATION_MANUAL_SELECTION_REQUIRED: Im Knoten "' + selector +
+                '" genau einen der angezeigten Vorgänge wählen.', ensure_ascii=False) + ');', [-550, -1600]))
+        candidate['connections'][trigger] = {'main': [[edge(selector)]]}
+        candidate['connections'][selector] = {'main': [[edge(router)]]}
+        candidate['connections'][router] = {'main': [[edge(entry['target_bridge'])] for entry in operations] + [[edge(reject)]]}
+        provenance['manual_entry_consolidation'][target] = {'trigger': trigger, 'selector': selector,
+            'field': field, 'default_value': '', 'router': router, 'reject': reject, 'operations': operations}
+    for target, candidate in candidates.items():
+        need(sum(node['type'] == manual_type for node in candidate['nodes']) <= 1,
+             'N8N_MANUAL_TRIGGER_LIMIT_EXCEEDED', target)
+
+
 def build(plan, original_sources, review, effective_sources=None, metadata_sources=None, components=None):
     original_plan = plan
     expected = {entry['id'] for entry in plan['sources']}
@@ -784,6 +851,7 @@ def build(plan, original_sources, review, effective_sources=None, metadata_sourc
 
     markers_by_node = instrument_deadlines(sources, allocated, candidates, copied, names,
                                            internal_entries, runtime, provenance)
+    consolidate_manual_entries(candidates, copied, provenance)
 
     used_call_deadlines = set()
     for (identity, old_name), node in sorted(copied.items()):
@@ -842,6 +910,8 @@ def build(plan, original_sources, review, effective_sources=None, metadata_sourc
         candidate['nodes'].append({'id': stable_id(target, entry_name), 'name': entry_name,
             'type': INTERNAL_TRIGGER, 'typeVersion': 1.1, 'position': [-1080, -800],
             'parameters': {'inputSource': 'passthrough'}})
+        need(sum(node['type'] == INTERNAL_TRIGGER for node in candidate['nodes']) == 1,
+             'N8N_INTERNAL_TRIGGER_LIMIT_EXCEEDED', target)
         candidate['nodes'].append(code_node(target, validate_name,
             runtime + '\nreturn consolidationValidate($input.all(), ' + json.dumps(operations) + ');', [-840, -800]))
         values = []
