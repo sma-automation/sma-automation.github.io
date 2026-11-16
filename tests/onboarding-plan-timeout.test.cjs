@@ -136,8 +136,10 @@ function setup({stalls = []} = {}) {
     },
     submit: () => fire(node('choice'), 'submit'),
     book: () => fire(node('book'), 'click'),
+    refresh: () => fire(node('refresh-payment'), 'click'),
     retry: () => fire(node('retry'), 'click'),
     logout: () => fire(node('logout'), 'click'),
+    setAccount: owner => { account = owner; },
     async auth(event, owner) {
       account = owner;
       authHandler(event, owner ? {user: {id: owner}} : null);
@@ -313,7 +315,8 @@ test('signout and account changes stop an old session lookup before it can save 
   for (const [event, owner, destination] of [['SIGNED_OUT', null, 'index.html'], ['SIGNED_IN', 'second', 'dashboard.html']]) {
     const f = setup();
     await f.check();
-    f.hold('auth2');
+    const nextAuth = 'auth' + (f.count('auth') + 1);
+    f.hold(nextAuth);
     await f.select('beta');
     await f.submit();
     const rpcCount = f.calls.filter(call => call.args?.p_owner).length;
@@ -321,10 +324,203 @@ test('signout and account changes stop an old session lookup before it can save 
     assert.equal(f.timers.size, 0);
     assert.deepEqual(f.redirects, [destination]);
     assert.equal(f.node('choice').hidden, true);
-    await f.release('auth2');
+    await f.release(nextAuth);
     assert.equal(f.calls.filter(call => call.args?.p_owner).length, rpcCount);
     assert.equal(f.writes().length, 0);
     await f.advance(45000);
     assert.deepEqual(f.redirects, [destination]);
   }
+});
+
+for (const stage of ['plan1', 'offer1']) {
+  test('a delayed ' + stage + ' cannot expose the previous account before its auth event arrives', async () => {
+    const f = setup({stalls: [stage]});
+    f.server.offer = {...f.server.offer, state: 'booked', checkout: 'https://www.mollie.com/checkout/first-owner-fixture'};
+    await f.check();
+    f.setAccount('second');
+    await f.release(stage);
+    assert.equal(f.node('choice').hidden, true);
+    assert.equal(f.node('booking').hidden, true);
+    assert.equal(f.node('checkout').hidden, true);
+    assert.equal(f.node('checkout').getAttribute('href'), null);
+    assert.deepEqual(f.redirects, ['dashboard.html']);
+    assert.equal(f.writes().length, 0);
+    assert.equal(f.count('payment'), 0);
+    if (stage === 'plan1') assert.equal(f.count('offer'), 0);
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('a delayed booking for the previous account cannot start its payment continuation', async () => {
+  const f = setup();
+  await f.check();
+  f.hold('booking1');
+  await f.book();
+  f.setAccount('second');
+  await f.release('booking1');
+  assert.equal(f.server.offer.state, 'booked', 'A client cancellation does not undo the stored booking');
+  assert.equal(f.count('booking'), 1);
+  assert.equal(f.count('payment'), 0);
+  assert.equal(f.count('plan'), 1);
+  assert.equal(f.node('booking').hidden, true);
+  assert.equal(f.node('checkout').getAttribute('href'), null);
+  assert.deepEqual(f.redirects, ['dashboard.html']);
+});
+
+test('a late ACTIVE response cannot open a dashboard after the session was lost', async () => {
+  const f = setup();
+  await f.check();
+  f.server.paymentCode = 'ACTIVE';
+  f.hold('payment1');
+  await f.book();
+  f.setAccount(null);
+  await f.release('payment1');
+  assert.deepEqual(f.redirects, ['index.html']);
+  assert.equal(f.count('payment'), 1);
+  assert.equal(f.count('plan'), 1);
+  assert.equal(f.node('booking').hidden, true);
+  assert.equal(f.node('checkout').getAttribute('href'), null);
+});
+
+test('logout intent stops a held booking before sign-out is confirmed and duplicate clicks do not restart it', async () => {
+  const f = setup();
+  await f.check();
+  f.hold('booking1');
+  f.hold('signout1');
+  await f.book();
+  await f.logout();
+  assert.equal(f.node('choice').hidden, true);
+  assert.equal(f.node('booking').hidden, true);
+  assert.equal(f.node('checkout').getAttribute('href'), null);
+  assert.equal(f.node('logout').disabled, true);
+  abortedRPC(f, 'booking1');
+  await f.logout();
+  await f.retry();
+  await f.book();
+  assert.equal(f.count('signout'), 1);
+  await f.release('booking1');
+  assert.equal(f.count('payment'), 0);
+  assert.equal(f.count('plan'), 1);
+  assert.equal(f.node('logout').disabled, true);
+  assert.deepEqual(f.redirects, []);
+  await f.release('signout1');
+  assert.deepEqual(f.redirects, ['index.html']);
+  assert.equal(f.count('booking'), 1);
+  assert.equal(f.count('payment'), 0);
+  assert.equal(f.timers.size, 0);
+});
+
+test('failed sign-out offers a fresh read without reviving the abandoned booking or payment', async () => {
+  const f = setup();
+  await f.check();
+  f.hold('booking1');
+  f.hold('signout1');
+  await f.book();
+  await f.logout();
+  await f.release('signout1', true);
+  assert.equal(f.node('logout').disabled, false);
+  assert.equal(f.node('retry').hidden, false);
+  assert.equal(f.node('retry').disabled, false);
+  assert.match(f.node('status').textContent, /Abmeldung/);
+  await f.retry();
+  assert.equal(f.node('booking').hidden, false);
+  assert.equal(f.node('book').hidden, true);
+  assert.equal(f.node('refresh-payment').hidden, false);
+  assert.equal(f.count('booking'), 1);
+  assert.equal(f.count('payment'), 0);
+  assert.equal(f.calls.find(call => call.key === 'plan2').args.p_plan, null);
+  const fresh = stableSnapshot(f);
+  await f.release('booking1');
+  assert.deepEqual(stableSnapshot(f), fresh);
+  assert.equal(f.count('payment'), 0);
+});
+
+test('logout removes an already displayed checkout link immediately', async () => {
+  const f = setup();
+  f.server.offer = {...f.server.offer, state: 'booked', checkout: 'https://www.mollie.com/checkout/first-owner-fixture'};
+  await f.check();
+  assert.equal(f.node('checkout').hidden, false);
+  f.hold('signout1');
+  await f.logout();
+  assert.equal(f.node('checkout').hidden, true);
+  assert.equal(f.node('checkout').getAttribute('href'), null);
+  assert.equal(f.node('booking').hidden, true);
+  assert.equal(f.node('logout').disabled, true);
+  assert.deepEqual(f.redirects, []);
+  await f.release('signout1');
+  assert.deepEqual(f.redirects, ['index.html']);
+});
+
+test('the final owner recheck shares the original deadline and its late answer cannot restore the offer', async () => {
+  const f = setup({stalls: ['offer1']});
+  await f.check();
+  const finalAuth = 'auth' + (f.count('auth') + 1);
+  f.hold(finalAuth);
+  await f.advance(40000);
+  await f.release('offer1');
+  assert.equal(f.count('auth'), Number(finalAuth.slice(4)));
+  await f.advance(5000);
+  retryAvailable(f);
+  await f.retry();
+  const fresh = stableSnapshot(f);
+  await f.release(finalAuth);
+  assert.deepEqual(stableSnapshot(f), fresh);
+  assert.equal(f.writes().length, 0);
+  assert.equal(f.count('payment'), 0);
+  assert.equal(f.timers.size, 0);
+});
+
+test('logout during the final owner recheck prevents its later answer from displaying a booking', async () => {
+  const f = setup({stalls: ['offer1']});
+  await f.check();
+  const finalAuth = 'auth' + (f.count('auth') + 1);
+  f.hold(finalAuth);
+  f.hold('signout1');
+  await f.release('offer1');
+  await f.logout();
+  await f.release(finalAuth);
+  assert.equal(f.node('choice').hidden, true);
+  assert.equal(f.node('booking').hidden, true);
+  assert.equal(f.node('logout').disabled, true);
+  assert.equal(f.count('payment'), 0);
+  assert.deepEqual(f.redirects, []);
+  await f.release('signout1', true);
+  assert.equal(f.node('retry').hidden, false);
+  await f.retry();
+  assert.equal(f.node('booking').hidden, false);
+  assert.equal(f.writes().length, 0);
+});
+
+test('a sign-out timeout permits a fresh read, ignores obsolete continuations and still respects a later real sign-out event', async () => {
+  const f = setup();
+  await f.check();
+  f.hold('booking1');
+  f.hold('signout1');
+  await f.book();
+  await f.logout();
+  await f.advance(14999);
+  assert.equal(f.node('logout').disabled, true);
+  assert.equal(f.node('retry').hidden, true);
+  await f.advance(1);
+  assert.equal(f.node('logout').disabled, false);
+  assert.equal(f.node('retry').hidden, false);
+  assert.equal(f.node('retry').disabled, false);
+  assert.match(f.node('status').textContent, /Abmeldung/);
+  await f.retry();
+  const fresh = stableSnapshot(f);
+  assert.equal(f.node('booking').hidden, false);
+  assert.equal(f.node('book').hidden, true);
+  await f.release('booking1');
+  await f.release('signout1');
+  assert.deepEqual(stableSnapshot(f), fresh);
+  assert.equal(f.count('booking'), 1);
+  assert.equal(f.count('payment'), 0);
+  // Ending the page's wait does not cancel the underlying auth operation.
+  // Its eventual SIGNED_OUT event must still remove the restored private view.
+  await f.auth('SIGNED_OUT', null);
+  assert.deepEqual(f.redirects, ['index.html']);
+  assert.equal(f.node('choice').hidden, true);
+  assert.equal(f.node('booking').hidden, true);
+  assert.equal(f.node('checkout').getAttribute('href'), null);
+  assert.equal(f.timers.size, 0);
 });

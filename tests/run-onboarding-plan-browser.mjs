@@ -5,9 +5,19 @@ import {chromium} from './dom-runtime/node_modules/playwright-core/index.mjs';
 
 const site = 'https://sma.test';
 const fakeClient = `export function createClient(){return {
- auth:{getSession:async()=>({data:{session:sessionStorage.signedOut?null:{user:{id:'fixture'},access_token:'fixture'}}}),
+ auth:{getSession:async()=>({data:{session:sessionStorage.signedOut?null:{user:{id:sessionStorage.fixtureOwner||'fixture'},access_token:'fixture'}}}),
    onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},
-   signInWithPassword:async()=>{sessionStorage.removeItem('signedOut');return {data:{session:{user:{id:'fixture'}}}};} },
+   signInWithPassword:async()=>{sessionStorage.removeItem('signedOut');return {data:{session:{user:{id:'fixture'}}}};},
+   signOut:async()=>{
+    window.fixtureSignOutCalls=(window.fixtureSignOutCalls||0)+1;
+    if(window.fixtureSignOutMode==='pending') return new Promise((resolve,reject)=>{
+      window.finishFixtureSignOut=result=>{
+        if(result==='reject') return reject(Error('simulated interrupted sign-out'));
+        sessionStorage.signedOut='1';resolve({error:null});
+      };
+    });
+    sessionStorage.signedOut='1';return {error:null};
+   } },
  functions:{invoke:async(name,options)=>{
   const response=await fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(options.body)});
   const result=response.ok?{data:await response.json()}:{error:{status:response.status}};
@@ -55,10 +65,12 @@ try {
     const order='80000000-0000-4000-8000-000000000001';
     const returnUrl=site+'/app/paketwahl.html?buchung='+order;
     let paymentState='booked',statusReads=0,closeOnRefresh=false,pausedReads=0;
-    let holdBooking=null,holdPayment=null,holdChoiceRead=null;
+    let holdBooking=null,holdPayment=null,holdChoiceRead=null,holdOfferRead=null,captureOwnerRedirect=false;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
+      if(req.method()==='GET' && url.href===site+'/app/dashboard.html' && captureOwnerRedirect)
+        return route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><h1>Aktuelle Anmeldung erneut prüfen</h1>'});
       if (req.method()==='GET' && url.origin===site && /^\/app\/(dashboard\.html|index\.html|paketwahl\.html|assets\/[\w.-]+\.m?js)$/.test(url.pathname))
         return route.fulfill({contentType:url.pathname.endsWith('.html')?'text/html; charset=utf-8':'text/javascript',body:await readFile(new URL('..'+url.pathname,import.meta.url))});
       if (req.method()==='GET' && url.origin==='https://esm.sh' && /^\/@supabase\/supabase-js@2(?:\.57\.4)?$/.test(url.pathname))
@@ -88,7 +100,7 @@ try {
           assert.equal(p_plan,saved);assert.equal(p_terms,offer.terms);bookings++;
           offer={...offer,state:'booked',id:offer.automated?(p_offer==='retry-offer'?'retry-booking':'actual-booking'):offer.id,checkout:offer.automated?null:'https://www.mollie.com/checkout/fixture'};
           if(holdBooking){const held=holdBooking;holdBooking=null;return held.send(route,{ok:true,offer:{...offer}});}
-        }
+        } else if(holdOfferRead){const held=holdOfferRead;holdOfferRead=null;return held.send(route,{ok:true,offer:{...offer}});}
         return route.fulfill({json:{ok:true,offer}});
       }
       if(req.method()==='POST' && url.href===site+'/fixture/sma-package-payment'){
@@ -298,6 +310,59 @@ try {
       ...beforeBookingTimeout,bookings:beforeBookingTimeout.bookings+1
     });
     console.log((mobile?'Handy':'Desktop')+': Hängende Buchungs-/Zahlungsantworten enden nach gemeinsamem Zeitlimit; erneutes Laden bleibt lesend und verspätete Antworten wirkungslos.');
+
+    // Storage can change before the cross-tab auth event reaches this page.
+    // The old offer must never become a usable checkout for the new account.
+    offer={id:'first-owner-booking',state:'booked',plan:saved,terms:'2026-11-15-v1',automated:true,
+      checkout:'https://www.mollie.com/checkout/first-owner-fixture'};
+    const delayedOwnerOffer=heldReply();holdOfferRead=delayedOwnerOffer;captureOwnerRedirect=true;
+    const beforeOwnerChange={bookings,paymentCalls,writes,sessionReads};
+    await page.goto(site+'/app/paketwahl.html',{waitUntil:'commit'});
+    await delayedOwnerOffer.wait();
+    await page.evaluate(()=>{sessionStorage.fixtureOwner='second';});
+    await delayedOwnerOffer.release();
+    await page.getByRole('heading',{name:'Aktuelle Anmeldung erneut prüfen'}).waitFor();
+    assert.equal(page.url(),site+'/app/dashboard.html');
+    assert.equal(await page.locator('#checkout').count(),0);
+    assert.deepEqual({bookings,paymentCalls,writes,sessionReads},beforeOwnerChange);
+    await page.evaluate(()=>{sessionStorage.removeItem('fixtureOwner');});
+    captureOwnerRedirect=false;
+
+    // Choosing sign-out must stop the continuation immediately, even if both
+    // the booking reply and sign-out itself are still outstanding.
+    offer={id:'logout-pending-offer',state:'offered',plan:saved,terms:'2026-11-15-v1',automated:true,checkout:null};
+    await page.goto(site+'/app/paketwahl.html');await book.waitFor();
+    await page.evaluate(()=>{window.ignoreRpcAbort=true;window.fixtureSignOutMode='pending';});
+    const abandonedBooking=heldReply();holdBooking=abandonedBooking;
+    const beforeLogout={bookings,paymentCalls,writes,sessionReads};
+    if(mobile)await book.tap();else await book.press('Enter');
+    await abandonedBooking.wait();
+    const logout=page.getByRole('button',{name:'Abmelden',exact:true});
+    if(mobile)await logout.tap();else await logout.press('Enter');
+    await page.waitForFunction(()=>typeof window.finishFixtureSignOut==='function');
+    assert.equal(await logout.isDisabled(),true);
+    assert.equal(await page.locator('#choice').isHidden(),true);
+    assert.equal(await page.locator('#booking').isHidden(),true);
+    assert.equal(await page.locator('#checkout').getAttribute('href'),null);
+    await page.locator('#logout').dispatchEvent('click');
+    await page.locator('#book').dispatchEvent('click');
+    await page.locator('#retry').dispatchEvent('click');
+    assert.equal(await page.evaluate(()=>window.fixtureSignOutCalls),1);
+    const beforeAbandonedReply=await page.evaluate(()=>window.fixtureRpcFinished.sma_onboarding_booking_v1);
+    await abandonedBooking.release();
+    await page.waitForFunction(expected=>window.fixtureRpcFinished.sma_onboarding_booking_v1===expected,beforeAbandonedReply+1);
+    assert.equal(await logout.isDisabled(),true);
+    assert.equal(await page.locator('#booking').isHidden(),true);
+    assert.equal(paymentCalls,beforeLogout.paymentCalls);
+    assert.deepEqual({bookings,paymentCalls,writes,sessionReads},{...beforeLogout,bookings:beforeLogout.bookings+1});
+    await page.evaluate(()=>window.finishFixtureSignOut('reject'));
+    await page.waitForFunction(()=>!document.querySelector('#logout').disabled && !document.querySelector('#retry').hidden);
+    assert.match(await page.locator('#status').innerText(),/Abmeldung/);
+    if(mobile)await reloadState.tap();else await reloadState.press('Enter');
+    await page.getByText('Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.').waitFor();
+    assert.equal(await refresh.isVisible(),true);assert.equal(await pay.isHidden(),true);
+    assert.deepEqual({bookings,paymentCalls,writes,sessionReads},{...beforeLogout,bookings:beforeLogout.bookings+1});
+    console.log((mobile?'Handy':'Desktop')+': Kontowechsel verwirft alte Zahlungslinks; Abmelden stoppt eine laufende Buchung und Wiederholung liest nur den gespeicherten Stand.');
     assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Desktop')+': Mollie-Rückkehr, verspätete und sofortige Freischaltung, Abbruch, Wiederanmeldung und begrenzte Statusabfragen bestanden.');
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');
