@@ -9,8 +9,10 @@ const source=html.slice(html.indexOf('let pending;'),html.indexOf('async functio
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const order='60600000-0000-4000-8000-000000000011';
 const shell='<body data-sma-customer-id="fixture"><p>Mein Kundenbereich</p></body>';
+let tabDraftStore;
+test.before(async()=>{({tabDraftStore}=await import('../app/assets/publication-tab-draft.mjs'));});
 
-function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false}={}){
+function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false,sessionStorage=null,onTeardown=()=>{}}={}){
  let owner='first',phase='initial',holdStage=hold,authHandler,clock=0,next=0;
  const calls=[],signals=[],held=[],redirects=[],timers=new Map(),nodes=new Map();
  const node=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,textContent:'',srcdoc:'',
@@ -22,7 +24,7 @@ function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false}={
  };
  const client={auth:{
   getSession:()=>stage(phase,{data:{session:owner?{user:{id:owner},access_token:owner}:null}}),
-  onAuthStateChange:fn=>{authHandler=fn;},signOut:async()=>({error:null})
+  onAuthStateChange:fn=>{authHandler=fn;},signOut:async()=>{onTeardown('sign-out');return {error:null};}
  },rpc:(name,args)=>({abortSignal(signal){
   signals.push(signal);
   if(name==='sma_customer_media_pilot_v1'){assert.equal(args.p_route,'eligible');return stage('pilot',{data:{ok:true}});}
@@ -32,10 +34,10 @@ function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false}={
  }})};
  const env={AbortController,AbortSignal,URLSearchParams,Response,supabase:client,
   document:{getElementById:node,documentElement:{dataset:{}}},
-  window:{location:{replace:path=>redirects.push(path)}},location:{search:pilot?'?kundenmedien=pilot':''},
+  window:{sessionStorage,location:{replace:path=>{onTeardown('redirect');redirects.push(path);}}},location:{search:pilot?'?kundenmedien=pilot':''},
   endpoint:'https://fixture.invalid/dashboard',dashboardOwnerId:null,startupView:null,
   galleryReload:{take(){return null;},clear(){}},previewMatchesHistory:()=>false,history:{state:null},
-  clearOptimizer(){},frame:node('dashboard'),state:node('state'),
+  clearOptimizer(){onTeardown('remove-editors');},frame:node('dashboard'),state:node('state'),
   setTimeout:(fn,delay)=>{const id=++next;timers.set(id,{fn,at:clock+delay});return id;},clearTimeout:id=>timers.delete(id),
   fetch:(url,options)=>{
    assert.equal(url,'https://fixture.invalid/dashboard');assert.equal(options.method,'POST');
@@ -44,6 +46,7 @@ function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false}={
    return stage('shell',{ok:status===200,status,json:()=>stage('body',{html:shell})});
   }
  };
+ env.publicationDrafts=tabDraftStore(env.window);
  for(const key of ['dashboardMobileNav','dashboardQuickFind','dashboardCloudUpload','musicLibraryDashboard','mediaEditorEntry',
  'dashboardChapters','publicationHistory','customerWebsiteDashboard','companyProfileDashboard','websitePreparation','fileView'])env[key]=null;
  vm.createContext(env);vm.runInContext(source,env);
@@ -116,6 +119,40 @@ test('actual sign-out and account-change handlers cancel every pending dashboard
  const first=setup({hold:'initial'});const run=first.start();await flush();await first.logout();await run;
  assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial']);
  assert.deepEqual(first.redirects,['index.html']);
+});
+
+for(const departure of ['logout','account-change'])test(departure+': parent teardown purges previous-owner checkpoints after child pagehide without relying on child auth callbacks',async()=>{
+ const rows=new Map(),sessionStorage={get length(){return rows.size;},key:i=>[...rows.keys()][i]??null,
+  getItem:k=>rows.get(k)??null,setItem:(k,v)=>rows.set(k,v),removeItem:k=>rows.delete(k)};
+ const drafts=tabDraftStore({sessionStorage}),id=n=>'60600000-0000-4000-8000-'+String(n).padStart(12,'0');
+ const record=(n,owner,kind)=>({token:id(n),owner,portal:'youtube',route:JSON.stringify([null,id(n+1),null,null]),
+  fileId:id(n+1),fileRevision:'version:1',previewId:id(n+2),assignment:4,revision:1,
+  shop:'https://sma-automation.com/app/shop.html?shop=fixture',
+  base:{title:'Gespeicherter Titel',body:'Die bisherige gespeicherte Fassung.',hashtags:[],product_id:null},
+  ...(kind==='edit'?{kind}:{sent:{title:'Gespeicherter Titel',body:'Gesendete Fassung ohne Empfangsbestätigung.',hashtags:[],product_id:null}}),
+  form:{title:'Lokaler Titel',body:'Die noch offene Bearbeitung '+n+'.',tags:'',source:{text:'Private Beschreibung '+n,language:'de'}}});
+ const pending=record(701,'first'),editing=record(711,'first','edit'),foreign=record(721,'separate-owner','edit');
+ let armed=false,removed=false;
+ const remaining=record=>drafts.read(record.portal,record.owner,record.route);
+ const f=setup({sessionStorage,onTeardown(stage){
+  if(!armed)return;
+  if(stage==='remove-editors'){
+   removed=true;
+   // A departing child can still perform its ordinary final pagehide checkpoint.
+   drafts.write({...editing,token:id(731),form:{...editing.form,body:'Letzte Eingabe beim Entfernen des Editors.'}});
+   return;
+  }
+  assert.equal(removed,true,'the owner purge must follow editor removal');
+  assert.equal(remaining(pending),null,'the pending save checkpoint must be purged before '+stage);
+  assert.equal(remaining(editing),null,'the final pagehide checkpoint must be purged before '+stage);
+  assert.deepEqual(remaining(foreign),foreign,'another owner checkpoint must remain');
+  assert.equal(sessionStorage.getItem('fixture.unrelated'),'behalten');
+ }});
+ await f.start();drafts.write(pending);drafts.write(editing);drafts.write(foreign);sessionStorage.setItem('fixture.unrelated','behalten');
+ assert.equal(rows.size,4);armed=true;
+ if(departure==='logout')await f.logout();else await f.auth('SIGNED_IN','second');
+ assert.equal(rows.size,2);assert.equal(remaining(pending),null);assert.equal(remaining(editing),null);
+ assert.deepEqual(f.redirects,['index.html']);
 });
 
 test('owner changes without auth events still refuse active shell and both booking destinations',async()=>{

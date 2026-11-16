@@ -21,15 +21,21 @@ const files=Array.from({length:14},(_,i)=>({id:uuid(i+1),name:'Suchweg Datei '+(
  modified_at:'2026-11-16T00:00:00Z',assignments:[{platform:'youtube',revision:1,status:'assigned',title:'Suchweg Beitrag '+(i+1)}]}));
 const shell=`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}.page:not(.active){display:none}@media(max-width:650px){aside{display:none}}main{padding:16px}.platform-card{display:grid;gap:14px;padding:16px}.card{padding:12px}</style>
-<body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"></div></header>
+<body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"><button id="fixtureLogout" onclick="parent.postMessage({type:'sma-dashboard-logout'},top.location.origin)">Abmelden</button></div></header>
 <aside><p>Arbeitsbereich</p><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button></aside><main>
 <section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid"><div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
 <section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
 <div class="card"><div class="platform-list"><article class="platform-card"><div class="platform-icon"></div><div class="platform-info"><strong>YouTube</strong></div></article></div></div><div id="publishingFilesSlot"></div></section></main>
 <script>document.querySelector('aside').onclick=e=>{const nav=e.target.closest('[data-page]');if(nav)for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+nav.dataset.page)}</script></body></html>`;
-const client=`export function createClient(){return {
- auth:{getSession:async()=>({data:{session:{user:{id:'fixture'},access_token:'fixture'}}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
- rpc(name,args){const controller=new AbortController();const p=fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(args),signal:controller.signal}).then(r=>r.json()).then(data=>({data}));
+const client=`export function createClient(){
+ const auth=window.top.smaFixtureAuth;
+ return {
+ auth:{getSession:async()=>({data:{session:auth.session()}}),
+  onAuthStateChange(callback){const listener={window,callback};auth.listeners.add(listener);return {data:{subscription:{unsubscribe(){auth.listeners.delete(listener);}}}};},
+  async signOut(){await fetch('/fixture/sign-out',{method:'POST',body:'{}'});auth.emit('SIGNED_OUT',null);return {error:null};},
+  async signInWithPassword(input){const response=await fetch('/fixture/sign-in',{method:'POST',body:JSON.stringify(input)}),data=await response.json();auth.emit('SIGNED_IN',data.owner);return {data:{session:auth.session()},error:null};}
+ },
+ rpc(name,args){const controller=new AbortController();const p=fetch('/fixture/'+name,{method:'POST',headers:{'X-Fixture-Owner':auth.owner||''},body:JSON.stringify(args),signal:controller.signal}).then(r=>r.json()).then(data=>({data}));
  p.abortSignal=signal=>{if(signal.aborted)controller.abort();else signal.addEventListener('abort',()=>controller.abort(),{once:true});return p;};return p;}
 }}`;
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0b8AAAAASUVORK5CYII=';
@@ -42,24 +48,50 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
  const ownedFiles=structuredClone(files).map(file=>({...file,verified_at:new Date().toISOString()}));
  const drafts=new Map(ownedFiles.map((file,i)=>[file.id,{ok:true,status:'completed',id:uuid(100+(distinctDrafts?i:0)),revision:1,assignment_revision:1,
   preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',drafts:[{platform:'youtube',title:file.assignments[0].title,body:'Gespeicherter Suchweg-Text.',hashtags:[],review_notes:[],caption:'Gespeicherter Suchweg-Text.'}]}}]));
- let catalog=ownedFiles.slice(),nextCatalogGate=null,nextDraftGate=null,nextLostSave=null,closing=false;
+ let catalog=ownedFiles.slice(),nextCatalogGate=null,nextDraftGate=null,nextSignOutGate=null,nextLostSave=null,closing=false;
  const unreadableDrafts=new Set();
  const gates=[];
+ await context.addInitScript(()=>{
+  if(window!==window.top||location.origin==='null')return;
+  const key='sma.fixture.owner',stored=sessionStorage.getItem(key);
+  window.smaFixtureAuth={owner:stored===null?'fixture':stored||null,listeners:new Set(),
+   session(){return this.owner?{user:{id:this.owner},access_token:this.owner}:null;},
+   emit(event,owner){
+    this.owner=owner;sessionStorage.setItem(key,owner||'');
+    // Parent-first auth delivery: removed editor windows never receive their own event.
+    for(const listener of [...this.listeners])if(listener.window===window&&this.listeners.has(listener))listener.callback(event,this.session());
+   }
+  };
+ });
  await context.routeWebSocket('**/*',socket=>{unexpected.push('WebSocket '+socket.url());socket.close();});
  await context.route('**/*',async route=>{
   const request=route.request(),address=new URL(request.url()),path=address.pathname;
   const reply=data=>route.fulfill({json:data,headers:{'Access-Control-Allow-Origin':'*'}});
   try{
    if(request.method()==='GET'){
-    if(address.origin===site&&/^\/app\/(dashboard\.html|publication-preview\.html|assets\/[\w.-]+\.(css|m?js))$/.test(path)){
+    if(address.origin===site&&/^\/app\/(dashboard\.html|index\.html|publication-preview\.html|assets\/[\w.-]+\.(css|m?js))$/.test(path)){
      return await route.fulfill({contentType:path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript',body:await fs.readFile('.'+path)});
     }
     if(address.origin==='https://esm.sh'&&path.startsWith('/@supabase/supabase-js@'))return await route.fulfill({contentType:'text/javascript',headers:{'Access-Control-Allow-Origin':'*'},body:client});
    }
    if(request.method()==='POST'){
-    if(address.origin==='https://johnmusic.app.n8n.cloud'&&path==='/webhook/sma-dashboard-session')return await reply({html:shell});
-    const args=request.postDataJSON();calls.push({path,args});
+    if(address.origin==='https://johnmusic.app.n8n.cloud'&&path==='/webhook/sma-dashboard-session'){
+     const owner=request.headers().authorization?.replace(/^Bearer /,'');assert.ok(['fixture','second'].includes(owner));
+     return await reply({html:shell.replace('data-sma-customer-id="fixture"','data-sma-customer-id="'+owner+'"')});
+    }
+    const args=request.postDataJSON(),owner=request.headers()['x-fixture-owner'];calls.push({path,args,owner});
+    if(address.origin===site&&path==='/fixture/sign-out'){
+     const gate=nextSignOutGate;nextSignOutGate=null;
+     if(gate){gate.started.resolve();await gate.released.promise;}
+     return await reply({ok:true});
+    }
+    if(address.origin===site&&path==='/fixture/sign-in'){
+     assert.equal(args.password,'Fixture-only_123!');assert.ok(['fixture@example.test','second@example.test'].includes(args.email));
+     return await reply({owner:args.email.split('@')[0]});
+    }
     if(address.origin===site&&path==='/fixture/sma_publication_files_v1'){
+     assert.ok(['fixture','second'].includes(owner),'file reads require a synthetic signed-in owner');
+     if(owner==='second'){assert.equal(args.p_action,'list','the second account cannot request the first account files');return await reply({ok:true,files:[],sync_state:'complete'});}
      if(args.p_action==='list'){
       if(args.p_input?.dashboard_labels){
        const gate=nextCatalogGate;nextCatalogGate=null;
@@ -74,6 +106,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
       const saved=structuredClone(drafts.get(file.id));
       const gate=nextDraftGate;nextDraftGate=null;
       if(gate){gate.started.resolve();await gate.released.promise;}
+      if(request.frame().isDetached())return await route.abort('aborted').catch(()=>{});
       return await reply(saved);
      }
      if(args.p_action==='save'&&allowDraftSave){
@@ -145,6 +178,22 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
   const gate={started:deferred(),released:deferred()};gates.push(gate);nextDraftGate=gate;
   return {started:gate.started.promise,release:()=>gate.released.resolve()};
  }
+ function holdSignOut(){
+  const gate={started:deferred(),released:deferred()};gates.push(gate);nextSignOutGate=gate;
+  return {started:gate.started.promise,release:()=>gate.released.resolve()};
+ }
+ async function switchOwner(owner){
+  await page.evaluate(owner=>window.smaFixtureAuth.emit('SIGNED_IN',owner),owner);
+  await page.waitForFunction(owner=>document.getElementById('dashboard')?.contentDocument?.body?.dataset.smaCustomerId===owner,owner);
+  await dashboard.getByRole('tab',{name:'Konto & Paket'}).waitFor();
+ }
+ async function signIn(owner='fixture'){
+  await page.waitForURL(site+'/app/index.html');
+  await page.locator('#email').fill(owner+'@example.test');await page.locator('#password').fill('Fixture-only_123!');
+  await page.locator('#authSubmit').click();
+  await page.waitForFunction(owner=>document.getElementById('dashboard')?.contentDocument?.body?.dataset.smaCustomerId===owner,owner);
+  await dashboard.getByRole('tab',{name:'Konto & Paket'}).waitFor();
+ }
  function advanceDraft(id,fields){
   const saved=drafts.get(id),file=ownedFiles.find(file=>file.id===id);assert.ok(saved&&file);
   const draft=saved.preview.drafts[0];Object.assign(draft,structuredClone(fields));draft.caption=draft.body;
@@ -152,7 +201,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
   return structuredClone(saved);
  }
  return {page,dashboard,dialog,input,hit,editor,body,previewBack,launcher,account,open,edit,returnToSearch,refreshCatalog,holdCatalog,holdDraft,calls,
-  advanceDraft,savedDraft:id=>structuredClone(drafts.get(id)),
+  advanceDraft,holdSignOut,switchOwner,signIn,savedDraft:id=>structuredClone(drafts.get(id)),
   loseNextSaveReply(id){assert.ok(allowDraftSave&&drafts.has(id));nextLostSave=id;},
   allowDraftRead(id){unreadableDrafts.delete(id);}};
 }
@@ -194,6 +243,60 @@ async function showPreview(editor){
 
 for(const mobile of [false,true]){
  const label=mobile?'mobile':'desktop';
+ for(const departure of ['logout','account-change'])test(label+': '+departure+' clears both file checkpoints before re-entry even with a late save receipt',{timeout:45000},async t=>{
+  const f=await fixture(t,mobile,{distinctDrafts:true,allowDraftSave:true}),other=uuid(2);
+  const editorA=editorFor(f,wanted),editorB=editorFor(f,other),bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
+  const sent='Die ausdrücklich gespeicherte Fassung von A bleibt auf dem simulierten Server.';
+  const privateA='Private spätere Eingabe von A vor dem Verlassen des Kontos.';
+  const privateB='Private offene Eingabe von B vor dem Verlassen des Kontos.';
+  await f.open();await f.edit();await bodyA.fill(sent);f.loseNextSaveReply(wanted);
+  await editorA.locator('#save').click();await waitForFile(f,wanted);await editorA.locator('#checkDraftSave').waitFor();
+  await bodyA.fill(privateA);
+  if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
+  await editorA.locator('#source_text').fill(pendingSource);
+  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill(privateB);
+  await openSearchFile(f,wanted);await showSource(editorA);
+  const receipt=f.holdDraft();f.allowDraftRead(wanted);await editorA.locator('#checkDraftSave').click();await receipt.started;
+  await openSearchFile(f,other);await showSource(editorB);assert.equal(await bodyB.inputValue(),privateB);
+  assert.ok(await checkpoint(f,wanted));assert.ok(await checkpoint(f,other));assert.equal(draftWrites(f).length,1);
+  const authCalls=f.calls.length;
+  if(departure==='logout'){
+   const signOut=f.holdSignOut();await f.dashboard.getByRole('button',{name:'Abmelden',exact:true}).click();await signOut.started;
+   assert.equal(await f.page.locator('#dashboard').isVisible(),false);
+   assert.equal(await checkpoint(f,wanted),null,'A is purged before the sign-out service replies');
+   assert.equal(await checkpoint(f,other),null,'B is purged before the sign-out service replies');
+   receipt.release();signOut.release();await f.signIn();
+   assert.equal(f.calls.slice(authCalls).filter(call=>call.path==='/fixture/sign-out').length,1);
+  }else{
+   await f.switchOwner('second');
+   assert.equal(await checkpoint(f,wanted),null);assert.equal(await checkpoint(f,other),null);
+   receipt.release();
+   await f.launcher.click();assert.equal(await f.input.inputValue(),'');await f.input.fill(query);
+   await f.dialog.getByText('Keine Treffer. Versuche einen kürzeren Begriff.',{exact:true}).waitFor();
+   assert.equal(await f.dialog.locator('[data-quick-file]').count(),0,'another account never sees the former file search');
+   await f.input.press('Escape');
+   for(const direction of ['goBack','goForward']){
+    await f.page[direction]();
+    await f.page.waitForFunction(()=>document.getElementById('dashboard')?.contentDocument?.body?.dataset.smaCustomerId==='second');
+    assert.equal(await f.dashboard.locator('iframe[data-portal]').count(),0,'old history cannot restore a former account editor');
+    assert.equal(await checkpoint(f,wanted),null);assert.equal(await checkpoint(f,other),null);
+   }
+   await f.switchOwner('fixture');
+  }
+  assert.equal(await checkpoint(f,wanted),null);assert.equal(await checkpoint(f,other),null);
+  await openSearchFile(f,wanted);await showSource(editorA);
+  assert.equal(await bodyA.inputValue(),sent,'returning to the former account starts from the actually saved A');
+  assert.equal((await editorA.locator('#source_text').inputValue()).includes(pendingSource),false);
+  assert.equal(await editorA.locator('#checkDraftSave').isVisible(),false);
+  await openSearchFile(f,other);await showSource(editorB);
+  assert.equal(await bodyB.inputValue(),'Gespeicherter Suchweg-Text.','B has no remaining local draft after explicit account departure');
+  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
+  await f.page.goForward();await editorB.locator('#workspacePreview').waitFor();
+  await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
+  assert.equal(draftWrites(f).length,1);assert.equal(f.savedDraft(wanted).preview.drafts[0].body,sent);
+  assert.equal(await checkpoint(f,wanted),null);assert.equal(await checkpoint(f,other),null);
+ });
  test(label+': a lost save receipt resolves while A is hidden without replacing later A edits or B navigation',{timeout:45000},async t=>{
   const f=await fixture(t,mobile,{distinctDrafts:true,allowDraftSave:true}),other=uuid(2);
   const editorA=editorFor(f,wanted),editorB=editorFor(f,other),bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
