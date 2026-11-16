@@ -188,7 +188,9 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
   await dashboard.getByRole('tab',{name:'Konto & Paket'}).waitFor();
  }
  async function signIn(owner='fixture'){
-  await page.waitForURL(site+'/app/index.html');
+  // Auth notification and explicit logout may both replace the same login URL.
+  await page.locator('#authSubmit:enabled').waitFor();
+  assert.equal(new URL(page.url()).pathname,'/app/index.html');
   await page.locator('#email').fill(owner+'@example.test');await page.locator('#password').fill('Fixture-only_123!');
   await page.locator('#authSubmit').click();
   await page.waitForFunction(owner=>document.getElementById('dashboard')?.contentDocument?.body?.dataset.smaCustomerId===owner,owner);
