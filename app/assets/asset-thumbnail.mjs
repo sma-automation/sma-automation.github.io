@@ -32,23 +32,49 @@ export async function fetchAssetThumbnail(file,token,signal,request=fetch){
 // One owner-scoped loader per view; at most three concurrent preview requests.
 // Object URLs and responses live only in memory and are cleared at logout/reload.
 export function createMediaThumbnailLoader(getToken){
- let generation=0,active=0,queue=[],observer=null;const cache=new Map(),urls=new Set(),controllers=new Set();
- function reset(){generation++;observer?.disconnect();observer=null;queue=[];for(const c of controllers)c.abort();for(const url of urls)URL.revokeObjectURL(url);urls.clear();}
- function clear(){reset();cache.clear();}
- async function run(){
-  if(active>=3||!queue.length)return;const {host,file,version}=queue.shift();active++;
-  const key=file.id+':'+file.revision,scope=thumbnailReadScope(),{controller}=scope;controllers.add(controller);
+ let generation=0,owner=0,active=0,queue=[],observer=null;
+ const cache=new Map(),urls=new Set(),pending=new Map(),wanted=new Set();
+ function reset(){
+  generation++;observer?.disconnect();observer=null;queue=[];wanted.clear();
+  for(const [key,job] of pending){job.targets=[];if(!job.scope)pending.delete(key);}
+  for(const url of urls)URL.revokeObjectURL(url);urls.clear();
+  // A renderer re-observes its next page synchronously. Keep matching work even
+  // before IntersectionObserver fires; abort only files that left the new view.
+  const version=generation;void Promise.resolve().then(()=>{
+   if(version!==generation)return;
+   for(const [key,job] of pending)if(!wanted.has(key)){pending.delete(key);job.scope?.close();}
+  });
+ }
+ function clear(){reset();owner++;for(const job of pending.values())job.scope?.close();pending.clear();cache.clear();}
+ function current({host,version}){return version===generation&&host.isConnected;}
+ function show(target,entry){
+  if(!current(target))return;const {host,file,version}=target;
+  const url=URL.createObjectURL(entry.blob);urls.add(url);const img=host.ownerDocument.createElement('img');img.alt=file.media_kind==='video'?'Videovorschau':'Bildvorschau';img.decoding='async';img.src=url;
+  img.addEventListener('error',()=>{if(version!==generation)return;host.textContent=file.media_kind==='video'?'Video':'Bild';URL.revokeObjectURL(url);urls.delete(url);});host.replaceChildren(img);
+ }
+ function drain(){
+  while(active<3&&queue.length){const job=queue.shift();if(pending.get(job.key)!==job)continue;active++;job.scope=thumbnailReadScope();void run(job);}
+ }
+ async function run(job){
+  const {key,file,scope}=job;
   try{
-   let entry=cache.get(key);if(!entry||Date.now()-entry.time>60000){const token=await scope.read(getToken);const blob=await scope.read(()=>fetchAssetThumbnail(file,token,scope.signal));scope.signal.throwIfAborted();if(version!==generation||!host.isConnected)return;entry={blob,time:Date.now()};cache.delete(key);cache.set(key,entry);if(cache.size>20)cache.delete(cache.keys().next().value);}
-   if(version!==generation||!host.isConnected)return;
-   const url=URL.createObjectURL(entry.blob);urls.add(url);const img=host.ownerDocument.createElement('img');img.alt=file.media_kind==='video'?'Videovorschau':'Bildvorschau';img.decoding='async';img.src=url;
-   img.addEventListener('error',()=>{if(version!==generation)return;host.textContent=file.media_kind==='video'?'Video':'Bild';URL.revokeObjectURL(url);urls.delete(url);});host.replaceChildren(img);
-  }catch{if(version===generation&&host.isConnected)host.textContent='Vorschau folgt';}
-  finally{scope.close();controllers.delete(controller);active--;void run();}
+   const token=await scope.read(getToken),blob=await scope.read(()=>fetchAssetThumbnail(file,token,scope.signal));scope.signal.throwIfAborted();
+   if(job.owner!==owner||pending.get(key)!==job)return;
+   const entry={blob,time:Date.now()};cache.delete(key);cache.set(key,entry);if(cache.size>20)cache.delete(cache.keys().next().value);
+   for(const target of job.targets)show(target,entry);
+  }catch{if(job.owner===owner)for(const target of job.targets)if(current(target))target.host.textContent='Vorschau folgt';}
+  finally{scope.close();if(pending.get(key)===job)pending.delete(key);active--;drain();}
  }
  function observe(host,file){
-  host.textContent=file.media_kind==='video'?'▶':'▧';const version=generation;
-  const enqueue=()=>{if(version!==generation||!host.isConnected)return;queue.push({host,file,version});void run();};
+  file={id:file.id,revision:file.revision,media_kind:file.media_kind};
+  host.textContent=file.media_kind==='video'?'▶':'▧';const target={host,file,version:generation},key=JSON.stringify([file.id,file.revision,file.media_kind]);wanted.add(key);let queued=false;
+  const enqueue=()=>{
+   if(queued||!current(target))return;queued=true;
+   const entry=cache.get(key);if(entry&&Date.now()-entry.time<=60000){show(target,entry);return;}cache.delete(key);
+   let job=pending.get(key);
+   if(!job||job.scope?.signal.aborted){job={key,file,owner,targets:[],scope:null};pending.set(key,job);queue.push(job);}
+   job.targets.push(target);drain();
+  };
   const Observer=host.ownerDocument.defaultView?.IntersectionObserver;
   if(!Observer){enqueue();return;}
   if(!observer){const current=new Observer(entries=>{if(observer!==current)return;for(const e of entries)if(e.isIntersecting){current.unobserve(e.target);e.target.loadThumbnail?.();}},{rootMargin:'100px'});observer=current;}

@@ -7,7 +7,7 @@ import {missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} 
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
-import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=2';
+import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=3';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';

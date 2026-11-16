@@ -2,11 +2,12 @@
 
 Recovers missed Shopify order webhooks into the existing Supabase dashboard mirror.
 The dedicated n8n workflow is `SMA – Shopify Bestellabgleich V1`
-(`wudynmKEwHU8QPQ4`), published as "Bestellabgleich V1 – 15 Minuten". It does not modify the main customer assistant workflow.
+(`wudynmKEwHU8QPQ4`), with the trigger "Stündlicher Kontrollabgleich". It does not modify the main customer assistant workflow.
 
 ## Operation
 
-- Schedule: every 15 minutes, Europe/Vienna. A manual trigger uses the same path.
+- Schedule: every hour at minute 0, Europe/Vienna. A manual trigger uses the same path.
+  Regular signed Shopify order webhooks retain their existing event-driven path.
 - Only explicitly enabled rows in `sma_private.order_reconciliation_v1` participate.
   The initial deployment opts in the existing SMA test merchant only.
 - The service-only RPC derives tenant, owner, account and exact Shopify hostname
@@ -14,8 +15,9 @@ The dedicated n8n workflow is `SMA – Shopify Bestellabgleich V1`
   Checkout release (`sma_shopify_konten.aktiv`) remains a separate gate.
 - Claims are serialized per account with `FOR UPDATE SKIP LOCKED`, a random lease,
   and a 10-minute expiry. The workflow timeout is 8 minutes. The next due time
-  uses the claim start plus 14 minutes, avoiding a skipped 15-minute tick caused
-  by normal execution duration or scheduler jitter.
+  remains the claim start plus 14 minutes: this is the normal recovery eligibility
+  floor, not a separate timer. Eligible accounts are processed on the next hourly
+  tick. The existing five-minute failure retry eligibility remains unchanged.
 - Every claim retrieves fresh Shopify credentials through the existing encrypted
   n8n credential table. Account, customer, credential reference, sync opt-in,
   connection status and exact HTTPS hostname must match. Redirects are disabled.
@@ -37,13 +39,29 @@ The dedicated n8n workflow is `SMA – Shopify Bestellabgleich V1`
   No stock, payment, fulfillment, refund, cancellation or notification operation
   is performed. Orders absent from a response are never deleted.
 
+The hourly control schedule reduces planned starts from 96 to 24 per day, or
+from 2,880 to 720 per 30 days of continuous operation, excluding manual starts.
+This saves 2,160 scheduled starts per 30 days (75% of this workflow's planned
+starts). Missed webhooks and failed recovery runs can wait until the next hourly
+tick instead of the next quarter-hour tick. The existing two-minute cutoff,
+processing time and Shopify availability still apply; this is not a guaranteed
+60-minute recovery deadline. Normal webhook delivery and dashboard refreshes
+are unchanged.
+
+Production verification on 2026-11-16: the existing workflow was published as
+version `63164c6a-3551-4d15-98c5-4178250af128`. A fresh export after reloading
+matched the reviewed draft byte for byte. All 17 node IDs, processing nodes,
+credentials and workflow settings were preserved; only the schedule, its label
+and the corresponding connection key changed. n8n omits the default values of
+one hour and minute zero in its export; the editor confirmed both values.
+
 ## Monitoring and recovery
 
 Read `account_id,status,started_at,finished_at,last_success_at,next_run_at,result`
 from `sma_private.order_reconciliation_v1`. The result contains counts and at
 most 100 conflict order IDs, never tokens, addresses or customer emails.
 
-`failed` is eligible after five minutes and retried on the next scheduler tick.
+`failed` is eligible after five minutes and retried on the next hourly scheduler tick.
 A crashed execution leaves a lease that expires before the next normal tick.
 `review_required` needs investigation of the listed timestamp conflicts.
 The n8n execution itself may succeed after a handled failure; the database audit
