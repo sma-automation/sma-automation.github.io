@@ -341,6 +341,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   show('files');
   return {
     show,
+    finishInitialLoad() { deferInitialFocus=false; },
     setSearchReturn(value) { fromSearch = value; previewBack.textContent = backText(); },
     restoreView(requestedView,restoreFocus=true) {
       deferInitialFocus=false;

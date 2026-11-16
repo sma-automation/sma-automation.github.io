@@ -1751,4 +1751,7 @@ try{
   if(ready)await loadLatest();
  }
 }catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
-finally{if(workspace&&!signedOut&&window.top!==window)window.top.postMessage({type:'sma-publication-workspace-ready'},location.origin);}
+finally{
+ workspace?.finishInitialLoad();
+ if(workspace&&!signedOut&&window.top!==window)window.top.postMessage({type:'sma-publication-workspace-ready'},location.origin);
+}

@@ -80,6 +80,17 @@ test('restored workspace can finish loading behind another focused surface witho
  p.workspace.restoreView('files',false);assert.notEqual(p.get('workspaceTab-files').focused,true);
  p.workspace.restoreView('preview');assert.equal(p.get('workspacePreviewBack').focused,true);
 });
+test('finishing a hidden initial load releases focus suppression without navigating or focusing',()=>{
+ const views=[],p=setup({}, {deferInitialFocus:true,onView:view=>views.push(view)});
+ p.workspace.selection({id:'file-1',name:'Beitrag.jpg',media_kind:'image'});
+ p.workspace.show('preview');
+ assert.notEqual(p.get('workspacePreviewBack').focused,true);
+ const before=views.slice();
+ p.workspace.finishInitialLoad();
+ assert.deepEqual(views,before);assert.notEqual(p.get('workspacePreviewBack').focused,true);
+ p.workspace.show('preview');
+ assert.equal(p.get('workspacePreviewBack').focused,true);
+});
 test('trusted workspace tab choices report user intent even when that tab is already visible',()=>{
  const views=[],p=setup({}, {onView:(view,requested,user)=>views.push({view,user})});
  p.get('workspaceTab-source').events.click({isTrusted:true});

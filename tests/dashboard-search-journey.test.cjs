@@ -315,4 +315,33 @@ for(const mobile of [false,true]){
   assert.equal(await f.dialog.locator('[data-quick-file="'+uuid(14)+'"]').count(),1);
   assert.equal(await f.body.inputValue(),pending);
  });
+ test(label+': reopening a search result focuses the same editor after its reload completed while hidden',{timeout:30000},async t=>{
+  const f=await fixture(t,mobile);await f.open();await f.edit();
+  await f.editor.locator('#workspacePreviewEdits').click();
+  await f.page.waitForFunction(()=>history.state?.view==='preview');
+  const catalogGate=f.holdCatalog(),draftGate=f.holdDraft();
+  await f.page.reload({waitUntil:'domcontentloaded'});await catalogGate.started;
+  await catalogGate.release();await draftGate.started;
+  const restoredFrame=await f.dashboard.locator('iframe[data-portal="youtube"]').elementHandle();
+  await f.page.goBack();await f.dialog.waitFor();
+  assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit));
+  draftGate.release();
+  await f.body.waitFor({state:'attached'});
+  await f.page.waitForFunction(()=>{
+   const editor=document.getElementById('dashboard').contentDocument.querySelector('iframe[data-portal="youtube"]');
+   return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+  });
+  assert.equal(await f.dialog.isVisible(),true);
+  assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit),'hidden readiness leaves the restored result focused');
+  assert.equal(await f.body.inputValue(),pending);
+  await f.hit.click();await f.previewBack.waitFor();
+  await f.page.waitForFunction(id=>history.state?.smaOptimization&&history.state.assetId===id&&history.state.view==='preview',wanted);
+  assert(await restoredFrame.evaluate(el=>el===el.ownerDocument.querySelector('iframe[data-portal="youtube"]')),'the explicitly reopened result reuses the restored iframe');
+  assert.equal(await f.dashboard.locator('iframe[data-portal="youtube"]').count(),1);
+  assert.equal(await f.body.inputValue(),pending);
+  assert.equal(await f.editor.locator('#workspacePostCaption').textContent(),pending);
+  assert(await focused(f.previewBack),'explicit reopening focuses the preview return button after initial loading has finished');
+  await f.previewBack.click();await f.dialog.waitFor();
+  assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit));
+ });
 }
