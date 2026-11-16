@@ -209,12 +209,41 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false}={}){
 }
 
 const editorFor=(f,id)=>f.dashboard.frameLocator('iframe[data-key="youtube:'+id+'"]');
+async function workspaceFailure(f,id,error){
+ const state=await f.page.evaluate(()=>{
+  const frame=document.getElementById('dashboard'),doc=frame?.contentDocument;
+  return {url:location.href,route:history.state,rootMessage:document.getElementById('message')?.textContent,
+   dashboardHidden:frame?.hidden,editors:[...(doc?.querySelectorAll('iframe[data-key]')||[])].map(editor=>{
+    const content=editor.contentDocument;
+    return {key:editor.dataset.key,restoring:editor.dataset.restoring,hidden:editor.hidden,src:editor.src,
+     status:content?.getElementById('status')?.textContent,saveStatus:content?.getElementById('saveStatus')?.textContent,
+     assetStatus:content?.getElementById('assetStatus')?.textContent,bodyDisabled:content?.getElementById('youtube-body')?.disabled};
+   })};
+ }).catch(reason=>({diagnosticError:reason.message}));
+ const requests=f.calls.slice(-12).map(call=>({path:call.path,owner:call.owner,action:call.args?.p_action,file:call.args?.p_input?.asset_id}));
+ throw new Error('File workspace did not become ready: '+JSON.stringify({id,state,requests}),{cause:error});
+}
 async function waitForFile(f,id){
- await f.page.waitForFunction(id=>{
-  const dashboard=document.getElementById('dashboard').contentDocument;
-  const editor=dashboard?.querySelector('iframe[data-key="youtube:'+id+'"]');
-  return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
- },id);
+ try{
+  await f.page.waitForFunction(id=>{
+   const dashboard=document.getElementById('dashboard').contentDocument;
+   const editor=dashboard?.querySelector('iframe[data-key="youtube:'+id+'"]');
+   return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+  },id);
+ }catch(error){await workspaceFailure(f,id,error);}
+}
+async function waitForWorkspaceView(f,editor,view=null){
+ let key;
+ try{
+  key=await editor.locator('body').evaluate(()=>window.frameElement.dataset.key);
+  await f.page.waitForFunction(({key,view})=>{
+   const route=history.state,doc=document.getElementById('dashboard')?.contentDocument;
+   const frame=doc?.querySelector('iframe[data-key="'+key+'"]'),content=frame?.contentDocument;
+   const shown=content?.getElementById('workspaceSource')?.hidden===false?'source':content?.getElementById('workspacePreview')?.hidden===false?'preview':null;
+   return frame&&!frame.hidden&&frame.dataset.restoring!=='true'&&route?.smaOptimization&&
+    key===route.portal+':'+(route.assetId||'template')&&route.view===shown&&frame.dataset.view===shown&&(!view||view===shown);
+  },{key,view});
+ }catch(error){await workspaceFailure(f,key,error);}
 }
 async function openSearchFile(f,id){
  await f.launcher.click();await f.input.fill(query);
@@ -232,15 +261,16 @@ async function checkpoint(f,id){
  },id);
 }
 const draftWrites=f=>f.calls.filter(call=>call.path==='/fixture/sma_publication_files_v1'&&call.args.p_action==='save');
-async function showSource(editor){
- await editor.locator('#workspaceSource:visible, #workspacePreview:visible').waitFor();
+async function showSource(editor,f){
+ // Reused editors can still show the old panel until their search-open message arrives.
+ await waitForWorkspaceView(f,editor);
  if(!await editor.locator('#workspaceSource').isVisible())await editor.locator('#workspaceEditPost').click();
- await editor.locator('#workspaceSource').waitFor();
+ await waitForWorkspaceView(f,editor,'source');
 }
-async function showPreview(editor){
- await editor.locator('#workspaceSource:visible, #workspacePreview:visible').waitFor();
+async function showPreview(editor,f){
+ await waitForWorkspaceView(f,editor);
  if(!await editor.locator('#workspacePreview').isVisible())await editor.locator('#workspacePreviewEdits').click();
- await editor.locator('#workspacePreview').waitFor();
+ await waitForWorkspaceView(f,editor,'preview');
 }
 
 for(const mobile of [false,true]){
@@ -256,10 +286,10 @@ for(const mobile of [false,true]){
   await bodyA.fill(privateA);
   if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
   await editorA.locator('#source_text').fill(pendingSource);
-  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill(privateB);
-  await openSearchFile(f,wanted);await showSource(editorA);
+  await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill(privateB);
+  await openSearchFile(f,wanted);await showSource(editorA,f);
   const receipt=f.holdDraft();f.allowDraftRead(wanted);await editorA.locator('#checkDraftSave').click();await receipt.started;
-  await openSearchFile(f,other);await showSource(editorB);assert.equal(await bodyB.inputValue(),privateB);
+  await openSearchFile(f,other);await showSource(editorB,f);assert.equal(await bodyB.inputValue(),privateB);
   assert.ok(await checkpoint(f,wanted));assert.ok(await checkpoint(f,other));assert.equal(draftWrites(f).length,1);
   const authCalls=f.calls.length;
   if(departure==='logout'){
@@ -286,13 +316,13 @@ for(const mobile of [false,true]){
    await f.switchOwner('fixture');
   }
   assert.equal(await checkpoint(f,wanted),null);assert.equal(await checkpoint(f,other),null);
-  await openSearchFile(f,wanted);await showSource(editorA);
+  await openSearchFile(f,wanted);await showSource(editorA,f);
   assert.equal(await bodyA.inputValue(),sent,'returning to the former account starts from the actually saved A');
   assert.equal((await editorA.locator('#source_text').inputValue()).includes(pendingSource),false);
   assert.equal(await editorA.locator('#checkDraftSave').isVisible(),false);
-  await openSearchFile(f,other);await showSource(editorB);
+  await openSearchFile(f,other);await showSource(editorB,f);
   assert.equal(await bodyB.inputValue(),'Gespeicherter Suchweg-Text.','B has no remaining local draft after explicit account departure');
-  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  await showPreview(editorB,f);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
   await f.page.goForward();await editorB.locator('#workspacePreview').waitFor();
   await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
@@ -319,15 +349,15 @@ for(const mobile of [false,true]){
   assert.deepEqual(f.calls.slice(readStart).filter(call=>call.path==='/fixture/sma_publication_files_v1'&&call.args.p_input?.asset_id===wanted)
    .map(call=>call.args.p_action),['get'],'retrying an unavailable receipt only reads A');
   assert.equal(draftWrites(f).length,1);
-  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill('Die erste unabhängige Bearbeitung von B bleibt erhalten.');
-  await openSearchFile(f,wanted);await showSource(editorA);await bodyA.fill(later);
+  await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill('Die erste unabhängige Bearbeitung von B bleibt erhalten.');
+  await openSearchFile(f,wanted);await showSource(editorA,f);await bodyA.fill(later);
   await editorA.locator('#youtube-hashtags').fill(rawTags);
   if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
   await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
   const gate=f.holdDraft();f.allowDraftRead(wanted);
   await editorA.locator('#checkDraftSave').click();await gate.started;
   assert.equal(await bodyA.isDisabled(),true,'A stays locked while its receipt read is pending');
-  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill(laterB);
+  await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill(laterB);
   const bCheckpoint=await checkpoint(f,other),route=await f.page.evaluate(()=>JSON.stringify(history.state));assert.ok(bCheckpoint);
   gate.release();await waitForFile(f,wanted);
   assert.match(await editorA.locator('#saveStatus').textContent(),/gesendete Fassung ist gespeichert.*späteren Texteingaben sind noch offen/);
@@ -341,14 +371,14 @@ for(const mobile of [false,true]){
    return document.activeElement===dashboard&&dashboard.contentDocument.activeElement===editor&&editor.contentDocument.activeElement?.id==='youtube-body';
   },other),'a background receipt leaves the keyboard focus in B');
   assert.equal(draftWrites(f).length,1);assert.equal(f.savedDraft(wanted).revision,before.revision+1);
-  await openSearchFile(f,wanted);await showSource(editorA);
-  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA);
+  await openSearchFile(f,wanted);await showSource(editorA,f);
+  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA,f);
   assert.equal(await bodyA.inputValue(),later);assert.equal(await editorA.locator('#youtube-hashtags').inputValue(),rawTags);
   assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource);assert.equal(await editorA.locator('#language').inputValue(),'en');
   assert.equal(await editorA.locator('#checkDraftSave').isVisible(),false);
   assert.equal(await checkpoint(f,other),bCheckpoint);assert.equal(draftWrites(f).length,1);
   assert.equal(f.savedDraft(wanted).preview.drafts[0].body,sent,'later input stays local until another explicit save');
-  await showPreview(editorA);
+  await showPreview(editorA,f);
   assert.equal(await editorA.locator('#workspacePostCaption').textContent(),later);
   assert.equal(await editorA.locator('#workspacePostTags').textContent(),rawTags);
   assert.equal(await editorA.locator('#workspaceDraftAction').textContent(),'Hashtags korrigieren');
@@ -356,7 +386,7 @@ for(const mobile of [false,true]){
   await f.page.goForward();await editorA.locator('#workspacePreview').waitFor();assert.equal(await bodyA.inputValue(),later);
   await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
   await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);assert.equal(await bodyB.inputValue(),laterB);
-  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  await showPreview(editorB,f);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));assert.equal(draftWrites(f).length,1);
  });
  test(label+': a second server change during comparison requires another choice after real reload and preserves B',{timeout:45000},async t=>{
@@ -368,11 +398,11 @@ for(const mobile of [false,true]){
   await f.open();await f.edit();await bodyA.fill(localA);
   if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
   await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
-  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill(localB);
+  await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill(localB);
   const otherCheckpoint=await checkpoint(f,other);assert.ok(otherCheckpoint);
   await openSearchFile(f,wanted);
   const first=f.advanceDraft(wanted,{title:'Suchweg erste externe Änderung',body:'Die erste externe Änderung am Beitrag von Datei A.'});
-  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA);
+  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA,f);
   assert.equal(await bodyA.inputValue(),localA);assert.equal(await editorA.locator('#save').isDisabled(),true);
   const compare=editorA.locator('#compareDraft'),dialog=editorA.locator('#draftConflictDialog');
   await compare.click();await dialog.waitFor();
@@ -389,7 +419,7 @@ for(const mobile of [false,true]){
   assert.equal(await bodyA.inputValue(),localA);assert.equal(await compare.isVisible(),true);
   assert.equal(await checkpoint(f,other),otherCheckpoint);
   // Use the browser's actual reload, including the existing pagehide checkpoint.
-  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA);
+  await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);await showSource(editorA,f);
   assert.equal(await bodyA.inputValue(),localA);assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource);
   assert.equal(await editorA.locator('#language').inputValue(),'en');
   assert.equal(await editorA.locator('#save').isDisabled(),true,'reload still requires comparison against the latest baseline');
@@ -408,13 +438,13 @@ for(const mobile of [false,true]){
   assert.equal(f.savedDraft(wanted).preview.drafts[0].title,second.preview.drafts[0].title);
   assert.equal(await editorA.locator('#source_text').inputValue(),pendingSource,'saving the post retains its separate source input');
   assert.equal(await checkpoint(f,other),otherCheckpoint);
-  await showPreview(editorA);await editorA.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  await showPreview(editorA,f);await editorA.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.hit));assert.equal(await f.input.inputValue(),query);
   await f.page.goForward();await editorA.locator('#workspacePreview').waitFor();assert.equal(await bodyA.inputValue(),localA);
   await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
   await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);
   assert.equal(await bodyB.inputValue(),localB);
-  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  await showPreview(editorB,f);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
  });
  for(const choice of ['local','stored'])test(label+': two file checkpoints survive a newer server draft, explicit '+choice+' comparison and real history',{timeout:45000},async t=>{
@@ -429,12 +459,12 @@ for(const mobile of [false,true]){
    if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
    await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
   }
-  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill(textB);
+  await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill(textB);
   const otherCheckpoint=await checkpoint(f,other);assert.ok(otherCheckpoint);
   await openSearchFile(f,wanted);
   const newer=f.advanceDraft(wanted,{title:'Suchweg neuer Titel vom zweiten Editor',body:remoteBody});
   await f.page.reload({waitUntil:'domcontentloaded'});await waitForFile(f,wanted);
-  await showSource(editorA);
+  await showSource(editorA,f);
   assert.equal(await bodyA.inputValue(),textA,'reload keeps the local body until a deliberate choice');
   assert.equal(await editorA.locator('#save').isDisabled(),true,'a changed server baseline cannot be blindly saved');
   assert.equal(await checkpoint(f,other),otherCheckpoint);
@@ -474,7 +504,7 @@ for(const mobile of [false,true]){
    assert.equal(draftWrites(f).length,0);
   }
   assert.equal(await checkpoint(f,other),otherCheckpoint,'save or reload of A leaves B byte-for-byte intact');
-  await showPreview(editorA);await editorA.locator('#workspacePreviewBack').click();
+  await showPreview(editorA,f);await editorA.locator('#workspacePreviewBack').click();
   await f.dialog.waitFor();assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit));
   await f.page.goForward();await editorA.locator('#workspacePreview').waitFor();
   assert.equal(await f.page.evaluate(()=>history.state.assetId),wanted);
@@ -482,7 +512,7 @@ for(const mobile of [false,true]){
   await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
   await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);
   assert.equal(await bodyB.inputValue(),textB,'B recovers its unchanged checkpoint through the original search');
-  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  await showPreview(editorB,f);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
   // This later search was opened from the editor's publishing page, not the
   // initial account chapter. Its own origin must remain active behind the dialog.
@@ -495,13 +525,13 @@ for(const mobile of [false,true]){
   const textA='Die lokale Bearbeitung von A wartet auf den Versionsvergleich.';
   const textB='Neuere Eingaben in B während die Antwort für A noch aussteht.';
   await f.open();await f.edit();await bodyA.fill(textA);
-  await openSearchFile(f,other);await showSource(editorB);await bodyB.fill('Frühere ungesicherte Eingaben in Datei B.');
+  await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill('Frühere ungesicherte Eingaben in Datei B.');
   await openSearchFile(f,wanted);
   f.advanceDraft(wanted,{body:'Neue gespeicherte A-Fassung für den verzögerten Abruf.'});
   const gate=f.holdDraft();await f.page.reload({waitUntil:'domcontentloaded'});await gate.started;
   await f.page.goBack();await f.dialog.waitFor();assert(await focused(f.hit));
   await f.dialog.locator('[data-quick-file="'+other+'"]').click();await waitForFile(f,other);
-  await showSource(editorB);await bodyB.fill(textB);
+  await showSource(editorB,f);await bodyB.fill(textB);
   const before=await checkpoint(f,other),route=await f.page.evaluate(()=>JSON.stringify(history.state));
   gate.release();await waitForFile(f,wanted);
   assert.equal(await bodyA.inputValue(),textA);assert.equal(await editorA.locator('#compareDraft').getAttribute('hidden'),null);
@@ -513,11 +543,11 @@ for(const mobile of [false,true]){
   assert.equal(await checkpoint(f,other),before,'late A restoration cannot update B storage');
   assert.equal(await f.page.evaluate(()=>JSON.stringify(history.state)),route,'late A restoration cannot replace B navigation');
   assert.equal(draftWrites(f).length,0);
-  await showPreview(editorB);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
+  await showPreview(editorB,f);await editorB.locator('#workspacePreviewBack').click();await f.dialog.waitFor();
   assert(await focused(f.dialog.locator('[data-quick-file="'+other+'"]')));
   await f.page.goForward();await editorB.locator('#workspacePreview').waitFor();assert.equal(await bodyB.inputValue(),textB);
   await f.page.goBack();await f.dialog.waitFor();
-  await f.hit.click();await showSource(editorA);await editorA.locator('#compareDraft').click();
+  await f.hit.click();await showSource(editorA,f);await editorA.locator('#compareDraft').click();
   await editorA.locator('#draftConflictDialog').waitFor();
   assert.equal(await editorA.locator('#draftConflictApply').isDisabled(),true);
   await editorA.locator('#draftConflictBack').click();await waitForFile(f,wanted);
