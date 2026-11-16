@@ -23,6 +23,14 @@ const authModule = `export function createClient() {
     },
     async getSession() {
       window.recoveryCalls.session++;
+      if (query.get('bootstrap') === 'pending' && window.recoveryCalls.session === 1) {
+        return new Promise((resolve, reject) => {
+          window.finishInitialSession = result => result === 'reject'
+            ? reject(Error('simulated late initial session failure'))
+            : resolve({data:{session:result === 'session'
+              ? {user:{id:'late-initial-customer',email:'entry@example.invalid'}} : null}});
+        });
+      }
       if (window.sessionResult === 'offline') throw Error('simulated session interruption');
       return {data:{session:window.sessionResult === 'missing' ? null : session}};
     },
@@ -231,6 +239,72 @@ try {
     assert.equal(new URL(page.url()).hash, '');
     assert.equal(await page.getByLabel('Passwort', {exact:true}).inputValue(), '');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+
+    // The first session read can stall before any button listener used to be
+    // attached. Exercise the rendered page while that promise is still pending.
+    await page.clock.install();
+    await page.goto(site + '/app/index.html?bootstrap=pending', {waitUntil:'commit'});
+    await page.waitForFunction(() => typeof window.finishInitialSession === 'function');
+    await page.getByLabel('E-Mail-Adresse', {exact:true}).fill('entry@example.invalid');
+    await activate(page.getByRole('button', {name:'Passwort vergessen?', exact:true}));
+    assert.equal(await mail.inputValue(), 'entry@example.invalid');
+    await activate(page.getByRole('button', {name:'Wiederherstellungslink senden', exact:true}));
+    await page.getByText(/Link zum Zurücksetzen/).waitFor();
+    const helpStatus = await page.locator('#status').textContent();
+    await page.evaluate(() => {
+      window.emitAuthEvent('PASSWORD_RECOVERY');
+      window.finishInitialSession('session');
+    });
+    await page.clock.runFor(1);
+    assert.equal(await page.locator('#status').textContent(), helpStatus);
+    assert.equal(await page.locator('#forgotView').isVisible(), true);
+    assert.deepEqual(await page.evaluate(() => window.authCalls), [{
+      reset:'entry@example.invalid',options:{redirectTo:'https://sma-automation.com/app/'}
+    }]);
+    await activate(page.getByRole('button', {name:'Zur Anmeldung', exact:true}));
+    assert.equal(await page.getByRole('button', {name:'Anmelden', exact:true}).isEnabled(), true);
+
+    for (const late of ['session', 'reject']) {
+      await page.goto(site + '/app/index.html?bootstrap=pending', {waitUntil:'commit'});
+      await page.waitForFunction(() => typeof window.finishInitialSession === 'function');
+      await page.clock.fastForward(15001);
+      assert.equal(await page.getByRole('button', {name:'Anmelden', exact:true}).isEnabled(), true);
+      assert.match(await page.locator('#status').textContent(), /lange|erreichbar|erneut|geprüft/i);
+      await page.getByLabel('E-Mail-Adresse', {exact:true}).fill('entry@example.invalid');
+      await page.getByLabel('Passwort', {exact:true}).fill('EntryExample909!');
+      await activate(page.getByRole('button', {name:'Anmelden', exact:true}));
+      await page.getByText('Testanmeldung', {exact:true}).waitFor();
+      await page.evaluate(result => window.finishInitialSession(result), late);
+      await page.clock.runFor(1);
+      assert.equal(await page.locator('#status').textContent(), 'Testanmeldung');
+      assert.equal(await page.locator('#loginView').isVisible(), true);
+      assert.deepEqual(await page.evaluate(() => window.authCalls), ['signIn']);
+      assert.equal(new URL(page.url()).pathname, '/app/index.html');
+    }
+
+    await page.goto(site + '/app/index.html?type=recovery&bootstrap=pending#type=recovery', {waitUntil:'commit'});
+    await page.waitForFunction(() => typeof window.finishInitialSession === 'function');
+    await newPassword.fill('Recovery909!');
+    await confirmation.fill('Recovery909!');
+    await page.clock.fastForward(15001);
+    const stalledRecoveryStatus = await page.locator('#status').textContent();
+    assert.match(stalledRecoveryStatus, /lange|erneut|geprüft/i);
+    await page.evaluate(() => {
+      window.emitAuthEvent('PASSWORD_RECOVERY');
+      window.finishInitialSession('missing');
+    });
+    await page.clock.runFor(1);
+    assert.equal(await page.locator('#status').textContent(), stalledRecoveryStatus);
+    assert.equal(await newPassword.inputValue(), 'Recovery909!');
+    assert.equal(await confirmation.inputValue(), 'Recovery909!');
+    assert.equal(await savePassword.isEnabled(), true);
+    assert.equal(new URL(page.url()).hash, '#type=recovery');
+    await activate(savePassword);
+    await page.getByRole('heading', {name:'Kundenbereich', exact:true}).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.recoveryCalls), {
+      session:2,update:1,signOut:1,passwordMatches:true
+    });
+    console.log(mobile ? 'Hängender Kundeneinstieg auf dem Handy sicher abgefangen.' : 'Hängender Kundeneinstieg per Tastatur sicher abgefangen.');
     console.log(mobile ? 'Passwort-Wiederherstellung auf dem Handy bestanden.' : 'Passwort-Wiederherstellung per Tastatur bestanden.');
     assert.deepEqual(unexpected, []);
     console.log(mobile ? 'Kundeneinstieg auf dem Handy bestanden.' : 'Kundeneinstieg per Tastatur bestanden.');
