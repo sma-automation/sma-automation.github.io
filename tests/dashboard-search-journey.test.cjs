@@ -36,7 +36,7 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 const focused=locator=>locator.evaluate(el=>el.ownerDocument.activeElement===el);
 
-async function fixture(t,mobile){
+async function fixture(t,mobile,{distinctDrafts=false}={}){
  const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,locale:'de-AT',serviceWorkers:'block'});
  const errors=[],unexpected=[],calls=[];
  let catalog=files.slice(),nextCatalogGate=null,nextDraftGate=null,closing=false;
@@ -68,7 +68,7 @@ async function fixture(t,mobile){
      if(args.p_action==='get'){
       const gate=nextDraftGate;nextDraftGate=null;
       if(gate){gate.started.resolve();await gate.released.promise;}
-      return await reply({ok:true,status:'completed',id:uuid(100),revision:1,assignment_revision:1,
+      return await reply({ok:true,status:'completed',id:uuid(100+(distinctDrafts?files.indexOf(file):0)),revision:1,assignment_revision:1,
        preview:{can_publish:false,language:'de',shop_url:'https://sma-automation.com/app/shop.html?shop=fixture',drafts:[{platform:'youtube',title:file.assignments[0].title,body:'Gespeicherter Suchweg-Text.',hashtags:[],review_notes:[],caption:'Gespeicherter Suchweg-Text.'}]}});
      }
      if(args.p_action==='check')return await reply({ok:true});
@@ -343,5 +343,47 @@ for(const mobile of [false,true]){
   assert(await focused(f.previewBack),'explicit reopening focuses the preview return button after initial loading has finished');
   await f.previewBack.click();await f.dialog.waitFor();
   assert.equal(await f.input.inputValue(),query);assert(await focused(f.hit));
+ });
+ test(label+': two files in the same portal keep independent unsaved texts across search navigation and a full reload',{timeout:30000},async t=>{
+  const f=await fixture(t,mobile,{distinctDrafts:true}),other=uuid(2);
+  const textA='Ungespeicherter Text für Datei A im YouTube-Portal.';
+  const textB='Ungespeicherter Text für Datei B im selben YouTube-Portal.';
+  const selector=id=>'iframe[data-key="youtube:'+id+'"]';
+  const editorA=f.dashboard.frameLocator(selector(wanted)),editorB=f.dashboard.frameLocator(selector(other));
+  const bodyA=editorA.locator('#youtube-body'),bodyB=editorB.locator('#youtube-body');
+  async function openThroughSearch(id){
+   await f.launcher.click();await f.input.fill(query);
+   await f.dialog.locator('[data-quick-file="'+id+'"]').click();
+   await f.dialog.waitFor({state:'hidden'});
+   await f.page.waitForFunction(id=>{
+    const dashboard=document.getElementById('dashboard').contentDocument;
+    const editor=[...dashboard.querySelectorAll('iframe[data-key]')].find(frame=>frame.dataset.key==='youtube:'+id);
+    return history.state?.smaOptimization&&history.state.assetId===id&&['source','preview'].includes(history.state.view)&&
+     editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+   },id);
+  }
+  await f.open();await f.edit();await bodyA.fill(textA);
+  const originalA=await f.dashboard.locator(selector(wanted)).elementHandle();
+  await openThroughSearch(other);
+  await editorB.locator('#workspaceEditPost').click();await bodyB.fill(textB);
+  await openThroughSearch(wanted);
+  assert(await originalA.evaluate(el=>el===el.ownerDocument.querySelector('iframe[data-key="'+el.dataset.key+'"]')),'returning through search reuses the first file editor');
+  assert.equal(await bodyA.inputValue(),textA);assert.equal(await bodyB.inputValue(),textB);
+  assert.equal(await f.dashboard.locator('iframe[data-portal="youtube"]').count(),2);
+  await editorA.locator('#workspacePreview').waitFor();
+  await f.page.reload({waitUntil:'domcontentloaded'});
+  await bodyA.waitFor({state:'attached'});
+  await f.page.waitForFunction(id=>{
+   const dashboard=document.getElementById('dashboard').contentDocument;
+   const editor=[...dashboard.querySelectorAll('iframe[data-key]')].find(frame=>frame.dataset.key==='youtube:'+id);
+   return editor?.dataset.restoring!=='true'&&editor?.contentDocument?.getElementById('youtube-body')?.disabled===false;
+  },wanted);
+  assert.equal(await bodyA.inputValue(),textA,'the first file checkpoint must survive editing another file in the same portal');
+  assert.equal(await f.dashboard.locator('iframe[data-portal="youtube"]').count(),1,'the reload recreated only the active file editor');
+  await editorA.locator('#workspacePreview').waitFor();
+  await openThroughSearch(other);
+  assert.equal(await bodyB.inputValue(),textB,'restoring the first file must not overwrite the second file checkpoint');
+  assert.equal(await bodyA.inputValue(),textA,'both reopened files keep their own local edits');
+  assert.equal(await f.page.evaluate(()=>history.state?.assetId),other);
  });
 }

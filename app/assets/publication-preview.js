@@ -9,7 +9,7 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {fetchAssetThumbnail,createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=2';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
-import {tabDraftStore} from './publication-tab-draft.mjs?v=2';
+import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=26';

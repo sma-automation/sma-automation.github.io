@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const {pathToFileURL}=require('node:url');
 const source=fs.readFileSync('app/assets/publication-tab-draft.mjs','utf8');
-const key=p=>'sma.publication.pending-save.v1.'+p;
+const key=p=>'sma.publication.pending-save.v2.'+p+':fixture-owner:'+encodeURIComponent('[null,null,null,null]');
 const copy=v=>JSON.parse(JSON.stringify(v));
 function record(portal='youtube'){
  const fields={title:'Privater Titel',body:'Privater Beitragstext.',hashtags:['SMA'],product_id:null};
@@ -17,7 +17,8 @@ function fixture({dom=true,brokenDom=false}={}){
  const entries=new Map(),nodes=[];let denyWrite=false,denyRead=false,denyRemove=false;
  const status={textContent:'Speicherstand bei SMA noch ungeklärt.'},input={value:'Neueste offene Eingabe'};
  const main={prepend:n=>nodes.unshift(n)};
- const win={sessionStorage:{getItem(k){if(denyRead)throw Error('denied');return entries.get(k)??null;},
+ const win={sessionStorage:{get length(){return entries.size;},key:i=>[...entries.keys()][i]??null,
+  getItem(k){if(denyRead)throw Error('denied');return entries.get(k)??null;},
   setItem(k,v){if(denyWrite)throw Object.assign(Error('full'),{name:'QuotaExceededError'});entries.set(k,v);},
   removeItem(k){if(denyRemove)throw Error('denied');entries.delete(k);}}};
  if(dom)win.document={querySelector(){if(brokenDom)throw Error('view removed');return main;},
@@ -71,7 +72,10 @@ test('logout clears the warning even when all storage access fails and no checkp
 test('owner changes and explicit discard remove the notice without depending on storage writes',()=>{
  for(const change of ['owner','discard']){
   const f=fixture(),v=record();f.store.write(v);f.denyWrite(true);f.store.update(v);assert.equal(f.warning()?.hidden,false);
-  if(change==='owner')assert.equal(f.store.read(v.portal,'other-owner',v.route),null);else f.store.forget(v);
+  if(change==='owner'){
+   assert.equal(f.store.read(v.portal,'other-owner',v.route),null);assert.equal(f.warning().hidden,false);
+   f.store.clearOwner(v.owner);
+  }else f.store.forget(v);
   assert.equal(f.warning().hidden,true);assert.equal(f.entries.has(key(v.portal)),false);
  }
 });

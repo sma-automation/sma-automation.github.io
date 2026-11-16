@@ -1379,9 +1379,9 @@ test('history with a withdrawn product opens only the verified saved draft for c
  }
 });
 
-function sharedDraft(portal){
- const file={...supportedVideo};
- let draft={...result.preview.drafts[0],platform:portal,product_id:'alter-artikel'},revision=1,assign=4,previewId=historySaved.id;
+function sharedDraft(portal,fileId=supportedVideo.id,initialPreviewId=historySaved.id){
+ const file={...supportedVideo,id:fileId};
+ let draft={...result.preview.drafts[0],platform:portal,product_id:'alter-artikel'},revision=1,assign=4,previewId=initialPreviewId;
  const writes=[];
  const view=()=>({ok:true,status:'completed',id:previewId,revision,assignment_revision:assign,product_link_available:!!draft.product_id,
   preview:{...result.preview,drafts:[structuredClone(draft)]}});
@@ -1567,7 +1567,7 @@ test('a timed-out save that reaches the database after the read cannot create a 
 
 function tabStorage(){
  const rows=new Map();
- return {rows,getItem:k=>rows.get(k)??null,setItem:(k,v)=>rows.set(k,v),removeItem:k=>rows.delete(k)};
+ return {rows,get length(){return rows.size;},key:i=>[...rows.keys()][i]??null,getItem:k=>rows.get(k)??null,setItem:(k,v)=>rows.set(k,v),removeItem:k=>rows.delete(k)};
 }
 function interruptedDraft(portal,commit,extra={}){
  const f=sharedDraft(portal),sessionStorage=tabStorage();
@@ -1619,6 +1619,71 @@ test('source-only edits are restored as unconsumed input and never treated as a 
  assert.equal(restored.get('save').disabled,true);assert.equal(f.writes.length,0);
  assert.throws(()=>restored.orderOptions.getContext(),/speichere/);
 });
+test('two files in the same portal keep their own ordinary edits through later input and reload',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const a=sharedDraft(portal),b=sharedDraft(portal,'60600000-0000-4000-8000-000000000012','60600000-0000-4000-8000-000000000013');
+  const sessionStorage=tabStorage(),options={sessionStorage,newUuid:require('node:crypto').randomUUID};
+  const first=await a.open(a.rpc,options),second=await b.open(b.rpc,options);
+  editPortalField(first,'body','Meine ungespeicherte Bearbeitung der ersten Datei.');
+  editPortalField(second,'body','Eine andere Bearbeitung der zweiten Datei.');
+  editPortalField(first,'title','Spätere Änderung nur der ersten Datei');
+  assert.equal(sessionStorage.rows.size,2,'one editor must not evict the other file checkpoint');
+  const reloadedSecond=await b.open(b.rpc,options),reloadedFirst=await a.open(a.rpc,options);
+  assert.equal(reloadedFirst.get('drafts').querySelector('textarea').value,'Meine ungespeicherte Bearbeitung der ersten Datei.');
+  assert.equal(reloadedFirst.get('drafts').querySelector('[data-field=title]').value,'Spätere Änderung nur der ersten Datei');
+  assert.equal(reloadedSecond.get('drafts').querySelector('textarea').value,'Eine andere Bearbeitung der zweiten Datei.');
+  assert.equal(a.writes.length+b.writes.length,0);
+  for(const p of [first,second,reloadedFirst,reloadedSecond])assert(p.calls.every(c=>!c.url&&['list','get','check'].includes(c.p_action)));
+ }
+});
+test('saving, reverting or discarding one file preserves another file checkpoint',async()=>{
+ for(const cleanup of ['save','revert','discard']){
+  const a=sharedDraft('youtube'),b=sharedDraft('youtube','60600000-0000-4000-8000-000000000022','60600000-0000-4000-8000-000000000023');
+  const sessionStorage=tabStorage(),options={sessionStorage,newUuid:require('node:crypto').randomUUID};
+  const first=await a.open(a.rpc,options),second=await b.open(b.rpc,options);
+  const localA='Die erste Datei bleibt bis zu meinem Speichern unverändert offen.';
+  editPortalField(first,'body',localA);editPortalField(second,'body','Eine getrennte Bearbeitung der zweiten Datei.');
+  if(cleanup==='save')await second.save();
+  if(cleanup==='revert')editPortalField(second,'body',b.view().preview.drafts[0].body);
+  if(cleanup==='discard'){
+   const reading=second.get('loadLatest').click();await compareTick();await second.get('useStoredDraft').click();await reading;
+  }
+  assert.equal(sessionStorage.rows.size,1,cleanup+' removes only the second checkpoint');
+  const restored=await a.open(a.rpc,options);
+  assert.equal(restored.get('drafts').querySelector('textarea').value,localA);
+  assert.equal(a.writes.length,0);assert.equal(b.writes.length,cleanup==='save'?1:0);
+ }
+});
+test('a checkpoint from the previous release restores its text before an explicit save clears it',async()=>{
+ for(const portal of ['youtube','tiktok']){
+  const f=sharedDraft(portal),sessionStorage=tabStorage(),options={sessionStorage,newUuid:require('node:crypto').randomUUID};
+  const first=await f.open(f.rpc,options);editPortalField(first,'body','Mein Text aus der bisherigen Zwischensicherung.');
+  const stored=[...sessionStorage.rows.values()][0],legacyKey='sma.publication.pending-save.v1.'+portal;
+  sessionStorage.rows.clear();sessionStorage.setItem(legacyKey,stored);
+  const restored=await f.open(f.rpc,options);
+  assert.equal(restored.get('drafts').querySelector('textarea').value,'Mein Text aus der bisherigen Zwischensicherung.');
+  assert.equal(f.writes.length,0,'the migration does not save a customer draft');
+  assert.equal(sessionStorage.rows.size,1);assert.equal(sessionStorage.getItem(legacyKey),null,'the old checkpoint is superseded only after its replacement is stored');
+  await restored.save();assert.equal(f.writes.length,1);assert.equal(sessionStorage.rows.size,0);
+ }
+});
+test('logout and an authenticated owner change clear all of that customers file checkpoints',async()=>{
+ for(const event of ['logout','owner-change']){
+  const a=sharedDraft('youtube'),b=sharedDraft('youtube','60600000-0000-4000-8000-000000000032','60600000-0000-4000-8000-000000000033');
+  const c=sharedDraft('tiktok','60600000-0000-4000-8000-000000000042','60600000-0000-4000-8000-000000000043');
+  const sessionStorage=tabStorage(),options={sessionStorage,newUuid:require('node:crypto').randomUUID};
+  const first=await a.open(a.rpc,options),second=await b.open(b.rpc,options),foreign=await c.open(c.rpc,{...options,ownerId:'separate-owner'});
+  editPortalField(first,'body','Private Eingabe der ersten Datei.');editPortalField(second,'body','Private Eingabe der zweiten Datei.');
+  editPortalField(foreign,'body','Ein getrennt gesicherter anderer Kundenkontext.');
+  assert.equal(sessionStorage.rows.size,3);
+  if(event==='logout')first.signOut();else first.switchOwner();
+  assert.equal(sessionStorage.rows.size,1);
+  assert.equal(JSON.parse([...sessionStorage.rows.values()][0]).owner,'separate-owner');
+  const restored=await a.open(a.rpc,options);
+  assert.equal(restored.get('drafts').querySelector('textarea').value,a.view().preview.drafts[0].body);
+  assert.equal(a.writes.length+b.writes.length+c.writes.length,0);
+ }
+});
 test('reverting, saving, discarding and signing out clear ordinary edit checkpoints',async()=>{
  for(const cleanup of ['revert','save','discard','logout']){
   const f=sharedDraft('youtube'),sessionStorage=tabStorage(),p=await f.open(f.rpc,{sessionStorage});
@@ -1648,7 +1713,8 @@ test('ordinary checkpoint recovery remains bound to owner, route, file version a
   assert.doesNotMatch(restored.get('drafts').querySelector('textarea')?.value||'',/Private Eingabe/);
   assert.notEqual(restored.get('source_text').value,'Private Inhaltsbeschreibung.');
   assert.equal(f.writes.length,0);
-  if(change!=='route')assert.equal(sessionStorage.rows.size,0);
+  if(change==='file'||change==='draft')assert.equal(sessionStorage.rows.size,0);
+  else assert.equal(sessionStorage.rows.size,1,'a different owner or route cannot read or consume this checkpoint');
  }
 });
 test('a newer saved revision requires comparison before ordinary restored edits can be written',async()=>{
@@ -1743,7 +1809,7 @@ test('a different account or route cannot restore a prior form and disabled sess
   editPortalField(old,'body','Eigenes lokales Formular nur für diesen Einstieg.');await old.save();
   const p=await f.open(f.rpc,{sessionStorage:f.sessionStorage,...other});
   assert.doesNotMatch(p.get('drafts').querySelector('textarea')?.value||'',/Eigenes lokales/);
-  if(other.ownerId)assert.equal(f.sessionStorage.rows.size,0);
+  if(other.ownerId)assert.equal(f.sessionStorage.rows.size,1,'another owner cannot read or consume the saved checkpoint');
  }
  const storage=tabStorage();storage.setItem=()=>{throw Error('quota exceeded');};
  const f=sharedDraft('tiktok'),p=await f.open(f.rpc,{sessionStorage:storage});
