@@ -115,6 +115,8 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         const requested=cycle?o.payment_id:(event||o.payment_id);
         p=await bridge('payment',{payment:requested});requireValue(p.id===requested);
       }else{
+        // Customer creation may have taken time; recheck before creating the first payment.
+        const row=await account();requireValue(sameAccount(row,o)&&dormant(row)&&hasFolderMapping(row));
         eligibleTime(o.first_started,now);
         p=await bridge('first',{order:id,body:{customerId:o.merchant_customer,amount,sequenceType:'first',
           description:'SMA '+o.plan.toUpperCase()+' – Monatsabo',redirectUrl:site+'/app/paketwahl.html?buchung='+id,

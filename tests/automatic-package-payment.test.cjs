@@ -127,6 +127,17 @@ test('Fehlende oder ungültige Ordnerzuordnung verhindert neue Kunden- und Erstz
  }
 });
 
+test('Während der Mollie-Kundenanlage verlorene Ordnerzuordnung verhindert die anschließende Erstzahlung',async()=>{
+ const x=await fixture({beforeBridge:(op,row)=>{if(op==='customer')row.processing_folder_id=null;}});
+ assert.equal((await x.go()).status,503);
+ assert.equal(x.counts.customer,1);assert.equal(x.counts.first,undefined);
+ assert.equal(x.o.payment_id,undefined);assert.equal(x.row().zugang_aktiv,false);
+ Object.assign(x.row(),folderMapping);
+ assert.equal((await (await x.go()).json()).code,'BOOKED');
+ assert.equal(x.counts.customer,1);assert.equal(x.counts.first,1);
+ assert.equal(x.o.payment_id,x.p.id);assert.equal(x.row().zugang_aktiv,false);
+});
+
 test('Nach Erstzahlung fehlende Ordnerzuordnung erhält den Zahlungsbeleg und erzeugt kein Abo oder aktiven Zugang',async()=>{
  const x=await fixture();await x.go();
  x.row().processing_folder_id=null;x.p.status='paid';x.p.paidAt=new Date().toISOString();
