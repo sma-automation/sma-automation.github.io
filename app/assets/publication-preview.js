@@ -9,13 +9,13 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './thumbnail-batch.mjs?v=1';
-import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=1';
+import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=2';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=26';
-import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=28';
+import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=29';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -1731,12 +1731,12 @@ async function saveDraft(){
 $('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
- command:async(action,input,binding)=>{
+ command:async(action,input,binding,options)=>{
   if(action==='get')return new Response(JSON.stringify(await readStoredOrder(input.id)),{status:200,headers:{'Content-Type':'application/json'}});
   const operations={account:'account',prepare:'order_prepare',approve:'order_approve'};
   if(!Object.hasOwn(operations,action))throw fileError('INVALID_INPUT');
   if(!binding?.asset_id||!binding.asset_revision)throw Error('Bitte wähle zuerst den aktuellen Dateistand.');
-  return fileJobs.request({anchor:fileJobAnchor(binding),operation:operations[action],input,timeoutMs:145000});
+  return fileJobs.request({anchor:fileJobAnchor(binding),operation:operations[action],input,timeoutMs:145000,retryAfter:options?.retryAfter});
  },
  getContext:()=>{
   if(signedOut)throw Error(messages.AUTH_REQUIRED);
