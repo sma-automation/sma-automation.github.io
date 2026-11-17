@@ -19,9 +19,10 @@ einen erfolgreich veröffentlichten Beitrag.**
 
 ## Kundenstart-Zuordnung im rein lesenden Startcheck (17.11.2026)
 
-Version 5 des bestehenden SMA-Startchecks enthält zusätzlich die Revisionsprüfung für berechtigte Konten ohne n8n-Verweis. Die in Version 4 ergänzten Werte in `accounts` die
-Anzahl der Website-Kunden mit gespeicherter n8n-Referenz, neue
-Onboarding-Profile und den Stand ihrer noch offenen bzw. gespeicherten
+Version 5 des bestehenden SMA-Startchecks ergänzt eine gesonderte
+Prüfung für berechtigte Konten ohne n8n-Verweis. Bereits seit Version 4
+zählt `accounts` die Website-Kunden mit gespeicherter n8n-Referenz,
+neue Onboarding-Profile sowie deren offene und abgeschlossene
 n8n-Zeilenzuordnungen. Der Schalter für automatische Erstbuchungen ist
 `true` oder `false` bei genau einem Einstellungsdatensatz, andernfalls
 `null` (keine eindeutige Konfiguration). Die Ausgabe gibt keine
