@@ -321,6 +321,26 @@ const paginationState={
   products:{page:1,total:0,request:0},
   orders:{page:1,total:0,request:0}
 };
+// Poll only the section a customer can actually see. A CSS-hidden iframe
+// can remain active even when document.hidden is false in the child.
+function shopFrameDisplayed(){
+ try{
+  let view=window;
+  for(let depth=0;depth<6;depth++){
+   const frame=view.frameElement;
+   if(!frame)return true;
+   if(frame.hidden||frame.ownerDocument?.hidden||
+      typeof frame.getClientRects==='function'&&!frame.getClientRects().length)return false;
+   view=frame.ownerDocument?.defaultView;
+   if(!view)return true;
+  }
+  return false;
+ }catch{return false;}
+}
+function shopPollingAllowed(section){
+ return !stockPageSuspended&&!document.hidden&&!!currentUserId&&
+   !document.getElementById(section).hidden&&shopFrameDisplayed();
+}
 const gallery={product:null,index:0,busy:false,version:0,opener:null};
 const galleryBackdrop=document.getElementById('galleryBackdrop');
 const galleryDialog=document.getElementById('galleryDialog');
@@ -428,7 +448,7 @@ function stockRefreshDelay(){
 }
 function scheduleStockRefresh(delay=stockRefreshDelay()){
   clearTimeout(stockRefreshTimer);stockRefreshTimer=null;
-  if(stockPageSuspended||document.hidden||!currentUserId||!productsState.length)return;
+  if(!shopPollingAllowed('shop')||!productsState.length)return;
   stockRefreshTimer=setTimeout(refreshStock,delay);
 }
 function updateStockViews(){
@@ -442,12 +462,12 @@ function updateStockViews(){
   }
 }
 async function refreshStock(){
-  if(document.hidden||stockPageSuspended||!currentUserId)return;
+  if(!shopPollingAllowed('shop'))return;
   if(stockRefreshRunning||stockPageLoading||stockSaving.size){scheduleStockRefresh(1000);return;}
   const ids=productsState.map(p=>String(p.sma_produkt_id)).filter(Boolean);
   if(!ids.length)return;
   const pageRequest=paginationState.products.request,revision=stockRevision,userId=currentUserId;
-  const isCurrent=()=>pageRequest===paginationState.products.request&&revision===stockRevision&&userId===currentUserId&&!stockPageSuspended;
+  const isCurrent=()=>pageRequest===paginationState.products.request&&revision===stockRevision&&userId===currentUserId&&shopPollingAllowed('shop');
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),10000);
   stockRefreshRunning=true;
@@ -990,7 +1010,7 @@ async function loadProductsPage(requestedPage=1){
 function orderRefreshDelay(){return Math.min(60000,15000*2**Math.min(orderRefreshFailures,2));}
 function scheduleOrderRefresh(delay=orderRefreshDelay()){
   clearTimeout(orderRefreshTimer);orderRefreshTimer=null;
-  if(!orderRefreshEnabled||stockPageSuspended||document.hidden||!currentUserId)return;
+  if(!orderRefreshEnabled||!shopPollingAllowed('bestellungen'))return;
   orderRefreshTimer=setTimeout(()=>loadOrdersPage(orderRequestedPage,{background:true}),delay);
 }
 function stopOrderRefresh(){
@@ -998,12 +1018,37 @@ function stopOrderRefresh(){
   orderRefreshController?.abort();orderRefreshController=null;
   paginationState.orders.request++;orderPageLoading=false;
 }
+// Stop automatic reads when the surrounding dashboard chapter is CSS-hidden.
+// Parent attribute changes resume the selected section without hidden polling.
+function watchShopFrame(){
+ let lastVisible=shopFrameDisplayed();
+ try{
+  let view=window;
+  for(let depth=0;depth<6;depth++){
+   const frame=view.frameElement;if(!frame)break;
+   const ParentObserver=frame.ownerDocument?.defaultView?.MutationObserver;
+   if(typeof ParentObserver==='function'){
+    const observer=new ParentObserver(()=>{
+     const visible=shopFrameDisplayed();if(visible===lastVisible)return;
+     lastVisible=visible;
+     if(visible)resumeShopRefresh();
+     else{clearTimeout(stockRefreshTimer);stockRefreshTimer=null;stopOrderRefresh();}
+    });
+    for(let element=frame;element?.nodeType===1;element=element.parentElement)
+     observer.observe(element,{attributes:true,attributeFilter:['class','style','hidden']});
+   }
+   view=frame.ownerDocument?.defaultView;
+   if(!view)break;
+  }
+ }catch{/* The child visibility and section checks still apply. */}
+}
+watchShopFrame();
 function setOrderStatus(message='Bestellungen werden automatisch aktualisiert.'){
   document.getElementById('bestellStatus').textContent=message;
 }
 async function loadOrdersPage(requestedPage=1,{background=false}={}){
   if(!currentUserId||stockPageSuspended)return;
-  if(background&&(document.hidden||orderPageLoading))return;
+  if(background&&(!shopPollingAllowed('bestellungen')||orderPageLoading))return;
   const state=paginationState.orders;
   const request=++state.request;
   const userId=currentUserId;
@@ -1013,7 +1058,7 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
   orderRefreshController?.abort();
   const controller=new AbortController();orderRefreshController=controller;
   const timeout=setTimeout(()=>controller.abort(),10000);
-  const isCurrent=()=>request===state.request&&userId===currentUserId&&!stockPageSuspended;
+  const isCurrent=()=>request===state.request&&userId===currentUserId&&!stockPageSuspended&&(!background||shopPollingAllowed('bestellungen'));
   orderPageLoading=true;orderRefreshEnabled=true;orderRequestedPage=page;
   const appliedFilters=orderFilters;
   if(!background){
@@ -1082,10 +1127,19 @@ document.getElementById('smaOrderClear').addEventListener('click',()=>{
 
 function selectShopSection(section){
   const orders=section==='orders';
+  const wasOrders=!document.getElementById('bestellungen').hidden;
   document.getElementById('shop').hidden=orders;
   document.getElementById('bestellungen').hidden=!orders;
   document.getElementById('showProducts').setAttribute('aria-pressed',String(!orders));
   document.getElementById('showOrders').setAttribute('aria-pressed',String(orders));
+  if(orders===wasOrders)return;
+  if(orders){
+    clearTimeout(stockRefreshTimer);stockRefreshTimer=null;
+    scheduleOrderRefresh(0);
+  }else{
+    stopOrderRefresh();
+    scheduleStockRefresh(0);
+  }
 }
 document.getElementById('showProducts').addEventListener('click',()=>selectShopSection('products'));
 document.getElementById('showOrders').addEventListener('click',()=>selectShopSection('orders'));

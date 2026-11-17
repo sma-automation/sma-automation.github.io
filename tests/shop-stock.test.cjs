@@ -60,7 +60,7 @@ function harness(extraGlobals={}){
       fast(){stockFastUntil=Date.now()+120000;},
       state(){return {products:productsState,error:stockRequestsError,running:stockRefreshRunning,page:paginationState.products.page};}
     };`,context);
-  return {api:context.api,document,nodes,timers,queries,docEvents,winEvents,
+  return {api:context.api,document,window:context.window,nodes,timers,queries,docEvents,winEvents,
     respond:fn=>respond=fn,advance:ms=>now+=ms};
 }
 const product=(id='product-1')=>({sma_produkt_id:id,produkt_name:'Test',shopify_aktiv:true,bestand:6,sku:'TEST'});
@@ -184,4 +184,46 @@ test('only active products in the current public shop expose a copyable link wit
  const open=buttons.find(b=>b.textContent==='Produktseite öffnen');assert.equal(open.hidden,true);
  await copy.events.click();assert.equal(open.hidden,false);assert.equal(open.href,copied);assert.equal(copied,'https://sma-automation.com/app/shop.html?shop=mein-shop&produkt=product-1');
  denied=true;await copy.events.click();assert.equal(field.hidden,false);assert.equal(field.selected,true);assert.equal(field.value,copied);
+});
+
+
+test('stock polling stops while order section is displayed and resumes on product selection',async()=>{
+ const h=harness(),p=product();h.api.init([p]);
+ h.document.getElementById('shop').hidden=true;
+ h.api.scheduleStockRefresh();assert.equal(h.timers.size,0);
+ await h.api.refreshStock();assert.equal(h.queries.length,0);
+ h.nodes.get('showProducts').events.click();
+ assert.equal(h.nodes.get('shop').hidden,false);
+ const poll=[...h.timers.values()][0];assert.equal(poll.delay,0);
+ h.respond(q=>({data:q.table==='sma_produkte'?[{sma_produkt_id:p.sma_produkt_id,bestand:2}]:[],error:null}));
+ await poll.fn();
+ assert.equal(p.bestand,2);
+ assert.equal(h.queries.filter(q=>q.table==='sma_produkte').length,1);
+ h.nodes.get('showOrders').events.click();assert.equal(h.timers.size,0);
+ await h.api.refreshStock();assert.equal(h.queries.filter(q=>q.table==='sma_produkte').length,1);
+});
+
+test('an iframe hidden behind a different dashboard chapter does not run stock requests',async()=>{
+ const h=harness(),p=product();h.api.init([p]);
+ let shown=false;
+ h.window.frameElement={hidden:false,ownerDocument:{hidden:false,defaultView:{frameElement:null}},
+  getClientRects:()=>shown?[{}]:[]};
+ h.api.scheduleStockRefresh();assert.equal(h.timers.size,0);
+ await h.api.refreshStock();assert.equal(h.queries.length,0);
+ shown=true;h.winEvents.focus();
+ const timer=[...h.timers.values()][0];assert.equal(timer.delay,0);
+ h.respond(q=>({data:q.table==='sma_produkte'?[{sma_produkt_id:p.sma_produkt_id,bestand:3}]:[],error:null}));
+ await timer.fn();
+ assert.equal(p.bestand,3);
+});
+
+test('stock response in flight cannot overwrite data after products become invisible',async()=>{
+ const h=harness(),p=product(),slow=deferred();h.api.init([p]);
+ h.respond(q=>q.table==='sma_produkte'?slow.promise:{data:[],error:null});
+ const pending=h.api.refreshStock();await flush();
+ h.document.getElementById('shop').hidden=true;
+ slow.resolve({data:[{sma_produkt_id:p.sma_produkt_id,bestand:99}],error:null});
+ await pending;
+ assert.equal(p.bestand,6);
+ assert.equal(h.timers.size,0);
 });
