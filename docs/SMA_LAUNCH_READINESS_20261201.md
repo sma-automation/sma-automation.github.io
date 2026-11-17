@@ -17,6 +17,28 @@ E-Mail-Adressen, Medienbytes, Dateipfade noch Tokens. **Eine Anzahl
 gilt nie als Beweis für den unveränderten Freigabe-Fingerprint oder
 einen erfolgreich veröffentlichten Beitrag.**
 
+## Kundenstart-Zuordnung im rein lesenden Startcheck (17.11.2026)
+
+Version 4 des bestehenden SMA-Startchecks ergänzt in `accounts` die
+Anzahl der Website-Kunden mit gespeicherter n8n-Referenz, neue
+Onboarding-Profile und den Stand ihrer noch offenen bzw. gespeicherten
+n8n-Zeilenzuordnungen. Der Schalter für automatische Erstbuchungen ist
+`true` oder `false` bei genau einem Einstellungsdatensatz, andernfalls
+`null` (keine eindeutige Konfiguration). Die Ausgabe gibt keine
+Kundennamen, Kennungen, Adressen, Medieninhalte oder Tokens preis.
+
+Die Werte `drive_folder_access` und `first_paid_customer_e2e` bleiben
+stets `NOT_VERIFIED_BY_THIS_QUERY`. Weder die gespeicherte n8n-Referenz
+noch ein eingeschalteter Zahlungsschalter ersetzen den echten
+[Drive-Ordnercheck](ONBOARDING_FOLDER_PREFLIGHT.md), den Zahlungsbeleg
+oder den ersten praktischen Kunden-E2E. Es wird nichts aktiviert,
+erstellt, veröffentlicht oder als n8n-Execution ausgelöst.
+
+**Nur-Lesen-Livestand vom 17.11.2026, ca. 15:18 Uhr Wien:**
+4 Website-Konten (3 Demo, 0 zahlend), 2 mit n8n-Referenz,
+0 neue Onboarding-Profile, 0 offene manuelle n8n-Zuordnungen,
+automatischer Erstbuchungsschalter an. Noch kein zahlender Kunden-E2E.
+
 ## Einstieg nach der E-Mail-Bestätigung (15.11.2026)
 
 Bei ausstehender E-Mail-Bestätigung kann der Kunde auf der Anmeldeseite über

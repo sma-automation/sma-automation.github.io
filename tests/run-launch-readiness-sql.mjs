@@ -27,7 +27,7 @@ async function checkGallery(expected) {
       (SELECT jsonb_agg(to_jsonb(t)) FROM sma_private.music_catalog_v1 t) AS tracks`)).rows;
     const before = await snapshot();
     const {rows:[{readiness}]} = await db.query(report);
-    assert.equal(readiness.version,3);
+    assert.equal(readiness.version,4);
     const media=readiness.media;
     for (const [key,value] of Object.entries(expected)) assert.equal(media[key],value,key);
     assert.equal(media.gallery_music_jobs,media.gallery_completed_jobs+media.gallery_pending_jobs+media.gallery_other_jobs);
@@ -56,8 +56,11 @@ try {
     CREATE ROLE authenticated;
     CREATE ROLE service_role;
     CREATE TABLE public.sma_kunden (
-      id bigint PRIMARY KEY, aktiv boolean, zahlung_bestaetigt boolean, demo_delta_aktiv boolean
+      id bigint PRIMARY KEY, aktiv boolean, zahlung_bestaetigt boolean,
+      demo_delta_aktiv boolean, n8n_kunde_id text
     );
+    CREATE TABLE sma_private.onboarding_n8n_accounts_v1 (n8n_row_id bigint);
+    CREATE TABLE sma_private.onboarding_payment_settings_v1 (enabled boolean);
     CREATE TABLE public.sma_bestellungen (ist_testbestellung boolean);
     CREATE TABLE sma_private.publication_files_v1 (
       id uuid PRIMARY KEY, customer_id bigint, user_id uuid, revision text, size_bytes bigint,
@@ -81,7 +84,7 @@ try {
   // One transaction fixes now() so both edges of the permission interval can be checked exactly.
   await db.exec(`
     BEGIN;
-    INSERT INTO public.sma_kunden VALUES (1, true, false, true);
+    INSERT INTO public.sma_kunden (id,aktiv,zahlung_bestaetigt,demo_delta_aktiv) VALUES (1, true, false, true);
     INSERT INTO sma_private.publication_orders_v1
       (id, user_id, customer_id, binding, draft, choices, state, approved_at)
     VALUES
@@ -207,6 +210,44 @@ try {
   await checkGallery({music_listed_tracks:1});
   await db.query('DELETE FROM sma_private.gallery_music_v1 WHERE id=$1',[completed]);
   await checkGallery({gallery_music_jobs:3,gallery_completed_jobs:0,gallery_completed_without_record:0,gallery_technical_records:3});
+  // Verify account and payment-switch aggregates using synthetic fixtures only.
+  const accountReadiness=async()=> (await db.query(report)).rows[0].readiness;
+  let onboarding=(await accountReadiness()).accounts;
+  assert.equal(onboarding.new_onboarding_profiles,0);
+  assert.equal(onboarding.new_profiles_waiting_for_n8n_link,0);
+  assert.equal(onboarding.new_profiles_with_n8n_link,0);
+  assert.equal(onboarding.with_n8n_reference,0);
+  assert.equal(onboarding.automatic_first_payment_setting,null);
+  assert.equal(onboarding.onboarding_state,'NO_NEW_ONBOARDING_PROFILES');
+
+  await db.exec(`INSERT INTO sma_private.onboarding_n8n_accounts_v1 VALUES(NULL),(12);
+    INSERT INTO sma_private.onboarding_payment_settings_v1 VALUES(true);
+    INSERT INTO public.sma_kunden (id,aktiv,zahlung_bestaetigt,demo_delta_aktiv,n8n_kunde_id)
+    VALUES (7,false,false,false,'kunde_synthetic_not_a_real_account');`);
+  onboarding=(await accountReadiness()).accounts;
+  assert.equal(onboarding.new_onboarding_profiles,2);
+  assert.equal(onboarding.new_profiles_waiting_for_n8n_link,1);
+  assert.equal(onboarding.new_profiles_with_n8n_link,1);
+  assert.equal(onboarding.with_n8n_reference,1);
+  assert.equal(onboarding.automatic_first_payment_setting,true);
+  assert.equal(onboarding.onboarding_state,'MANUAL_N8N_LINK_PENDING');
+  assert.equal(onboarding.drive_folder_access,'NOT_VERIFIED_BY_THIS_QUERY');
+  assert.equal(onboarding.first_paid_customer_e2e,'NOT_VERIFIED_BY_THIS_QUERY');
+  assert.doesNotMatch(JSON.stringify(await accountReadiness()),/kunde_synthetic_not_a_real_account/);
+  await db.exec('UPDATE sma_private.onboarding_n8n_accounts_v1 SET n8n_row_id=13 WHERE n8n_row_id IS NULL');
+  onboarding=(await accountReadiness()).accounts;
+  assert.equal(onboarding.new_profiles_waiting_for_n8n_link,0);
+  assert.equal(onboarding.new_profiles_with_n8n_link,2);
+  assert.equal(onboarding.onboarding_state,'N8N_LINK_COUNTS_REQUIRE_MANUAL_E2E_CHECK');
+  await db.exec('UPDATE sma_private.onboarding_payment_settings_v1 SET enabled=false');
+  assert.equal((await accountReadiness()).accounts.automatic_first_payment_setting,false);
+  await db.exec('DELETE FROM sma_private.onboarding_payment_settings_v1');
+  assert.equal((await accountReadiness()).accounts.automatic_first_payment_setting,null);
+  await db.exec('INSERT INTO sma_private.onboarding_payment_settings_v1 VALUES(false),(true)');
+  assert.equal((await accountReadiness()).accounts.automatic_first_payment_setting,null);
+  assert.equal((await accountReadiness()).allows_publication,false);
+  assert.equal((await accountReadiness()).initiates_checkout,false);
+
   for(const role of ['anon','authenticated']){
     await db.exec('BEGIN READ ONLY; SET LOCAL ROLE '+role);
     try{await assert.rejects(db.query(report),/permission denied/);}

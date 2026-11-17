@@ -12,6 +12,13 @@ WITH snapshot AS (
     AND zahlung_bestaetigt IS TRUE) AS paid_accounts,
   (SELECT count(*) FROM public.sma_kunden WHERE aktiv IS TRUE
     AND demo_delta_aktiv IS TRUE AND zahlung_bestaetigt IS NOT TRUE) AS demo_only_accounts,
+  -- Onboarding configuration is not proof of payment, folder permission, or successful customer start.
+  (SELECT count(*) FROM public.sma_kunden WHERE nullif(btrim(n8n_kunde_id),'') IS NOT NULL) AS public_accounts_with_n8n_reference,
+  (SELECT count(*) FROM sma_private.onboarding_n8n_accounts_v1) AS onboarding_profiles,
+  (SELECT count(*) FROM sma_private.onboarding_n8n_accounts_v1 WHERE n8n_row_id IS NULL) AS onboarding_waiting_for_link,
+  (SELECT count(*) FROM sma_private.onboarding_n8n_accounts_v1 WHERE n8n_row_id IS NOT NULL) AS onboarding_with_link,
+  (SELECT count(*) FROM sma_private.onboarding_payment_settings_v1) AS first_payment_setting_rows,
+  (SELECT count(*) FROM sma_private.onboarding_payment_settings_v1 WHERE enabled IS TRUE) AS first_payment_enabled_rows,
   (SELECT count(*) FROM sma_private.publication_orders_v1) AS publication_orders,
   (SELECT count(*) FROM sma_private.publication_orders_v1
     WHERE approved_at IS NOT NULL) AS approved_orders,
@@ -83,12 +90,24 @@ WITH snapshot AS (
     WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
 )
 SELECT jsonb_build_object(
- 'version',3,
+ 'version',4,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
   'total',customers,'entitled',entitled_accounts,
-  'paid',paid_accounts,'demo_only',demo_only_accounts
+  'paid',paid_accounts,'demo_only',demo_only_accounts,
+  'with_n8n_reference',public_accounts_with_n8n_reference,
+  'new_onboarding_profiles',onboarding_profiles,
+  'new_profiles_waiting_for_n8n_link',onboarding_waiting_for_link,
+  'new_profiles_with_n8n_link',onboarding_with_link,
+  'automatic_first_payment_setting',CASE
+    WHEN first_payment_setting_rows=1 THEN first_payment_enabled_rows=1 ELSE NULL END,
+  'onboarding_state',CASE
+    WHEN onboarding_waiting_for_link>0 THEN 'MANUAL_N8N_LINK_PENDING'
+    WHEN onboarding_profiles=0 THEN 'NO_NEW_ONBOARDING_PROFILES'
+    ELSE 'N8N_LINK_COUNTS_REQUIRE_MANUAL_E2E_CHECK' END,
+  'drive_folder_access','NOT_VERIFIED_BY_THIS_QUERY',
+  'first_paid_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY'
  ),
  'publishing',jsonb_build_object(
   'orders',publication_orders,'prepared',prepared_orders,
