@@ -153,7 +153,8 @@ try {
 
   await db.exec(`INSERT INTO sma_private.onboarding_n8n_accounts_v1 VALUES(NULL),(12);
     INSERT INTO sma_private.onboarding_payment_settings_v1 VALUES(true);
-    UPDATE public.sma_kunden SET n8n_kunde_id='kunde_synthetic_not_a_real_account' WHERE id=1;`);
+    INSERT INTO public.sma_kunden (id,aktiv,zahlung_bestaetigt,demo_delta_aktiv,n8n_kunde_id)
+    VALUES (7,false,false,false,'kunde_synthetic_not_a_real_account');`);
   onboarding=(await accountReadiness()).accounts;
   assert.equal(onboarding.new_onboarding_profiles,2);
   assert.equal(onboarding.new_profiles_waiting_for_n8n_link,1);
