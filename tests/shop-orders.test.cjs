@@ -22,7 +22,7 @@ class Element {
   querySelector(){return null;}
   focus(){this.focused=true;}
 }
-function harness(){
+function harness(frame=null){
   const nodes=new Map(),timers=new Map(),queries=[],docEvents={},winEvents={};
   let timerId=0,now=100000,respond=()=>({data:[],error:null});
   const document={hidden:false,activeElement:null,
@@ -46,7 +46,7 @@ function harness(){
     };return builder;
   }};
   class Clock extends Date {static now(){return now;}}
-  const context=vm.createContext({document,window:{addEventListener:(e,f)=>winEvents[e]=f},
+  const context=vm.createContext({document,window:{addEventListener:(e,f)=>winEvents[e]=f,frameElement:frame},
     createClient:()=>supabase,Intl,AbortController,AbortSignal,Date:Clock,console,
     setTimeout:(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},
     clearTimeout:id=>timers.delete(id)});
@@ -56,7 +56,7 @@ function harness(){
       state(){return {page:paginationState.orders.page,total:paginationState.orders.total,
         requested:orderRequestedPage,loading:orderPageLoading,failures:orderRefreshFailures};}
     };`,context);
-  return {api:context.api,document,nodes,timers,queries,docEvents,winEvents,
+  return {api:context.api,document,window:context.window,nodes,timers,queries,docEvents,winEvents,
     respond:fn=>respond=fn,advance:ms=>now+=ms};
 }
 const order=(id=9,status='paid')=>({id,markt:'shopify',ist_testbestellung:false,bestellnummer:'#'+(1000+id),
@@ -241,4 +241,44 @@ test('resetting order search restores all accessible results without creating or
   assert.equal(q.focused,true);
   assert.deepEqual(h.queries.at(-1).filters,[['user_id','owner']]);
   assert(h.queries.every(q=>q.operation==='select'));
+});
+
+
+test('inactive product view suppresses order status polling until the customer opens orders',async()=>{
+ const h=harness();h.api.init();h.respond(()=>response([order(1)],1));await h.api.loadOrdersPage();
+ const initial=h.queries.length;
+ h.nodes.get('bestellungen').hidden=true;
+ h.api.scheduleOrderRefresh();
+ assert.equal(h.timers.size,0);
+ await poll(h);assert.equal(h.queries.length,initial);
+ h.nodes.get('showOrders').events.click();
+ assert.equal(h.nodes.get('bestellungen').hidden,false);
+ assert.equal(nextTimer(h).delay,0);
+ h.respond(()=>response([order(2)],1));await nextTimer(h).fn();
+ assert.equal(h.queries.length,initial+1);
+ assert.equal(list(h).children[0].children[0].children[0].textContent,'#1002');
+ h.nodes.get('showProducts').events.click();
+ assert.equal(h.nodes.get('bestellungen').hidden,true);
+ assert.equal(h.timers.size,0);
+ await poll(h);assert.equal(h.queries.length,initial+1);
+});
+
+test('hidden parent dashboard iframe blocks order reads and resumes on return without another tab click',async()=>{
+ let visible=true,change;
+ class Observer{
+  constructor(cb){change=cb;}
+  observe(){}
+ }
+ const parent={hidden:false,defaultView:{frameElement:null,MutationObserver:Observer}};
+ const frame={nodeType:1,hidden:false,parentElement:null,ownerDocument:parent,
+  getClientRects:()=>visible?[{}]:[]};
+ const h=harness(frame);h.api.init();h.respond(()=>response([order()],1));await h.api.loadOrdersPage();
+ assert.equal(nextTimer(h).delay,15000);
+ const before=h.queries.length;
+ visible=false;change();assert.equal(h.timers.size,0);
+ await poll(h);assert.equal(h.queries.length,before);
+ visible=true;change();assert.equal(nextTimer(h).delay,0);
+ h.respond(()=>response([order(3)],1));await nextTimer(h).fn();
+ assert.equal(h.queries.length,before+1);
+ assert.equal(list(h).children[0].children[0].children[0].textContent,'#1003');
 });
