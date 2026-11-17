@@ -149,13 +149,59 @@ dem vorhandenen Produktionsmetadatenbeleg abgeglichen haben. Sämtliche Medien-
 und Kundenzeilen in diesen Tests sind synthetisch; es werden keine Bytes an
 Provider übertragen.
 
+### Zugehörige Musikfassung aus dem Browser
+
+`supabase/sql/file-job-music-family.sql` ergänzt die bestehende Familienzuordnung
+um die automatisch im Browser erzeugte Musikfassung. Sie wird nach
+`file-job-export-family.sql` und dem vorhandenen Gallery-Music-Schema angewendet.
+Der Browser verwendet weiterhin die von Gallery Music reservierte Upload-ID;
+er kann keinen Zielauftrag, fremden Besitzer oder beliebigen Familienanker
+vorgeben. Es entstehen keine neue Commandoperation und kein neuer n8n-Workflow.
+
+Die private Uploadbindung erhält einen eigenen Fremdschlüssel auf den
+Musikauftrag. Eine Musik-ID wird nicht als Editor-Export-ID ausgegeben.
+Ein NULL-sicherer Constraint trennt die beiden Herkunftsarten; die bisherigen
+Anforderungen an Mediendateien und Cover bleiben erhalten. Die Zuordnung prüft
+Besitzer, Kunde, Quelle, reservierten Ausgabehash, Größe, Namen, MIME-Typ und
+Track. Die vollständige Quellrevision wird beim Beitritt serverseitig eingefroren.
+Bekannte ungültige oder mehrdeutige Musik-IDs dürfen nicht auf die Freigabe eines
+gewöhnlichen Uploads ausweichen.
+
+Bei einer bereits gebundenen Musikfassung eines Editor-Derivats darf sich der
+Drive-Zähler bei unveränderten Bytes ändern. Die gespeicherte Quellrevision wird
+dabei nicht umgeschrieben. Die strenge Revisionsprüfung des ursprünglichen
+Hauptauftrags bleibt unverändert; ein anderer Quellinhalt ist kein gültiger Replay.
+
+Eine neue noch nicht abgeschlossene Musikbindung benötigt eine gültige
+serverseitige Reservierung und Musik-Lease. Ein bereits gebundener unveränderter
+Upload behält seinen Auftrag auch bei Wiederholung oder Wechsel der Musik-Lease.
+Vorhandene ältere separate Aufträge behalten ihren Vorrang; sie werden nicht
+nachträglich mit laufender Arbeit zusammengeführt. Die ursprüngliche Frist und
+die Grenze von 64 Commands werden nicht verlängert.
+
+Ein vollständig belegter Katalog-Receipt kann den Uploadabschluss vorwegnehmen,
+wenn der Browser nach der Übertragung geschlossen wurde. Innerhalb der gültigen
+Frist bestätigt der bestehende Upload-Finish-Vertrag diesen ausschließlich aus
+aktuellen Datenbankfeldern rekonstruierten Abschluss. Parent, Upload und Ergebnis
+werden in dieser Reihenfolge gesperrt und danach erneut geprüft. Nach Ablauf
+bleibt ein gültiges historisches Ergebnis als normale Datei benutzbar; der alte
+Upload wird dafür weder erneuert noch künstlich abgeschlossen. Eine abgelehnte
+neue Musikreservierung rollt den dazu begonnenen Familienbeitritt vollständig
+zurück und hinterlässt keinen leeren Zusatzauftrag.
+
+Die lokale Suite `tests/file-job-music-family.test.mjs` prüft die Bindung und
+die vollständige Mailbox-/Uploadquittung mit synthetischen Datensätzen.
+`tests/run-file-job-music-family-concurrency.mjs` prüft unabhängige PostgreSQL-
+Sitzungen ausschließlich in einer neuen dedizierten localhost-Testdatenbank.
+Die bestehenden Editorfamilien- und Workerprüfungen laufen zusätzlich weiter.
+
 ### Planungsrechnung für 20 Kunden
 
 Dies ist ein Nutzungsmodell, kein gemessener Abrechnungswert. Es setzt
 20 Kunden, drei neue Quelldateien je Kunde und Tag, 31 Tage und die Verarbeitung
 einer zusammengehörigen Datei innerhalb derselben 24-Stunden-Frist voraus.
-Eine fertige Exportdatei mit Cover und ihre Folgeaktionen benötigen in diesem
-Modell keinen weiteren Hauptstart.
+Eine fertige Exportdatei mit Cover, die zugehörige Browser-Musikfassung und ihre
+Folgeaktionen benötigen in diesem Modell keinen weiteren Hauptstart.
 
 | Bestandteil | Angenommene Hauptstarts pro Monat |
 | --- | ---: |
