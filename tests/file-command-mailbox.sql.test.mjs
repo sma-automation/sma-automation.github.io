@@ -163,6 +163,10 @@ await test('generic file command mailbox uses the original authenticated busines
       assert.deepEqual(grants, live.public_grants);
     });
 
+    // Run the existing single-file/transport regression cases against the
+    // upgraded family contract after checking the original business baseline.
+    await db.exec(await source('file-job-export-family'));
+
     await scenario('same request and active asset join, immutable keys and owner isolation', async () => {
       const f = await file(), j = await start(assetAnchor(f));
       assert.equal((await start(assetAnchor(f), j.request_id)).job_id, j.job_id);

@@ -109,3 +109,77 @@ und SQL-Integrationskontrolle des fertigen Gesamtimports.
 
 Die erzeugten JSONs und das Manifest bleiben außerhalb des Repositories. Das
 Manifest bindet jeden Overlay an die SHA256 seines unveränderten Quellexports.
+
+## Gemeinsamer Auftrag für Original und Editor-Ausgaben
+
+Die zusätzliche SQL-Datei `supabase/sql/file-job-export-family.sql` erweitert
+die installierte Mailbox. Sie wird nach `file-command-mailbox.sql` angewendet;
+die ursprüngliche Migration bleibt unverändert. Die Erweiterung verwendet
+dieselben öffentlichen Upload-/Asset-Anker, dieselben neun Operationen und
+dieselben nativen Worker.
+
+Ein Editor-Export weist seine Mediendatei und sein optionales Cover bereits
+serverseitig über Export-ID, separate Cover-Upload-ID, Quelle, Entwurfsstand,
+Ausgabehashes und Größen nach. Nur diese nachgewiesene Zugehörigkeit erlaubt
+den Beitritt zum aktiven Auftrag der Quelle. Beliebige Dateien desselben
+Kunden werden dadurch nicht zu einer Datei zusammengefasst.
+
+Jeder zugehörige Upload behält seine eigene Upload-ID und seine ursprüngliche
+private Startreservierung. Upload-Commands werden pro Auftrag, Operation und
+Upload-ID kanonisch dedupliziert. Die öffentliche Antwortprojektion liest
+Abschluss und Ablauf für genau diesen Upload. Die Quell-Assetbindung des
+Hauptauftrags wird durch fertige Mediendateien oder Cover nicht überschrieben.
+Alle Ansichten prüfen vor der Ausgabe einer Upload-Adresse erneut die aktuelle
+Kunden- und Uploadbindung, auch wenn kein einzelner Command angefordert wurde.
+
+Bestätigte Ergebnisdateien erhalten private Zuordnungen zum selben Auftrag.
+Auch eine Dateiauswahl zwischen tatsächlichem Uploadabschluss und der späteren
+Mailbox-Ergebnisquittung muss diesen Auftrag finden. Spätere Magic-, Review-
+und Auftragsaktionen bleiben an die konkrete eigene Datei und Revision gebunden.
+Bereits getrennt laufende ältere Aufträge haben Vorrang; sie werden nicht
+zusammengeführt. Ein vollständig bestätigtes älteres Exportergebnis kann nach
+Ende seines separaten Auftrags einem bereits aktiven Quellauftrag beitreten.
+Unklare Ergebnisse, die Grenze von 64 Commands und die feste
+24-Stunden-Frist erhalten keine zusätzliche Start- oder Verlängerungsmöglichkeit.
+
+Die unabhängige SQL-Suite liegt in
+`tests/file-job-export-family.test.mjs`. Die bisherigen Mailbox-Szenarien laden
+die Erweiterung ebenfalls, nachdem sie die ursprünglichen Fachfunktionen mit
+dem vorhandenen Produktionsmetadatenbeleg abgeglichen haben. Sämtliche Medien-
+und Kundenzeilen in diesen Tests sind synthetisch; es werden keine Bytes an
+Provider übertragen.
+
+### Planungsrechnung für 20 Kunden
+
+Dies ist ein Nutzungsmodell, kein gemessener Abrechnungswert. Es setzt
+20 Kunden, drei neue Quelldateien je Kunde und Tag, 31 Tage und die Verarbeitung
+einer zusammengehörigen Datei innerhalb derselben 24-Stunden-Frist voraus.
+Eine fertige Exportdatei mit Cover und ihre Folgeaktionen benötigen in diesem
+Modell keinen weiteren Hauptstart.
+
+| Bestandteil | Angenommene Hauptstarts pro Monat |
+| --- | ---: |
+| 20 × 3 × 31 Datei-Aufträge einschließlich zugehöriger Exportausgaben | 1.860 |
+| Ein Originalabruf pro Datei | 1.860 |
+| Ein Vorschaubild-Batch pro Datei | 1.860 |
+| Ein Katalogabruf pro Kunde und Tag | 620 |
+| Ein Dashboardabruf pro Kunde und Tag | 620 |
+| Ein gemeinsamer Stundenlauf | 744 |
+| **Summe** | **7.564** |
+| **Verbleibend bis 10.000** | **2.436** |
+
+Vor der Familienzuordnung hätten zusätzliche Mediendatei und Cover in diesem
+Szenario bis zu 3.720 weitere Hauptstarts erzeugt: insgesamt 11.284. Werden
+Originalansicht und Exportvorschau jeweils einmal getrennt geladen, kommt
+weiterhin ein zweiter Originalabruf pro Datei hinzu. Das ergibt nach der
+Zuordnung 9.424 Starts und 576 verbleibende Starts. Weitere Abrufe, neue Arbeit
+nach Ablauf, zusätzliche Dienste und tatsächliche Wiederholungen müssen in
+einer betrieblichen Verbrauchsmessung mitgezählt werden; die Zahl 7.564 ist
+keine pauschale Kapazitätszusage.
+
+Nach den [veröffentlichten n8n-Quotaregeln](https://docs.n8n.io/build/understand-workflows/understand-executions.md)
+zählen native Unterworkflow-Aufrufe nicht als weitere monatliche
+Hauptausführungen. Zusätzliche Einträge in der Ausführungsliste sind deshalb
+nicht automatisch zusätzliche abgerechnete Hauptstarts. Die native Zuordnung,
+die tatsächliche Laufzeit und der Cloud-Abrechnungszähler bleiben unabhängig
+von den SQL-Tests zu kontrollieren.
