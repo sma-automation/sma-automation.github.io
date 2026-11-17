@@ -20,6 +20,8 @@ on:
       - tests/sql-runtime/file-job-*.json
       - tests/sql-runtime/file-job-*.mjs
       - n8n/consolidation/**
+      - tests/oauth-return-refresh*.test.*
+      - tests/fixtures/oauth-return-fixture.cjs
       - n8n/file-command/**
       - n8n/thumbnail-batch/**
       - n8n/publishing/*workflow.json
@@ -290,7 +292,7 @@ jobs:
         env:
           SMA_REQUIRE_FFMPEG: '1'
         run: |
-          node --test tests/original-media-cache*.test.mjs tests/catalog-refresh*.test.mjs
+          node --test tests/original-media-cache*.test.mjs tests/catalog-refresh*.test.mjs tests/oauth-return-refresh.test.mjs
           node --test tests/*.test.cjs
           node --test tests/publication-file-sync-preflight.test.mjs
           node tests/run-launch-readiness-sql.mjs
