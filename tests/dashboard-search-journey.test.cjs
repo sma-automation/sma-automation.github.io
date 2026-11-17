@@ -96,6 +96,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false,start
     }
     if(address.origin===site&&path==='/fixture/sma_publication_files_v1'){
      assert.ok(['fixture','second'].includes(owner),'file reads require a synthetic signed-in owner');
+     if(args.p_action==='sync_status'){assert.deepEqual(args.p_input,{});return await reply({ok:true,version:1,can_publish:false,sync_state:'idle',retry_after_ms:0,synced_at:null});}
      if(owner==='second'){assert.equal(args.p_action,'list','the second account cannot request the first account files');return await reply({ok:true,files:[],sync_state:'complete'});}
      if(args.p_action==='list'){
       if(args.p_input?.dashboard_labels){

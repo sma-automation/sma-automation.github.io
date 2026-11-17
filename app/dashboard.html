@@ -6,9 +6,10 @@
 <iframe id="dashboard" title="SMA Kunden-Dashboard" hidden></iframe>
 
 <script type="module">
-import {customerMediaEndpoint} from './assets/customer-media-routes.mjs?v=1';
+import {refreshMediaCatalog} from './assets/media-metadata.mjs?v=3';
+import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './assets/catalog-refresh.mjs?v=1';
 
-import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=4';
+import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=5';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
 import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
 import {mountWebsitePreparation} from './assets/website-domain.mjs?v=19';
@@ -111,7 +112,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','54');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','55');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -720,23 +721,20 @@ function attachFileList(doc,page,editorHref){
   return folderNotice+' '+summary;
  }
  async function syncFolder(session,read,signal){
-  let res,body;
   try{
-   res=await read(()=>fetch(customerMediaEndpoint('catalog'),{method:'POST',
-    headers:{Authorization:'Bearer '+session.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal}));
-   body=await read(()=>res.json());
-  }catch{
+   await read(()=>refreshMediaCatalog({owner:session.user.id,signal,getSession:()=>dashboardSession(),
+    readStatus:async sharedSignal=>{
+     const {data,error}=await supabase.rpc('sma_publication_files_v1',{p_action:'sync_status',p_input:{}}).abortSignal(sharedSignal);
+     if(error)throw Error('FILE_SYNC_UNAVAILABLE');
+     return data;
+    }}));
+   folderNotice='';
+  }catch(error){
+   if(error.code==='FILE_SYNC_RUNNING')return runningNotice;
+   if(error.code==='FILE_SYNC_RATE_LIMITED')return rateLimitNotice;
+   if(error.code==='FOLDER_UNAVAILABLE')throw Error('Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.');
    throw Error(interruptedNotice);
   }
-  if(res.ok&&body?.ok===true){folderNotice='';return;}
-  if(!res.ok||!body||['FILE_CATALOG_TOO_LARGE','FILE_SYNC_UNAVAILABLE','FILE_METADATA_INVALID'].includes(body.code)){
-   throw Error(interruptedNotice);
-  }
-  if(['FILE_SYNC_RATE_LIMITED','FILE_SYNC_RUNNING'].includes(body.code)){
-   return body.code==='FILE_SYNC_RUNNING'?runningNotice:rateLimitNotice;
-  }
-  if(body.code==='FOLDER_UNAVAILABLE')throw Error('Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.');
-  throw Error('Die Dateien konnten noch nicht aktualisiert werden. Bitte erneut versuchen.');
  }
  async function load(sync=false){
   if(loading||disposed||signedOut||owner!==dashboardOwnerId)return;
@@ -968,7 +966,7 @@ async function load(){
   return pending;
 }
 // Purge after frame removal: departing editors may still checkpoint during pagehide.
-async function logout(){const previousOwner=dashboardOwnerId;galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);clearSharedOriginalMediaCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){const previousOwner=dashboardOwnerId;galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);clearSharedOriginalMediaCache(undefined,previousOwner);clearSharedCatalogRefreshCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -1005,9 +1003,11 @@ window.addEventListener('message',event=>{
 function leaveDashboard(){
  const previousOwner=dashboardOwnerId;
  delete document.documentElement.dataset.smaCustomerMedia;
- galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);clearSharedOriginalMediaCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);window.location.replace('index.html');
+ galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);clearSharedOriginalMediaCache(undefined,previousOwner);clearSharedCatalogRefreshCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);window.location.replace('index.html');
 }
 supabase.auth.onAuthStateChange((event,s)=>{
+ if(event==='INITIAL_SESSION'&&dashboardOwnerId&&s?.user?.id!==dashboardOwnerId)return;
+ syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
 });
 await load();

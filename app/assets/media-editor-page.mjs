@@ -1,5 +1,5 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=17';
-import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=12';
+import {mountMediaEditor} from './media-editor-view.mjs?v=18';
+import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=13';
 
 const query = new URLSearchParams(location.search);
 const fileLink = new URLSearchParams(location.hash.slice(1));

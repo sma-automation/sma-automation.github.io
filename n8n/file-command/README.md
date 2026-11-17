@@ -195,6 +195,52 @@ Status-/Listenabfragen. Die vorhandene Dateifrischeprüfung vor eigentlichen
 Verarbeitungsaktionen bleibt bestehen. Dateien, die außerhalb von SMA in Drive
 hinzukommen, werden weiterhin durch den ausdrücklichen Abgleich gefunden.
 
+### Gemeinsamer Katalogabgleich vor dem n8n-Start
+
+Galerie, Veröffentlichungsansicht und Editor verwenden denselben
+`refreshMediaCatalog`-Adapter. Gleichzeitig angeforderte Abgleiche desselben
+Kunden und tatsächlichen Katalogendpunkts teilen im selben SMA-Fenster einen
+laufenden POST. Nach einem gesendeten Start bleibt ein 15-Sekunden-Abstand
+wirksam, auch wenn eine Ansicht geschlossen oder die Antwort unterbrochen wird.
+Ein einzelner Abbruch beendet nicht die Anfragen anderer beteiligter Ansichten.
+Der Transport läuft im langlebigen übergeordneten Fenster.
+
+Vor jedem neuen POST liest der Adapter über den vorhandenen
+`sma_publication_files_v1`-RPC die Aktion `sync_status` mit leerem Input.
+`publication-file-sync-preflight.sql` ergänzt dafür ausschließlich einen
+Lesezweig hinter den bestehenden Auth-, Kunden- und Zugangskontrollen.
+Die Antwort enthält Zustand, verbleibende Wartezeit und letzten Abschluss,
+aber keine Kundenkennungen, Lease-ID oder Ordnerdaten. Sie reserviert keinen
+Abgleich. Eine bereits laufende Lease oder Startpause wird dadurch vor dem
+kostenpflichtigen Webhook-Aufruf erkannt. Eine fehlende oder ungültige
+Statusantwort erlaubt keinen ersatzweisen Start.
+
+Erfolg wird nicht zwischengespeichert und ein blockierter Start nicht als
+abgeschlossener Abgleich ausgegeben. Alle Phasen eines Versuchs bleiben auf
+insgesamt 90 Sekunden begrenzt; der Editor schließt darin auch das anschließende
+Lesen der aktualisierten Dateiliste ein. Nach Abbruch oder Antwortverlust gibt
+es keinen automatischen weiteren POST. Ein späterer ausdrücklicher Versuch
+prüft den Serverstatus erneut. Der gespeicherte Dateistand und lokale Eingaben
+bleiben in den bestehenden Fehler- und Wiederholungspfaden erhalten.
+
+Die gemeinsame Browserkoordination gilt für Ansichten desselben übergeordneten
+Fensters. Getrennte Tabs oder Geräte können gleichzeitig noch einen freien
+Serverstatus lesen, bevor der erste Worker seine Lease reserviert. Der
+bestehende serverseitige Startschutz bleibt deshalb erforderlich; diese
+Leseprüfung ist keine globale atomare Startreservierung und keine Begrenzung
+auf genau einen Abgleich je Kunde und Tag. Es entsteht weder ein zusätzlicher
+n8n-Workflow noch ein neuer Hintergrundtimer.
+
+Die synthetischen Tests `catalog-refresh*.test.*` prüfen die tatsächlichen
+Adapter, Gleichzeitigkeit, Abbruch, Kontowechsel, Gesamtfrist und den Wegfall
+unnötiger POSTs. Die Browserfälle laufen auf Desktop und Mobilgeräten in CI.
+`publication-file-sync-preflight.test.mjs` prüft die tatsächlichen SQL-Funktionen
+einschließlich öffentlichem Wrapper, Lesezugriff, Zeitgrenzen und unveränderten
+Berechtigungen. Bei der Bereitstellung muss der SQL-Lesezweig vor den neuen
+Frontenddateien verfügbar sein.
+
+### Gemeinsame Originalabrufe
+
 Originalplayer, Exportvorschau, Coveransicht und gespeicherter Download verwenden
 denselben geprüften Originalabruf über `media-editor-api.mjs`. Der begrenzte
 RAM-Speicher in `original-media-cache.mjs` teilt laufende Anfragen und erfolgreich
