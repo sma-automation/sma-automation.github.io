@@ -34,6 +34,7 @@ function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false,se
  }})};
  const env={AbortController,AbortSignal,URLSearchParams,Response,supabase:client,
   clearSharedThumbnailCache(){calls.push('clear-thumbnail-cache');},
+  clearSharedOriginalMediaCache(){calls.push('clear-original-cache');},
   document:{getElementById:node,documentElement:{dataset:{}}},
   window:{sessionStorage,location:{replace:path=>{onTeardown('redirect');redirects.push(path);}}},location:{search:pilot?'?kundenmedien=pilot':''},
   endpoint:'https://fixture.invalid/dashboard',dashboardOwnerId:null,startupView:null,
@@ -118,7 +119,7 @@ test('actual sign-out and account-change handlers cancel every pending dashboard
   await f.release();assert.equal(f.node('dashboard').srcdoc,'');assert.deepEqual(f.redirects,['index.html']);
  }
  const first=setup({hold:'initial'});const run=first.start();await flush();await first.logout();await run;
- assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial','clear-thumbnail-cache']);
+ assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial','clear-thumbnail-cache','clear-original-cache']);
  assert.deepEqual(first.redirects,['index.html']);
 });
 
@@ -152,6 +153,7 @@ for(const departure of ['logout','account-change'])test(departure+': parent tear
  await f.start();drafts.write(pending);drafts.write(editing);drafts.write(foreign);sessionStorage.setItem('fixture.unrelated','behalten');
  assert.equal(rows.size,4);armed=true;
  if(departure==='logout')await f.logout();else await f.auth('SIGNED_IN','second');
+ assert.equal(f.calls.filter(call=>call==='clear-original-cache').length,1,'leaving the owner clears held original media');
  assert.equal(rows.size,2);assert.equal(remaining(pending),null);assert.equal(remaining(editing),null);
  assert.deepEqual(f.redirects,['index.html']);
 });

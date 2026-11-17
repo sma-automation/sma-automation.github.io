@@ -80,7 +80,7 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
 }
 
 export function mountGalleryMusic({owner,onComplete,onStatus}){
- const api=()=>import('./media-editor-api.mjs?v=11');
+ const api=()=>import('./media-editor-api.mjs?v=12');
  return createGalleryMusicWorker({
   rpc:async(action,input,signal)=>(await api()).galleryMusicRequest(action,input,owner,signal),
   source:async(file,signal)=>(await api()).editorSource(file,signal,owner),
