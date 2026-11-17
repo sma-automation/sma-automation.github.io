@@ -51,6 +51,26 @@ WITH snapshot AS (
     WHERE g.state='completed' AND NOT EXISTS (
       SELECT 1 FROM sma_private.publication_gallery_technical_v1 e WHERE e.gallery_job_id=g.id
     )) AS gallery_completed_without_record,
+
+  -- A historical evidence row alone does not attest the current source/output
+  -- pair. Count only evidence still bound to BOTH current SHA-256 revisions.
+  (SELECT count(*) FROM sma_private.gallery_music_v1 g
+    JOIN sma_private.publication_files_v1 s ON s.id=g.source_id
+      AND s.user_id=g.user_id AND s.customer_id=g.customer_id AND s.available IS TRUE
+    JOIN sma_private.publication_files_v1 f ON f.id=g.result_id
+      AND f.user_id=g.user_id AND f.customer_id=g.customer_id AND f.available IS TRUE
+    JOIN sma_private.publication_gallery_technical_v1 e ON e.gallery_job_id=g.id
+      AND e.asset_id=f.id AND e.source_asset_id=s.id
+      AND e.user_id=g.user_id AND e.customer_id=g.customer_id
+      AND e.asset_revision=f.revision AND e.source_revision=s.revision
+      AND e.sha256=split_part(f.revision,':',2)
+      AND e.source_sha256=split_part(s.revision,':',2)
+      AND e.size_bytes=f.size_bytes
+    WHERE g.state='completed' AND g.expected_sha=e.sha256
+      AND g.expected_size=e.size_bytes
+      AND g.source_key='sha256:'||e.source_sha256
+      AND f.revision LIKE 'sha256:%' AND s.revision LIKE 'sha256:%'
+  ) AS gallery_current_revision_evidence_jobs,
   -- Listing alone does not prove playable bytes, licensing, AAC readiness, or customer access.
   (SELECT count(*) FROM sma_private.music_catalog_v1 WHERE listed IS TRUE) AS music_listed_tracks,
   (SELECT count(*) FROM sma_private.customer_websites_v1
@@ -90,6 +110,12 @@ SELECT jsonb_build_object(
   'gallery_pending_unscheduled_jobs',gallery_pending_unscheduled_jobs,
   'gallery_other_jobs',gallery_other_jobs,
   'gallery_completed_without_record',gallery_completed_without_record,
+  'gallery_current_revision_evidence_jobs',gallery_current_revision_evidence_jobs,
+  'gallery_completed_without_current_evidence',gallery_completed_jobs-gallery_current_revision_evidence_jobs,
+  'gallery_evidence_state',CASE
+    WHEN gallery_completed_jobs=0 THEN 'NO_COMPLETED_GALLERY_JOB'
+    WHEN gallery_current_revision_evidence_jobs < gallery_completed_jobs THEN 'CURRENT_GALLERY_EVIDENCE_REQUIRED'
+    ELSE 'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION' END,
   'music_listed_tracks',music_listed_tracks,
   'gallery_technical_records',gallery_technical_records,
   'state',CASE
