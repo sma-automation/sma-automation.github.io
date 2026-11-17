@@ -2,10 +2,10 @@ name: Dashboard chapter navigation checks
 on:
   push:
     branches: [dashboard-chapter-navigation, website-v1]
-    paths: ['index.html', 'app/**', 'tests/**', '.github/workflows/dashboard-chapter-tests.yml']
+    paths: ['index.html', 'app/**', 'tests/**', 'n8n/consolidation/dashboard-oauth-refresh.cjs', 'n8n/consolidation/patch-dashboard-oauth-refresh.cjs', '.github/workflows/dashboard-chapter-tests.yml']
   pull_request:
     branches: [website-v1]
-    paths: ['index.html', 'app/**', 'tests/**', '.github/workflows/dashboard-chapter-tests.yml']
+    paths: ['index.html', 'app/**', 'tests/**', 'n8n/consolidation/dashboard-oauth-refresh.cjs', 'n8n/consolidation/patch-dashboard-oauth-refresh.cjs', '.github/workflows/dashboard-chapter-tests.yml']
 permissions: {}
 jobs:
   test:
@@ -22,7 +22,7 @@ jobs:
         run: npm ci --prefix tests/dom-runtime --ignore-scripts
       - name: Check chapters and existing dashboard flows
         run: |
-          node --test tests/original-media-cache*.test.mjs tests/catalog-refresh*.test.mjs
+          node --test tests/original-media-cache*.test.mjs tests/catalog-refresh*.test.mjs tests/oauth-return-refresh.test.mjs
           node --test tests/*.test.cjs
           node tests/run-optimizer-layout.mjs
           node tests/run-website-preparation-chromium.mjs

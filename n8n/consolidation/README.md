@@ -211,6 +211,47 @@ node --test n8n/consolidation/dispatcher-runtime.test.cjs \
   n8n/consolidation/file-job-native-probe.test.cjs
 ```
 
+## Bounded dashboard checks after OAuth
+
+The existing account workflow renders the dashboard's connection controls.
+Previously an unfinished OAuth attempt kept its pending platform indefinitely:
+every later window-focus or visibility return could request another full
+dashboard through the existing n8n session endpoint. The old retry counter did
+not bound those passive return events.
+
+`dashboard-oauth-refresh.cjs` supplies the replacement browser block;
+`patch-dashboard-oauth-refresh.cjs` applies it only to the reviewed renderer
+with its exact original definition hash. The private full workflow export stays
+outside this repository. The patch changes no trigger, route, credential,
+connection graph or workflow setting and creates no workflow.
+
+A deliberate connection-link click grants one passive status check on return.
+Focus and visibility events consume that allowance together, before scheduling
+the check. An unfinished connection or failed read leaves a visible
+“Verbindungsstatus prüfen” action in Publishing → Portals. This action reads the
+current status without restarting OAuth. Later passive returns do not retry it.
+The native connection link and its `noopener` behavior remain unchanged.
+The status region stays outside the replaceable platform list. Its own display
+state overrides the existing chapter rule that hides other social-page children,
+so it also works in an already loaded dashboard with that stylesheet.
+
+Allowed fresh success notifications remain hints for a server check, never
+proof of a connection. Duplicate notifications do not reset the passive
+allowance. Request generations protect newer connection attempts from old
+responses; a new connection attempt or success notification during a running
+check is combined into at most one pending follow-up. Removing the dashboard
+ends its scheduled checks. Restoring it from the browser's back/forward cache
+retains the manual controls, discards old scheduled checks and snapshots, and
+does not start another read automatically. Customer identity is checked before applying a
+returned dashboard, and access decisions are not cached for the day.
+
+The isolated `oauth-return-refresh` tests count actual mocked dashboard
+requests and exercise cancellation, delayed completion, duplicate notifications,
+customer changes and the visible manual action in the existing portal layout.
+Browser cases run in the existing CI jobs, without real OAuth or provider calls.
+This bounds the specific OAuth-return path; normal page reloads and deliberate
+later status checks remain real dashboard requests in the usage calculation.
+
 ## Execution budget
 
 Five active workflows are an organizational target, not a cost calculation.
