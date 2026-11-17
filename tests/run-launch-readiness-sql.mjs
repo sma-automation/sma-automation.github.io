@@ -210,7 +210,10 @@ try {
   await checkGallery({music_listed_tracks:1});
   await db.query('DELETE FROM sma_private.gallery_music_v1 WHERE id=$1',[completed]);
   await checkGallery({gallery_music_jobs:3,gallery_completed_jobs:0,gallery_completed_without_record:0,gallery_technical_records:3});
-  // Verify account and payment-switch aggregates using synthetic fixtures only.
+  // The publication-permission account was rolled back above. Set up an
+  // independent, eligible synthetic fixture for the account coverage checks.
+  await db.exec(`INSERT INTO public.sma_kunden (id,aktiv,zahlung_bestaetigt,demo_delta_aktiv)
+    VALUES (1,true,false,true)`);
   const accountReadiness=async()=> (await db.query(report)).rows[0].readiness;
   let onboarding=(await accountReadiness()).accounts;
   assert.equal(onboarding.new_onboarding_profiles,0);
