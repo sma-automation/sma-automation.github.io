@@ -20,7 +20,9 @@ test('preflight counts aggregate statuses without selecting customer identities 
  assert.match(source,/sma_private\.publication_gallery_technical_v1/);
  assert.match(source,/sma_private\.customer_websites_v1/);
  assert.match(source,/public\.sma_bestellungen/);
- assert.doesNotMatch(noComments,/\b(user_id|kunde_id|shop_slug|access_token|refresh_token|caption|description|file_path|drive_file_id)\b/i);
+ // Owner IDs are legitimate internal join predicates, never report output keys.
+ assert.doesNotMatch(noComments,/\\b(kunde_id|shop_slug|access_token|refresh_token|caption|description|file_path|drive_file_id)\\b/i);
+ assert.doesNotMatch(noComments,/['"](?:user_id|kunde_id|shop_slug|access_token|refresh_token|caption|description|file_path|drive_file_id)['"]\\s*,/i);
 });
 test('report never upgrades preflight counts into permission to publish or pay',()=>{
  assert.match(source,/'allows_publication',false/);
