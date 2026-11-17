@@ -33,6 +33,12 @@ async function checkGallery(expected) {
     assert.equal(media.gallery_music_jobs,media.gallery_completed_jobs+media.gallery_pending_jobs+media.gallery_other_jobs);
     assert.equal(media.gallery_pending_jobs,media.gallery_pending_due_jobs+media.gallery_pending_scheduled_jobs+media.gallery_pending_unscheduled_jobs);
     assert.ok(media.gallery_completed_without_record<=media.gallery_completed_jobs);
+    assert.equal(media.gallery_completed_without_current_evidence,
+      media.gallery_completed_jobs-media.gallery_current_revision_evidence_jobs);
+    assert.ok(media.gallery_completed_without_current_evidence>=media.gallery_completed_without_record);
+    assert.equal(media.gallery_evidence_state,media.gallery_completed_jobs===0?
+      'NO_COMPLETED_GALLERY_JOB':media.gallery_current_revision_evidence_jobs<media.gallery_completed_jobs?
+      'CURRENT_GALLERY_EVIDENCE_REQUIRED':'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION');
     assert.equal(readiness.allows_publication,false);
     assert.equal(readiness.initiates_checkout,false);
     assert.equal(readiness.requires_personal_approval,true);
@@ -56,9 +62,17 @@ try {
     CREATE TABLE sma_private.onboarding_n8n_accounts_v1 (n8n_row_id bigint);
     CREATE TABLE sma_private.onboarding_payment_settings_v1 (enabled boolean);
     CREATE TABLE public.sma_bestellungen (ist_testbestellung boolean);
-    CREATE TABLE sma_private.publication_files_v1 (available boolean, verified_at timestamptz);
-    CREATE TABLE sma_private.publication_gallery_technical_v1 (gallery_job_id uuid);
-    CREATE TABLE sma_private.gallery_music_v1 (id uuid PRIMARY KEY, state text, next_attempt timestamptz);
+    CREATE TABLE sma_private.publication_files_v1 (
+      id uuid PRIMARY KEY, customer_id bigint, user_id uuid, revision text, size_bytes bigint,
+      available boolean, verified_at timestamptz);
+    CREATE TABLE sma_private.publication_gallery_technical_v1 (
+      gallery_job_id uuid, asset_id uuid, source_asset_id uuid, user_id uuid,
+      customer_id bigint, asset_revision text, source_revision text,
+      sha256 text, source_sha256 text, size_bytes bigint);
+    CREATE TABLE sma_private.gallery_music_v1 (
+      id uuid PRIMARY KEY, state text, next_attempt timestamptz,
+      source_id uuid, result_id uuid, user_id uuid, customer_id bigint,
+      source_key text, expected_sha text, expected_size bigint);
     CREATE TABLE sma_private.music_catalog_v1 (listed boolean);
     CREATE TABLE sma_private.customer_websites_v1 (published_at timestamptz);
     CREATE TABLE sma_private.website_provider_connections_v1 ();
@@ -107,24 +121,80 @@ try {
   await db.exec('ROLLBACK');
 
   // Isolated metadata fixtures only; never render media or call a registration function.
-  await checkGallery({gallery_music_jobs:0,gallery_completed_without_record:0,music_listed_tracks:0});
+  await checkGallery({gallery_music_jobs:0,gallery_completed_without_record:0,
+    gallery_current_revision_evidence_jobs:0,gallery_completed_without_current_evidence:0,
+    gallery_evidence_state:'NO_COMPLETED_GALLERY_JOB',music_listed_tracks:0});
   const completed='60600000-0000-4000-8000-000000000001';
   const pending='60600000-0000-4000-8000-000000000002';
-  await db.exec(`INSERT INTO sma_private.gallery_music_v1 VALUES
+  await db.exec(`INSERT INTO sma_private.gallery_music_v1 (id,state,next_attempt) VALUES
     ('${completed}','completed',NULL),('${pending}','pending',now()-interval '1 hour'),
     ('60600000-0000-4000-8000-000000000003','pending',now()+interval '1 hour'),
     ('60600000-0000-4000-8000-000000000004','pending',now()+interval '2 hours');
     INSERT INTO sma_private.music_catalog_v1 VALUES(false);`);
   await checkGallery({gallery_music_jobs:4,gallery_completed_jobs:1,gallery_pending_jobs:3,
     gallery_pending_due_jobs:1,gallery_pending_scheduled_jobs:2,gallery_pending_unscheduled_jobs:0,
-    gallery_other_jobs:0,gallery_completed_without_record:1,gallery_technical_records:0,music_listed_tracks:0});
-  await db.exec("INSERT INTO sma_private.publication_gallery_technical_v1 VALUES('60600000-0000-4000-8000-000000000099')");
+    gallery_other_jobs:0,gallery_completed_without_record:1,gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1,gallery_evidence_state:'CURRENT_GALLERY_EVIDENCE_REQUIRED',
+    gallery_technical_records:0,music_listed_tracks:0});
+  await db.exec("INSERT INTO sma_private.publication_gallery_technical_v1 (gallery_job_id) VALUES('60600000-0000-4000-8000-000000000099')");
   await checkGallery({gallery_technical_records:1,gallery_completed_without_record:1});
-  await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 VALUES($1)',[completed]);
+  await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 (gallery_job_id) VALUES($1)',[completed]);
   await checkGallery({gallery_technical_records:2,gallery_completed_without_record:0,gallery_completed_jobs:1});
   // Duplicate synthetic evidence cannot multiply the completed-job count.
-  await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 VALUES($1)',[completed]);
-  await checkGallery({gallery_technical_records:3,gallery_completed_without_record:0,gallery_completed_jobs:1});
+  await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 (gallery_job_id) VALUES($1)',[completed]);
+  await checkGallery({gallery_technical_records:3,gallery_completed_without_record:0,
+    gallery_completed_jobs:1,gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1});
+  // Historical job-ID-only evidence is not sufficient; both CURRENT files,
+  // owner, SHA, size and the saved receipt must still agree.
+  const sourceId='60600000-0000-4000-8000-000000000091';
+  const resultId='60600000-0000-4000-8000-000000000092';
+  const ownerId='60600000-0000-4000-8000-000000000090';
+  const sourceSha='b'.repeat(64),resultSha='a'.repeat(64);
+  const sourceRevision='sha256:'+sourceSha+':1';
+  const resultRevision='sha256:'+resultSha+':2';
+  await db.query(`INSERT INTO sma_private.publication_files_v1
+    (id,customer_id,user_id,revision,size_bytes,available)
+    VALUES ($1,1,$2,$3,100,true),($4,1,$2,$5,120,true)`,
+    [sourceId,ownerId,sourceRevision,resultId,resultRevision]);
+  await db.query(`UPDATE sma_private.gallery_music_v1
+    SET source_id=$1,result_id=$2,customer_id=1,user_id=$3,
+    source_key=$4,expected_sha=$5,expected_size=120 WHERE id=$6`,
+    [sourceId,resultId,ownerId,'sha256:'+sourceSha,resultSha,completed]);
+  await db.query(`UPDATE sma_private.publication_gallery_technical_v1
+    SET asset_id=$1,source_asset_id=$2,customer_id=1,user_id=$3,
+    asset_revision=$4,source_revision=$5,sha256=$6,source_sha256=$7,
+    size_bytes=120 WHERE gallery_job_id=$8`,
+    [resultId,sourceId,ownerId,resultRevision,sourceRevision,resultSha,sourceSha,completed]);
+  await checkGallery({gallery_completed_jobs:1,
+    gallery_current_revision_evidence_jobs:1,gallery_completed_without_current_evidence:0,
+    gallery_evidence_state:'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION'});
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [resultId,'sha256:'+'c'.repeat(64)+':3']);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1,gallery_completed_without_record:0});
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [resultId,resultRevision]);
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [sourceId,'sha256:'+'d'.repeat(64)+':4']);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1,gallery_completed_without_record:0});
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [sourceId,sourceRevision]);
+  await db.query('UPDATE sma_private.publication_files_v1 SET customer_id=2 WHERE id=$1',
+    [resultId]);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1});
+  await db.query('UPDATE sma_private.publication_files_v1 SET customer_id=1 WHERE id=$1',
+    [resultId]);
+  await db.query('UPDATE sma_private.publication_files_v1 SET available=false WHERE id=$1',
+    [resultId]);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1});
+  await db.query('UPDATE sma_private.publication_files_v1 SET available=true WHERE id=$1',
+    [resultId]);
+  await checkGallery({gallery_current_revision_evidence_jobs:1,
+    gallery_completed_without_current_evidence:0});
   await db.query("UPDATE sma_private.gallery_music_v1 SET state='pending',next_attempt=now()-interval '1 hour' WHERE id=$1",[completed]);
   await checkGallery({gallery_completed_jobs:0,gallery_pending_jobs:4,gallery_pending_due_jobs:2,gallery_completed_without_record:0});
   await db.query("UPDATE sma_private.gallery_music_v1 SET state='completed',next_attempt=NULL WHERE id=$1",[completed]);
@@ -140,8 +210,7 @@ try {
   await checkGallery({music_listed_tracks:1});
   await db.query('DELETE FROM sma_private.gallery_music_v1 WHERE id=$1',[completed]);
   await checkGallery({gallery_music_jobs:3,gallery_completed_jobs:0,gallery_completed_without_record:0,gallery_technical_records:3});
-  // The onboarding section reports read-only facts and never infers that a paid
-  // first customer or customer Drive folders were actually verified.
+  // Verify account and payment-switch aggregates using synthetic fixtures only.
   const accountReadiness=async()=> (await db.query(report)).rows[0].readiness;
   let onboarding=(await accountReadiness()).accounts;
   assert.equal(onboarding.new_onboarding_profiles,0);
@@ -165,7 +234,6 @@ try {
   assert.equal(onboarding.drive_folder_access,'NOT_VERIFIED_BY_THIS_QUERY');
   assert.equal(onboarding.first_paid_customer_e2e,'NOT_VERIFIED_BY_THIS_QUERY');
   assert.doesNotMatch(JSON.stringify(await accountReadiness()),/kunde_synthetic_not_a_real_account/);
-
   await db.exec('UPDATE sma_private.onboarding_n8n_accounts_v1 SET n8n_row_id=13 WHERE n8n_row_id IS NULL');
   onboarding=(await accountReadiness()).accounts;
   assert.equal(onboarding.new_profiles_waiting_for_n8n_link,0);
