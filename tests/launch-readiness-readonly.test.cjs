@@ -56,7 +56,7 @@ test('gallery counts separate pending work from completed clips and never call a
   /CURRENT_GALLERY_EVIDENCE_REQUIRED/,
   /REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION/
  ]) assert.match(source,check);
- assert.match(source,/count\\(DISTINCT g\\.id\\) FROM sma_private\\.gallery_music_v1 g/);
+ assert.ok(source.includes('count(DISTINCT g.id) FROM sma_private.gallery_music_v1 g'));
  assert.match(source,/gallery_completed_jobs-gallery_current_revision_evidence_jobs/);
  assert.match(noComments,/'version',3/);
  assert.doesNotMatch(noComments,/\b(?:gallery_background_(?:tick|pick)|gallery_music_(?:request|enqueue)|publication_gallery_technical_register|gallery_worker_snapshot)_v1\s*\(/i);
