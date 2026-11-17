@@ -170,8 +170,9 @@ Modell keinen weiteren Hauptstart.
 
 Vor der Familienzuordnung hätten zusätzliche Mediendatei und Cover in diesem
 Szenario bis zu 3.720 weitere Hauptstarts erzeugt: insgesamt 11.284. Werden
-Originalansicht und Exportvorschau jeweils einmal getrennt geladen, kommt
-weiterhin ein zweiter Originalabruf pro Datei hinzu. Das ergibt nach der
+Originalansicht und Exportvorschau in getrennten Fenstern, nach einem Neuladen
+oder außerhalb der unten beschriebenen Speichergrenzen geladen, kann
+weiterhin ein zweiter Originalabruf pro Datei hinzukommen. Das ergibt nach der
 Zuordnung 9.424 Starts und 576 verbleibende Starts. Weitere Abrufe, neue Arbeit
 nach Ablauf, zusätzliche Dienste und tatsächliche Wiederholungen müssen in
 einer betrieblichen Verbrauchsmessung mitgezählt werden; die Zahl 7.564 ist
@@ -183,3 +184,39 @@ Hauptausführungen. Zusätzliche Einträge in der Ausführungsliste sind deshalb
 nicht automatisch zusätzliche abgerechnete Hauptstarts. Die native Zuordnung,
 die tatsächliche Laufzeit und der Cloud-Abrechnungszähler bleiben unabhängig
 von den SQL-Tests zu kontrollieren.
+
+## Abrufe während Navigation und Bearbeitung
+
+Ein normaler Wechsel zu „Veröffentlichung“ liest die gespeicherte Dateiliste
+direkt aus Supabase. Er startet keinen Drive-Abgleich über n8n. Der ausdrückliche
+Button „Dateien aktualisieren“ behält diesen Abgleich; die Prüfung eines laufenden
+Abgleichs und die Wiederholung eines fehlgeschlagenen Listenabrufs bleiben reine
+Status-/Listenabfragen. Die vorhandene Dateifrischeprüfung vor eigentlichen
+Verarbeitungsaktionen bleibt bestehen. Dateien, die außerhalb von SMA in Drive
+hinzukommen, werden weiterhin durch den ausdrücklichen Abgleich gefunden.
+
+Originalplayer, Exportvorschau, Coveransicht und gespeicherter Download verwenden
+denselben geprüften Originalabruf über `media-editor-api.mjs`. Der begrenzte
+RAM-Speicher in `original-media-cache.mjs` teilt laufende Anfragen und erfolgreich
+geprüfte Mediendaten innerhalb desselben gleichursprünglichen Hauptfensters.
+Er hält höchstens zwei Originale mit zusammen 48 MB und verwendet Einträge nur
+innerhalb von zehn Minuten. Gleichzeitig laufende Originalabrufe sind auf zwei
+begrenzt. Die bestehende
+Grenze von 24 MB pro Original bleibt erhalten.
+Quelle, Revision, Route, erwarteter Dateityp und Größe müssen passen; jede Nutzung
+prüft die aktuelle Sitzung. Logout und Kontowechsel verwerfen gespeicherte und
+laufende Daten. Der Abbruch eines einzelnen Verbrauchers beendet keinen Abruf,
+den eine andere Ansicht noch benötigt.
+
+Es werden keine Mediendaten, Tokens oder Provideradressen dauerhaft gespeichert.
+Ein echtes Neuladen oder ein separates Fenster mit `noopener` besitzt einen
+eigenen Speicher und benötigt wieder einen Abruf. Auch Ablauf und Verdrängung
+aus dem begrenzten Speicher können einen neuen Abruf erforderlich machen.
+Eine Einsparung über diese Grenzen hinweg ist nicht zugesagt.
+
+Die Navigation wird mit der echten Dashboard-Funktion in
+`tests/gallery-navigation-read-budget.test.cjs` geprüft. Die
+`tests/original-media-cache*.test.*` prüfen den tatsächlichen Client, Editoraktionen,
+Kontowechsel, Abbruch und Browserfenster. Browserprüfungen fangen sämtliche
+Provider-/Authantworten synthetisch ab; sie übertragen keine echten Medien und
+starten keine n8n-Workflows.

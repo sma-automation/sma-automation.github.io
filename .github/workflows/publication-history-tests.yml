@@ -38,6 +38,10 @@ on:
       - n8n/confirm-onboarding-row.cjs
       - tests/launch-readiness-readonly.test.cjs
       - app/assets/original-video-preview.mjs
+      - app/assets/original-media-cache.mjs
+      - tests/original-media-cache*.test.mjs
+      - tests/original-media-cache-browser.test.cjs
+      - tests/gallery-navigation-read-budget.test.cjs
       - tests/run-original-video-preview-dom.mjs
       - app/assets/publication-order.mjs
       - tests/*publication-manual-review*
@@ -278,6 +282,7 @@ jobs:
         env:
           SMA_REQUIRE_FFMPEG: '1'
         run: |
+          node --test tests/original-media-cache*.test.mjs
           node --test tests/*.test.cjs
           node tests/run-launch-readiness-sql.mjs
           node tests/run-onboarding-plan-sql.mjs

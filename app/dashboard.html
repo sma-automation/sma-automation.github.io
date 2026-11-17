@@ -8,7 +8,7 @@
 <script type="module">
 import {customerMediaEndpoint} from './assets/customer-media-routes.mjs?v=1';
 
-import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=3';
+import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=4';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
 import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
 import {mountWebsitePreparation} from './assets/website-domain.mjs?v=19';
@@ -23,6 +23,7 @@ import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders}
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './assets/thumbnail-batch.mjs?v=1';
+import {clearSharedOriginalMediaCache} from './assets/original-media-cache.mjs?v=1';
 import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=5';
 import {tabDraftStore} from './assets/publication-tab-draft.mjs?v=3';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
@@ -556,7 +557,7 @@ function attachFileList(doc,page,editorHref){
  const soundtrack=owner?mountGalleryMusic({owner,onComplete:()=>load(false),onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
- let files=[],pageNumber=0,loading=false,lastSync=0,catalogState='loading',catalogController=null;
+ let files=[],pageNumber=0,loading=false,catalogState='loading',catalogController=null;
  const back=doc.createElement('button'),next=doc.createElement('button'),count=doc.createElement('span');
  back.type=next.type='button';back.textContent='Zurück';next.textContent='Weiter';
  count.setAttribute('role','status');
@@ -727,7 +728,7 @@ function attachFileList(doc,page,editorHref){
   }catch{
    throw Error(interruptedNotice);
   }
-  if(res.ok&&body?.ok===true){lastSync=Date.now();folderNotice='';return;}
+  if(res.ok&&body?.ok===true){folderNotice='';return;}
   if(!res.ok||!body||['FILE_CATALOG_TOO_LARGE','FILE_SYNC_UNAVAILABLE','FILE_METADATA_INVALID'].includes(body.code)){
    throw Error(interruptedNotice);
   }
@@ -800,8 +801,10 @@ function attachFileList(doc,page,editorHref){
   try{nav.click();}finally{navigatingWithCatalog=previous;}
  }
  refresh.addEventListener('click',()=>load(retryStep!=='catalog'&&!scanRunning));
+ // Navigation reads the saved catalogue. A Drive scan belongs to the explicit
+ // refresh action; processing still checks file freshness independently.
  for(const button of doc.querySelectorAll('button'))if(button.textContent.replace(/\s+/g,'').endsWith('Veröffentlichung'))
-  button.addEventListener('click',()=>{if(!restoringGallery&&!navigatingWithCatalog)void load(retryStep!=='catalog'&&!scanRunning&&Date.now()-lastSync>60000);});
+  button.addEventListener('click',()=>{if(!restoringGallery&&!navigatingWithCatalog)void load(false);});
  function openFile(id,portal,origin){
   if(disposed||signedOut||owner!==dashboardOwnerId)return false;
   const item=files.find(f=>f.id===id);if(!item)return false;
@@ -965,7 +968,7 @@ async function load(){
   return pending;
 }
 // Purge after frame removal: departing editors may still checkpoint during pagehide.
-async function logout(){const previousOwner=dashboardOwnerId;galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);await supabase.auth.signOut();window.location.replace('index.html');}
+async function logout(){const previousOwner=dashboardOwnerId;galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);clearSharedOriginalMediaCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);await supabase.auth.signOut();window.location.replace('index.html');}
 document.getElementById('retry').addEventListener('click',load);
 document.getElementById('logout').addEventListener('click',logout);
 window.addEventListener('message',event=>{
@@ -1002,7 +1005,7 @@ window.addEventListener('message',event=>{
 function leaveDashboard(){
  const previousOwner=dashboardOwnerId;
  delete document.documentElement.dataset.smaCustomerMedia;
- galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);window.location.replace('index.html');
+ galleryReload.clear();clearSharedThumbnailCache(undefined,previousOwner);clearSharedOriginalMediaCache(undefined,previousOwner);signedOut=true;cancelDashboardReads();dashboardMobileNav?.destroy();dashboardMobileNav=null;dashboardQuickFind?.destroy();dashboardQuickFind=null;dashboardCloudUpload?.destroy();dashboardCloudUpload=null;musicLibraryDashboard?.destroy();musicLibraryDashboard=null;mediaEditorEntry?.destroy();mediaEditorEntry=null;dashboardChapters?.destroy();dashboardChapters=null;publicationHistory?.destroy();publicationHistory=null;customerWebsiteDashboard?.destroy();customerWebsiteDashboard=null;companyProfileDashboard?.destroy();companyProfileDashboard=null;websitePreparation?.destroy();websitePreparation=null;dashboardOwnerId=null;fileView?.clear();clearOptimizer();frame.hidden=true;frame.removeAttribute('srcdoc');publicationDrafts.clearOwner(previousOwner);window.location.replace('index.html');
 }
 supabase.auth.onAuthStateChange((event,s)=>{
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
