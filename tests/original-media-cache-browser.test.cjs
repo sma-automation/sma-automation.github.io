@@ -24,7 +24,7 @@ import {mountMediaEditor} from '/app/assets/media-editor-view.mjs';
 import {editorDefaults} from '/app/assets/media-editor-model.mjs';
 import {editorSource,getOwnerId,watchOwner} from '/app/assets/media-editor-api.mjs';
 const expectedOwner='${owner}',file=${JSON.stringify(file)};
-const fixture=window.fixture={owner:expectedOwner,file,sources:[],realms:[],renders:[],calls:[],authCallbacks:new Set(),sessionReads:0};
+const fixture=window.fixture={owner:expectedOwner,file,sources:[],sourceErrors:[],realms:[],renders:[],calls:[],authCallbacks:new Set(),sessionReads:0};
 let saved={revision:0,settings:{...editorDefaults},saved_at:null,changed:false};
 const state=()=>({ok:true,version:1,can_publish:false,asset_id:file.id,asset_revision:file.revision,...saved});
 function inspect(blob){let topRealm=null;try{topRealm=blob instanceof window.top.Blob;}catch{}
@@ -32,7 +32,8 @@ function inspect(blob){let topRealm=null;try{topRealm=blob instanceof window.top
 fixture.read=async(selected=file,asOwner=fixture.owner)=>inspect(await editorSource(selected,new AbortController().signal,asOwner));
 const source=async(selected,signal)=>{
  fixture.sources.push({id:selected.id||selected.asset_id,revision:selected.revision||selected.asset_revision});
- const blob=await editorSource(selected,signal,expectedOwner);fixture.realms.push(inspect(blob));return blob;
+ try{const blob=await editorSource(selected,signal,expectedOwner);fixture.realms.push(inspect(blob));return blob;}
+ catch(error){fixture.sourceErrors.push({name:error.name,message:error.message,aborted:signal.aborted});throw error;}
 };
 fixture.view=mountMediaEditor({doc:document,expectedOwnerId:expectedOwner,getOwnerId,source,
  request:async(action,input)=>{
@@ -64,11 +65,15 @@ export function createClient(){return {auth:{
 async function fixture(browser,mobile,{holdFirstOriginal=false}={}){
  const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},
   isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
- const transfers=[],unexpected=[],pageErrors=[],fixtureErrors=[];
+ const transfers=[],unexpected=[],pageErrors=[],fixtureErrors=[],consoleErrors=[],failedRequests=[];
  let releaseHeld=null,started;
  const originalStarted=new Promise(resolve=>{started=resolve;});
  const releaseOriginal=()=>{releaseHeld?.();releaseHeld=null;};
- context.on('page',page=>page.on('pageerror',error=>pageErrors.push(error.message)));
+ context.on('page',page=>{
+  page.on('pageerror',error=>pageErrors.push(error.stack||error.message));
+  page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
+ });
+ context.on('requestfailed',request=>failedRequests.push({url:request.url(),error:request.failure()?.errorText}));
  await context.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url());
   try{
@@ -93,25 +98,53 @@ async function fixture(browser,mobile,{holdFirstOriginal=false}={}){
    unexpected.push(request.url());return route.abort();
   }catch(error){fixtureErrors.push(error.stack);return route.fulfill({status:500,body:'Invalid synthetic request'});}
  });
- const ready=page=>page.waitForFunction(()=>window.fixture?.ready&&!document.querySelector('#editor').hidden&&!document.querySelector('#asset').disabled);
+ async function diagnostics(target){
+  const page=typeof target.frames==='function'?target:target.page();
+  const frames=await Promise.all(page.frames().map(async frame=>{
+   try{return await frame.evaluate(()=>{
+    const f=window.fixture,$=id=>document.getElementById(id);let host=window;
+    try{if(window.top.location.origin===location.origin)host=window.top;}catch{}
+    const registry=host[Symbol.for('sma.original.media.v1')];
+    return {url:location.href,readyState:document.readyState,visibility:document.visibilityState,ready:f?.ready,
+     owner:f?.owner,sessionReads:f?.sessionReads,status:$('status')?.textContent,editorHidden:$('editor')?.hidden,
+     appHidden:$('app')?.hidden,assetDisabled:$('asset')?.disabled,originalStatus:$('originalVideoPreview')?.querySelector('p')?.textContent,
+     originalHidden:$('originalVideoPreview')?.querySelector('video')?.hidden,originalReadyState:$('originalVideoPreview')?.querySelector('video')?.readyState,
+     sources:f?.sources,sourceErrors:f?.sourceErrors,realms:f?.realms,calls:f?.calls.map(call=>call.action),
+     registry:registry?{owner:registry.owner,epoch:registry.epoch,cacheEntries:registry.cache.size,running:registry.running.size,
+      pending:[...registry.pending.values()].map(job=>({asset:job.file.id,consumers:job.consumers.size,aborted:job.scope.signal.aborted}))}:null};
+   });}catch(error){return {url:frame.url(),unavailable:error.message};}
+  }));
+  return {frames,transfers,unexpected,pageErrors,fixtureErrors,consoleErrors,failedRequests};
+ }
+ async function wait(target,label,predicate,arg){
+  // These predicates observe state, not animation frames. Timer polling also
+  // works while Chrome suspends rAF for an offscreen cross-origin iframe.
+  try{return await target.waitForFunction(predicate,arg,{polling:50});}
+  catch(error){throw new Error(label+' failed: '+error.message+'\nFixture diagnostics: '+JSON.stringify(await diagnostics(target)),{cause:error});}
+ }
+ const ready=page=>wait(page,'Editor ready',()=>window.fixture?.ready&&!document.querySelector('#editor').hidden&&!document.querySelector('#asset').disabled);
  const open=async()=>{const page=await context.newPage();await page.goto(origin+'/app/media-editor.html');await ready(page);return page;};
  const frame=async(page,frameOrigin,name)=>{
   const navigated=page.waitForEvent('framenavigated',{predicate:frame=>frame.name()===name&&frame.url().startsWith(frameOrigin+'/app/media-editor.html')});
   await page.evaluate(({frameOrigin,name})=>{const frame=document.createElement('iframe');frame.name=name;frame.title=name;
    frame.src=frameOrigin+'/app/media-editor.html?frame='+name;frame.style.width='100%';frame.height='850';document.body.append(frame);},{frameOrigin,name});
-  const target=await navigated;await ready(target);return target;
+  const target=await navigated;
+  // Chrome can suspend requestAnimationFrame in an offscreen foreign iframe.
+  // Make the actual editor visible before waiting for its visual readiness.
+  await page.locator('iframe[name="'+name+'"]').scrollIntoViewIfNeeded();
+  await ready(target);return target;
  };
  const clean=()=>{assert.deepEqual(unexpected,[]);assert.deepEqual(pageErrors,[]);assert.deepEqual(fixtureErrors,[]);};
- return {context,transfers,open,ready,frame,clean,originalStarted,releaseOriginal,
+ return {context,transfers,open,ready,wait,diagnostics,frame,clean,originalStarted,releaseOriginal,
   async close(){releaseOriginal();await context.close();}};
 }
 async function beginOriginalPreview(page){
  await page.getByRole('tab',{name:'Schnitt & Cover',exact:true}).click();
  await page.getByRole('button',{name:'Originalvideo laden',exact:true}).click();
 }
-async function originalPreview(page){
+async function originalPreview(page,f){
  await beginOriginalPreview(page);
- await page.waitForFunction(()=>!document.querySelector('#originalVideoPreview video').hidden&&document.querySelector('#originalVideoPreview p').textContent==='Originalvideo geladen.');
+ await f.wait(page,'Original preview ready',()=>!document.querySelector('#originalVideoPreview video').hidden&&document.querySelector('#originalVideoPreview p').textContent==='Originalvideo geladen.');
  assert.equal(await page.locator('#originalVideoPreview video').isVisible(),true);
 }
 async function assertNoPersistence(page){
@@ -130,30 +163,30 @@ test('real browser editorSource reuses exact original bytes only inside its auth
    await t.test(device+': real editor journey needs one original POST; reload and another tab each need a new one',async()=>{
     const f=await fixture(browser,mobile);try{
      const page=await f.open();assert.equal(f.transfers.length,0);
-     await originalPreview(page);assert.equal(f.transfers.length,1);
+     await originalPreview(page,f);assert.equal(f.transfers.length,1);
      await page.locator('[name=cover_ms]').fill('0.5');await page.getByRole('button',{name:'Entwurf speichern',exact:true}).click();
      await page.waitForFunction(()=>document.querySelector('#savedInfo').textContent.includes('Version 1'));
      await page.getByRole('tab',{name:'Export',exact:true}).click();await page.locator('#generateExport').click();
      await page.waitForFunction(()=>!document.querySelector('#exportResult').hidden&&!document.querySelector('#generateExport').disabled);
      assert.equal(f.transfers.length,1);assert.equal(await page.evaluate(()=>fixture.renders.length),1);
-     await originalPreview(page);assert.equal(f.transfers.length,1);assert.equal(await page.evaluate(()=>fixture.sources.length),3);
+     await originalPreview(page,f);assert.equal(f.transfers.length,1);assert.equal(await page.evaluate(()=>fixture.sources.length),3);
      assert.deepEqual(await page.evaluate(()=>fixture.realms.map(value=>value.ownRealm)),[true,true,true]);
      assert.ok((await page.evaluate(()=>fixture.calls.map(call=>call.action))).every(action=>['get','save','export-list'].includes(action)));
      await assertNoPersistence(page);
      await page.reload();await f.ready(page);assert.equal(f.transfers.length,1,'Opening a fresh document remains read-only');
-     await originalPreview(page);assert.equal(f.transfers.length,2,'Reload discards the old RAM; no reload saving is claimed');
-     const second=await f.open();assert.equal(f.transfers.length,2);await originalPreview(second);
+     await originalPreview(page,f);assert.equal(f.transfers.length,2,'Reload discards the old RAM; no reload saving is claimed');
+     const second=await f.open();assert.equal(f.transfers.length,2);await originalPreview(second,f);
      assert.equal(f.transfers.length,3,'A second top window cannot reuse the first window memory');
      await assertNoPersistence(second);f.clean();
     }finally{await f.close();}
    });
    await t.test(device+': same-origin iframe receives its own Blob realm while a foreign-origin iframe reads separately',async()=>{
     const f=await fixture(browser,mobile);try{
-     const page=await f.open();await originalPreview(page);assert.equal(f.transfers.length,1);
-     const same=await f.frame(page,origin,'same-origin');await originalPreview(same);
+     const page=await f.open();await originalPreview(page,f);assert.equal(f.transfers.length,1);
+     const same=await f.frame(page,origin,'same-origin');await originalPreview(same,f);
      assert.equal(f.transfers.length,1);assert.deepEqual(await same.evaluate(()=>fixture.realms),[
       {ownRealm:true,topRealm:false,size:original.length,type:'video/mp4'}]);
-     const foreign=await f.frame(page,foreignOrigin,'foreign-origin');await originalPreview(foreign);
+     const foreign=await f.frame(page,foreignOrigin,'foreign-origin');await originalPreview(foreign,f);
      assert.equal(f.transfers.length,2);assert.equal(await foreign.evaluate(()=>fixture.realms[0].ownRealm),true);
      await assertNoPersistence(page);await assertNoPersistence(same);await assertNoPersistence(foreign);f.clean();
     }finally{await f.close();}
@@ -164,10 +197,10 @@ test('real browser editorSource reuses exact original bytes only inside its auth
      await beginOriginalPreview(child);await f.originalStarted;assert.equal(f.transfers.length,1);
      assert.equal(f.transfers[0].frame,page.url(),'The shared transfer uses the surviving top-window fetch realm');
      const before=await page.evaluate(()=>fixture.sessionReads);await beginOriginalPreview(page);
-     await page.waitForFunction(before=>fixture.sources.length===1&&fixture.sessionReads>=before+2,before);
+     await f.wait(page,'Parent joined shared transfer',before=>fixture.sources.length===1&&fixture.sessionReads>=before+2,before);
      await page.evaluate(()=>document.querySelector('iframe[name="pending-original"]').remove());
      f.releaseOriginal();
-     await page.waitForFunction(()=>!document.querySelector('#originalVideoPreview video').hidden&&fixture.realms.length===1);
+     await f.wait(page,'Parent received original after iframe removal',()=>!document.querySelector('#originalVideoPreview video').hidden&&fixture.realms.length===1);
      assert.equal(f.transfers.length,1);assert.deepEqual(await page.evaluate(()=>fixture.realms),[
       {ownRealm:true,topRealm:true,size:original.length,type:'video/mp4'}]);
      await assertNoPersistence(page);f.clean();
@@ -188,7 +221,7 @@ test('real browser editorSource reuses exact original bytes only inside its auth
    });
    await t.test(device+': the actual auth subscription invalidates old original bytes on logout and owner changes',async()=>{
     const f=await fixture(browser,mobile);try{
-     const page=await f.open();await originalPreview(page);assert.equal(f.transfers.length,1);
+     const page=await f.open();await originalPreview(page,f);assert.equal(f.transfers.length,1);
      await page.evaluate(async()=>{await fixture.changeOwner(null);});
      assert.equal(await page.locator('#login').isVisible(),true);
      const failure=await page.evaluate(async owner=>{try{await fixture.read(fixture.file,owner);return null;}catch(error){return error.message;}},owner);

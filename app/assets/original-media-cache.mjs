@@ -6,14 +6,19 @@ export const ORIGINAL_MEDIA_MAX_BYTES=48000000;
 export const ORIGINAL_MEDIA_TTL_MS=600000;
 export const ORIGINAL_MEDIA_READ_MS=180000;
 const REGISTRY=Symbol.for('sma.original.media.v1');
+const DRIVER=Symbol.for('sma.original.media.driver.v1');
 const MAX_READS=2,MAX_RESPONSE_BYTES=32004096;
 const MIME_TYPES=new Set(['video/mp4','image/jpeg','image/png','image/webp']);
 const failed=()=>Error('SOURCE_UNAVAILABLE');
 const cancelled=()=>Error('SOURCE_ABORTED');
+let defaultHost;
 
 function sharedHost(){
- try{const top=globalThis.window?.top;if(top&&top.location.origin===globalThis.location?.origin)return top;}catch{}
- return globalThis;
+ if(defaultHost)return defaultHost;
+ try{const top=globalThis.window?.top;if(top&&top.location.origin===globalThis.location?.origin&&(top===globalThis.window||typeof top[DRIVER]==='function'))return defaultHost=top;}catch{}
+ // Keep auth observers, explicit clears and all later clients on the same host
+ // for this module's lifetime, even if an unrelated parent imports us later.
+ return defaultHost=globalThis;
 }
 function registry(host){
  if(!host[REGISTRY])Object.defineProperty(host,REGISTRY,{value:{owner:undefined,epoch:0,cache:new Map(),bytes:0,pending:new Map(),consumers:new Set(),queue:[],running:new Set()},configurable:true});
@@ -146,7 +151,8 @@ function drain(state){
  }
 }
 function removeConsumer(state,consumer){
- state.consumers.delete(consumer);consumer.scope.abort();consumer.scope.close();
+ if(!state.consumers.delete(consumer))return;
+ consumer.scope.abort();consumer.scope.close();
  const job=consumer.job;if(!job)return;
  job.consumers.delete(consumer);
  if(job.consumers.size)return;
@@ -157,7 +163,17 @@ function removeConsumer(state,consumer){
 // This registry contains verified Blobs and short-lived in-flight consumers only.
 // Tokens stay in individual auth/transport calls; media never reaches persistent
 // storage. Each receiver gets a Blob constructed in its own JavaScript realm.
-export function createSharedOriginalMediaClient({getSession,host=sharedHost(),endpoint=()=>customerMediaEndpoint('original'),fetcher=(...args)=>host.fetch(...args),now=()=>Date.now(),BlobCtor=Blob}){
+export function createSharedOriginalMediaClient(options={}){
+ const {getSession,BlobCtor=Blob}=options;let host=options.host??sharedHost();
+ // Using top.fetch alone does not keep an iframe's Promise/async continuations
+ // alive after that iframe is removed. The surviving host must create the whole
+ // driver, while each consumer retains its own session callback and Blob realm.
+ const driver=host[DRIVER];
+ if(typeof driver==='function'&&driver!==createSharedOriginalMediaClient)return driver({...options,host,BlobCtor});
+ // Known app hosts import this module themselves. An unrelated embed without a
+ // host driver keeps its own bounded cache instead of sharing a disposable job.
+ if(globalThis.window&&host!==globalThis.window&&host.window===host&&!driver)host=globalThis;
+ const {endpoint=()=>customerMediaEndpoint('original'),fetcher=(...args)=>host.fetch(...args),now=()=>Date.now()}=options;
  if(typeof getSession!=='function')throw Error('AUTH_REQUIRED');
  const state=registry(host),consumers=new Set();let disposed=false;
  return {
@@ -190,6 +206,11 @@ export function createSharedOriginalMediaClient({getSession,host=sharedHost(),en
     const blob=new BlobCtor([entry.blob],{type:entry.mime});assertConsumer(state,consumer);return blob;
    }finally{consumers.delete(consumer);removeConsumer(state,consumer);}
   },
-  dispose(){if(disposed)return;disposed=true;for(const consumer of consumers)consumer.scope.abort();}
+  dispose(){if(disposed)return;disposed=true;for(const consumer of [...consumers]){consumers.delete(consumer);removeConsumer(state,consumer);}}
  };
 }
+
+// This module is loaded by the dashboard and standalone API in the top window.
+// Child modules may call this function, but cannot install their own realm as
+// the long-lived driver of another window.
+if(globalThis.window&&globalThis.window===globalThis.window.top)Object.defineProperty(globalThis,DRIVER,{value:createSharedOriginalMediaClient,configurable:true});

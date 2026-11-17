@@ -199,6 +199,10 @@ Originalplayer, Exportvorschau, Coveransicht und gespeicherter Download verwende
 denselben geprüften Originalabruf über `media-editor-api.mjs`. Der begrenzte
 RAM-Speicher in `original-media-cache.mjs` teilt laufende Anfragen und erfolgreich
 geprüfte Mediendaten innerhalb desselben gleichursprünglichen Hauptfensters.
+Das Hauptfenster führt den gemeinsamen Abruf aus, damit das Schließen der
+zuerst lesenden Unteransicht andere Verbraucher nicht unterbricht. Einbettungen
+ohne das gemeinsame Modul im Hauptfenster verwenden einen eigenen lokalen
+RAM-Speicher.
 Er hält höchstens zwei Originale mit zusammen 48 MB und verwendet Einträge nur
 innerhalb von zehn Minuten. Gleichzeitig laufende Originalabrufe sind auf zwei
 begrenzt. Die bestehende

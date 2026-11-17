@@ -293,6 +293,7 @@ for(const mobile of [false,true]){
  const label=mobile?'mobile':'desktop';
  test(label+': a new signed-in customer reaches the empty catalogue and first file preparation through real navigation',{timeout:45000},async t=>{
   const f=await fixture(t,mobile,{startAtLogin:true});
+  const catalogStarts=()=>f.calls.filter(call=>call.path==='/webhook/sma-publication-files-v1').length;
   await f.signIn('second');
   await f.page.waitForFunction(()=>document.getElementById('dashboard')?.contentDocument?.querySelector('.sma-file-toolbar button')?.disabled===false);
   await f.dashboard.getByRole('tab',{name:'Arbeitsbereich',selected:true}).waitFor();
@@ -305,6 +306,11 @@ for(const mobile of [false,true]){
   await emptyCatalogue.waitFor();
   assert.equal(await f.dashboard.locator('.sma-file-grid .sma-file-row').count(),0);
   assert.equal(await f.dashboard.locator('iframe[data-portal]').count(),0);
+  assert.equal(catalogStarts(),0,'ordinary navigation only reads the saved catalogue');
+  await f.dashboard.getByRole('button',{name:'Dateien aktualisieren',exact:true}).click();
+  await f.page.waitForFunction(()=>document.getElementById('dashboard')?.contentDocument?.querySelector('.sma-file-toolbar button')?.disabled===false);
+  assert.equal(catalogStarts(),1,'the explicit refresh starts one folder check');
+  assert(await emptyCatalogue.isVisible());
   await f.launcher.click();await f.input.fill(query);
   await f.dialog.getByText('Keine Treffer. Versuche einen kürzeren Begriff.',{exact:true}).waitFor();
   assert.equal(await f.dialog.locator('[data-quick-file]').count(),0);
@@ -337,7 +343,7 @@ for(const mobile of [false,true]){
   assert.ok(fileReads.some(call=>call.args.p_input?.dashboard_labels));
   assert.ok(fileReads.some(call=>call.args.p_input?.platform==='youtube'));
   assert.ok(fileReads.every(call=>call.owner==='second'&&call.args.p_action==='list'));
-  assert.equal(f.calls.filter(call=>call.path==='/webhook/sma-publication-files-v1').length,1);
+  assert.equal(catalogStarts(),1,'the remaining navigation and first-file preparation never repeat the folder check');
   assert.deepEqual(f.calls.filter(call=>!['/fixture/sign-in','/fixture/sma_publication_files_v1','/fixture/sma_publication_preview_v1','/rest/v1/rpc/sma_gallery_music_v1','/webhook/sma-publication-files-v1'].includes(call.path)),[],
    'opening and cancelling the file picker never fetches, uploads, edits or publishes media');
  });
