@@ -49,6 +49,9 @@ const client=`export function createClient(){return {
  rpc(name,args){const p=fetch('/fixture/'+name,{method:'POST',body:JSON.stringify(args)}).then(r=>r.json()).then(data=>({data}));p.abortSignal=()=>p;return p;}
 }}`;
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0b8AAAAASUVORK5CYII=';
+const catalogSyncStatus=({sync_state='idle',retry_after_ms=0,synced_at=null}={})=>({
+ ok:true,version:1,can_publish:false,sync_state,retry_after_ms,synced_at
+});
 function rpc(name,args){
  switch(name){
   case 'sma_publication_history_find_v1':
@@ -59,6 +62,7 @@ function rpc(name,args){
   case 'sma_publication_order_v1':
    assert.equal(args.p_action,'get');assert.equal(args.p_input.id,target);return order;
   case 'sma_publication_files_v1':
+   if(args.p_action==='sync_status'){assert.deepEqual(args.p_input,{});return catalogSyncStatus();}
    if(args.p_action==='list')return {ok:true,files:[file]};
    assert.equal(args.p_input.asset_id,asset);
    if(args.p_action==='get')return saved;
@@ -188,6 +192,9 @@ async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
    if(url.pathname==='/webhook/sma-publication-files-v1')return reply({ok:true});
   }
   const args=request.postDataJSON();
+  if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='sync_status'){
+   assert.deepEqual(args.p_input,{});return reply(catalogSyncStatus());
+  }
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='list'){
    return reply(args.p_input?.platform==='youtube'?readPortalFiles():{ok:true,files:args.p_input?.dashboard_labels===true?dashboardFiles:[]});
   }
@@ -503,29 +510,45 @@ async function checkGalleryKeyboard(browser,width){
  try{
   const wanted={...file,name:'Werkstatt Ziel.mp4'};
   const rest=Array.from({length:999},(_,i)=>({...file,id:uuid(i+100),name:'Werkstatt '+i+'.mp4'}));
-  let catalog=[...rest,wanted],catalogReads=0,driveReads=0,folderError=null,holdRetry=false,failNextRead=false;
+  let catalog=[...rest,wanted],catalogReads=0,driveReads=0,preflightReads=0,folderError=null,holdRetry=false,failNextRead=false;
+  let clock=Date.parse('2026-11-17T12:00:00Z'),startedAt=clock-60000,leaseUntil=0,syncState='complete';
+  let syncedAt=new Date(startedAt).toISOString();
+  const syncStatus=()=>catalogSyncStatus({sync_state:leaseUntil>clock?'running':syncState,
+   retry_after_ms:Math.max(0,Math.min(120000,leaseUntil>clock?leaseUntil-clock:startedAt+15000-clock)),synced_at:syncedAt});
   const requested=Promise.withResolvers(),release=Promise.withResolvers();
   const errors=[];
   await ctx.routeWebSocket('**/*',ws=>ws.close());
   await ctx.route('**/*',async route=>{
    try{
-    const req=route.request();
-    if(new URL(req.url()).pathname==='/webhook/sma-publication-files-v1'){
+    const req=route.request(),path=new URL(req.url()).pathname;
+    if(req.method()==='POST'&&path==='/webhook/sma-publication-files-v1'){
      driveReads++;
+     assert.notEqual(syncStatus().sync_state,'running','A known active lease must block before n8n');
+     assert.equal(syncStatus().retry_after_ms,0,'A known cooldown must block before n8n');
+     assert.ok(folderError===null||['FILE_CATALOG_TOO_LARGE','FILE_SYNC_UNAVAILABLE'].includes(folderError));
+     startedAt=clock;leaseUntil=clock+120000;
      if(holdRetry){requested.resolve();await release.promise;}
-     if(folderError)return await route.fulfill({json:{ok:false,code:folderError}});
+     leaseUntil=0;syncState=folderError?'interrupted':'complete';if(!folderError)syncedAt=new Date(clock).toISOString();
+     return await route.fulfill({json:folderError?{ok:false,code:folderError}:{ok:true},headers:{'Access-Control-Allow-Origin':'*'}});
     }
-    if(req.method()==='POST'&&new URL(req.url()).pathname==='/fixture/sma_publication_files_v1'){
+    if(req.method()==='POST'&&path==='/fixture/sma_publication_files_v1'){
      const q=req.postDataJSON();
+     if(q.p_action==='sync_status'){
+      assert.deepEqual(q.p_input,{});preflightReads++;return await route.fulfill({json:syncStatus()});
+     }
      if(q.p_action==='list'&&q.p_input?.dashboard_labels){
       catalogReads++;
       if(failNextRead){failNextRead=false;return await route.abort('internetdisconnected');}
+      return await route.fulfill({json:{ok:true,files:catalog,sync_state:syncStatus().sync_state,synced_at:syncedAt}});
      }
     }
     await firstPostRoute(route,()=>({ok:true,files:catalog}),catalog);
    }catch(e){errors.push(e.message);await route.abort();}
   });
   const page=await ctx.newPage();page.setDefaultTimeout(5000);page.on('pageerror',e=>errors.push(e.message));
+  // Move Date.now without firing background timers or waiting in real time.
+  await page.clock.setFixedTime(clock);
+  const advance=async ms=>{clock+=ms;await page.clock.setFixedTime(clock);};
   await page.goto(dashboard);
   const frame=page.frameLocator('#dashboard'),nav=frame.locator('.sma-file-pages');
   const launcher=mobile?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
@@ -565,38 +588,52 @@ async function checkGalleryKeyboard(browser,width){
   await quickStatus.filter({hasText:'Keine gespeicherten Dateien'}).waitFor();
   assert.equal(await dialog.locator('[data-quick-file]').count(),0);
   const retry=dialog.getByRole('button',{name:'Ordnerabgleich wiederholen'});
-  folderError=null;catalog=[wanted];await retry.click();
+  assert.equal(driveReads,1);const firstPreflight=preflightReads;
+  await retry.click();await quickStatus.filter({hasText:'Bitte warte kurz'}).waitFor();
+  assert.equal(preflightReads,firstPreflight+1);assert.equal(driveReads,1,'An immediate retry reads cooldown without another n8n start');
+  assert.equal(await dialog.locator('[data-quick-file]').count(),0);
+  folderError=null;catalog=[wanted];await advance(15000);await retry.click();
   await retry.waitFor({state:'hidden'});await dialog.locator('[data-quick-file]').waitFor();
   await dialog.getByRole('button',{name:'Suche schließen'}).click();await select.waitFor();
-  assert.equal(driveReads,2,'an explicit refresh must still synchronize the folder');
-  assert.equal(catalogReads,before+1);assert.equal(await select.getAttribute('aria-pressed'),'false');
-  folderError='FILE_SYNC_UNAVAILABLE';await manual.click();await status.filter({hasText:'zuletzt gespeicherte'}).waitFor();
+  assert.equal(driveReads,2,'An explicit refresh after the 15-second gate still starts once');
+  assert.equal(catalogReads,before+2);assert.equal(await select.getAttribute('aria-pressed'),'false');
+  folderError='FILE_SYNC_UNAVAILABLE';await advance(15000);await manual.click();await status.filter({hasText:'zuletzt gespeicherte'}).waitFor();
+  assert.equal(driveReads,3);
   await launcher.click();const input=dialog.getByRole('searchbox');await input.fill('Werkstatt');
   assert.equal(await dialog.locator('[data-quick-file]').count(),1);assert.match(await quickStatus.innerText(),/zuletzt gespeicherte/);
   await input.fill('Fehlt im Katalog');assert.equal(await dialog.locator('[data-quick-file]').count(),0);
   assert.match(await quickStatus.innerText(),/zuletzt gespeicherte/);
-  folderError='FILE_SYNC_RATE_LIMITED';await retry.click();await quickStatus.filter({hasText:'Bitte warte kurz'}).waitFor();
+  const beforeCooldown=preflightReads;
+  await retry.click();await quickStatus.filter({hasText:'Bitte warte kurz'}).waitFor();
+  assert.equal(preflightReads,beforeCooldown+1);assert.equal(driveReads,3,'Server cooldown adds no native start');
   assert.equal(await input.inputValue(),'Fehlt im Katalog');assert(await focus(retry));
-  folderError='FILE_SYNC_RUNNING';await retry.click();await quickStatus.filter({hasText:'läuft bereits'}).waitFor();
+  leaseUntil=clock+120000;const beforeRunning=preflightReads;
+  await retry.click();await quickStatus.filter({hasText:'läuft bereits'}).waitFor();
+  assert.equal(preflightReads,beforeRunning+1);assert.equal(driveReads,3,'An active server lease adds no native start');
+  const checkStatus=dialog.getByRole('button',{name:'Abgleichstatus prüfen'});
+  leaseUntil=0;syncState='interrupted';await advance(15000);await checkStatus.click();await retry.waitFor();
+  assert.equal(driveReads,3,'Checking a finished lease only reloads saved status');
   folderError=null;holdRetry=true;
   await retry.press('Enter');await requested.promise;
   try{
    assert.equal(await retry.getAttribute('aria-disabled'),'true');await page.keyboard.press('Enter');
+   assert.equal(driveReads,4,'A repeated keypress while refresh is pending cannot start another workflow');
    await input.fill('Werkstatt Ziel');await dialog.locator('[data-quick-file]').waitFor();
   }finally{release.resolve();}
   await retry.waitFor({state:'hidden'});assert.equal(await input.inputValue(),'Werkstatt Ziel');assert(await focus(input));
   assert.equal(await quickStatus.innerText(),'1 direkter Treffer');
-  assert.equal(catalogReads,before+4);assert.equal(driveReads,6);
-  await input.press('Escape');folderError='FILE_SYNC_UNAVAILABLE';await manual.click();
+  assert.equal(catalogReads,before+6);assert.equal(driveReads,4);
+  await input.press('Escape');folderError='FILE_SYNC_UNAVAILABLE';await advance(15000);await manual.click();
   await status.filter({hasText:'nicht abgeschlossen'}).waitFor();
+  assert.equal(driveReads,5);
   await launcher.click();await input.fill('Werkstatt');
-  folderError=null;catalog=[{...wanted,name:'Werkstatt Neu.mp4'}];failNextRead=true;await retry.click();
+  folderError=null;catalog=[{...wanted,name:'Werkstatt Neu.mp4'}];failNextRead=true;await advance(15000);await retry.click();
   await quickStatus.filter({hasText:'zuletzt geladene Dateiliste'}).waitFor();
   await dialog.getByRole('button',{name:/Werkstatt Ziel/}).waitFor();
   await dialog.getByRole('button',{name:'Dateiliste erneut laden'}).click();
   await dialog.getByRole('button',{name:/Werkstatt Neu/}).waitFor();
   assert.equal(await input.inputValue(),'Werkstatt');assert(await focus(input));
-  assert.equal(catalogReads,before+6);assert.equal(driveReads,8);
+  assert.equal(catalogReads,before+8);assert.equal(driveReads,6,'Retrying the saved list never repeats its successful native scan');
   assert.deepEqual(errors,[]);console.log(width+'px: 1000 files paged forward and back by keyboard; selected file followed across reload and removal');
  }finally{await ctx.close();}
 }
@@ -700,7 +737,7 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
    const mobile=width===320,errors=[];
    const ctx=await browser.newContext({viewport:{width,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
    try{
-    let scans=0;
+    let scans=0,clock=Date.parse('2026-11-17T12:00:00Z'),lastDispatch=clock-15000;
     assert.deepEqual(await scan('first-only'),{ok:true,count:1000});
     await ctx.routeWebSocket('**/*',ws=>ws.close());
     await ctx.route('**/*',async route=>{
@@ -708,9 +745,21 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
       const req=route.request(),path=new URL(req.url()).pathname;
       const reply=json=>route.fulfill({json,headers:{'Access-Control-Allow-Origin':'*'}});
       if(req.method()==='POST'){
-       if(path==='/webhook/sma-publication-files-v1')return await reply(await scan(++scans===2?'complete':'interrupt'));
+       if(path==='/webhook/sma-publication-files-v1'){
+        assert.ok(clock-lastDispatch>=15000,'A retry must wait for its existing dispatch gate');
+        lastDispatch=clock;return await reply(await scan(++scans===2?'complete':'interrupt'));
+       }
        const args=req.postDataJSON();
        if(path==='/fixture/sma_publication_files_v1'){
+        if(args.p_action==='sync_status'){
+         assert.deepEqual(args.p_input,{});const current=await dashboardList();
+         // The supplied database reader is authoritative for the live lease.
+         // Its scan fixture explicitly rewinds SQL cooldowns; mirror elapsed
+         // dispatch time here without sleeping or changing that fixture's DB.
+         return await reply(catalogSyncStatus({sync_state:current.sync_state,
+          retry_after_ms:current.sync_state==='running'?120000:Math.max(0,lastDispatch+15000-clock),
+          synced_at:current.synced_at??null}));
+        }
         if(args.p_action==='list')return await reply(await (args.p_input.dashboard_labels?dashboardList():portalList()));
         assert.equal(args.p_input.asset_id,wanted.id);
         if(args.p_action==='get')return await reply({ok:true,status:'empty'});
@@ -729,6 +778,8 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
      }catch(e){errors.push(e.message);await route.abort();}
     });
     const page=await ctx.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
+    await page.clock.setFixedTime(clock);
+    const advance=async ms=>{clock+=ms;await page.clock.setFixedTime(clock);};
     const frame=page.frameLocator('#dashboard'),mobileNav=frame.getByRole('navigation',{name:'SMA Schnellnavigation'});
     const launcher=mobile?mobileNav.getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
     const dialog=frame.getByRole('dialog',{name:'SMA durchsuchen'}),input=dialog.getByRole('searchbox');
@@ -745,12 +796,15 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
     assert.deepEqual(await dashboardList(),{...previous,sync_state:'interrupted'});
     await launcher.click();await input.fill('Werkstatt Finale');assert.equal(await hit.count(),0);
     const retry=dialog.getByRole('button',{name:'Ordnerabgleich wiederholen'});
-    await retry.click();await hit.waitFor();assert.equal(await input.inputValue(),'Werkstatt Finale');
+    assert.equal(scans,1);await retry.click();await dialog.getByRole('status').filter({hasText:'Bitte warte kurz'}).waitFor();
+    assert.equal(scans,1,'The SQL-backed catalogue retry is read-only during cooldown');assert.equal(await hit.count(),0);
+    await advance(15000);await retry.click();await hit.waitFor();assert.equal(scans,2);assert.equal(await input.inputValue(),'Werkstatt Finale');
     assert.equal(await retry.count(),0);await input.press('Escape');
     await frame.getByText(/1000 von 1001 Dateien gefunden/).waitFor();
     const complete=await dashboardList();
     await launcher.click();await input.fill('Werkstatt Finale');await hit.waitFor();await input.press('Escape');
-    await manual.click();await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
+    await advance(15000);await manual.click();await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
+    assert.equal(scans,3);
     assert.deepEqual(await dashboardList(),{...complete,sync_state:'interrupted'});
     const overview=mobile?mobileNav.getByRole('button',{name:'Start'}):frame.locator('aside').getByRole('button',{name:'Übersicht'});
     const account=frame.getByRole('tab',{name:'Konto & Paket'});
