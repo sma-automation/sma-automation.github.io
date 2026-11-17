@@ -19,9 +19,10 @@ einen erfolgreich veröffentlichten Beitrag.**
 
 ## Kundenstart-Zuordnung im rein lesenden Startcheck (17.11.2026)
 
-Version 4 des bestehenden SMA-Startchecks ergänzt in `accounts` die
-Anzahl der Website-Kunden mit gespeicherter n8n-Referenz, neue
-Onboarding-Profile und den Stand ihrer noch offenen bzw. gespeicherten
+Version 5 des bestehenden SMA-Startchecks ergänzt eine gesonderte
+Prüfung für berechtigte Konten ohne n8n-Verweis. Bereits seit Version 4
+zählt `accounts` die Website-Kunden mit gespeicherter n8n-Referenz,
+neue Onboarding-Profile sowie deren offene und abgeschlossene
 n8n-Zeilenzuordnungen. Der Schalter für automatische Erstbuchungen ist
 `true` oder `false` bei genau einem Einstellungsdatensatz, andernfalls
 `null` (keine eindeutige Konfiguration). Die Ausgabe gibt keine
@@ -38,6 +39,20 @@ erstellt, veröffentlicht oder als n8n-Execution ausgelöst.
 4 Website-Konten (3 Demo, 0 zahlend), 2 mit n8n-Referenz,
 0 neue Onboarding-Profile, 0 offene manuelle n8n-Zuordnungen,
 automatischer Erstbuchungsschalter an. Noch kein zahlender Kunden-E2E.
+
+**Zusätzlicher Live-Abgleich vom 17.11.2026 (nur SELECT, keine Änderung):**
+Von 3 berechtigten Konten haben 2 eine nichtleere n8n-Referenz und 1 keine.
+Der Bericht zeigt dazu `entitled_with_n8n_reference` und
+`entitled_without_n8n_reference`. Ohne eine Referenz erhält der aggregierte
+Status `ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED`, sofern nicht bereits eine
+neue manuelle n8n-Zeilenzuordnung wartet. Das ist eine **Prüfaufforderung**:
+Ein älterer Testkunde kann einen abweichenden Legacy-Zuordnungsweg haben.
+Keine Zeile automatisch ergänzen, keine Ordner-IDs kopieren und keine Zahlung
+oder Veröffentlichung durch bloße Referenzvergabe freigeben. Die bestätigten
+Drive-Ordnerfelder und deren tatsächliche Berechtigungen sind getrennte Fragen.
+Die erweiterte SQL-Version 5 wird im Repository geprüft; die zusätzliche
+Live-Zählung selbst war eine eigenständige SELECT-Abfrage, **kein** schon
+nachgewiesener Voll-Live-Durchlauf von Version 5.
 
 ## Einstieg nach der E-Mail-Bestätigung (15.11.2026)
 

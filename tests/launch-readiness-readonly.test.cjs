@@ -34,7 +34,8 @@ test('report never upgrades preflight counts into permission to publish or pay',
  assert.match(source,/'requires_personal_approval',true/);
  assert.match(source,/'BLOCKED_NO_EXPLICIT_APPROVAL'/);
  assert.match(source,/verified_at >= now\(\)-interval '15 minutes'/);
- for(const field of ['with_n8n_reference','new_onboarding_profiles','new_profiles_waiting_for_n8n_link',
+ for(const field of ['with_n8n_reference','entitled_with_n8n_reference','entitled_without_n8n_reference',
+   'new_onboarding_profiles','new_profiles_waiting_for_n8n_link',
    'new_profiles_with_n8n_link','automatic_first_payment_setting','onboarding_state'])
   assert.ok(source.includes("'"+field+"'"),field);
  for(const field of ['drive_folder_access','first_paid_customer_e2e'])
@@ -65,6 +66,8 @@ test('gallery counts separate pending work from completed clips and never call a
  ]) assert.match(source,check);
  assert.ok(source.includes('count(DISTINCT g.id) FROM sma_private.gallery_music_v1 g'));
  assert.match(source,/gallery_completed_jobs-gallery_current_revision_evidence_jobs/);
- assert.match(noComments,/'version',4/);
+ assert.match(noComments,/'version',5/);
+ assert.match(noComments,/ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED/);
+ assert.match(noComments,/entitled_accounts-entitled_accounts_without_n8n_reference/);
  assert.doesNotMatch(noComments,/\b(?:gallery_background_(?:tick|pick)|gallery_music_(?:request|enqueue)|publication_gallery_technical_register|gallery_worker_snapshot)_v1\s*\(/i);
 });

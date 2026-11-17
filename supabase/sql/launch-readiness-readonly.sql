@@ -14,6 +14,10 @@ WITH snapshot AS (
     AND demo_delta_aktiv IS TRUE AND zahlung_bestaetigt IS NOT TRUE) AS demo_only_accounts,
   -- Onboarding configuration is not proof of payment, folder permission, or successful customer start.
   (SELECT count(*) FROM public.sma_kunden WHERE nullif(btrim(n8n_kunde_id),'') IS NOT NULL) AS public_accounts_with_n8n_reference,
+  -- Eligible legacy/demo accounts with an empty link need review, not automatic enrollment.
+  (SELECT count(*) FROM public.sma_kunden WHERE aktiv IS TRUE
+    AND (zahlung_bestaetigt IS TRUE OR demo_delta_aktiv IS TRUE)
+    AND nullif(btrim(n8n_kunde_id),'') IS NULL) AS entitled_accounts_without_n8n_reference,
   (SELECT count(*) FROM sma_private.onboarding_n8n_accounts_v1) AS onboarding_profiles,
   (SELECT count(*) FROM sma_private.onboarding_n8n_accounts_v1 WHERE n8n_row_id IS NULL) AS onboarding_waiting_for_link,
   (SELECT count(*) FROM sma_private.onboarding_n8n_accounts_v1 WHERE n8n_row_id IS NOT NULL) AS onboarding_with_link,
@@ -90,13 +94,15 @@ WITH snapshot AS (
     WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
 )
 SELECT jsonb_build_object(
- 'version',4,
+ 'version',5,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
   'total',customers,'entitled',entitled_accounts,
   'paid',paid_accounts,'demo_only',demo_only_accounts,
   'with_n8n_reference',public_accounts_with_n8n_reference,
+  'entitled_with_n8n_reference',entitled_accounts-entitled_accounts_without_n8n_reference,
+  'entitled_without_n8n_reference',entitled_accounts_without_n8n_reference,
   'new_onboarding_profiles',onboarding_profiles,
   'new_profiles_waiting_for_n8n_link',onboarding_waiting_for_link,
   'new_profiles_with_n8n_link',onboarding_with_link,
@@ -104,6 +110,7 @@ SELECT jsonb_build_object(
     WHEN first_payment_setting_rows=1 THEN first_payment_enabled_rows=1 ELSE NULL END,
   'onboarding_state',CASE
     WHEN onboarding_waiting_for_link>0 THEN 'MANUAL_N8N_LINK_PENDING'
+    WHEN entitled_accounts_without_n8n_reference>0 THEN 'ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED'
     WHEN onboarding_profiles=0 THEN 'NO_NEW_ONBOARDING_PROFILES'
     ELSE 'N8N_LINK_COUNTS_REQUIRE_MANUAL_E2E_CHECK' END,
   'drive_folder_access','NOT_VERIFIED_BY_THIS_QUERY',
