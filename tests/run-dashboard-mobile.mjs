@@ -52,6 +52,19 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const catalogSyncStatus=({sync_state='idle',retry_after_ms=0,synced_at=null}={})=>({
  ok:true,version:1,can_publish:false,sync_state,retry_after_ms,synced_at
 });
+async function controlCatalogTime(page){
+ // The dashboard's shared refresh driver reads Date.now in the top realm.
+ // Playwright Clock also replaces performance navigation entries, breaking F5
+ // restoration; keep navigation timing and all timers native in this fixture.
+ const original=await page.evaluateHandle(()=>Date.now);
+ let now=await page.evaluate(()=>Date.now());
+ const set=()=>page.evaluate(value=>{Date.now=()=>value;},now);
+ await set();
+ return {now,
+  async advance(ms){now+=ms;await set();return now;},
+  async restore(){await original.evaluate(fn=>{Date.now=fn;});await original.dispose();}
+ };
+}
 function rpc(name,args){
  switch(name){
   case 'sma_publication_history_find_v1':
@@ -511,7 +524,7 @@ async function checkGalleryKeyboard(browser,width){
   const wanted={...file,name:'Werkstatt Ziel.mp4'};
   const rest=Array.from({length:999},(_,i)=>({...file,id:uuid(i+100),name:'Werkstatt '+i+'.mp4'}));
   let catalog=[...rest,wanted],catalogReads=0,driveReads=0,preflightReads=0,folderError=null,holdRetry=false,failNextRead=false;
-  let clock=Date.parse('2026-11-17T12:00:00Z'),startedAt=clock-60000,leaseUntil=0,syncState='complete';
+  let clock=Date.now(),startedAt=clock-60000,leaseUntil=0,syncState='complete';
   let syncedAt=new Date(startedAt).toISOString();
   const syncStatus=()=>catalogSyncStatus({sync_state:leaseUntil>clock?'running':syncState,
    retry_after_ms:Math.max(0,Math.min(120000,leaseUntil>clock?leaseUntil-clock:startedAt+15000-clock)),synced_at:syncedAt});
@@ -546,9 +559,6 @@ async function checkGalleryKeyboard(browser,width){
    }catch(e){errors.push(e.message);await route.abort();}
   });
   const page=await ctx.newPage();page.setDefaultTimeout(5000);page.on('pageerror',e=>errors.push(e.message));
-  // Move Date.now without firing background timers or waiting in real time.
-  await page.clock.setFixedTime(clock);
-  const advance=async ms=>{clock+=ms;await page.clock.setFixedTime(clock);};
   await page.goto(dashboard);
   const frame=page.frameLocator('#dashboard'),nav=frame.locator('.sma-file-pages');
   const launcher=mobile?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
@@ -580,6 +590,9 @@ async function checkGalleryKeyboard(browser,width){
   await page.keyboard.press('Space');assert.equal(await select.getAttribute('aria-pressed'),'false');assert(await focus(select));
   catalog=[];await page.reload();await frame.getByText(/Noch keine Bild- oder Videodateien/).waitFor();
   assert(await focus(field));assert.equal(await field.inputValue(),'Werkstatt');assert.equal(await filter.inputValue(),'youtube');
+  const controlled=await controlCatalogTime(page);clock=controlled.now;
+  startedAt=clock-60000;syncedAt=new Date(startedAt).toISOString();
+  const advance=async ms=>{clock=await controlled.advance(ms);};
   const manual=frame.getByRole('button',{name:'Dateien aktualisieren',exact:true});
   const before=catalogReads,status=frame.locator('.sma-file-toolbar [role=status]').first();
   const quickStatus=dialog.getByRole('status');
@@ -634,6 +647,7 @@ async function checkGalleryKeyboard(browser,width){
   await dialog.getByRole('button',{name:/Werkstatt Neu/}).waitFor();
   assert.equal(await input.inputValue(),'Werkstatt');assert(await focus(input));
   assert.equal(catalogReads,before+8);assert.equal(driveReads,6,'Retrying the saved list never repeats its successful native scan');
+  await controlled.restore();
   assert.deepEqual(errors,[]);console.log(width+'px: 1000 files paged forward and back by keyboard; selected file followed across reload and removal');
  }finally{await ctx.close();}
 }
@@ -737,7 +751,7 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
    const mobile=width===320,errors=[];
    const ctx=await browser.newContext({viewport:{width,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
    try{
-    let scans=0,clock=Date.parse('2026-11-17T12:00:00Z'),lastDispatch=clock-15000;
+    let scans=0,clock=Date.now(),lastDispatch=clock-15000;
     assert.deepEqual(await scan('first-only'),{ok:true,count:1000});
     await ctx.routeWebSocket('**/*',ws=>ws.close());
     await ctx.route('**/*',async route=>{
@@ -778,8 +792,6 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
      }catch(e){errors.push(e.message);await route.abort();}
     });
     const page=await ctx.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
-    await page.clock.setFixedTime(clock);
-    const advance=async ms=>{clock+=ms;await page.clock.setFixedTime(clock);};
     const frame=page.frameLocator('#dashboard'),mobileNav=frame.getByRole('navigation',{name:'SMA Schnellnavigation'});
     const launcher=mobile?mobileNav.getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
     const dialog=frame.getByRole('dialog',{name:'SMA durchsuchen'}),input=dialog.getByRole('searchbox');
@@ -791,6 +803,8 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
     assert(!await hit.count());
     await input.fill('Kundenclip');await dialog.getByRole('button',{name:'Alle 1000 Dateien anzeigen'}).click();
     const previous=await dashboardList();
+    const controlled=await controlCatalogTime(page);clock=controlled.now;lastDispatch=clock-15000;
+    const advance=async ms=>{clock=await controlled.advance(ms);};
     await manual.click();
     await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
     assert.deepEqual(await dashboardList(),{...previous,sync_state:'interrupted'});
@@ -806,6 +820,7 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
     await advance(15000);await manual.click();await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
     assert.equal(scans,3);
     assert.deepEqual(await dashboardList(),{...complete,sync_state:'interrupted'});
+    await controlled.restore();
     const overview=mobile?mobileNav.getByRole('button',{name:'Start'}):frame.locator('aside').getByRole('button',{name:'Übersicht'});
     const account=frame.getByRole('tab',{name:'Konto & Paket'});
     await overview.click();await account.click();await launcher.click();await input.fill('Werkstatt Finale');
