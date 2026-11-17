@@ -189,7 +189,7 @@ test('only active products in the current public shop expose a copyable link wit
 
 test('stock polling stops while order section is displayed and resumes on product selection',async()=>{
  const h=harness(),p=product();h.api.init([p]);
- h.nodes.get('shop').hidden=true;
+ h.document.getElementById('shop').hidden=true;
  h.api.scheduleStockRefresh();assert.equal(h.timers.size,0);
  await h.api.refreshStock();assert.equal(h.queries.length,0);
  h.nodes.get('showProducts').events.click();
@@ -221,7 +221,7 @@ test('stock response in flight cannot overwrite data after products become invis
  const h=harness(),p=product(),slow=deferred();h.api.init([p]);
  h.respond(q=>q.table==='sma_produkte'?slow.promise:{data:[],error:null});
  const pending=h.api.refreshStock();await flush();
- h.nodes.get('shop').hidden=true;
+ h.document.getElementById('shop').hidden=true;
  slow.resolve({data:[{sma_produkt_id:p.sma_produkt_id,bestand:99}],error:null});
  await pending;
  assert.equal(p.bestand,6);
