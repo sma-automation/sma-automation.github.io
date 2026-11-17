@@ -8,10 +8,14 @@ on:
       - app/assets/thumbnail-batch.mjs
       - supabase/functions/sma-file-job/**
       - supabase/sql/file-command-mailbox.sql
+      - supabase/sql/file-job-export-family.sql
+      - supabase/migrations/*_file_job_export_family_v1.sql
       - tests/file-job-*.test.mjs
       - tests/file-command-*.test.mjs
+      - tests/run-file-job-family-concurrency.mjs
       - tests/thumbnail-batch.test.cjs
       - tests/sql-runtime/file-job-*.json
+      - tests/sql-runtime/file-job-*.mjs
       - n8n/consolidation/**
       - n8n/file-command/**
       - n8n/thumbnail-batch/**
@@ -345,3 +349,5 @@ jobs:
         run: npm ci --prefix tests/postgres-runtime --ignore-scripts
       - name: Test concurrent upload and reservation cleanup
         run: node tests/run-music-library-concurrency.mjs
+      - name: Test concurrent file-family joins and upload receipts
+        run: node tests/run-file-job-family-concurrency.mjs
