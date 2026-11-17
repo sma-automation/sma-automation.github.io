@@ -343,7 +343,8 @@ for(const mobile of [false,true]){
   const fileReads=f.calls.filter(call=>call.path==='/fixture/sma_publication_files_v1');
   assert.ok(fileReads.some(call=>call.args.p_input?.dashboard_labels));
   assert.ok(fileReads.some(call=>call.args.p_input?.platform==='youtube'));
-  assert.ok(fileReads.every(call=>call.owner==='second'&&call.args.p_action==='list'));
+  assert.ok(fileReads.every(call=>call.owner==='second'&&['list','sync_status'].includes(call.args.p_action)));
+  assert.equal(fileReads.filter(call=>call.args.p_action==='sync_status').length,1,'the one explicit folder check requires exactly one read-only preflight');
   assert.equal(catalogStarts(),1,'the remaining navigation and first-file preparation never repeat the folder check');
   assert.deepEqual(f.calls.filter(call=>!['/fixture/sign-in','/fixture/sma_publication_files_v1','/fixture/sma_publication_preview_v1','/rest/v1/rpc/sma_gallery_music_v1','/webhook/sma-publication-files-v1'].includes(call.path)),[],
    'opening and cancelling the file picker never fetches, uploads, edits or publishes media');
