@@ -7,7 +7,8 @@ const html=readFileSync('app/dashboard.html','utf8');
 const source=html.slice(html.indexOf('function attachFileList('),html.indexOf('\nlet pending;'));
 const runtime=Promise.all([
  import('./dom-runtime/node_modules/linkedom/esm/index.js'),
- import('../app/assets/dashboard-file-search.mjs')
+ import('../app/assets/dashboard-file-search.mjs'),
+ import('../app/assets/media-metadata.mjs')
 ]);
 const initialTime=Date.parse('2026-11-17T12:00:00Z');
 const knownFile={id:'known-file',name:'Kundenvideo.mp4',revision:'same-revision',media_kind:'video',
@@ -18,7 +19,7 @@ function backend(){
   failLists:0,folderReply:{ok:true},onFolder:null,calls:[]};
 }
 async function mount(state){
- const [{parseHTML},{filterDashboardFiles,dashboardFileDescription,searchFilePage}]=await runtime;
+ const [{parseHTML},{filterDashboardFiles,dashboardFileDescription,searchFilePage},{refreshMediaCatalog}]=await runtime;
  const {document}=parseHTML('<html><head></head><body><nav><button id="publicationNav">Veröffentlichung</button></nav><main><div id="publishingFilesSlot"></div></main></body></html>');
  class Clock extends Date {static now(){return state.now;}}
  const env={AbortController,setTimeout,clearTimeout,Date:Clock,
@@ -37,6 +38,10 @@ async function mount(state){
   },
   supabase:{rpc:(name,args)=>{
    assert.equal(name,'sma_publication_files_v1');
+   if(args.p_action==='sync_status'){
+    assert.deepEqual(JSON.parse(JSON.stringify(args.p_input)),{});
+    return {abortSignal:async signal=>{signal.throwIfAborted();state.calls.push('supabase-sync-status');return {data:{ok:true,version:1,can_publish:false,sync_state:state.syncState,retry_after_ms:state.syncState==='running'?120000:0,synced_at:state.syncedAt},error:null};}};
+   }
    assert.equal(JSON.stringify(args),JSON.stringify({p_action:'list',p_input:{dashboard_labels:true}}));
    return {abortSignal:async signal=>{
     signal.throwIfAborted();state.calls.push('supabase-list');
@@ -45,6 +50,7 @@ async function mount(state){
    }};
   }}
  };
+ env.refreshMediaCatalog=options=>refreshMediaCatalog({...options,host:env,now:()=>state.now,request:env.fetch,endpoint:()=>env.customerMediaEndpoint('catalog')});
  const attach=vm.runInNewContext(source+'\nattachFileList',env);
  const gallery=attach(document,document.querySelector('main'),'https://sma.test/app/media-editor.html');
  // LinkeDOM has no select.value setter; native browsers do.

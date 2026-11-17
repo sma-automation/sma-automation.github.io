@@ -35,6 +35,8 @@ function setup({hold=null,status=200,paused=null,onboarding=false,pilot=false,se
  const env={AbortController,AbortSignal,URLSearchParams,Response,supabase:client,
   clearSharedThumbnailCache(){calls.push('clear-thumbnail-cache');},
   clearSharedOriginalMediaCache(){calls.push('clear-original-cache');},
+  clearSharedCatalogRefreshCache(){calls.push('clear-catalog-refresh');},
+  syncSharedCatalogRefreshOwner(){},
   document:{getElementById:node,documentElement:{dataset:{}}},
   window:{sessionStorage,location:{replace:path=>{onTeardown('redirect');redirects.push(path);}}},location:{search:pilot?'?kundenmedien=pilot':''},
   endpoint:'https://fixture.invalid/dashboard',dashboardOwnerId:null,startupView:null,
@@ -83,6 +85,16 @@ for(const [name,config] of [
  assert.equal(f.timers.size,0);assert.equal(f.active(),0);
 });
 
+test('a delayed initial auth snapshot cannot tear down an established dashboard owner',async()=>{
+ for(const stale of ['second',null]){
+  const f=setup();await f.start();const calls=f.calls.length;
+  await f.auth('INITIAL_SESSION',stale);
+  assert.deepEqual(f.redirects,[]);assert.equal(f.node('dashboard').srcdoc,shell);assert.equal(f.calls.length,calls);
+  await f.auth('SIGNED_IN','second');assert.deepEqual(f.redirects,['index.html']);
+  assert.ok(f.calls.includes('clear-catalog-refresh'));
+ }
+});
+
 test('all stages share one deadline instead of resetting the budget after a slow response',async()=>{
  const f=setup({hold:'initial'});const run=f.start();await flush();await f.advance(40000);
  f.hold('body');await f.release();assert.equal(f.held.length,2);assert.equal(f.timers.size,1);
@@ -119,7 +131,7 @@ test('actual sign-out and account-change handlers cancel every pending dashboard
   await f.release();assert.equal(f.node('dashboard').srcdoc,'');assert.deepEqual(f.redirects,['index.html']);
  }
  const first=setup({hold:'initial'});const run=first.start();await flush();await first.logout();await run;
- assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial','clear-thumbnail-cache','clear-original-cache']);
+ assert.equal(first.timers.size,0);await first.release();assert.deepEqual(first.calls,['initial','clear-thumbnail-cache','clear-original-cache','clear-catalog-refresh']);
  assert.deepEqual(first.redirects,['index.html']);
 });
 
@@ -186,7 +198,7 @@ test('valid active, paused, new, refused and private pilot routes retain existin
 
 const browserRuntime='./dom-runtime/node_modules/playwright-core/index.mjs';
 test('desktop and mobile login retry remains usable after stalled auth, HTTP, body and booking lookups',
- {skip:!fs.existsSync('tests/'+browserRuntime)?'Pinned browser runtime is installed in GitHub CI':false,timeout:90000},async()=>{
+ {skip:process.env.CI!=='true'?'Real Chrome acceptance runs in CI':false,timeout:90000},async()=>{
  const {chromium}=await import(browserRuntime);
  const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
  const site='https://sma.test';

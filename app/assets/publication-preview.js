@@ -1,9 +1,9 @@
-import {customerMediaEndpoint} from './customer-media-routes.mjs?v=1';
+import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
-import {mountGalleryMusic} from './gallery-music-worker.mjs?v=4';
+import {mountGalleryMusic} from './gallery-music-worker.mjs?v=5';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
-import {missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=2';
+import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
@@ -383,9 +383,11 @@ function assertFileContext(context){
  if(assignmentRevision!==context.assignment_revision)throw fileError('ASSIGNMENT_CONFLICT');
 }
 async function syncFileCatalog(){
- const auth=await session();if(signedOut)throw fileError('AUTH_REQUIRED');
- const response=await fetch(customerMediaEndpoint('catalog'),{method:'POST',headers:{Authorization:'Bearer '+auth.access_token},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(90000)});
- const data=await response.json();if(signedOut)throw fileError('AUTH_REQUIRED');if(!response.ok||!data?.ok)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
+ const owner=previewOwnerId;
+ if(signedOut||!owner)throw fileError('AUTH_REQUIRED');
+ try{await refreshMediaCatalog({owner,getSession:session,readStatus:signal=>fileRpc('sync_status',{},signal)});}
+ catch(error){throw fileError(error.code||'FILE_SYNC_UNAVAILABLE');}
+ if(signedOut||owner!==previewOwnerId)throw fileError('AUTH_REQUIRED');
 }
 function catalogFileIsFresh(file){
  const age=Date.now()-Date.parse(file.verified_at);
@@ -1762,7 +1764,7 @@ syncMedia();sourceBaseline=sourceFormKey();lock(true);status('Deine Dateien werd
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);clearSharedOriginalMediaCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{if(event==='INITIAL_SESSION'&&previewOwnerId&&s?.user?.id!==previewOwnerId)return;syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);clearSharedOriginalMediaCache(undefined,previewOwnerId);clearSharedCatalogRefreshCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
@@ -1772,11 +1774,11 @@ try{
  }
  coverView=mountExportCover({doc:document,portal:selectedPortal,expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,request:async f=>{const {data,error}=await supabase.rpc('sma_publication_editor_result_v1',{p_asset_id:f.id,p_revision:f.revision});if(error)throw error;return data;},loadImage:async(f,signal)=>{
   if(!['youtube','tiktok'].includes(selectedPortal))return previewThumbnails.request(f,signal);
-  const blob=await (await import('./media-editor-api.mjs?v=12')).editorSource(f,signal,coverOwner);
+  const blob=await (await import('./media-editor-api.mjs?v=13')).editorSource(f,signal,coverOwner);
   if(blob.type!=='image/png'||(f.size_bytes!=null&&blob.size!==f.size_bytes))throw Error('COVER_UNAVAILABLE');
   return blob;
  }});
- originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=12')).editorSource(f,signal,coverOwner)});
+ originalVideo=mountOriginalVideo({doc:document,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=13')).editorSource(f,signal,coverOwner)});
  if(params.has('order')||startupDraft){
   await loadHistoryPreview();
  }else{

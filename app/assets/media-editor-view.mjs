@@ -140,18 +140,42 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  async function refreshFileMetadata(){
   if(busy||disposed||invalidOwner||!file||!saved||!refreshMetadata)return;
   if(fileStale){fail(Error('FILE_CHANGED'));return;}
-  const g=generation,selected=file,controller=new AbortController();metadataController=controller;lock(true);
+  const g=generation,selected=file,controller=new AbortController(),expires=Date.now()+90000;let timedOut=false;
+  const expire=()=>{timedOut=true;controller.abort(Error('FILE_SYNC_TIMEOUT'));};
+  const deadline=setTimeout(expire,90000);
+  const check=()=>{if(Date.now()>=expires)expire();controller.signal.throwIfAborted();};
+  const read=start=>new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(callback,value)=>{if(settled)return;settled=true;controller.signal.removeEventListener('abort',abort);callback(value);};
+   const abort=()=>finish(reject,controller.signal.reason||Error('FILE_SYNC_ABORTED'));
+   if(controller.signal.aborted)return abort();controller.signal.addEventListener('abort',abort,{once:true});
+   Promise.resolve().then(()=>{check();return start();})
+    .then(value=>{try{check();finish(resolve,value);}catch(error){finish(reject,error);}},error=>finish(reject,error));
+  });
+  // Race the owner read itself. Racing owner(g) would still allow its late
+  // continuation to clear the editor after this attempt had already ended.
+  const checkOwner=async()=>{
+   const id=await read(()=>getOwnerId());check();
+   if(!current(g)||metadataController!==controller)return false;
+   if(id!==expectedOwnerId){unavailable(errors.AUTH_REQUIRED);return false;}return true;
+  };
+  metadataController=controller;lock(true);
   $('metadataStatus').textContent='Dateiangaben werden im Kundenordner geprüft …';
   try{
-   if(!await owner(g))return;const result=await refreshMetadata(controller.signal);if(!current(g)||!await owner(g)||controller.signal.aborted)return;
+   if(!await checkOwner())return;const result=await read(()=>refreshMetadata(controller.signal));if(!current(g)||!await checkOwner())return;
    const latestFiles=readEditorFiles(result,initialAssetId,initialAssetPortal),latest=latestFiles.find(f=>f.id===selected.id);
    if(!latest)throw Error('FILE_UNAVAILABLE');
    files=latestFiles;renderOptions(false);$('asset').value=selected.id;
    if(latest.revision!==selected.revision||latest.media_kind!==selected.media_kind){fileStale=true;exportView?.setContext(null,null,false);throw Error('FILE_CHANGED');}
    file=latest;$('fileInfo').textContent=file.name;fileFields();paint();exportView?.setContext(file,saved,dirty||fileStale);void loadPreview(g,file);
    say(missingVideoMetadata(file).length?'Google Drive hat die fehlenden Dateiangaben noch nicht bereitgestellt. Bitte später erneut aktualisieren. Deine Eingaben bleiben erhalten.':'Dateiangaben aktualisiert. Deine Eingaben bleiben erhalten.');
-  }catch(e){if(current(g)&&!controller.signal.aborted){if(['FILE_UNAVAILABLE','FILE_CHANGED'].includes(e?.message)){fileStale=true;original?.setContext(null);exportView?.setContext(null,null,false);}fail(e);if(!invalidOwner)$('metadataStatus').textContent=e?.message==='FILE_CHANGED'?'Die Dateiversion wurde geändert. Deine Eingaben bleiben sichtbar. Lade den passenden gespeicherten Stand, bevor du fortfährst.':errors[e?.message]||errors.FILE_SYNC_UNAVAILABLE;}}
-  finally{if(metadataController===controller)metadataController=null;if(current(g))lock(false);}
+  }catch(e){if(current(g)){
+   if(timedOut||e?.message==='FILE_SYNC_TIMEOUT'){
+    const message='Die Aktualisierung der Dateiangaben dauert zu lange. Deine Eingaben bleiben erhalten. Bitte versuche es erneut.';
+    say(message,true);$('metadataStatus').textContent=message;
+   }else if(!controller.signal.aborted){if(['FILE_UNAVAILABLE','FILE_CHANGED'].includes(e?.message)){fileStale=true;original?.setContext(null);exportView?.setContext(null,null,false);}fail(e);if(!invalidOwner)$('metadataStatus').textContent=e?.message==='FILE_CHANGED'?'Die Dateiversion wurde geändert. Deine Eingaben bleiben sichtbar. Lade den passenden gespeicherten Stand, bevor du fortfährst.':errors[e?.message]||errors.FILE_SYNC_UNAVAILABLE;}
+  }}
+  finally{clearTimeout(deadline);if(metadataController===controller)metadataController=null;if(current(g))lock(false);}
  }
  $('refreshMetadata').addEventListener('click',refreshFileMetadata);
  async function save(event){
