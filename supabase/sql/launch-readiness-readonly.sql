@@ -54,7 +54,7 @@ WITH snapshot AS (
 
   -- A historical evidence row alone does not attest the current source/output
   -- pair. Count only evidence still bound to BOTH current SHA-256 revisions.
-  (SELECT count(*) FROM sma_private.gallery_music_v1 g
+  (SELECT count(DISTINCT g.id) FROM sma_private.gallery_music_v1 g
     JOIN sma_private.publication_files_v1 s ON s.id=g.source_id
       AND s.user_id=g.user_id AND s.customer_id=g.customer_id AND s.available IS TRUE
     JOIN sma_private.publication_files_v1 f ON f.id=g.result_id
