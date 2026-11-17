@@ -9,7 +9,7 @@ import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
 let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './thumbnail-batch.mjs?v=1';
-import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=2';
+import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=3';
 import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
@@ -709,10 +709,14 @@ function renderReview(r,file){
  $('contentReviewStatus').textContent=message;syncReviewButton();
 }
 $('reviewContent').addEventListener('click',async()=>{
- if(busy||!selectedAsset||selectedAsset.media_kind==='video'||['processing','completed'].includes(reviewStatus))return;const file=selectedAsset;lock(true);$('contentReviewStatus').textContent='Die visuelle Sicherheitsprüfung wird gestartet …';
+ if(busy||!selectedAsset||selectedAsset.media_kind==='video'||['processing','completed'].includes(reviewStatus))return;const file=selectedAsset,context=fileContext();lock(true);$('contentReviewStatus').textContent='Die visuelle Sicherheitsprüfung wird gestartet …';
  try{
-  const response=await fileJobs.request({anchor:fileJobAnchor(file),operation:'review',input:{asset_id:file.id,asset_revision:file.revision},timeoutMs:45000});
-  const d=await response.json();if(!response.ok||!d?.ok)throw Error(errorText(d));renderReview(d.review,file);
+  await ensureFreshFile(context);
+  const d=await withFreshFile(context,async retryAfter=>{
+   const response=await fileJobs.request({anchor:fileJobAnchor(file),operation:'review',input:{asset_id:file.id,asset_revision:file.revision},timeoutMs:45000,retryAfter,retryFailed:true});
+   const data=await response.json();if(!response.ok||!data?.ok)throw Object.assign(Error(errorText(data)),{code:data?.code});return data;
+  });
+  renderReview(d.review,file);
   for(let i=0;i<48&&reviewStatus==='processing';i++){
    await new Promise(resolve=>setTimeout(resolve,5000));if(selectedAsset?.id!==file.id||selectedAsset?.revision!==file.revision)return;
    const {data,error}=await supabase.rpc('sma_publication_review_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error(errorText(data));renderReview(data.review,file);
@@ -1037,7 +1041,7 @@ async function loadMagicEffect(autoStart=false){
   if(autoStart&&file.media_kind==='image'&&(r.status==='processing'||(r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
  }catch(e){if(ticket===magicLoadTicket&&!busy&&photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
-async function recognizePhoto({withinAutomatic=false}={}){
+async function recognizePhoto({withinAutomatic=false,retryFailed=false}={}){
  if(signedOut||(busy&&!withinAutomatic)||!selectedAsset||!['image','video'].includes(selectedAsset.media_kind)||magicState?.status==='completed')return;
  const hint=magicHint();if(hint){$('magicStatus').textContent=hint;return;}
  const file=selectedAsset,context=fileContext();magicLoadTicket++;lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
@@ -1046,7 +1050,7 @@ async function recognizePhoto({withinAutomatic=false}={}){
   if(magicState?.status!=='processing'){
    const d=await withFreshFile(context,async retryAfter=>{
     await session();assertFileContext(context);
-    const response=await fileJobs.request({anchor:fileJobAnchor(file),operation:file.media_kind==='video'?'magic_video':'magic_photo',input:{asset_id:file.id,asset_revision:file.revision},timeoutMs:25000,retryAfter});
+    const response=await fileJobs.request({anchor:fileJobAnchor(file),operation:file.media_kind==='video'?'magic_video':'magic_photo',input:{asset_id:file.id,asset_revision:file.revision},timeoutMs:25000,retryAfter,retryFailed});
     const data=await response.json();if(!response.ok||!data?.ok)throw Object.assign(Error(magicErrorText(data?.code)),{code:data?.code});return data;
    });
    if(!showMagic(d.analysis,file))return;
@@ -1059,7 +1063,7 @@ async function recognizePhoto({withinAutomatic=false}={}){
  }catch(e){if(photoStillSelected(file)){$('magicStatus').textContent=e.message;status(e.message,true);}}
  finally{if(photoStillSelected(file))lock(false);}
 }
-$('recognizePhoto').addEventListener('click',()=>recognizePhoto());
+$('recognizePhoto').addEventListener('click',()=>recognizePhoto({retryFailed:true}));
 $('applyMagic').addEventListener('click',()=>{
  if(busy||magicState?.status!=='completed'||magicState.asset_id!==selectedAsset?.id||magicState.asset_revision!==selectedAsset?.revision||magicState.result?.subject_type==='unclear')return;
  $('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;attempt=null;
@@ -1143,7 +1147,7 @@ async function runMagicAction(mode,replace=false){
      // analysis path below decides whether this file may be processed.
     }
    }
-   if(magicState?.status!=='completed')await recognizePhoto({withinAutomatic:true});
+   if(magicState?.status!=='completed')await recognizePhoto({withinAutomatic:true,retryFailed:true});
    if(signedOut||!photoStillSelected(file))return;
    if(magicState?.status!=='completed')throw Error($('magicStatus').textContent||'Die Erkennung ist noch nicht abgeschlossen. Bitte versuche es erneut.');
    if(magicState.result.subject_type==='unclear')throw Error('Das Motiv ist nicht sicher erkennbar. Bitte ergänze den Inhalt selbst oder wähle ein deutlicheres Foto.');

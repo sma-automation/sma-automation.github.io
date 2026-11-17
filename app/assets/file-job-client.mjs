@@ -4,7 +4,17 @@ const origin='https://bnvnmdxosbnuzedokqgh.supabase.co';
 const key='sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const operations=new Set(['upload_start','upload_finish','magic_photo','magic_video','review','preview_prepare','account','order_prepare','order_approve']);
+const analyses={
+ magic_photo:{rpc:'sma_publication_magic_v1',field:'analysis',policy:'magic-photo-2026-11-02.1',empty:'unrecognized',retryCodes:['MAGIC_RATE_LIMITED','MAGIC_RUNNING']},
+ magic_video:{rpc:'sma_publication_video_magic_v1',field:'analysis',policy:'magic-video-2026-11-03.1',empty:'unrecognized',retryCodes:['MAGIC_RATE_LIMITED','MAGIC_RUNNING']},
+ review:{rpc:'sma_publication_review_v1',field:'review',policy:'visual-2026-11-01.1',empty:'unreviewed',retryCodes:['REVIEW_RATE_LIMITED','REVIEW_RUNNING']},
+};
 const record=v=>v&&typeof v==='object'&&!Array.isArray(v);
+const boundAnalysis=(value,input,spec)=>record(value)&&typeof input?.asset_id==='string'&&input.asset_id.length>0&&
+ typeof input?.asset_revision==='string'&&input.asset_revision.length>0&&value.asset_id===input.asset_id&&
+ value.asset_revision===input?.asset_revision&&value.policy_version===spec.policy&&value.can_publish===false&&
+ [spec.empty,'processing','completed','failed'].includes(value.status);
+const publicResponse=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 const fail=(code,extra={})=>{throw Object.assign(Error(code==='AUTH_REQUIRED'?'Bitte melde dich erneut an.':
  code==='FILE_JOB_EXPIRED'?'Der Datei-Auftrag ist abgelaufen. Wähle die Datei erneut aus, um neue Arbeit zu beginnen.':
  code==='FILE_JOB_PENDING'?'Die Verarbeitung läuft weiter. Lade den gespeicherten Status erneut.':
@@ -62,9 +72,10 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
   if(!UUID.test(job.view.job_id)||!Number.isFinite(Date.parse(job.view.deadline_at))||Date.parse(job.view.deadline_at)<=now())fail('FILE_JOB_EXPIRED');
   return job.view;
  }
- async function request({anchor,operation,input,signal,timeoutMs=145000,retryAfter}){
+ async function request({anchor,operation,input,signal,timeoutMs=145000,retryAfter,retryFailed=false}){
   if(!operations.has(operation)||retryAfter!==undefined&&retryAfter!=='FILE_REFRESH_REQUIRED'&&
-     !(operation==='order_prepare'&&retryAfter==='TARGET_CHECK_UNAVAILABLE'))fail('INVALID_INPUT');
+     !(operation==='order_prepare'&&retryAfter==='TARGET_CHECK_UNAVAILABLE')||
+     typeof retryFailed!=='boolean'||retryFailed&&!Object.hasOwn(analyses,operation))fail('INVALID_INPUT');
   const entryGeneration=commandGeneration;
   const controller=new AbortController();controllers.add(controller);
   const limit=AbortSignal.timeout(timeoutMs),combined=AbortSignal.any([controller.signal,limit,...(signal?[signal]:[])]);
@@ -75,9 +86,9 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
    job=await join(anchor,owner,combined,context);
    const identity=job.job_id+'\n'+operation+'\n'+JSON.stringify(input);
    command=commands.get(identity);
-   // An explicit target retry may replace only the command that already
+   // An explicit retry may replace only the command that already
    // existed when this call began, never its own newly submitted replacement.
-   let retryCommand=retryAfter==='TARGET_CHECK_UNAVAILABLE'&&command?.generation<=entryGeneration?command:null;
+   let retryCommand=(retryFailed||retryAfter==='TARGET_CHECK_UNAVAILABLE')&&command?.generation<=entryGeneration?command:null;
    const newCommand=()=>{
     if(commands.size>=256)commands.delete([...commands.keys()][0]);
     const next={id:uuid(),generation:++commandGeneration,submissions:0,acknowledged:false,observed:false,retryableCode:null};
@@ -111,12 +122,29 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
      if(!Number.isInteger(r.status)||r.status<200||r.status>599||!record(r.body))fail('FILE_JOB_UNAVAILABLE');
      await auth(owner,context);guard(context);
      command.retryableCode=r.status===200&&r.body.ok===false&&r.body.code==='FILE_REFRESH_REQUIRED'&&!operation.startsWith('upload_')?'FILE_REFRESH_REQUIRED':null;
-     // The public reply can precede the worker's final state. A fresh failed
-     // receipt is required before retrying this one non-approving operation.
-     if(command===retryCommand&&item.state==='failed'&&r.status===200&&
-        r.body.ok===false&&r.body.code==='TARGET_CHECK_UNAVAILABLE'&&
-        ['queued','running','waiting'].includes(view.state)&&
-        Number.isFinite(Date.parse(view.deadline_at))&&Date.parse(view.deadline_at)>now()){
+     // A public processing reply can precede a failed worker. Both the native
+     // receipt and the current business status must confirm a safe retry.
+     const active=()=>['queued','running','waiting'].includes(view.state)&&
+      Number.isFinite(Date.parse(view.deadline_at))&&Date.parse(view.deadline_at)>now();
+     let replace=false;
+     if(command===retryCommand&&item.state==='failed'&&r.status===200&&active()){
+      if(retryAfter==='TARGET_CHECK_UNAVAILABLE')replace=r.body.ok===false&&r.body.code==='TARGET_CHECK_UNAVAILABLE';
+      if(retryFailed){
+       const spec=analyses[operation],original=r.body[spec.field];
+       const early=r.body.ok===true&&boundAnalysis(original,input,spec)&&original.status==='processing';
+       const noWork=r.body.ok===false&&spec.retryCodes.includes(r.body.code);
+       if(early||noWork){
+        const latest=await post('/rest/v1/rpc/'+spec.rpc,{p_action:'get',p_input:{asset_id:input.asset_id,asset_revision:input.asset_revision}},owner,combined,context);
+        const current=latest[spec.field];
+        if(!boundAnalysis(current,input,spec))fail('FILE_JOB_UNAVAILABLE');
+        // Another tab may already have recovered this file. Return its stored
+        // status without changing the original receipt or submitting work.
+        if(['processing','completed'].includes(current.status))return publicResponse({ok:true,[spec.field]:current});
+        replace=current.status==='failed'||noWork&&current.status===spec.empty;
+       }
+      }
+     }
+     if(replace&&active()){
       const current=commands.get(identity);
       if(!current)fail('FILE_JOB_UNAVAILABLE');
       // Parallel explicit retries share the first replacement. No await may
@@ -126,7 +154,7 @@ export function createFileJobClient({session,fetcher=fetch,uuid=()=>crypto.rando
       if(command.submissions===0)await submit();
       continue;
      }
-     return new Response(JSON.stringify(r.body),{status:r.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+     return publicResponse(r.body,r.status);
     }
     if(['failed','uncertain'].includes(item?.state)||['failed','uncertain','start_uncertain'].includes(view.state))fail('FILE_JOB_UNCERTAIN');
     if(Date.parse(view.deadline_at)<=now()||['expired','finished'].includes(view.state))fail('FILE_JOB_EXPIRED');
