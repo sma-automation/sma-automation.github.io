@@ -139,7 +139,59 @@ try {
   await checkGallery({gallery_technical_records:2,gallery_completed_without_record:0,gallery_completed_jobs:1});
   // Duplicate synthetic evidence cannot multiply the completed-job count.
   await db.query('INSERT INTO sma_private.publication_gallery_technical_v1 (gallery_job_id) VALUES($1)',[completed]);
-  await checkGallery({gallery_technical_records:3,gallery_completed_without_record:0,gallery_completed_jobs:1});
+  await checkGallery({gallery_technical_records:3,gallery_completed_without_record:0,
+    gallery_completed_jobs:1,gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1});
+  // Historical job-ID-only evidence is not sufficient; both CURRENT files,
+  // owner, SHA, size and the saved receipt must still agree.
+  const sourceId='60600000-0000-4000-8000-000000000091';
+  const resultId='60600000-0000-4000-8000-000000000092';
+  const ownerId='60600000-0000-4000-8000-000000000090';
+  const sourceSha='b'.repeat(64),resultSha='a'.repeat(64);
+  const sourceRevision='sha256:'+sourceSha+':1';
+  const resultRevision='sha256:'+resultSha+':2';
+  await db.query(`INSERT INTO sma_private.publication_files_v1
+    (id,customer_id,user_id,revision,size_bytes,available)
+    VALUES ($1,1,$2,$3,100,true),($4,1,$2,$5,120,true)`,
+    [sourceId,ownerId,sourceRevision,resultId,resultRevision]);
+  await db.query(`UPDATE sma_private.gallery_music_v1
+    SET source_id=$1,result_id=$2,customer_id=1,user_id=$3,
+    source_key=$4,expected_sha=$5,expected_size=120 WHERE id=$6`,
+    [sourceId,resultId,ownerId,'sha256:'+sourceSha,resultSha,completed]);
+  await db.query(`UPDATE sma_private.publication_gallery_technical_v1
+    SET asset_id=$1,source_asset_id=$2,customer_id=1,user_id=$3,
+    asset_revision=$4,source_revision=$5,sha256=$6,source_sha256=$7,
+    size_bytes=120 WHERE gallery_job_id=$8`,
+    [resultId,sourceId,ownerId,resultRevision,sourceRevision,resultSha,sourceSha,completed]);
+  await checkGallery({gallery_completed_jobs:1,
+    gallery_current_revision_evidence_jobs:1,gallery_completed_without_current_evidence:0,
+    gallery_evidence_state:'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION'});
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [resultId,'sha256:'+'c'.repeat(64)+':3']);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1,gallery_completed_without_record:0});
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [resultId,resultRevision]);
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [sourceId,'sha256:'+'d'.repeat(64)+':4']);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1,gallery_completed_without_record:0});
+  await db.query('UPDATE sma_private.publication_files_v1 SET revision=$2 WHERE id=$1',
+    [sourceId,sourceRevision]);
+  await db.query('UPDATE sma_private.publication_files_v1 SET customer_id=2 WHERE id=$1',
+    [resultId]);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1});
+  await db.query('UPDATE sma_private.publication_files_v1 SET customer_id=1 WHERE id=$1',
+    [resultId]);
+  await db.query('UPDATE sma_private.publication_files_v1 SET available=false WHERE id=$1',
+    [resultId]);
+  await checkGallery({gallery_current_revision_evidence_jobs:0,
+    gallery_completed_without_current_evidence:1});
+  await db.query('UPDATE sma_private.publication_files_v1 SET available=true WHERE id=$1',
+    [resultId]);
+  await checkGallery({gallery_current_revision_evidence_jobs:1,
+    gallery_completed_without_current_evidence:0});
   await db.query("UPDATE sma_private.gallery_music_v1 SET state='pending',next_attempt=now()-interval '1 hour' WHERE id=$1",[completed]);
   await checkGallery({gallery_completed_jobs:0,gallery_pending_jobs:4,gallery_pending_due_jobs:2,gallery_completed_without_record:0});
   await db.query("UPDATE sma_private.gallery_music_v1 SET state='completed',next_attempt=NULL WHERE id=$1",[completed]);
