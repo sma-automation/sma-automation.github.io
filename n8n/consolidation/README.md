@@ -262,3 +262,16 @@ Actual reductions require fewer external requests, bounded recovery schedules,
 cache/deduplication, batching or dispatch only when work is due. Calculate the
 budget for the stated 20 customers and three files per customer per day from
 those real entry events, including navigation, provider callbacks and retries.
+
+An offline, *non-activating* capacity model is available without cloud API calls:
+
+```sh
+node n8n/consolidation/execution-budget.cjs --customers 20 --files-per-day 3 --days 30 --executions-per-file 26
+node --test tests/n8n-execution-budget.test.cjs
+```
+
+The `--executions-per-file` value is a **scenario input, not a measured result**.
+The model uses the communicated 10,000 monthly starts with an optional reserve
+(default 2,000), includes daily and customer-specific overhead, and never caps
+customer count at 20. A mathematically affordable scenario is not a tested
+live workflow. See [capacity and measurement guide](../../docs/SMA_N8N_EXECUTION_CAPACITY.md).
