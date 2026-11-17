@@ -427,3 +427,36 @@ auf dem vorhandenen SMA-Supabase-Projekt rein lesend ausgeführt.
 
 Keine neuen Tabellen, Rollen, Berechtigungen, Workflows,
 Provider-Aufrufe, Echtkäufe oder Kosten.
+
+
+## Revisionsgebundener Galerie-Nachweis – Startcheck vom 17.11.2026
+
+Der rein lesende Betreibercheck `supabase/sql/launch-readiness-readonly.sql`
+zeigt neben den bisherigen Galerie-Zählern jetzt drei zusätzliche Werte an:
+
+- `gallery_current_revision_evidence_jobs`: Zahl abgeschlossener Musikaufträge,
+  für die ein technischer Galerie-Nachweis **zu den aktuell verfügbaren Original-
+  und Ergebnisdateien** passt. Verglichen werden Datei-IDs, Kunden-/Benutzerzuordnung,
+  beide SHA-256-Revisionswerte, gespeicherter Ergebnis-Hash und Dateigröße.
+- `gallery_completed_without_current_evidence`: abgeschlossene Musikaufträge,
+  denen dieser revisionsgebundene Nachweis fehlt, einschließlich historischer
+  Nachweise für inzwischen geänderte Dateien.
+- `gallery_evidence_state`: `NO_COMPLETED_GALLERY_JOB`,
+  `CURRENT_GALLERY_EVIDENCE_REQUIRED` oder
+  `REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION`.
+
+Die ältere Zahl `gallery_completed_without_record` bleibt für den
+Vergleich erhalten. Ein vorhandener Datensatz allein ist **kein** gültiger
+revisionsgebundener Nachweis. Der Startcheck akzeptiert auch bei passender
+Revision **weder Medienupload noch Veröffentlichung**; unabhängige
+Byte-/Dekodierprüfung, Inhalts-/Rechteprüfung, aktuelle Konten- und
+Dateiverifikation und persönliche Betreiberfreigabe sind getrennt erforderlich.
+
+Die isolierte SQL-Regression simuliert ausdrücklich eine geänderte
+Originalrevision, eine geänderte Ergebnisrevision, einen fremden
+Kundenbezug und eine nicht mehr verfügbare Ergebnisdatei. Jede Abweichung
+senkt `gallery_current_revision_evidence_jobs`, ohne ein historisches
+Beweisdokument zu ändern. Der Test selbst schreibt ausschließlich in
+eine lokale PGlite-Testdatenbank. In der produktiven Supabase-Datenbank
+wurde nur die SELECT-Abfrage des Berichts ausgeführt – keine Migration,
+keine Medienfreigabe und kein n8n-Lauf.
