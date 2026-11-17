@@ -17,6 +17,30 @@ E-Mail-Adressen, Medienbytes, Dateipfade noch Tokens. **Eine Anzahl
 gilt nie als Beweis für den unveränderten Freigabe-Fingerprint oder
 einen erfolgreich veröffentlichten Beitrag.**
 
+## Zusätzlicher Kundenstart-Abgleich (17.11.2026)
+
+Version 4 des bestehenden reinen Lesereports zeigt im Abschnitt `accounts` die
+Anzahl der Website-Kunden mit hinterlegter n8n-Referenz, neue
+Onboarding-Profile, noch nicht bestätigte n8n-Zeilenzuordnungen und bereits
+gespeicherte Zuordnungen. Dazu wird der Schalter für automatische
+Erstbuchungen gelesen: `true` oder `false` bei genau einem vorhandenen
+Einstellungsdatensatz, andernfalls `null` (nicht sicher bestimmbar).
+Die Zählwerte enthalten keine Kennungen, E-Mail-Adressen oder Zugangsdaten.
+
+`drive_folder_access` und `first_paid_customer_e2e` bleiben immer
+`NOT_VERIFIED_BY_THIS_QUERY`. Eine vorhandene n8n-Referenz beweist
+weder eine nutzbare Ordnerzuordnung noch Zahlungs- oder Uploadfähigkeit.
+Die weiterhin separaten realen Nachweise sind in
+[ONBOARDING_FOLDER_PREFLIGHT.md](ONBOARDING_FOLDER_PREFLIGHT.md) beschrieben.
+Der Check löst keine Buchung, Aktivierung, n8n-Execution oder Veröffentlichung aus.
+
+**Read-only Beobachtung 17.11.2026, 15:18 Uhr Wien:** 4 Website-Konten,
+davon 3 Demo und 0 bezahlt, 2 mit hinterlegter n8n-Referenz,
+0 neue Onboarding-Profile und 0 offene n8n-Zeilenzuordnungen.
+Der Schalter für die automatische Erstbuchung ist `true`, der
+erste zahlende Kunden-E2E aber nicht nachgewiesen. Diese Momentaufnahme
+ersetzt keine erneute Prüfung beim Start.
+
 ## Einstieg nach der E-Mail-Bestätigung (15.11.2026)
 
 Bei ausstehender E-Mail-Bestätigung kann der Kunde auf der Anmeldeseite über
