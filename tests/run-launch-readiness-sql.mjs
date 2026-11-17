@@ -27,7 +27,7 @@ async function checkGallery(expected) {
       (SELECT jsonb_agg(to_jsonb(t)) FROM sma_private.music_catalog_v1 t) AS tracks`)).rows;
     const before = await snapshot();
     const {rows:[{readiness}]} = await db.query(report);
-    assert.equal(readiness.version,4);
+    assert.equal(readiness.version,5);
     const media=readiness.media;
     for (const [key,value] of Object.entries(expected)) assert.equal(media[key],value,key);
     assert.equal(media.gallery_music_jobs,media.gallery_completed_jobs+media.gallery_pending_jobs+media.gallery_other_jobs);
@@ -217,8 +217,10 @@ try {
   assert.equal(onboarding.new_profiles_waiting_for_n8n_link,0);
   assert.equal(onboarding.new_profiles_with_n8n_link,0);
   assert.equal(onboarding.with_n8n_reference,0);
+  assert.equal(onboarding.entitled_with_n8n_reference,0);
+  assert.equal(onboarding.entitled_without_n8n_reference,1);
   assert.equal(onboarding.automatic_first_payment_setting,null);
-  assert.equal(onboarding.onboarding_state,'NO_NEW_ONBOARDING_PROFILES');
+  assert.equal(onboarding.onboarding_state,'ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED');
 
   await db.exec(`INSERT INTO sma_private.onboarding_n8n_accounts_v1 VALUES(NULL),(12);
     INSERT INTO sma_private.onboarding_payment_settings_v1 VALUES(true);
@@ -229,6 +231,8 @@ try {
   assert.equal(onboarding.new_profiles_waiting_for_n8n_link,1);
   assert.equal(onboarding.new_profiles_with_n8n_link,1);
   assert.equal(onboarding.with_n8n_reference,1);
+  assert.equal(onboarding.entitled_with_n8n_reference,0); // Inactive reference is not eligible.
+  assert.equal(onboarding.entitled_without_n8n_reference,1);
   assert.equal(onboarding.automatic_first_payment_setting,true);
   assert.equal(onboarding.onboarding_state,'MANUAL_N8N_LINK_PENDING');
   assert.equal(onboarding.drive_folder_access,'NOT_VERIFIED_BY_THIS_QUERY');
@@ -238,7 +242,15 @@ try {
   onboarding=(await accountReadiness()).accounts;
   assert.equal(onboarding.new_profiles_waiting_for_n8n_link,0);
   assert.equal(onboarding.new_profiles_with_n8n_link,2);
+  assert.equal(onboarding.onboarding_state,'ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED');
+  // A reference fixes only the aggregate coverage warning, not Drive access or E2E.
+  await db.exec("UPDATE public.sma_kunden SET n8n_kunde_id='synthetic_linked_01' WHERE id=1");
+  onboarding=(await accountReadiness()).accounts;
+  assert.equal(onboarding.entitled_without_n8n_reference,0);
+  assert.equal(onboarding.entitled_with_n8n_reference,1);
   assert.equal(onboarding.onboarding_state,'N8N_LINK_COUNTS_REQUIRE_MANUAL_E2E_CHECK');
+  assert.equal(onboarding.drive_folder_access,'NOT_VERIFIED_BY_THIS_QUERY');
+  assert.doesNotMatch(JSON.stringify(await accountReadiness()),/synthetic_linked_01/);
   await db.exec('UPDATE sma_private.onboarding_payment_settings_v1 SET enabled=false');
   assert.equal((await accountReadiness()).accounts.automatic_first_payment_setting,false);
   await db.exec('DELETE FROM sma_private.onboarding_payment_settings_v1');
