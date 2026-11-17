@@ -15,6 +15,8 @@ test('SMA launch preflight consists only of one read-only SELECT statement',()=>
 test('preflight counts aggregate statuses without selecting customer identities or private media',()=>{
  assert.match(source,/count\(\*\)/i);
  assert.match(source,/public\.sma_kunden/);
+ assert.match(source,/sma_private\.onboarding_n8n_accounts_v1/);
+ assert.match(source,/sma_private\.onboarding_payment_settings_v1/);
  assert.match(source,/sma_private\.publication_orders_v1/);
  assert.match(source,/sma_private\.publication_provider_permissions_v1/);
  assert.match(source,/sma_private\.publication_gallery_technical_v1/);
@@ -30,6 +32,12 @@ test('report never upgrades preflight counts into permission to publish or pay',
  assert.match(source,/'requires_personal_approval',true/);
  assert.match(source,/'BLOCKED_NO_EXPLICIT_APPROVAL'/);
  assert.match(source,/verified_at >= now\(\)-interval '15 minutes'/);
+ for(const field of ['with_n8n_reference','new_onboarding_profiles','new_profiles_waiting_for_n8n_link',
+   'new_profiles_with_n8n_link','automatic_first_payment_setting','onboarding_state']){
+  assert.ok(source.includes("'"+field+"'"),field);
+ }
+ for(const field of ['drive_folder_access','first_paid_customer_e2e'])
+  assert.ok(source.includes("'"+field+"','NOT_VERIFIED_BY_THIS_QUERY'"),field);
 });
 test('gallery counts separate pending work from completed clips and never call a renderer or evidence writer',()=>{
  for(const field of ['gallery_completed_jobs','gallery_pending_jobs','gallery_pending_due_jobs',
@@ -37,6 +45,6 @@ test('gallery counts separate pending work from completed clips and never call a
   'gallery_completed_without_record','music_listed_tracks'])assert.ok(source.includes("'"+field+"'"),field);
  assert.match(noComments,/g\.state='completed' AND NOT EXISTS/);
  assert.match(noComments,/e\.gallery_job_id=g\.id/);
- assert.match(noComments,/'version',3/);
+ assert.match(noComments,/'version',4/);
  assert.doesNotMatch(noComments,/\b(?:gallery_background_(?:tick|pick)|gallery_music_(?:request|enqueue)|publication_gallery_technical_register|gallery_worker_snapshot)_v1\s*\(/i);
 });
