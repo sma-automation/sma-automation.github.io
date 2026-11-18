@@ -40,7 +40,7 @@ function parameterDifference(a,b){
     !isDeepStrictEqual(a[key],b[key])).map(key=>
       Object.hasOwn(parameterKeys,key)?parameterKeys[key]:'OTHER'))].sort();
 }
-function outcome(issues,mappedCount,mismatches=[]){
+function outcome(issues,mappedCount,mismatches=[],filterChecks=[]){
   const list=[...new Set(issues)].sort();
   return {ok:list.length===0,
     status:list.length?'PUBLISHED_PAYMENT_EQUIVALENCE_REVIEW_REQUIRED':
@@ -52,6 +52,7 @@ function outcome(issues,mappedCount,mismatches=[]){
       template_position:x.template_position,
       categories:x.categories.slice(0,12)
     })),
+    filter_checks:filterChecks.slice(0,26),
     issues:list,...noGrant};
 }
 function outgoing(graph,name){
@@ -86,13 +87,77 @@ function canonicalValue(value,actualToExpected){
 function normalizedParameters(node,actualToExpected){
   if(!object(node?.parameters))return null;
   const p=canonicalValue(node.parameters,actualToExpected);
-  if(node.type==='n8n-nodes-base.dataTable')delete p.dataTableId;
+  if(node.type==='n8n-nodes-base.httpRequest'){
+    // n8n's HTTP Request V3 node defaults an omitted Method to GET.
+    // Never normalize missing POST, PUT, PATCH or DELETE.
+    if(!Object.hasOwn(p,'method'))p.method='GET';
+  }
+  if(node.type==='n8n-nodes-base.dataTable'){
+    delete p.dataTableId;
+    // n8n Data Table's get/update filter defaults an absent operator
+    // (only for value-based expressions) to equality. Keep any explicit
+    // unexpected operator and all other filter semantics unchanged.
+    for(const condition of p.filters?.conditions||[]){
+      if(object(condition)&&Object.hasOwn(condition,'keyValue')&&
+        condition.condition==null)condition.condition='eq';
+    }
+  }
   if(node.type==='n8n-nodes-base.switch'){
     for(const rule of p.rules?.values||[]){
       for(const c of rule.conditions?.conditions||[])delete c.id;
     }
   }
   return p;
+}
+
+// Only fixed schema field labels (from the public generator) can appear in
+// logs. Never return a live key, expression, credential ID or customer value.
+const safeFilterKeys=Object.freeze({
+  id:'ROW_ID',kunde_id:'CUSTOMER_REF',kunde_email:'EMAIL',
+  demo_delta_aktiv:'DEMO_OFF',zugang_aktiv:'ACCESS',zahlung_bestaetigt:'PAYMENT',
+  paket:'PLAN',mollie_customer_id:'MERCHANT_CUSTOMER',
+  mollie_subscription_id:'SUBSCRIPTION',zugangs_token:'ACCESS_TOKEN',
+  upload_folder_id:'UPLOAD_FOLDER',processing_folder_id:'PROCESSING_FOLDER'
+});
+function inspectFilterSemantics(actual,expected,pos){
+  const a=actual?.filters?.conditions,b=expected?.filters?.conditions;
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length>100||b.length>100)
+    return {template_position:pos,status:'INVALID_FILTER_FORMAT',
+      missing_required_fields:[],unexpected_fields:0,operator_differences:0,
+      expression_differences:0,duplicate_field_keys:false,
+      all_conditions:false};
+  const active=new Map();
+  let badKey=false,duplicate=false;
+  for(const x of a){
+    if(!object(x)||typeof x.keyName!=='string'||x.keyName.length>200){badKey=true;continue;}
+    if(active.has(x.keyName))duplicate=true;
+    active.set(x.keyName,x);
+  }
+  const expectedKeys=new Set(b.map(x=>x.keyName));
+  const missing=b.filter(x=>!active.has(x.keyName))
+    .map(x=>Object.hasOwn(safeFilterKeys,x.keyName)?safeFilterKeys[x.keyName]:'OTHER');
+  const extras=[...active.keys()].filter(key=>!expectedKeys.has(key)).length;
+  let operators=0,expressions=0;
+  for(const item of b){
+    const live=active.get(item.keyName);
+    if(!live)continue;
+    if(live.condition!==item.condition)operators++;
+    if(!isDeepStrictEqual(live.keyValue,item.keyValue))expressions++;
+  }
+  const all=actual?.matchType==='allConditions';
+  return {template_position:pos,
+    status:badKey?'INVALID_FILTER_FORMAT':
+      missing.length?'REQUIRED_FILTERS_MISSING':
+        duplicate?'DUPLICATE_FILTERS':
+          extras?'UNREVIEWED_FILTERS':
+            operators||expressions?'FILTER_SEMANTICS_DIFFER':
+              all?'FILTER_KEYS_AND_PREDICATES_MATCH':'MATCH_TYPE_NOT_ALL',
+    missing_required_fields:[...new Set(missing)].sort().slice(0,12),
+    unexpected_fields:Math.min(extras,100),
+    operator_differences:Math.min(operators,100),
+    expression_differences:Math.min(expressions,100),
+    duplicate_field_keys:duplicate,
+    all_conditions:all};
 }
 function sameGroupReferences(expectedNames,expectedToActual,byName,property){
   const values=[];
@@ -174,11 +239,14 @@ function auditPublishedByTopology(graph,template){
       }
     }
   }
-  const mismatches=[];
+  const mismatches=[],filterChecks=[];
   for(const [name,actualName] of paired){
     const e=expected.get(name),a=byName.get(actualName);
-    const categories=parameterDifference(normalizedParameters(a,reverse),
-      normalizedParameters(e,new Map()));
+    const actualParameters=normalizedParameters(a,reverse);
+    const expectedParameters=normalizedParameters(e,new Map());
+    const categories=parameterDifference(actualParameters,expectedParameters);
+    if(e.type==='n8n-nodes-base.dataTable')filterChecks.push(
+      inspectFilterSemantics(actualParameters,expectedParameters,template.nodes.indexOf(e)+1));
     if(categories.length){
       issues.push('PAYMENT_NODE_LOGIC_MISMATCH');
       mismatches.push({template_position:template.nodes.indexOf(e)+1,categories});
@@ -198,6 +266,7 @@ function auditPublishedByTopology(graph,template){
   if(!merchant||!database||merchant===database)issues.push('PAYMENT_CREDENTIAL_REFERENCE_MISMATCH');
   if(!table)issues.push('PAYMENT_CUSTOMER_TABLE_REFERENCE_MISMATCH');
   return outcome(issues,paired.size,mismatches.sort((a,b)=>
+    a.template_position-b.template_position),filterChecks.sort((a,b)=>
     a.template_position-b.template_position));
 }
 function auditRenamedPublishedPaymentWorker(graph){
