@@ -107,10 +107,20 @@ WITH snapshot AS (
   (SELECT count(*) FROM public.sma_bestellungen
     WHERE ist_testbestellung IS TRUE) AS shop_test_orders,
   (SELECT count(*) FROM public.sma_bestellungen
-    WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
+    WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders,
+  -- A Shopify test=false flag is NOT a bank settlement receipt. Distinguish
+  -- historical non-test draft orders from explicitly marked test orders.
+  (SELECT count(*) FROM public.sma_bestellungen
+    WHERE ist_testbestellung IS FALSE) AS shop_non_test_orders,
+  (SELECT count(*) FROM public.sma_bestellungen
+    WHERE ist_testbestellung IS FALSE AND lower(coalesce(zahlungsstatus,''))='paid')
+      AS shop_non_test_provider_paid_orders,
+  (SELECT count(*) FROM public.sma_bestellungen
+    WHERE ist_testbestellung IS FALSE AND lower(coalesce(zahlungsstatus,''))='pending')
+      AS shop_non_test_provider_pending_orders
 )
 SELECT jsonb_build_object(
- 'version',6,
+ 'version',7,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
@@ -186,7 +196,16 @@ SELECT jsonb_build_object(
  ),
  'shop',jsonb_build_object(
   'orders',shop_orders,'test_orders',shop_test_orders,
+  'non_test_orders',shop_non_test_orders,
+  'non_test_provider_paid_status_orders',shop_non_test_provider_paid_orders,
+  'non_test_provider_pending_status_orders',shop_non_test_provider_pending_orders,
   'unknown_test_status_orders',unknown_test_status_orders,
+  'settlement_evidence','NOT_VERIFIED_BY_THIS_QUERY',
+  'state',CASE
+    WHEN unknown_test_status_orders>0 THEN 'UNKNOWN_TEST_STATUS_REVIEW_REQUIRED'
+    WHEN shop_non_test_orders>0 THEN 'NON_TEST_ORDERS_REQUIRE_PAYMENT_REVIEW'
+    WHEN shop_orders=0 THEN 'NO_SHOP_ORDERS'
+    ELSE 'ONLY_TEST_FLAGGED_SHOP_ORDERS' END,
   'payment_mode','VERIFY_SHOPIFY_PAYMENTS_EXTERNALLY'
  ),
  'external_e2e_status','NOT_VERIFIED_BY_THIS_QUERY',
