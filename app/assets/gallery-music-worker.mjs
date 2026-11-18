@@ -109,13 +109,14 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
  }};
 }
 
-export function mountGalleryMusic({owner,onComplete,onStatus}){
+export function mountGalleryMusic({owner,onComplete,onStatus,isVisible,subscribeVisibility}){
  const api=()=>import('./media-editor-api.mjs?v=13');
  return createGalleryMusicWorker({
   rpc:async(action,input,signal)=>(await api()).galleryMusicRequest(action,input,owner,signal),
   source:async(file,signal)=>(await api()).editorSource(file,signal,owner),
   loadTrack:async(track,signal)=>(await api()).editorMusicLibrary(owner).catalog.source(track,signal),
   render:async input=>(await import('./gallery-music-render.mjs?v=1')).renderSoundtrack(input),
-  upload:async(blob,artifact,signal)=>(await api()).uploadExport(blob,artifact,signal,owner),onComplete,onStatus
+  upload:async(blob,artifact,signal)=>(await api()).uploadExport(blob,artifact,signal,owner),
+  onComplete,onStatus,isVisible,subscribeVisibility
  });
 }
