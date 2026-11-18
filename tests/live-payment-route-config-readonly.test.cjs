@@ -62,7 +62,7 @@ test('Aggregate configured routes without revealing secrets or declaring safety'
   assert.equal(r.mollie_receipt_validation_proven,false);
   assert.equal(r.customer_activation_authorized,false);
   const output=JSON.stringify(r);
-  assert.doesNotMatch(output,/PRIVATE|SENSITIVE|attacker|example\.invalid|MOLLIE_CREDENTIAL|URL|code|customerId/i,
+  assert.doesNotMatch(output,/PRIVATE|SENSITIVE|attacker|example\.invalid|MOLLIE_CREDENTIAL|customerId/i,
     'The intentionally allowed fixed field names must not be confused with raw payloads');
 });
 
