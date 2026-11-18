@@ -32,7 +32,9 @@ test('preflight uses exactly three fixed metadata GETs and never claims payment,
  assert.equal(result.code,'FOLDER_ACCESS_VERIFIED');assert.equal(result.scope,'drive_metadata_only');
  assert.ok(Number.isFinite(Date.parse(result.checked_at)));
  assert.deepEqual(result.checks,{drive_account_matches:true,upload_folder_readable:true,
-  upload_folder_writable:true,processing_folder_readable:true,processing_folder_writable:true});
+  upload_folder_service_can_add_children:true,
+  processing_folder_readable:true,processing_folder_writable:true});
+ assert.deepEqual(result.warnings,[]);
  assert.equal(x.requests.length,3);
  const urls=x.requests.map(r=>new URL(r.url));
  assert.deepEqual(urls.map(u=>u.pathname),['/drive/v3/about','/drive/v3/files/'+config.uploadFolderId,'/drive/v3/files/'+config.processingFolderId]);
@@ -99,7 +101,7 @@ test('a read-only processing folder cannot pass; missing and string write capabi
  }
 });
 
-test('a readable input folder without a true add-children capability does not pass preflight',async()=>{
+test('read-only input access is diagnosed without blocking a customer-owned upload path',async()=>{
  for(const canAddChildren of [false,undefined,null,'true',1]){
   const x=fixture({},index=>{
    const value=index===0?{user:{permissionId:config.expectedPermissionId}}:metadata(index===1?config.uploadFolderId:config.processingFolderId);
@@ -107,8 +109,10 @@ test('a readable input folder without a true add-children capability does not pa
    return reply(value);
   });
   const r=await x.run();
-  assert.equal(r.ok,false);assert.equal(r.code,'UPLOAD_NOT_WRITABLE');
-  assert.equal(r.step,'upload');assert.equal(x.requests.length,2);noGrant(r);
+  assert.equal(r.ok,true);assert.equal(r.code,'FOLDER_ACCESS_VERIFIED');
+  assert.equal(r.checks.upload_folder_service_can_add_children,false);
+  assert.deepEqual(r.warnings,['UPLOAD_SERVICE_WRITE_NOT_CONFIRMED']);
+  assert.equal(x.requests.length,3);noGrant(r);
  }
 });
 
@@ -120,8 +124,9 @@ test('both shared-drive and My Drive folders pass only when readable and writabl
    return reply(value);
   });
   const r=await x.run();
-  assert.equal(r.ok,true);assert.equal(r.checks.upload_folder_writable,true);
+  assert.equal(r.ok,true);assert.equal(r.checks.upload_folder_service_can_add_children,true);
   assert.equal(r.checks.processing_folder_writable,true);
+  assert.deepEqual(r.warnings,[]);
   noGrant(r);assert.equal(JSON.stringify(r).includes('private_shared_drive'),false);
  }
 });
