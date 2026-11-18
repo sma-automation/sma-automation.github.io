@@ -60,3 +60,65 @@ test('a lost upload reply uses the verified server receipt without repeating the
   assert.equal(updates.length,1);assert.match(notes.at(-1),/gespeichert/);
  }finally{worker.destroy();}
 });
+
+
+test('an idle music queue does not re-query Supabase while the browser tab is hidden',async()=>{
+ let visible=true,notify,unsubscribed=false,seq=0;
+ const timers=new Map();
+ const {worker,calls}=await fixture([{state:'idle'},{state:'idle'}],{
+  isVisible:()=>visible,
+  subscribeVisibility:fn=>{notify=fn;return ()=>{unsubscribed=true;};},
+  setTimer:(fn,ms)=>{const id=++seq;timers.set(id,{fn,ms});return id;},
+  cancelTimer:id=>timers.delete(id)
+ });
+ try{
+  await worker.wake();
+  assert.deepEqual(calls.map(x=>x[0]),['claim']);
+  assert.equal([...timers.values()][0].ms,120000);
+  visible=false;notify();
+  assert.equal(timers.size,0,'background tab must cancel its idle timer');
+  await worker.wake();
+  assert.equal(calls.length,1,'explicit unrelated wake cannot claim while hidden');
+  visible=true;notify();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(calls.map(x=>x[0]),['claim','claim']);
+  assert.equal(timers.size,1,'only the foreground page re-arms the idle timer');
+ }finally{worker.destroy();}
+ assert.equal(unsubscribed,true);
+ assert.equal(timers.size,0);
+});
+
+test('hidden before first claim: server background worker can proceed without client polling',async()=>{
+ let visible=false,notify;
+ const {worker,calls}=await fixture([{state:'idle'}],{
+  isVisible:()=>visible,
+  subscribeVisibility:fn=>{notify=fn;return ()=>{};}
+ });
+ try{
+  await worker.wake();assert.equal(calls.length,0);
+  visible=true;notify();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(calls.map(x=>x[0]),['claim']);
+ }finally{worker.destroy();}
+});
+
+test('hiding mid-job preserves a leased upload and receipt but does not claim another job',async()=>{
+ let visible=true,notify,started,release;
+ const readStarted=new Promise(resolve=>{started=resolve;});
+ const gate=new Promise(resolve=>{release=resolve;});
+ const {worker,calls,uploads,updates}=await fixture([job,{state:'idle'}],{
+  isVisible:()=>visible,
+  subscribeVisibility:fn=>{notify=fn;return ()=>{};},
+  source:async()=>{started();await gate;return video;}
+ });
+ try{
+  const pending=worker.wake();await readStarted;
+  visible=false;notify();release();
+  await pending;
+  assert.deepEqual(calls.map(x=>x[0]),['claim','reserve','complete']);
+  assert.equal(uploads.length,1);
+  assert.equal(updates.length,1);
+  await worker.wake();
+  assert.equal(calls.length,3,'no new claim while page is hidden');
+ }finally{worker.destroy();}
+});

@@ -1,8 +1,18 @@
 import {sha256} from './media-export-model.mjs?v=2';
 import {editorUUID} from './media-editor-model.mjs?v=3';
 
+// The server-scheduled soundtrack path handles work while the browser is closed.
+// Avoid repeatedly claiming an idle queue in a background browser tab.
+const browserVisible=()=>!globalThis.document?.hidden;
+function observeVisibility(handler){
+ const doc=globalThis.document;
+ doc?.addEventListener?.('visibilitychange',handler);
+ return ()=>doc?.removeEventListener?.('visibilitychange',handler);
+}
 // No payment or publishing entry points. All uploads use the server-reserved identity.
-export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onComplete,onStatus}){
+export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onComplete,onStatus,
+  isVisible=browserVisible,subscribeVisibility=observeVisibility,
+  setTimer=setTimeout,cancelTimer=clearTimeout}){
  let disposed=false,running=null,again=false,timer=null,transientStatus=false;
  const controller=new AbortController(),signal=controller.signal;
  // Queue notices expire when the server reports idle; saved results and review warnings do not.
@@ -15,11 +25,21 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
   if(r?.ok!==true)throw Error(r?.code||'UNAVAILABLE');
   return r;
  }
- function later(ms){clearTimeout(timer);if(!disposed)timer=setTimeout(wake,ms);}
+ function foreground(){
+  try{return isVisible()===true;}catch{return false;}
+ }
+ function clearScheduled(){if(timer!==null){cancelTimer(timer);timer=null;}}
+ function later(ms){
+  clearScheduled();
+  if(!disposed&&foreground())timer=setTimer(()=>{timer=null;wake();},ms);
+ }
  async function refreshGallery(){try{await onComplete();}catch{/* The saved file also appears on the next gallery refresh. */}}
  async function drain(){
   do{
    again=false;
+   // A claimed job continues to its existing receipt; no *next* claim starts
+   // while the page is hidden. This does not disable the background n8n worker.
+   if(!foreground())return;
    const job=await call('claim');
    if(job.state==='waiting'){report('Die automatische Vertonung wartet. Der Status wird später erneut geprüft.',true);later(Math.max(1000,Math.min(job.retry_ms,86400000)));return;}
    if(job.state==='deferred')continue;
@@ -71,12 +91,22 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
  }
  function wake(){
   if(disposed)return;
+  if(!foreground()){clearScheduled();return running;}
   if(running){again=true;return running;}
   running=drain().catch(()=>{if(!disposed){report('Automatische Vertonung ist gerade nicht erreichbar.',true);later(125000);}})
    .finally(()=>{running=null;if(again&&!disposed)wake();});
   return running;
  }
- return {wake,destroy(){disposed=true;clearTimeout(timer);controller.abort();}};
+ const unsubscribe=subscribeVisibility(()=>{
+  if(disposed)return;
+  if(!foreground()){clearScheduled();return;}
+  if(running)again=true;
+  else wake();
+ });
+ return {wake,destroy(){
+  disposed=true;clearScheduled();controller.abort();
+  if(typeof unsubscribe==='function')unsubscribe();
+ }};
 }
 
 export function mountGalleryMusic({owner,onComplete,onStatus}){
