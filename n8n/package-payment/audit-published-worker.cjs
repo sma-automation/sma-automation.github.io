@@ -20,8 +20,9 @@ const merchantNames=['Mollie customer','Mollie first','Mollie payment',
 const databaseNames=['Einmalauftrag abrufen','Folgeauftrag abrufen'];
 const tableNames=['Kundenzeile account','Kundenzeile activate','Kundenzeile disable',
   'Bestehenden Zugang fortsetzen'];
-const protectedNames=new Set(['Kundenzeile activate','Ordnerzuordnung vor Aktivierung prüfen',
-  'Antwort begrenzen','Einmalauftrag abrufen','Kundenzeile account']);
+// Any unreviewed entry into the known payment graph could bypass the
+// ticket, operation selector, or one of the downstream activation guards.
+const protectedNames=templateNames;
 const publicPaths=['sma-paket-dienst-v1','sma-paket-folge-dienst-v1'];
 
 function record(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
