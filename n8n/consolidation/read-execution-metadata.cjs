@@ -120,7 +120,8 @@ async function inspectSavedExecutionMetadata({
         if(!entry||typeof entry!=='object'||Array.isArray(entry))
           fail('N8N_READ_UNEXPECTED_RESPONSE');
         const id=String(entry.id??'');
-        if(!/^\d{1,32}$/.test(id)||ids.has(id))fail('N8N_READ_INCONSISTENT_PAGES');
+        if(!/^\d{1,32}$/.test(id))fail('N8N_READ_UNEXPECTED_RESPONSE');
+        if(ids.has(id))fail('N8N_READ_INCONSISTENT_PAGES');
         ids.add(id);recordsSeen++;
         if(entry.startedAt===null||entry.startedAt===undefined){undated++;continue;}
         if(!isUtcTime(entry.startedAt))fail('N8N_READ_UNEXPECTED_RESPONSE');
