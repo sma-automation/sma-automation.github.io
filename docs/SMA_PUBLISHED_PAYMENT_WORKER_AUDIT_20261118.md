@@ -118,3 +118,50 @@ Die eng begrenzte Eingabeprüfung für **angemeldete** Kunden in PR #380
 verändert weder die signierten Mollie- und Schedule-Routen noch die
 existierenden HMAC-Proofs oder n8n-Ziele. Dieser Codecheck ist kein
 Ersatz für eine Aktivversions- und Zahlungsverifikationsprobe.
+
+## Direkter n8n-Cloud-Leseabgleich ohne Exportdatei (Ergänzung 18.11.2026)
+
+Zusätzlich zum Offline-Exportprüfer steht jetzt ein **rein lesender** Prüfaufruf
+bereit. Er verwendet genau einen GET auf die n8n-Cloud-API für den bekannten
+Zahlungsworkflow und ruft weder dessen Webhook noch eine n8n-Execution auf.
+Er verändert keine Kundendaten, Credits, Tickets oder Zahlungen.
+
+Ein bestehender berechtigter n8n-API-Schlüssel wird **nur in der privaten
+Betreiberumgebung** unter SMA_N8N_READ_API_KEY bereitgestellt; nicht im
+Chat, Repository, Shell-Befehl, CI-Artefakt oder in Protokollen speichern.
+
+~~~sh
+node n8n/package-payment/audit-live-worker.cjs
+node --test tests/live-published-payment-worker-audit.test.cjs
+~~~
+
+Der feste Aufruf liest ausschließlich die n8n-Cloud-API per GET für
+Workflow 8v2wcz5lh0yUf3sw. Ohne API-Schlüssel meldet er
+N8N_READ_API_KEY_REQUIRED **ohne einen Netzaufruf**. HTTP-Fehler,
+Weiterleitungen, Abweichungen der Workflow-ID, nicht bestätigte Aktivversionen
+und unvollständige Knotengraphen schlagen fehl. Ein Lesezeitlimit von zwölf
+Sekunden und eine Antwortgrößengrenze von zwölf MiB sind integriert.
+Antworten und Credential-Referenzen werden ausschließlich im Arbeitsspeicher
+ausgewertet, nicht ausgegeben oder gespeichert. Der Prüfbericht enthält nur
+feste Fehlercodes und Freigabewerte, niemals das zurückgelieferte Workflow-JSON.
+
+**Wichtig:** Die öffentliche n8n-API kann den **neueren Editorentwurf**
+zurückgeben. activeVersionId allein ist daher **kein Beweis**, dass diese
+Nodes veröffentlicht sind. Der Direktprüfer verwendet denselben strengen
+Vertragsvergleich wie der Offline-Prüfer und akzeptiert den Top-Level-Graphen
+nur, wenn versionId mit activeVersionId übereinstimmt. Ist der Entwurf neuer
+oder die aktive Versionsstruktur nicht enthalten, lautet das Ergebnis
+PUBLISHED_PAYMENT_CONTRACT_REVIEW_REQUIRED. Dann ausschließlich die aktive
+Version separat über die berechtigte n8n-Versionsansicht abrufen und mit
+audit-published-worker.cjs in der privaten Betreiberumgebung prüfen.
+
+Auch ein positives Ergebnis lautet ausdrücklich
+ACTIVE_PAYMENT_GRAPH_STRUCTURALLY_MATCHES_NOT_E2E; es berechtigt nicht zu
+Kundenaktivierung oder Checkout und ersetzt weder die tatsächliche Drive-
+Berechtigung noch den ersten Kunden-/Mollie-End-to-End-Test. Bei fehlendem
+API-Zugang ist **keine** aktive Version bestätigt; das neue Werkzeug darf
+nicht als Ersatzbeleg aus GitHub heraus ausgeführt oder simuliert werden.
+
+Offizielle Grundlage: n8n Public API Authentifizierung und API-Referenz
+(https://docs.n8n.io/api/authentication/ und
+https://docs.n8n.io/api/api-reference/).
