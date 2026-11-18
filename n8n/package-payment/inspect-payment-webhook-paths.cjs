@@ -94,6 +94,9 @@ function inspectPaymentWebhookPaths(graph) {
         possible_http_mutations:0,
         named_folder_guard_reachable:false,
         static_terminal_nodes:0,
+        static_response_terminal_nodes:0,
+        static_nonresponse_terminal_nodes:0,
+        explicit_empty_decision_output_ports:0,
         path_is_proven_safe:false,
         config_markers:{status:'UNAVAILABLE'}
       };
@@ -107,6 +110,19 @@ function inspectPaymentWebhookPaths(graph) {
       overlap=new Set([...seen].filter(v=>overlap.has(v)));
     }
     const selected=[...seen].map(n=>nodes.get(n));
+    const terminalNames=[...seen].filter(n=>(edges.get(n)||[]).length===0);
+    const terminalResponses=terminalNames.filter(n=>
+      nodes.get(n)?.type==='n8n-nodes-base.respondToWebhook').length;
+    const terminalWithoutResponse=terminalNames.length-terminalResponses;
+    const emptyDecisionOutputs=[...seen].reduce((total,n)=>{
+      const item=nodes.get(n);
+      if(!['n8n-nodes-base.if','n8n-nodes-base.switch'].includes(item?.type))
+        return total;
+      const outputs=graph.connections[n]?.main;
+      // A missing output entry is not proof of a valid false/fallback path.
+      if(!Array.isArray(outputs)||outputs.length===0)return total+1;
+      return total+outputs.filter(port=>Array.isArray(port)&&port.length===0).length;
+    },0);
     const count=type=>selected.filter(n=>n.type===type).length;
     const connected=count('n8n-nodes-base.respondToWebhook');
     const http=selected.filter(n=>n.type==='n8n-nodes-base.httpRequest');
@@ -125,7 +141,12 @@ function inspectPaymentWebhookPaths(graph) {
       possible_http_mutations:http.filter(n=>
         ['POST','PUT','PATCH','DELETE'].includes(n.parameters?.method)).length,
       named_folder_guard_reachable:seen.has(PRIVATE_NODE_NAME),
-      static_terminal_nodes:[...seen].filter(n=>(edges.get(n)||[]).length===0).length,
+      static_terminal_nodes:terminalNames.length,
+      static_response_terminal_nodes:terminalResponses,
+      static_nonresponse_terminal_nodes:terminalWithoutResponse,
+      explicit_empty_decision_output_ports:emptyDecisionOutputs,
+      // These flags describe the explicit MAIN graph only, not zero-item
+      // execution behavior, Code errors, implicit fallback or runtime paths.
       // Even a reachable reply does not mean every conditional branch responds,
       // nor that a guard is effective: those require private dynamic E2E tests.
       path_is_proven_safe:false,

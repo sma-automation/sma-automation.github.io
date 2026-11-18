@@ -42,6 +42,11 @@ test('Pure, bounded trace follows separate webhook MAIN edges but claims no safe
   assert.equal(r.renewal.reachable_http_requests,1);
   assert.equal(r.renewal.reachable_data_table_nodes,1);
   assert.equal(r.renewal.possible_http_mutations,1);
+  assert.equal(r.first_payment.static_response_terminal_nodes,1);
+  assert.equal(r.first_payment.static_nonresponse_terminal_nodes,0);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,0);
+  assert.equal(r.renewal.static_response_terminal_nodes,1);
+  assert.equal(r.renewal.static_nonresponse_terminal_nodes,0);
   assert.equal(r.first_payment.config_markers.status,'CONFIG_MARKERS_PRESENT_NOT_VALIDATED');
   assert.equal(r.first_payment.config_markers.http_literal_mollie_v2,0);
   assert.equal(r.renewal.config_markers.http_other_literal_target,1);
@@ -111,6 +116,46 @@ test('An untrusted graph cannot cause unbounded traversal or disclose names',()=
     assert.doesNotMatch(JSON.stringify(r),/SECRET|Same|valid/);
   }
 });
+test('A reachable response does not hide a second nonresponse terminal',()=>{
+  const g=fixture();
+  g.nodes.push(node('Private decision','if'),node('Private dead end','code'));
+  g.connections.First={main:[[edge('Private decision')]]};
+  g.connections['Private decision']={main:[
+    [edge('First reply')],[edge('Private dead end')]
+  ]};
+  const r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.reachable_respond_to_webhook,1);
+  assert.equal(r.first_payment.static_terminal_nodes,2);
+  assert.equal(r.first_payment.static_response_terminal_nodes,1);
+  assert.equal(r.first_payment.static_nonresponse_terminal_nodes,1);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,0);
+  assert.equal(r.first_payment.path_is_proven_safe,false);
+  assert.doesNotMatch(JSON.stringify(r),/Private decision|Private dead end/);
+});
+
+test('Explicit empty IF output is reported, not treated as a successful response',()=>{
+  const g=fixture();
+  g.nodes.push(node('Private condition','if'));
+  g.connections.First={main:[[edge('Private condition')]]};
+  g.connections['Private condition']={main:[[edge('First reply')],[]]};
+  const r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.reachable_respond_to_webhook,1);
+  assert.equal(r.first_payment.static_terminal_nodes,1);
+  assert.equal(r.first_payment.static_nonresponse_terminal_nodes,0);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,1);
+  assert.equal(r.first_payment.path_is_proven_safe,false);
+});
+
+test('A reachable response in a cycle is not a terminal response',()=>{
+  const g=fixture();
+  g.connections['First reply']={main:[[edge('First')]]};
+  const r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.reachable_respond_to_webhook,1);
+  assert.equal(r.first_payment.static_terminal_nodes,0);
+  assert.equal(r.first_payment.static_response_terminal_nodes,0);
+  assert.equal(r.first_payment.path_is_proven_safe,false);
+});
+
 test('No assumptions about side effects from correctly linked reply nodes',()=>{
   const r=inspectPaymentWebhookPaths(fixture());
   assert.equal(r.first_payment.static_terminal_nodes,1);
