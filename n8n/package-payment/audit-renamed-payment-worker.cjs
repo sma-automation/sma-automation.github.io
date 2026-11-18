@@ -23,13 +23,34 @@ const noGrant={allows_checkout:false,activates_customer:false,
   billed_n8n_executions_measured:false};
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 
-function outcome(issues,mappedCount){
+// Enumerate only fixed public template positions and predetermined parameter
+// categories. Never copy a live node's name, parameter value, error or source.
+const parameterKeys=Object.freeze({
+  jsCode:'CODE',url:'TARGET',method:'METHOD',authentication:'AUTH',
+  genericAuthType:'AUTH_TYPE',headerParameters:'HEADERS',sendHeaders:'SEND_HEADERS',
+  sendBody:'SEND_BODY',jsonBody:'BODY',specifyBody:'BODY_FORMAT',options:'OPTIONS',
+  filters:'FILTERS',columns:'COLUMNS',matchType:'MATCH_TYPE',operation:'OPERATION',
+  rules:'ROUTES',limit:'LIMIT',httpMethod:'WEBHOOK_METHOD',path:'WEBHOOK_PATH',
+  responseMode:'WEBHOOK_REPLY_MODE',respondWith:'REPLY_FORMAT',
+  responseBody:'REPLY_BODY',dataTableId:'TABLE_REF'
+});
+function parameterDifference(a,b){
+  if(!object(a)||!object(b))return ['PARAMETERS_FORMAT'];
+  return [...new Set([...Object.keys(a),...Object.keys(b)].filter(key=>
+    !isDeepStrictEqual(a[key],b[key])).map(key=>parameterKeys[key]||'OTHER'))].sort();
+}
+function outcome(issues,mappedCount,mismatches=[]){
   const list=[...new Set(issues)].sort();
   return {ok:list.length===0,
     status:list.length?'PUBLISHED_PAYMENT_EQUIVALENCE_REVIEW_REQUIRED':
       'PUBLISHED_PAYMENT_EXACT_SOURCE_EQUIVALENCE_NOT_E2E',
     scope:'provided_published_graph_main_edges_and_parameters',
     matched_template_nodes:mappedCount,
+    // Template positions are 1-based in build-worker.cjs; never live names.
+    parameter_mismatches:mismatches.slice(0,26).map(x=>({
+      template_position:x.template_position,
+      categories:x.categories.slice(0,12)
+    })),
     issues:list,...noGrant};
 }
 function outgoing(graph,name){
@@ -152,10 +173,15 @@ function auditPublishedByTopology(graph,template){
       }
     }
   }
+  const mismatches=[];
   for(const [name,actualName] of paired){
     const e=expected.get(name),a=byName.get(actualName);
-    if(!isDeepStrictEqual(normalizedParameters(a,reverse),
-       normalizedParameters(e,new Map())))issues.push('PAYMENT_NODE_LOGIC_MISMATCH');
+    const categories=parameterDifference(normalizedParameters(a,reverse),
+      normalizedParameters(e,new Map()));
+    if(categories.length){
+      issues.push('PAYMENT_NODE_LOGIC_MISMATCH');
+      mismatches.push({template_position:template.nodes.indexOf(e)+1,categories});
+    }
     // Runtime node switches can bypass correct-looking Code and payment
     // parameters. Defaults are allowed, but permissive error routing,
     // disabled nodes, extra retries and dropping items are not equivalent.
@@ -170,7 +196,8 @@ function auditPublishedByTopology(graph,template){
   const table=sameGroupReferences(customers,paired,byName,'table');
   if(!merchant||!database||merchant===database)issues.push('PAYMENT_CREDENTIAL_REFERENCE_MISMATCH');
   if(!table)issues.push('PAYMENT_CUSTOMER_TABLE_REFERENCE_MISMATCH');
-  return outcome(issues,paired.size);
+  return outcome(issues,paired.size,mismatches.sort((a,b)=>
+    a.template_position-b.template_position));
 }
 function auditRenamedPublishedPaymentWorker(graph){
   try{return auditPublishedByTopology(graph,build(source));}
