@@ -68,6 +68,11 @@ test('An unchanged draft that looks correct cannot excuse an unsafe published ac
   assert.ok(report.issues.includes('payment_node_parameters_not_matching'));
   assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl]);
   assert.equal(report.activates_customer,false);
+  assert.equal(report.published_version_stability_rechecked,false);
+  assert.equal(report.diagnostic?.missing_expected_nodes.length,0);
+  assert.equal(report.diagnostic?.expected_payment_nodes_present,report.diagnostic?.expected_payment_nodes_count);
+  assert.equal(report.diagnostic?.activation_or_payment_authorized,false);
+  assert.doesNotMatch(JSON.stringify(report),/merchant-fixture|db-fixture|table-fixture|fixture-key/);
 });
 
 test('Unpublished, wrong-ID, archived or missing version state cannot lead to an active verdict',async()=>{
