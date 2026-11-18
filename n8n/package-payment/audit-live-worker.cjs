@@ -7,6 +7,7 @@
 const {auditPublishedPackageWorker}=require('./audit-published-worker.cjs');
 const {summarizeActivePaymentGraph}=require('./diagnose-active-payment-graph.cjs');
 const {inspectPaymentWebhookPaths}=require('./inspect-payment-webhook-paths.cjs');
+const {auditRenamedPublishedPaymentWorker}=require('./audit-renamed-payment-worker.cjs');
 const endpoint='https://johnmusic.app.n8n.cloud/api/v1/workflows/8v2wcz5lh0yUf3sw';
 const workflowId='8v2wcz5lh0yUf3sw';
 const activeId=/^[A-Za-z0-9_-]{8,128}$/;
@@ -113,10 +114,23 @@ async function inspectLivePaymentWorker({
       fail('N8N_ACTIVE_VERSION_MISMATCH');
     // Build the offline auditor's envelope using the independently attested
     // activeVersionId and exact fetched version, not the editor's live draft.
-    const report=auditPublishedPackageWorker({
+    const strict=auditPublishedPackageWorker({
       active:true,activeVersionId:versionId,versionId,
       nodes:published.nodes,connections:published.connections
     });
+    // A consolidated n8n workflow may rename all worker nodes. Accept it
+    // only if the complete ordered routes AND every reviewed parameter match
+    // after canonicalizing node references. Never infer safety from node counts.
+    const equivalence=strict.ok?null:auditRenamedPublishedPaymentWorker({
+      nodes:published.nodes,connections:published.connections
+    });
+    const report=equivalence?.ok
+      ? {...equivalence,name_based_contract_matching:false,
+        account_assignment_verified:false,drive_folder_access_verified:false,
+        mollie_payment_verified:false}
+      : equivalence
+        ? {...strict,issues:[...new Set([...strict.issues,...equivalence.issues])].sort()}
+        : strict;
     // Even a mismatch must be bound to a stable PUBLISHED version. Never
     // interpret a stale snapshot as evidence about the current active graph.
     const after=await readJson(endpoint,'N8N_WORKFLOW_NOT_FOUND');
