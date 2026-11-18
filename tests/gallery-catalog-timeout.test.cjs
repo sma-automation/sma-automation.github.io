@@ -141,6 +141,7 @@ test('desktop and mobile gallery retain the last complete list and recover after
      const createSharedThumbnailClient=()=>({dispose(){}});
      const createMediaThumbnailLoader=()=>({reset(){},observe(){},clear(){}});
      const mountGalleryMusic=()=>({wake(){},destroy(){}});
+      const createMusicViewGate=()=>({isVisible:()=>true,subscribeVisibility:()=>()=>{}});
      const leaveDashboard=()=>{signedOut=true;window.gallery.clear();};
      const f=window.catalogFixture={hold:null,held:[],calls:[],suffix:'Alt'};
      f.stage=(name,value)=>{f.calls.push(name);if(f.hold===name){f.hold=null;return new Promise(resolve=>f.held.push(()=>resolve(value)));}return Promise.resolve(value);};
