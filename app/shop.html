@@ -190,12 +190,18 @@ function exactShopCents(value){
 }
 function normalized(p){
  const cents=exactShopCents(p.preis);
- const validCurrency=typeof p.waehrung==='string'&&/^[A-Z]{3}$/.test(p.waehrung);
+ // Match the checkout service: lowercase three-letter currencies are valid.
+ const currencyCode=typeof p.waehrung==='string'?p.waehrung.toUpperCase():'';
+ const validCurrency=/^[A-Z]{3}$/.test(currencyCode);
  const price=cents===null||!validCurrency?null:cents/100;
- const validStock=Number.isSafeInteger(p.bestand)&&p.bestand>=0;
- const stock=validStock?p.bestand:0;
+ // PostgREST can serialize a BIGINT as a number or decimal string. Accept
+ // both exact safe integers; never turn a malformed count into inventory.
+ const rawStock=typeof p.bestand==='number'?p.bestand:
+  typeof p.bestand==='string'&&/^\d+$/.test(p.bestand)?Number(p.bestand):NaN;
+ const validStock=Number.isSafeInteger(rawStock)&&rawStock>=0;
+ const stock=validStock?rawStock:0;
  return {id:String(p.produkt_id),title:String(p.name||'Produkt'),description:String(p.beschreibung||''),category:String(p.typ||'Produkt'),
-  price,currency:validCurrency?p.waehrung:'EUR',stock,
+  price,currency:validCurrency?currencyCode:'EUR',stock,
   shopifyReady:p.shopify_aktiv===true&&price!==null&&validStock,
   images:Array.isArray(p.bilder)?p.bilder.filter(url=>typeof url==='string'&&url.startsWith('https://')).slice(0,8):[]};
 }
