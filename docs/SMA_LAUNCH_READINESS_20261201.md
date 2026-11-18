@@ -104,11 +104,19 @@ Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
    und Dienstzugänge leer lassen. Bei einer Unterbrechung wieder mit der Suche
    beginnen. Ein vorhandenes Konto mit anderer Kennung oder Adresse oder mehrere
    Treffer erfordern einen manuellen Abgleich.
-3. Die gespeicherte n8n-Zeile erneut öffnen. Die interne numerische `id`, die
-   Kennung, die E-Mail-Adresse und die vier Statusfelder direkt aus dieser
-   Ansicht ablesen. Im Projektverzeichnis den folgenden lokalen Befehl starten
-   und die Werte eingeben. Das Hilfsprogramm gibt den fertigen SQL-Aufruf aus
-   und baut E-Mail-Adressen mit Sonderzeichen korrekt ein.
+3. Die gespeicherte n8n-Zeile erneut öffnen. Die interne numerische `id`,
+   die Kennung, die E-Mail-Adresse, das leere Paket und die drei Schalter
+   `zugang_aktiv`, `zahlung_bestaetigt`, `demo_delta_aktiv` ablesen.
+   Zusätzlich mit **EIN/AUS** bestätigen, ob `zugangs_token`, `zugangs_link`,
+   `mollie_customer_id` oder `mollie_subscription_id` **vorhanden** sind.
+   Für eine unbenutzte neue Zeile müssen alle vier Angaben **AUS** sein.
+   Dabei niemals Token, Links oder Händlerreferenzen in den Chat oder in
+   Eingabefelder des Hilfsprogramms kopieren. Im Projektverzeichnis den
+   folgenden lokalen Befehl starten und die abgefragten Werte eingeben.
+   Das Hilfsprogramm lehnt wiederverwendete Zeilen ab und gibt nur dann
+   den fertigen privaten SQL-Aufruf aus. E-Mail-Adressen mit Sonderzeichen
+   werden korrekt codiert. Der Datenbankabgleich erwartet weiterhin exakt
+   die sieben vorhandenen Beweisfelder, keine Tokens oder zusätzlichen Spalten.
 
    ```sh
    node n8n/confirm-onboarding-row.cjs
