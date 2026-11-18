@@ -27,6 +27,7 @@ async function mount(state){
   portalNames:{youtube:'YouTube'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
   createSharedThumbnailClient:()=>({dispose(){}}),
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
+   createMusicViewGate:()=>({isVisible:()=>true,subscribeVisibility:()=>()=>{}}),
   dashboardSession:read=>(read||((fn)=>fn()))(async()=>({user:{id:'own-customer'},access_token:'synthetic-session'})),
   customerMediaEndpoint:kind=>{assert.equal(kind,'catalog');return 'https://fixture.invalid/catalog';},
   fetch:async(url,options)=>{
