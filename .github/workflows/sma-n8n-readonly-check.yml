@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 630447cc13b629e6af2ed12a983655f989afbb3e
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin d973dc7e3ad638a84d870415b136f20360cfca8a
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = '630447cc13b629e6af2ed12a983655f989afbb3e'
+          test "$(git rev-parse HEAD)" = 'd973dc7e3ad638a84d870415b136f20360cfca8a'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
@@ -60,6 +60,11 @@ jobs:
               const result=await inspectLivePaymentWorker({timeoutMs:12000});
               const status=result?.ok===true ? 'STRUCTURE_MATCHES_NOT_E2E' : 'REVIEW_REQUIRED';
               console.log('SMA_N8N_PAYMENT_GRAPH='+status);
+              if(result?.ok===true){
+                const kind=result?.status==='PUBLISHED_PAYMENT_EXACT_SOURCE_EQUIVALENCE_NOT_E2E'
+                  ? 'RENAMED_SOURCE_EQUIVALENT_NOT_E2E' : 'NAMED_SOURCE_MATCH_NOT_E2E';
+                console.log('SMA_N8N_PAYMENT_CONTRACT='+kind);
+              }
               if(!result?.ok){
                 allOk=false;
                 console.log('SMA_N8N_PAYMENT_CHECK_CODES='+onlyCodes(result?.issues).join(','));
