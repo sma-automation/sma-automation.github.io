@@ -16,12 +16,12 @@ function observeVisibility(handler){
 export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onComplete,onStatus,
   isVisible=browserVisible,subscribeVisibility=observeVisibility,
   setTimer=setTimeout,cancelTimer=clearTimeout}){
- let disposed=false,running=null,again=false,timer=null,transientStatus=false,pendingGalleryRefresh=false;
+ let disposed=false,running=null,again=false,timer=null,transientStatus=false,persistentStatus=false,pendingGalleryRefresh=false;
  const controller=new AbortController(),signal=controller.signal;
  // Queue notices expire when the server reports idle; saved results and review warnings do not.
  function report(text,transient=false){
   if(disposed)return;
-  transientStatus=transient;onStatus(text);
+  transientStatus=transient;persistentStatus=Boolean(text)&&!transient;onStatus(text);
  }
  async function call(action,input={}){
   signal.throwIfAborted();const r=await rpc(action,input,signal);signal.throwIfAborted();
@@ -57,7 +57,9 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
     // check_upload, completed or another non-idle response. Do not alter any
     // existing lease, upload or receipt; the server worker remains independent.
     again=false;
-    if(!transientStatus)report('Die automatische Vertonung wird später erneut geprüft.',true);
+    // Preserve a definite saved-result or uncertain-upload warning. Only a
+    // transient/empty notice may be replaced by the bounded-retry message.
+    if(!persistentStatus)report('Die automatische Vertonung wird später erneut geprüft.',true);
     later(CLAIM_BURST_BACKOFF_MS);
     return;
    }
