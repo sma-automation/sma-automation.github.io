@@ -66,13 +66,31 @@ test('An unchanged draft that looks correct cannot excuse an unsafe published ac
   const fake=fakeApi(data),report=await run(fake);
   assert.equal(report.ok,false);
   assert.ok(report.issues.includes('payment_node_parameters_not_matching'));
-  assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl]);
+  assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl,url]);
   assert.equal(report.activates_customer,false);
-  assert.equal(report.published_version_stability_rechecked,false);
+  assert.equal(report.published_version_stability_rechecked,true);
+  assert.equal(report.path_trace?.active_version_stability_verified,true);
+  assert.equal(report.path_trace?.first_payment.entry_count,1);
+  assert.equal(report.path_trace?.renewal.entry_count,1);
+  assert.equal(report.path_trace?.first_payment.path_is_proven_safe,false);
+  assert.equal(report.path_trace?.payment_or_activation_authorized,false);
   assert.equal(report.diagnostic?.missing_expected_nodes.length,0);
   assert.equal(report.diagnostic?.expected_payment_nodes_present,report.diagnostic?.expected_payment_nodes_count);
   assert.equal(report.diagnostic?.activation_or_payment_authorized,false);
   assert.doesNotMatch(JSON.stringify(report),/merchant-fixture|db-fixture|table-fixture|fixture-key/);
+});
+
+test('A changed published version during a mismatching graph never yields stale route evidence',async()=>{
+  const data=fixture();
+  data.version.nodes.find(n=>n.name==='Ordnerzuordnung vor Aktivierung prüfen')
+    .parameters.jsCode='return $input.all();';
+  const after={...data.meta,activeVersionId:'different-published-version'};
+  const fake=fakeApi({...data,metaAfter:after}),report=await run(fake);
+  assert.equal(report.ok,false);
+  assert.deepEqual(report.issues,['N8N_PUBLISHED_VERSION_CHANGED_DURING_AUDIT']);
+  assert.equal(report.path_trace,undefined);
+  assert.equal(report.diagnostic,undefined);
+  assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl,url]);
 });
 
 test('Unpublished, wrong-ID, archived or missing version state cannot lead to an active verdict',async()=>{
