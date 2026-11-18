@@ -85,8 +85,33 @@ async function fixture({time=Date.now(),issued={},reported={},folders={},beforeB
  const go=async(auth='Bearer session')=>handler(new Request('https://fixture.invalid/pay',{method:'POST',headers:{authorization:auth},body:JSON.stringify({owner,order:id})}));
  const event=async(proof='fixture-proof',payment=p.id)=>handler(new Request('https://fixture.invalid/pay?order='+id+'&proof='+proof,{
   method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'id='+payment}));
- return {go,event,p,counts,fail,o,reported,subscriptions,row:()=>row,advance:ms=>{time+=ms;}};
+ const raw=async(payload,headers={})=>handler(new Request('https://fixture.invalid/pay',{
+  method:'POST',headers:{authorization:'Bearer session',...headers},body:payload}));
+ return {go,event,raw,p,counts,fail,o,reported,subscriptions,row:()=>row,advance:ms=>{time+=ms;}};
 }
+test('Ungültige oder zu große Kundenanfragen erreichen weder Zahlungsworker noch Mollie',async()=>{
+ const x=await fixture();
+ for(const raw of ['{','null','[]','"string"',
+   JSON.stringify({owner:'invalid',order:'invalid',unexpected:'field'})]){
+  const response=await x.raw(raw);
+  assert.equal(response.status,400,'Malformed input must not be a temporary 503');
+  assert.equal((await response.json()).code,'INVALID');
+ }
+ const large=await x.raw(JSON.stringify({owner:'x',order:'x',padding:'a'.repeat(2200)}));
+ assert.equal(large.status,413);
+ assert.equal((await large.json()).code,'INVALID');
+ const announced=await x.raw('{"order":"test"}',{'content-length':'4096'});
+ assert.equal(announced.status,413);
+ assert.deepEqual(x.counts,{});
+ assert.equal(x.o.lease,undefined);
+ assert.equal(x.o.payment_id,undefined);
+ assert.equal(x.row().zugang_aktiv,false);
+ // Normal customer requests and external Mollie callbacks keep their contracts.
+ assert.equal((await x.go()).status,200);
+ assert.equal(x.counts.customer,1);assert.equal(x.counts.first,1);
+ assert.equal((await x.event('wrong')).status,403);
+});
+
 test('Automatische Erstzahlung, erneuter Aufruf, Monatsabo, Freischaltung und Rückbuchung',async()=>{
  const x=await fixture();
  assert.equal((await x.go('Bearer wrong')).status,403);assert.equal((await x.event('wrong')).status,403);assert.deepEqual(x.counts,{});
