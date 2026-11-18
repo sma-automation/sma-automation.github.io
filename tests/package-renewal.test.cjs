@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const order={id:'sma-order',merchant_customer:'cst_live',subscription_id:'sub_live',plan:'alpha',n8n_ref:'kunde_test',payment_id:'tr_first'};
 const amount={currency:'EUR',value:'100.00'};
-const sub={startDate:'2028-01-31',amount};
+const sub={startDate:'2028-01-31',amount,status:'active'};
 function bill(id,day,status='paid'){
   const stamp=day+'T12:00:00Z';
   return {id,amount,customerId:order.merchant_customer,subscriptionId:order.subscription_id,sequenceType:'recurring',
@@ -62,4 +62,30 @@ test('Fehlende Meldung allein sperrt weder aktive Abos noch offene oder strittig
   assert.deepEqual(await run('canceled',[bill('tr_open','2028-01-31','open')]),{decision:'WAIT',checkOn:null});
   const partial={...bill('tr_partial','2028-01-31'),amountRefunded:{currency:'EUR',value:'1.00'}};
   assert.deepEqual(await run('completed',[partial]),{decision:'REVIEW',checkOn:null});
+});
+
+test('Unbekannter Mollie-Abostatus darf weder ACTIVE noch WAIT erzeugen',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  const paid=bill('tr_valid','2028-01-31');
+  for(const status of [undefined,null,'','unknown','expired','cancelled','suspended-other',123]){
+    let pages=0;
+    for(const payments of [[],[paid]]){
+      await assert.rejects(
+        assessRenewal({order,sub:{...sub,status},today:'2028-02-01',event:null,
+          readPage:async()=>{pages++;return {payments,next:null};}}),
+        /INVALID_RENEWAL/
+      );
+    }
+    assert.equal(pages,0,'Unrecognized subscription status must fail before provider page fetch');
+  }
+});
+
+test('Alle fünf dokumentierten Mollie-Abostatus bleiben bei bestätigter Deckung prüfbar',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  const paid=bill('tr_valid','2028-01-31');
+  for(const status of ['pending','active','canceled','suspended','completed']){
+    const r=await assessRenewal({order,sub:{...sub,status},today:'2028-02-01',event:paid.id,
+      readPage:async()=>({payments:[paid],next:null})});
+    assert.deepEqual(r,{decision:'ACTIVE',checkOn:'2028-02-29'});
+  }
 });
