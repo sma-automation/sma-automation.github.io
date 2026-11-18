@@ -619,3 +619,35 @@ tatsächlichem Kunden-Musikrecht bleibt Voraussetzung für den Praxistest. Das F
 `NOT_VERIFIED_BY_THIS_QUERY`. Keine Kundendaten, Dateipfade,
 Tokens oder Medienbytes werden ausgelesen. Dieser Nachweis erstellt
 keine Songs, löst keine Verarbeitung und keine Gutschriften aus.
+
+## Version 7 – Shopify-Nicht-Testbestellungen ausdrücklich ausweisen (19.11.2026)
+
+Die rein lesende Startabfrage `supabase/sql/launch-readiness-readonly.sql`
+unterscheidet ab Version 7 im Bereich `shop` ausdrücklich
+`test_orders`, `non_test_orders` und `unknown_test_status_orders`.
+Zusätzlich werden für **Nicht-Testbestellungen** die ausschließlich vom
+Shopify-Bestellspiegel übernommenen Status `paid` und `pending` getrennt
+gezählt. Der Status `PAID` ist **keine unabhängige Bankbestätigung**.
+Deshalb bleibt `settlement_evidence=NOT_VERIFIED_BY_THIS_QUERY`;
+`initiates_checkout=false` und `requires_personal_approval=true`
+bleiben unverändert.
+
+Der rein lesende Live-Abgleich vom 19.11.2026 ergab 10 historische
+Shopify-Bestellungen: 6 mit `test=true`, 4 mit `test=false`.
+Von den vier Nicht-Testbestellungen zeigten zwei den Shopify-Status
+`PAID` und zwei `PENDING`. Eine separate Shopify-Admin-GraphQL-Abfrage
+bestätigte die Unterscheidung; die vier Einträge stammen aus
+Shopify-Entwurfsbestellungen. Keine Bestellung oder Zahlung wurde geändert.
+
+Bei Nicht-Testbestellungen lautet der Startcheck-Code
+`NON_TEST_ORDERS_REQUIRE_PAYMENT_REVIEW`, bei fehlendem Testmerkmal
+`UNKNOWN_TEST_STATUS_REVIEW_REQUIRED`. Sind alle Bestellungen ausdrücklich
+als Test markiert, bleibt die gesonderte Prüfung anderer SMA-Startblocker
+trotzdem erforderlich. Der Check darf niemals behaupten, dass ein
+`test=false`-Eintrag nachweislich zu einem echten Geldzufluss geführt hat.
+
+Die SQL-Regression prüft ohne externe Dienste die Fälle: keine
+Bestellungen, nur Testbestellungen, Nicht-Test mit PAID/PENDING und
+unbekannte Testkennzeichnung. Alle Testdaten existieren nur in der
+isolierten PGlite-Testdatenbank; die produktive Abfrage ist ausschließlich
+ein `SELECT` ohne Berechtigungs- oder Datenänderung.
