@@ -110,13 +110,33 @@ Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
    Zusätzlich mit **EIN/AUS** bestätigen, ob `zugangs_token`, `zugangs_link`,
    `mollie_customer_id` oder `mollie_subscription_id` **vorhanden** sind.
    Für eine unbenutzte neue Zeile müssen alle vier Angaben **AUS** sein.
-   Dabei niemals Token, Links oder Händlerreferenzen in den Chat oder in
-   Eingabefelder des Hilfsprogramms kopieren. Im Projektverzeichnis den
-   folgenden lokalen Befehl starten und die abgefragten Werte eingeben.
-   Das Hilfsprogramm lehnt wiederverwendete Zeilen ab und gibt nur dann
-   den fertigen privaten SQL-Aufruf aus. E-Mail-Adressen mit Sonderzeichen
-   werden korrekt codiert. Der Datenbankabgleich erwartet weiterhin exakt
-   die sieben vorhandenen Beweisfelder, keine Tokens oder zusätzlichen Spalten.
+   **Vor der Verknüpfung** auch die beiden verschiedenen Drive-Ordner
+   `upload_folder_id` (01 Upload – Eingang) und `processing_folder_id`
+   (02 Verarbeitung) in **derselben n8n-Kundenzeile** einrichten und
+   gegenlesen. Das verhindert, dass der Kunde bereits bucht, während die
+   Erstzahlungsroutine wegen fehlender Ordner abbricht und ihr begrenztes
+   Verarbeitungsfenster verbraucht.
+
+   Das Hilfsprogramm führt jetzt bei der Zuordnung den vorhandenen
+   [Drive-Ordnercheck](ONBOARDING_FOLDER_PREFLIGHT.md) automatisch aus:
+   maximal drei **reine Google-Drive-Metadaten-GETs** mit der tatsächlich
+   verwendeten SMA-Dienstverbindung. In der **privaten Betreiberumgebung**
+   müssen `SMA_GOOGLE_DRIVE_READ_TOKEN` (kurzlebiger OAuth-Access-Token)
+   und `SMA_GOOGLE_DRIVE_EXPECTED_PERMISSION_ID` (zuvor unabhängig
+   bestätigte Identität dieser n8n-Verbindung) gesetzt sein. Ohne diese
+   beiden Werte oder bei abweichendem Konto, unerreichbarem Ordner oder
+   fehlendem Schreibrecht für `02 Verarbeitung` wird **kein SQL-Aufruf
+   ausgegeben**. Beide Ordner-IDs werden lokal im Eingabedialog abgefragt
+   und weder im SQL-Aufruf noch im Ergebnisprotokoll ausgegeben. Vertrauliche
+   Tokens, Links oder Händlerreferenzen niemals in den Chat, ins Repository
+   oder in das Programm eingeben.
+
+   Der fertige SQL-Aufruf enthält weiterhin **genau die sieben bisherigen
+   Beweisfelder**. E-Mail-Adressen mit Sonderzeichen werden korrekt
+   codiert. Der erfolgreiche Metadatencheck ist **keine Zahlungs- oder
+   Kundenfreigabe**, kein Nachweis der tatsächlichen Dateiübertragung und
+   ersetzt nicht das erneute Gegenlesen von n8n-Zeile und Ordner-IDs direkt
+   vor dem SQL-Abgleich. Erst danach den lokalen Befehl starten:
 
    ```sh
    node n8n/confirm-onboarding-row.cjs
@@ -132,7 +152,10 @@ Supabase-SQL-Editor. Nach dem erneuten Öffnen der Vormerkung sieht der Kunde
 
 ### Kundenordner vor der ersten Buchung prüfen (16.11.2026)
 
-Die Kontozuordnung allein richtet keine Drive-Ordner ein. Vor der ersten
+Die Kontozuordnung allein richtet keine Drive-Ordner ein. **Für
+neue automatische Erstkunden** wird die vorhandene Drive-Metadatenprüfung
+bereits **vor der ersten n8n-Zeilenverknüpfung** durch
+`n8n/confirm-onboarding-row.cjs` verlangt. Vor der ersten
 automatischen Zahlung müssen in derselben geprüften `SMA_Kunden`-Zeile
 `upload_folder_id` und `processing_folder_id` auf die beiden vorhandenen,
 kundeneigenen Ordner zeigen. Fehlt die Einrichtung, zunächst den bestehenden
