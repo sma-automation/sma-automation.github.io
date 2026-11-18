@@ -129,3 +129,49 @@ test('hiding mid-job preserves a leased upload and receipt but does not claim an
   assert.equal(updates.length,1,'later visibility changes must not duplicate the refresh');
  }finally{worker.destroy();}
 });
+
+
+test('repeated deferred claims are bounded and resume only after the scheduled backoff',async()=>{
+ let seq=0;
+ const timers=new Map();
+ const {worker,calls,uploads,updates}=await fixture(Array.from({length:24},()=>({state:'deferred'})),{
+  setTimer:(fn,ms)=>{const id=++seq;timers.set(id,{fn,ms});return id;},
+  cancelTimer:id=>timers.delete(id),
+  source:()=>assert.fail('No media must be read for deferred claims')
+ });
+ try{
+  await worker.wake();
+  assert.equal(calls.length,8,'a stalled queue must not claim indefinitely');
+  assert.ok(calls.every(([action])=>action==='claim'));
+  assert.equal(timers.size,1,'one scheduled recheck, no busy loop');
+  assert.equal([...timers.values()][0].ms,300000);
+  assert.deepEqual(uploads,[]);assert.deepEqual(updates,[]);
+  const [id,scheduled]=[...timers][0];
+  timers.delete(id);
+  scheduled.fn();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.length,16,'a fresh timer starts one more bounded batch');
+  assert.equal(timers.size,1);
+ }finally{worker.destroy();}
+ assert.equal(timers.size,0);
+});
+
+test('repeated uncertain uploads retain their warning and do not spin or alter a lease',async()=>{
+ let seq=0;const timers=new Map(),messages=[];
+ const {worker,calls,uploads,updates}=await fixture(Array.from({length:40},()=>({state:'check_upload'})),{
+  setTimer:(fn,ms)=>{const id=++seq;timers.set(id,{fn,ms});return id;},
+  cancelTimer:id=>timers.delete(id),
+  onStatus:message=>messages.push(message),
+  source:()=>assert.fail('Uncertain transfer must not trigger another source read')
+ });
+ try{
+  await worker.wake();
+  assert.equal(calls.length,8);
+  assert.ok(calls.every(([action])=>action==='claim'));
+  assert.equal(timers.size,1);
+  assert.equal([...timers.values()][0].ms,300000);
+  assert.match(messages.at(-1),/nicht eindeutig zugeordnet/);
+  assert.deepEqual(uploads,[]);assert.deepEqual(updates,[]);
+ }finally{worker.destroy();}
+ assert.equal(timers.size,0);
+});
