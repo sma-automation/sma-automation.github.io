@@ -5,6 +5,31 @@ const pid=/^tr_[A-Za-z0-9]{1,64}$/, cid=/^cst_[A-Za-z0-9]{1,64}$/, sid=/^sub_[A-
 const site='https://sma-automation.com';
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','Access-Control-Allow-Origin':site,
   'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS'};
+// Bound incoming bytes while reading, not after buffering the whole request.
+// The public scheduled and provider callback routes need this too.
+async function readBounded(request,maxBytes){
+  const declared=request.headers.get('content-length');
+  if(declared!==null&&/^\d+$/.test(declared)&&Number(declared)>maxBytes)return {tooLarge:true};
+  const reader=request.body?.getReader();
+  if(!reader)return {text:''};
+  const decoder=new TextDecoder('utf-8',{fatal:true});
+  let bytes=0,text='',finished=false;
+  try{
+    while(true){
+      const {done,value}=await reader.read();
+      if(done){finished=true;break;}
+      if(!(value instanceof Uint8Array))return {invalid:true};
+      bytes+=value.byteLength;
+      if(bytes>maxBytes)return {tooLarge:true};
+      text+=decoder.decode(value,{stream:true});
+    }
+    return {text:text+decoder.decode()};
+  }catch{return {invalid:true};}
+  finally{
+    if(!finished)try{Promise.resolve(reader.cancel()).catch(()=>{});}catch{}
+    try{reader.releaseLock();}catch{}
+  }
+}
 function requireValue(ok){if(!ok)throw Error('CHECK_REQUIRED');}
 function nextMonth(paidAt){
   const date=new Date(paidAt);const day=date.getUTCDate();
@@ -61,8 +86,9 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
       const cycle=scheduled||url.searchParams.get('cycle')==='1';
       if(scheduled){
         if(url.search!=='?scheduled=1'||!request.headers.get('content-type')?.startsWith('application/json'))return response(400,'INVALID');
-        const input=await request.text();
-        if(input.length>100)return response(400,'INVALID');
+        const limited=await readBounded(request,100);
+        if(limited.tooLarge||limited.invalid)return response(400,'INVALID');
+        const input=limited.text;
         let body;try{body=JSON.parse(input);}catch{return response(400,'INVALID');}
         if(typeof body?.ticket!=='string'||!uuid.test(body.ticket)||Object.keys(body).length!==1)return response(400,'INVALID');
         id=await schedule.claim(body.ticket);
@@ -71,18 +97,19 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         id=url.searchParams.get('order');
         if(!uuid.test(id)||url.searchParams.get('proof')!==await signature(cycle?'renewal/'+id:id))return response(403,'DENIED');
         if(!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded'))return response(400,'INVALID');
-        const body=await request.text();if(body.length>150)return response(400,'INVALID');
-        event=new URLSearchParams(body).get('id');if(!pid.test(event))return response(400,'INVALID');
+        const limited=await readBounded(request,150);
+        if(limited.tooLarge||limited.invalid)return response(400,'INVALID');
+        event=new URLSearchParams(limited.text).get('id');if(!pid.test(event))return response(400,'INVALID');
       }else{
         if(cycle)return response(403,'DENIED');
         const auth=request.headers.get('authorization');
         if(!/^Bearer \S+$/.test(auth||''))return response(401,'AUTH');
         // A broken authenticated client request is not a temporary payment
         // failure. Reject it before locking a job or contacting n8n/Mollie.
-        const declared=request.headers.get('content-length');
-        if(declared&&/^\d+$/.test(declared)&&Number(declared)>2048)return response(413,'INVALID');
-        const payload=await request.text();
-        if(new TextEncoder().encode(payload).byteLength>2048)return response(413,'INVALID');
+        const limited=await readBounded(request,2048);
+        if(limited.tooLarge)return response(413,'INVALID');
+        if(limited.invalid)return response(400,'INVALID');
+        const payload=limited.text;
         let body;
         try{body=JSON.parse(payload);}catch{return response(400,'INVALID');}
         if(!body||typeof body!=='object'||Array.isArray(body)||
