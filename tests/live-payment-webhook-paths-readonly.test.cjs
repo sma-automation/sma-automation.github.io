@@ -45,6 +45,7 @@ test('Pure, bounded trace follows separate webhook MAIN edges but claims no safe
   assert.equal(r.first_payment.static_response_terminal_nodes,1);
   assert.equal(r.first_payment.static_nonresponse_terminal_nodes,0);
   assert.equal(r.first_payment.explicit_empty_decision_output_ports,0);
+  assert.equal(r.first_payment.missing_if_output_ports,0);
   assert.equal(r.renewal.static_response_terminal_nodes,1);
   assert.equal(r.renewal.static_nonresponse_terminal_nodes,0);
   assert.equal(r.first_payment.config_markers.status,'CONFIG_MARKERS_PRESENT_NOT_VALIDATED');
@@ -143,6 +144,49 @@ test('Explicit empty IF output is reported, not treated as a successful response
   assert.equal(r.first_payment.static_terminal_nodes,1);
   assert.equal(r.first_payment.static_nonresponse_terminal_nodes,0);
   assert.equal(r.first_payment.explicit_empty_decision_output_ports,1);
+  assert.equal(r.first_payment.path_is_proven_safe,false);
+});
+
+
+test('Missing IF false output is reported even when only the true output exists',()=>{
+  const g=fixture();
+  g.nodes.push(node('Private missing IF false','if'));
+  g.connections.First={main:[[edge('Private missing IF false')]]};
+  g.connections['Private missing IF false']={main:[[edge('First reply')]]};
+  const r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.reachable_respond_to_webhook,1);
+  assert.equal(r.first_payment.static_nonresponse_terminal_nodes,0);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,0);
+  assert.equal(r.first_payment.missing_if_output_ports,1);
+  assert.equal(r.first_payment.path_is_proven_safe,false);
+  assert.doesNotMatch(JSON.stringify(r),/Private missing IF false/);
+});
+
+test('Null decision output and completely missing IF connections are distinguished',()=>{
+  const g=fixture();
+  g.nodes.push(node('Private nullable IF','if'));
+  g.connections.First={main:[[edge('Private nullable IF')]]};
+  g.connections['Private nullable IF']={main:[[edge('First reply')],null]};
+  let r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,1);
+  assert.equal(r.first_payment.missing_if_output_ports,0);
+  delete g.connections['Private nullable IF'];
+  r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.reachable_respond_to_webhook,0);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,0);
+  assert.equal(r.first_payment.missing_if_output_ports,2);
+  assert.equal(r.first_payment.static_nonresponse_terminal_nodes,1);
+  assert.doesNotMatch(JSON.stringify(r),/Private nullable IF/);
+});
+
+test('Switch output count is not invented from variable rule configuration',()=>{
+  const g=fixture();
+  g.nodes.push(node('Private switch','switch',{rules:{values:[{},{}]}}));
+  g.connections.First={main:[[edge('Private switch')]]};
+  g.connections['Private switch']={main:[[edge('First reply')]]};
+  const r=inspectPaymentWebhookPaths(g);
+  assert.equal(r.first_payment.missing_if_output_ports,0);
+  assert.equal(r.first_payment.explicit_empty_decision_output_ports,0);
   assert.equal(r.first_payment.path_is_proven_safe,false);
 });
 
