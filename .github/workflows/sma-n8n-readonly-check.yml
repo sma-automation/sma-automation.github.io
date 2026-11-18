@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin b5712bbc1a387320322db7b7321f80710e414a5f
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin b06f85e28e11dce04c65128b607bd903572344d9
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = 'b5712bbc1a387320322db7b7321f80710e414a5f'
+          test "$(git rev-parse HEAD)" = 'b06f85e28e11dce04c65128b607bd903572344d9'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
@@ -88,6 +88,37 @@ jobs:
                   }) : [];
                 console.log('SMA_N8N_PAYMENT_PARAMETER_DIFF='+
                   [...new Set(mismatches)].slice(0,100).join(','));
+                // Only fixed names from the public generator and bounded
+                // booleans/counters; NEVER print the installed filter schema.
+                const safePositions=new Set([14,15,17,23]);
+                const safeStatuses=new Set([
+                  'INVALID_FILTER_FORMAT','REQUIRED_FILTERS_MISSING',
+                  'DUPLICATE_FILTERS','UNREVIEWED_FILTERS',
+                  'FILTER_SEMANTICS_DIFFER','FILTER_KEYS_AND_PREDICATES_MATCH',
+                  'MATCH_TYPE_NOT_ALL'
+                ]);
+                const safeFields=new Set([
+                  'ROW_ID','CUSTOMER_REF','EMAIL','DEMO_OFF','ACCESS','PAYMENT',
+                  'PLAN','MERCHANT_CUSTOMER','SUBSCRIPTION','ACCESS_TOKEN',
+                  'UPLOAD_FOLDER','PROCESSING_FOLDER','OTHER'
+                ]);
+                const safeCount=x=>Number.isSafeInteger(x)&&x>=0&&x<=100?x:0;
+                const checks=Array.isArray(result?.filter_checks)?result.filter_checks.slice(0,26):[];
+                for(const check of checks){
+                  const pos=check?.template_position;
+                  if(!safePositions.has(pos))continue;
+                  const state=safeStatuses.has(check?.status)?check.status:'UNAVAILABLE';
+                  const missing=Array.isArray(check?.missing_required_fields)
+                    ?check.missing_required_fields.slice(0,12)
+                      .filter(key=>safeFields.has(key)):[];
+                  console.log('SMA_N8N_PAYMENT_FILTER_N'+String(pos).padStart(2,'0')+
+                    '='+state+';MISSING='+missing.join('|')+
+                    ';EXTRA='+safeCount(check?.unexpected_fields)+
+                    ';OPERATOR_DIFF='+safeCount(check?.operator_differences)+
+                    ';EXPRESSION_DIFF='+safeCount(check?.expression_differences)+
+                    ';DUPLICATE='+(check?.duplicate_field_keys===true?'YES':'NO')+
+                    ';ALL_CONDITIONS='+(check?.all_conditions===true?'YES':'NO'));
+                }
                 // Only derived, bounded counters and fixed booleans. Never print
                 // the active workflow graph, node parameters, credentials,
                 // arbitrary live node names or customer references.
