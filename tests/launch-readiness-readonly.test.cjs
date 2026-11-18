@@ -72,7 +72,7 @@ test('gallery counts separate pending work from completed clips and never call a
  assert.match(noComments,/'NO_LISTED_TRACK_FOR_PENDING_JOBS'/);
  assert.match(noComments,/'LISTED_TRACK_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED'/);
  assert.match(noComments,/'music_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY'/);
- assert.match(noComments,/nullif\(btrim\(track_sha\),'\) IS NULL/);
+ assert.match(noComments,/nullif\(btrim\(track_sha\),''\) IS NULL/);
  assert.match(noComments,/ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED/);
  assert.match(noComments,/entitled_accounts-entitled_accounts_without_n8n_reference/);
  assert.doesNotMatch(noComments,/\b(?:gallery_background_(?:tick|pick)|gallery_music_(?:request|enqueue)|publication_gallery_technical_register|gallery_worker_snapshot)_v1\s*\(/i);
