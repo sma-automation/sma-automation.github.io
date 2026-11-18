@@ -150,6 +150,7 @@ test('safe mismatch report pinpoints template positions and fixed fields without
 test('unexpected property names are represented by OTHER, never returned verbatim',()=>{
   const g=renamed(),n=node(g,'Mollie first');
   n.parameters['private_property_NAME_DO_NOT_LOG']='PRIVATE_VALUE_DO_NOT_LOG';
+  n.parameters.constructor='INHERITED_KEY_VALUE_DO_NOT_LOG';
   const result=audit(exposed(g));
   assert(result.parameter_mismatches.some(x=>x.categories.includes('OTHER')));
   assert.doesNotMatch(JSON.stringify(result),/DO_NOT_LOG|private_property/);
