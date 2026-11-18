@@ -15,7 +15,9 @@ und verändert weder sie noch Shopify.
 
 ## Was der Check belegt
 
-- Berechtigte öffentlich geschaltete SMA-Shops (aktiv und bezahlt oder Demo).
+- Berechtigte öffentlich geschaltete SMA-Shops (aktiv und bezahlt oder Demo)
+  mit syntaktisch gültiger, eindeutiger öffentlicher Shop-Kennung. Eine zweite
+  gleichnamige öffentliche Shopzeile ist ein Problem für die Lese-API.
 - Genau ein aktives Shopify-Konto pro Shop und plausible Shop-Domain.
 - Für aktive Shopify-Produkte: UUID, zum Konto passende `https://*.myshopify.com/cart/VARIANTE:MENGE`-Adresse,
   eindeutige Variante, vollständiger Preis in ganzen Cent, dreistellige Währung,
