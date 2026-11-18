@@ -35,12 +35,15 @@ async function checkGallery(expected) {
     assert.ok(media.gallery_pending_without_track<=media.gallery_pending_jobs);
     assert.ok(media.gallery_pending_with_failures<=media.gallery_pending_jobs);
     assert.ok(media.music_ready_tracks<=media.music_listed_tracks);
+    assert.ok(media.music_aac_ready_tracks<=media.music_ready_tracks);
     const expectedMusicState=media.music_listed_tracks===0
       ? (media.gallery_pending_jobs>0?'NO_LISTED_TRACK_FOR_PENDING_JOBS':'NO_LISTED_TRACK')
       : media.music_ready_tracks===0
         ? (media.gallery_pending_jobs>0?'LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS':'LISTED_TRACKS_NOT_READY')
-        : media.gallery_pending_due_jobs>0?'GALLERY_DUE_WORK_NEEDS_REVIEW':
-          'READY_TRACK_EXISTS_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED';
+        : media.music_aac_ready_tracks===0
+          ? (media.gallery_pending_jobs>0?'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS':'READY_MASTER_WITHOUT_AAC')
+          : media.gallery_pending_due_jobs>0?'GALLERY_DUE_WORK_NEEDS_REVIEW':
+            'AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED';
     assert.equal(media.music_customer_state,expectedMusicState);
     assert.equal(media.music_customer_e2e,'NOT_VERIFIED_BY_THIS_QUERY');
     assert.ok(media.gallery_completed_without_record<=media.gallery_completed_jobs);
@@ -88,6 +91,8 @@ try {
     CREATE TABLE sma_private.music_catalog_v1 (listed boolean);
     -- Independent synthetic ready view: listed metadata without object bytes must fail closed.
     CREATE TABLE sma_private.music_catalog_ready_v1 (sha256 text);
+    CREATE SCHEMA storage;
+    CREATE TABLE storage.objects (bucket_id text,name text,metadata jsonb);
     CREATE TABLE sma_private.customer_websites_v1 (published_at timestamptz);
     CREATE TABLE sma_private.website_provider_connections_v1 ();
   `);
@@ -137,7 +142,7 @@ try {
   // Isolated metadata fixtures only; never render media or call a registration function.
   await checkGallery({gallery_music_jobs:0,gallery_completed_without_record:0,
     gallery_current_revision_evidence_jobs:0,gallery_completed_without_current_evidence:0,
-    gallery_evidence_state:'NO_COMPLETED_GALLERY_JOB',music_listed_tracks:0,music_ready_tracks:0,
+    gallery_evidence_state:'NO_COMPLETED_GALLERY_JOB',music_listed_tracks:0,music_ready_tracks:0,music_aac_ready_tracks:0,
     gallery_pending_without_track:0,gallery_pending_with_failures:0,
     music_customer_state:'NO_LISTED_TRACK'});
   const completed='60600000-0000-4000-8000-000000000001';
@@ -151,7 +156,7 @@ try {
     gallery_pending_due_jobs:1,gallery_pending_scheduled_jobs:2,gallery_pending_unscheduled_jobs:0,
     gallery_other_jobs:0,gallery_completed_without_record:1,gallery_current_revision_evidence_jobs:0,
     gallery_completed_without_current_evidence:1,gallery_evidence_state:'CURRENT_GALLERY_EVIDENCE_REQUIRED',
-    gallery_technical_records:0,music_listed_tracks:0,music_ready_tracks:0,
+    gallery_technical_records:0,music_listed_tracks:0,music_ready_tracks:0,music_aac_ready_tracks:0,
     gallery_pending_without_track:3,gallery_pending_with_failures:0,
     music_customer_state:'NO_LISTED_TRACK_FOR_PENDING_JOBS'});
   await db.exec("INSERT INTO sma_private.publication_gallery_technical_v1 (gallery_job_id) VALUES('60600000-0000-4000-8000-000000000099')");
@@ -225,8 +230,16 @@ try {
   await db.exec('UPDATE sma_private.music_catalog_v1 SET listed=true');
   await checkGallery({music_listed_tracks:1,music_ready_tracks:0,gallery_completed_without_record:0,
     music_customer_state:'LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS'});
-  await db.exec("INSERT INTO sma_private.music_catalog_ready_v1 VALUES('a-synthetic-verified-object')");
-  await checkGallery({music_ready_tracks:1,music_customer_state:'GALLERY_DUE_WORK_NEEDS_REVIEW'});
+  const masterSha='a'.repeat(64);
+  await db.query('INSERT INTO sma_private.music_catalog_ready_v1 VALUES($1)',[masterSha]);
+  await checkGallery({music_ready_tracks:1,music_aac_ready_tracks:0,
+    music_customer_state:'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'});
+  await db.query("INSERT INTO storage.objects VALUES('sma-katalog',$1,$2)",
+    ['render/'+masterSha+'/'+masterSha+'.aac',{size:'1234',mimetype:'audio/aac'}]);
+  await checkGallery({music_aac_ready_tracks:1,music_customer_state:'GALLERY_DUE_WORK_NEEDS_REVIEW'});
+  await db.exec("UPDATE storage.objects SET metadata=jsonb_build_object('size','1234','mimetype','application/octet-stream')");
+  await checkGallery({music_aac_ready_tracks:0,music_customer_state:'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'});
+  await db.exec("UPDATE storage.objects SET metadata=jsonb_build_object('size','1234','mimetype','audio/aac')");
   await db.exec("UPDATE sma_private.gallery_music_v1 SET failures=2 WHERE state='pending'");
   await checkGallery({gallery_pending_with_failures:2,music_customer_state:'GALLERY_DUE_WORK_NEEDS_REVIEW'});
   await db.exec('INSERT INTO sma_private.music_catalog_v1 VALUES(false),(NULL)');
