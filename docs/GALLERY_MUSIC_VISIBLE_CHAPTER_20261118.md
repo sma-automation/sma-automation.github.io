@@ -74,3 +74,27 @@ Die Regressionen verwenden ausschließlich synthetische RPC-Antworten
 und fiktive Kapitel-Sichtbarkeitszustände. Sie belegen das Aussetzen
 und Wiederaufnehmen von Leerlaufabrufen, nicht einen tatsächlichen
 Musik-Provider-End-to-End-Durchlauf.
+
+## Nachtrag: Versteckte Galerie nicht nach abgeschlossener Vertonung laden (18.11.2026)
+
+Ein schon beanspruchter Musikauftrag wird bei Kapitel- oder Tabwechsel wie bisher
+bis zum gespeicherten Upload-/Server-Receipt zu Ende geführt. **Neu:** Ist der
+Kundenbereich beim Abschluss verborgen, löst der Browser keine sofortige
+`sma_publication_files_v1('list')`-Abfrage aus. Er merkt sich genau eine fällige
+Aktualisierung; bei der nächsten sichtbaren Rückkehr lädt er zuerst den
+Dateikatalog und fragt erst danach nach weiterer fälliger Vertonung. Auch mehrere
+Kapitelwechsel duplizieren diese nachgeholte Aktualisierung nicht.
+
+Ein weiteres doppeltes Polling entfällt: Die `onComplete`-Ladung aus dem
+Musikworker weckt ihn **nicht** während seiner eigenen Drain-Schleife neu.
+Der laufende Worker führt seinen vorhandenen Folge-Claim selbst aus. Normale
+Galerie-Einstiege, manuelles Aktualisieren und neue Musikfreigaben behalten die
+bisherige Wecklogik. Bei Logout/Accountwechsel zerstört die bestehende
+Worker-Entsorgung die vorgemerkte Aktualisierung ohne Datenübernahme.
+
+Die Regression deckt ein während der Quelllesung verborgenes Kapitel,
+bestätigte Speicherung, Null Reloads im Hintergrund, exakt einen nachgeholten
+Reload und mehrfachen Sichtbarkeitswechsel ab. Der Fix ändert keine n8n-
+Workflows, Serverzeitpläne, Kundendaten, Bezahl- oder Veröffentlichungsrechte.
+Er vermeidet unnötige **Supabase-RPCs**; eine Einsparung bei abgerechneten
+n8n-Starts ist damit nicht belegt.
