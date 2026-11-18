@@ -6,6 +6,7 @@
 // activeVersionId from n8n's version API, then confirm it remained active.
 const {auditPublishedPackageWorker}=require('./audit-published-worker.cjs');
 const {summarizeActivePaymentGraph}=require('./diagnose-active-payment-graph.cjs');
+const {inspectPaymentWebhookPaths}=require('./inspect-payment-webhook-paths.cjs');
 const endpoint='https://johnmusic.app.n8n.cloud/api/v1/workflows/8v2wcz5lh0yUf3sw';
 const workflowId='8v2wcz5lh0yUf3sw';
 const activeId=/^[A-Za-z0-9_-]{8,128}$/;
@@ -116,14 +117,21 @@ async function inspectLivePaymentWorker({
       active:true,activeVersionId:versionId,versionId,
       nodes:published.nodes,connections:published.connections
     });
-    if(!report.ok)return {...report,
-      scope:'n8n_public_api_live_readonly',
-      diagnostic:summarizeActivePaymentGraph(published.nodes),
-      published_version_stability_rechecked:false,...noGrant};
-
+    // Even a mismatch must be bound to a stable PUBLISHED version. Never
+    // interpret a stale snapshot as evidence about the current active graph.
     const after=await readJson(endpoint,'N8N_WORKFLOW_NOT_FOUND');
     if(after.id!==workflowId||after.isArchived===true||
       after.activeVersionId!==versionId)fail('N8N_PUBLISHED_VERSION_CHANGED_DURING_AUDIT');
+    if(!report.ok){
+      const trace=inspectPaymentWebhookPaths({
+        nodes:published.nodes,connections:published.connections
+      });
+      return {...report,scope:'n8n_public_api_live_readonly',
+        diagnostic:summarizeActivePaymentGraph(published.nodes),
+        path_trace:{...trace,active_version_stability_verified:true},
+        published_version_stability_rechecked:true,
+        checked_at:new Date().toISOString(),...noGrant};
+    }
     return {...report,scope:'n8n_public_api_live_readonly',
       checked_at:new Date().toISOString(),...noGrant};
   }catch(error){
