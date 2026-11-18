@@ -52,27 +52,29 @@ test('Legacy tokens, active/demo/payment flags, wrong row or malformed email can
  assert.throws(()=>confirmationSql('not-a-ref',base),/Zeilen-ID|Status/);
 });
 
-test('CLI asks only whether secrets exist, never requests their value or prints private evidence on refusal',()=>{
+test('CLI never emits SQL when the verified SMA Drive identity is unavailable',()=>{
  const moduleSource=readFileSync('n8n/confirm-onboarding-row.cjs','utf8');
- assert.doesNotMatch(moduleSource,/\bfetch\s*\(|\bhttps?:\/\//);
+ assert.doesNotMatch(moduleSource,/\bhttps?:\/\//);
  const valid=[reference,'42',reference,"o'hara+pilot@example.invalid",'',
-  'AUS','AUS','AUS','AUS','AUS','AUS','AUS'].join('\n')+'\n';
- const yes=spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
-  input:valid,encoding:'utf8',timeout:15000
+  'AUS','AUS','AUS','AUS','AUS','AUS','AUS',
+  'synthetic_customer_upload_folder','synthetic_customer_processing_folder'].join('\n')+'\n';
+ const denied=spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
+  input:valid,encoding:'utf8',timeout:15000,
+  env:{...process.env,SMA_GOOGLE_DRIVE_READ_TOKEN:'',SMA_GOOGLE_DRIVE_EXPECTED_PERMISSION_ID:''}
  });
- assert.equal(yes.status,0,yes.stderr);
- assert.deepEqual(evidence(yes.stdout.trim()),[{
-  id:42,kunde_id:reference,kunde_email:"o'hara+pilot@example.invalid",paket:null,
-  zugang_aktiv:false,zahlung_bestaetigt:false,demo_delta_aktiv:false
- }]);
- assert.doesNotMatch(yes.stderr,/o'hara|pilot@example/);
+ assert.equal(denied.status,1);
+ assert.equal(denied.stdout,'');
+ assert.match(denied.stderr,/INVALID_CONFIGURATION/);
+ assert.doesNotMatch(denied.stderr,/o'hara|pilot@example|synthetic_customer_/);
+
  const blocked=valid.split('\n');
- blocked[8]='EIN'; // Access-token-present confirmation
+ blocked[8]='EIN'; // Old access token exists; fail before any Drive GET.
  const no=spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
-  input:blocked.join('\n'),encoding:'utf8',timeout:15000
+  input:blocked.join('\n'),encoding:'utf8',timeout:15000,
+  env:{...process.env,SMA_GOOGLE_DRIVE_READ_TOKEN:'',SMA_GOOGLE_DRIVE_EXPECTED_PERMISSION_ID:''}
  });
  assert.equal(no.status,1);
  assert.equal(no.stdout,'');
  assert.match(no.stderr,/n8n-Zeile ist nicht leer/);
- assert.doesNotMatch(no.stderr,/o'hara|pilot@example/);
+ assert.doesNotMatch(no.stderr,/o'hara|pilot@example|synthetic_customer_/);
 });
