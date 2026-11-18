@@ -58,6 +58,43 @@ test('malformed and expired data do not break catalogue or restore items',async(
 test('blocked local storage leaves cart controls usable',async()=>{
  const a=await boot({blocked:true});a.add(0);a.add(1);a.open();assert.equal(a.total(),74.8);a.change(0,1);assert.equal(a.total(),114.7);
 });
+test('public catalogue never turns absent or malformed prices into a free checkout item',async()=>{
+ const invalidPrices=[null,undefined,'','gratis','39.999','-5','1e3',Number.NaN,Number.POSITIVE_INFINITY,{},'9'.repeat(70)];
+ for(const preis of invalidPrices){
+  const a=await boot({enabled:true,products:[{...fixture('p2'),preis}]});
+  const product=a.get('grid').children[0],body=product.children[1];
+  assert.equal(body.children[3].children[0].textContent,'Preis nicht verfügbar',String(preis));
+  const add=body.children[4];assert.equal(add.disabled,true,String(preis));
+  assert.match(add.textContent,/Preis nicht verfügbar/);
+  a.add(0);a.open();
+  assert.equal(a.count(),0);
+  assert.equal(a.get('checkoutButton').disabled,true);
+  await a.checkout();
+  assert.equal(a.requests.length,0);
+  assert.equal(a.redirects.length,0);
+ }
+});
+
+test('invalid currency and noninteger stock cannot be added to the public cart',async()=>{
+ for(const patch of [{waehrung:null},{waehrung:''},{waehrung:'eur'},{waehrung:'EURO'},
+  {bestand:null},{bestand:'4'},{bestand:-1},{bestand:2.5},{bestand:Number.NaN}]){
+  const a=await boot({enabled:true,products:[{...fixture('p2'),...patch}]});
+  const body=a.get('grid').children[0].children[1];
+  assert.equal(body.children[4].disabled,true,JSON.stringify(patch));
+  if('waehrung' in patch)assert.equal(body.children[3].children[0].textContent,'Preis nicht verfügbar');
+  a.add(0);a.open();
+  assert.equal(a.count(),0);assert.equal(a.requests.length,0);
+ }
+});
+
+test('an exact-cent numeric price with trailing zero precision is not falsely rejected',async()=>{
+ const a=await boot({enabled:true,products:[{...fixture('p2'),'preis':'39.9000'}]});
+ const body=a.get('grid').children[0].children[1];
+ assert.equal(body.children[4].disabled,false);
+ assert.match(body.children[3].children[0].textContent,/39,90/);
+ a.add(0);a.open();assert.equal(a.count(),1);assert.equal(a.total(),39.9);
+});
+
 test('fresh catalogue prices and stock replace cached values',async()=>{
  const a=await boot();a.add(0);a.add(0);a.add(1);
  const products=[{...fixture('p2',45),bestand:1},{...fixture('p1',34.9),shopify_aktiv:false}];
@@ -174,9 +211,9 @@ test('invalid links, missing products and mismatched responses cannot open anoth
  }
 });
 test('an unpriced or unavailable linked product does not offer a purchase',async()=>{
- for(const p of [{...initial[1],preis:null},{...initial[1],bestand:0},{...initial[1],shopify_aktiv:false}]){
+ for(const p of [{...initial[1],preis:null},{...initial[1],preis:'39.991'},{...initial[1],waehrung:'EURO'},{...initial[1],bestand:2.5},{...initial[1],bestand:0},{...initial[1],shopify_aktiv:false}]){
   const b=await boot({linkQuery:'&produkt=p1',catalogFetch:async()=>({ok:true,json:async()=>single(p)})});
   assert.equal(b.get('galleryAdd').disabled,true);assert.equal(b.requests.length,0);
-  if(p.preis===null)assert.equal(b.get('galleryPrice').textContent,'Preis nicht verfügbar');
+  if(p.preis===null||p.preis==='39.991'||p.waehrung==='EURO')assert.equal(b.get('galleryPrice').textContent,'Preis nicht verfügbar');
  }
 });

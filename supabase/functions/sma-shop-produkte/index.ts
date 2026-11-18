@@ -150,7 +150,9 @@ export default {
             beschreibung: produkt.beschreibung ?? "",
             typ: produkt.produkt_typ ?? "",
             preis: produkt.preis,
-            waehrung: produkt.waehrung ?? "EUR",
+            // Never invent a currency for a missing DB value. The public
+            // storefront and the server-side checkout both fail closed.
+            waehrung: produkt.waehrung ?? null,
             bestand: produkt.bestand ?? 0,
             shopify_aktiv: produkt.shopify_aktiv === true,
             bilder,
