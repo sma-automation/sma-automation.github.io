@@ -241,6 +241,9 @@ test('Renamed unsafe activation guard remains blocked and live version is rechec
   const api=fakeApi(f),r=await run(api);
   assert.equal(r.ok,false);
   assert.ok(r.issues.includes('PAYMENT_NODE_LOGIC_MISMATCH'));
+  assert.ok(r.parameter_mismatches.some(x=>x.categories.includes('CODE')));
+  assert.ok(r.parameter_mismatches.every(x=>
+    Number.isInteger(x.template_position)&&x.template_position>0));
   assert.equal(r.published_version_stability_rechecked,true);
   assert.deepEqual(api.calls.map(x=>x.url),[url,versionUrl,url]);
 });

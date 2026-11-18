@@ -127,3 +127,31 @@ test('non-MAIN inbound or outbound payment connections require review',()=>{
   h.connections.Outside={error:[[{node:h.names.get('Kundenzeile activate'),type:'error',index:0}]]};
   assert(audit(exposed(h)).issues.includes('UNEXPECTED_PAYMENT_NODE_INGRESS'));
 });
+
+test('safe mismatch report pinpoints template positions and fixed fields without provider values',()=>{
+  const g=renamed();
+  const code=node(g,'Auftragsschlüssel prüfen');
+  code.parameters.jsCode='PRIVATE_PAYMENT_SOURCE_DO_NOT_LOG';
+  const remote=node(g,'Mollie first');
+  remote.parameters.url='https://private-merchant.example.invalid/path?secret=DO_NOT_LOG';
+  remote.parameters.headerParameters={parameters:[{name:'Private',value:'DO_NOT_LOG'}]};
+  const result=audit(exposed(g));
+  assert.equal(result.ok,false);
+  assert.ok(result.issues.includes('PAYMENT_NODE_LOGIC_MISMATCH'));
+  assert.equal(result.parameter_mismatches.length,2);
+  assert.deepEqual(result.parameter_mismatches.map(x=>x.categories),[
+    ['CODE'],['HEADERS','TARGET']
+  ]);
+  assert.ok(result.parameter_mismatches.every(x=>
+    Number.isSafeInteger(x.template_position)&&x.template_position>=1&&x.template_position<=26));
+  assert.doesNotMatch(JSON.stringify(result),
+    /PRIVATE_PAYMENT_SOURCE|DO_NOT_LOG|private-merchant|Einbindung/);
+});
+test('unexpected property names are represented by OTHER, never returned verbatim',()=>{
+  const g=renamed(),n=node(g,'Mollie first');
+  n.parameters['private_property_NAME_DO_NOT_LOG']='PRIVATE_VALUE_DO_NOT_LOG';
+  n.parameters.constructor='INHERITED_KEY_VALUE_DO_NOT_LOG';
+  const result=audit(exposed(g));
+  assert(result.parameter_mismatches.some(x=>x.categories.includes('OTHER')));
+  assert.doesNotMatch(JSON.stringify(result),/DO_NOT_LOG|private_property/);
+});
