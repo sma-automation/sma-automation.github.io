@@ -77,8 +77,19 @@ export function createPaymentHandler({authorize,worker,bridge,renewal,consumeRen
         if(cycle)return response(403,'DENIED');
         const auth=request.headers.get('authorization');
         if(!/^Bearer \S+$/.test(auth||''))return response(401,'AUTH');
-        const body=await request.json();id=body?.order;
-        if(!uuid.test(id)||!uuid.test(body?.owner)||!await authorize(auth,body.owner,id))return response(403,'DENIED');
+        // A broken authenticated client request is not a temporary payment
+        // failure. Reject it before locking a job or contacting n8n/Mollie.
+        const declared=request.headers.get('content-length');
+        if(declared&&/^\d+$/.test(declared)&&Number(declared)>2048)return response(413,'INVALID');
+        const payload=await request.text();
+        if(new TextEncoder().encode(payload).byteLength>2048)return response(413,'INVALID');
+        let body;
+        try{body=JSON.parse(payload);}catch{return response(400,'INVALID');}
+        if(!body||typeof body!=='object'||Array.isArray(body)||
+          Object.keys(body).length!==2||!Object.hasOwn(body,'order')||!Object.hasOwn(body,'owner'))
+          return response(400,'INVALID');
+        id=body.order;
+        if(!uuid.test(id)||!uuid.test(body.owner)||!await authorize(auth,body.owner,id))return response(403,'DENIED');
       }
       lease=newId();
       const write=async(action,data={})=>{
