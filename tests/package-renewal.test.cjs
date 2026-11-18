@@ -59,7 +59,7 @@ test('Fehlende Meldung allein sperrt weder aktive Abos noch offene oder strittig
     readPage:async()=>({payments,next:null})});
   assert.deepEqual(await run('active',[]),{decision:'WAIT',checkOn:null});
   assert.deepEqual(await run('suspended',[]),{decision:'SUSPEND',checkOn:null});
-  assert.deepEqual(await run('canceled',[bill('tr_open','2028-01-31','open')]),{decision:'SUSPEND',checkOn:'2028-02-29'});
+  assert.deepEqual(await run('canceled',[bill('tr_open','2028-01-31','open')]),{decision:'SUSPEND',checkOn:'2028-03-01'});
   const partial={...bill('tr_partial','2028-01-31'),amountRefunded:{currency:'EUR',value:'1.00'}};
   assert.deepEqual(await run('completed',[partial]),{decision:'REVIEW',checkOn:null});
 });
