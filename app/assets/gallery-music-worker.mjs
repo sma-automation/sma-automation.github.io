@@ -3,6 +3,9 @@ import {editorUUID} from './media-editor-model.mjs?v=3';
 
 // The server-scheduled soundtrack path handles work while the browser is closed.
 // Avoid repeatedly claiming an idle queue in a background browser tab.
+// Repeated no-progress claims must never spin against the production database.
+// More work can be picked up by the existing foreground timer or server worker.
+const MAX_IMMEDIATE_CLAIMS=8, CLAIM_BURST_BACKOFF_MS=300000;
 const browserVisible=()=>!globalThis.document?.hidden;
 function observeVisibility(handler){
  const doc=globalThis.document;
@@ -41,6 +44,7 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
   try{await onComplete();}catch{/* The saved file also appears on the next gallery refresh. */}
  }
  async function drain(){
+  let immediateClaims=0;
   do{
    again=false;
    // A claimed job continues to its existing receipt; no *next* claim starts
@@ -48,6 +52,16 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
    if(!foreground())return;
    if(pendingGalleryRefresh)await refreshGallery();
    if(!foreground())return;
+   if(immediateClaims>=MAX_IMMEDIATE_CLAIMS){
+    // Prevent an endless rapid loop if the server keeps reporting deferred,
+    // check_upload, completed or another non-idle response. Do not alter any
+    // existing lease, upload or receipt; the server worker remains independent.
+    again=false;
+    if(!transientStatus)report('Die automatische Vertonung wird später erneut geprüft.',true);
+    later(CLAIM_BURST_BACKOFF_MS);
+    return;
+   }
+   immediateClaims++;
    const job=await call('claim');
    if(job.state==='waiting'){report('Die automatische Vertonung wartet. Der Status wird später erneut geprüft.',true);later(Math.max(1000,Math.min(job.retry_ms,86400000)));return;}
    if(job.state==='deferred')continue;
