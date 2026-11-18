@@ -76,8 +76,8 @@ test('public catalogue never turns absent or malformed prices into a free checko
 });
 
 test('invalid currency and noninteger stock cannot be added to the public cart',async()=>{
- for(const patch of [{waehrung:null},{waehrung:''},{waehrung:'eur'},{waehrung:'EURO'},
-  {bestand:null},{bestand:'4'},{bestand:-1},{bestand:2.5},{bestand:Number.NaN}]){
+ for(const patch of [{waehrung:null},{waehrung:''},{waehrung:'EURO'},{waehrung:'EU'},
+  {bestand:null},{bestand:'four'},{bestand:'3.5'},{bestand:-1},{bestand:2.5},{bestand:Number.NaN}]){
   const a=await boot({enabled:true,products:[{...fixture('p2'),...patch}]});
   const body=a.get('grid').children[0].children[1];
   assert.equal(body.children[4].disabled,true,JSON.stringify(patch));
@@ -87,12 +87,16 @@ test('invalid currency and noninteger stock cannot be added to the public cart',
  }
 });
 
-test('an exact-cent numeric price with trailing zero precision is not falsely rejected',async()=>{
- const a=await boot({enabled:true,products:[{...fixture('p2'),'preis':'39.9000'}]});
+test('exact-cent price, lowercase currency and BIGINT stock string remain purchasable',async()=>{
+ const a=await boot({enabled:true,products:[{...fixture('p2'),preis:'39.9000',waehrung:'eur',bestand:'4'}]});
  const body=a.get('grid').children[0].children[1];
  assert.equal(body.children[4].disabled,false);
  assert.match(body.children[3].children[0].textContent,/39,90/);
- a.add(0);a.open();assert.equal(a.count(),1);assert.equal(a.total(),39.9);
+ a.add(0);a.open();
+ assert.equal(a.count(),1);assert.equal(a.total(),39.9);
+ assert.equal(a.get('checkoutButton').disabled,false);
+ // Only a customer-initiated confirmed checkout would make an external POST.
+ assert.equal(a.requests.length,0);assert.equal(a.redirects.length,0);
 });
 
 test('fresh catalogue prices and stock replace cached values',async()=>{
