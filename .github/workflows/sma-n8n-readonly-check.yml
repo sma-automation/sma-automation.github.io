@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 940180177ba49b875cf5694d7e0da2bb78b76625
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 7b6a41a78f3cfaf1a82c9b24a8b2557a5f775a1c
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = '940180177ba49b875cf5694d7e0da2bb78b76625'
+          test "$(git rev-parse HEAD)" = '7b6a41a78f3cfaf1a82c9b24a8b2557a5f775a1c'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
@@ -83,7 +83,41 @@ jobs:
                     count(d.database_nodes_with_credential_reference)+'/'+count(d.existing_database_nodes));
                   console.log('SMA_N8N_CUSTOMER_TABLE_REFERENCE_NODE_COUNTS='+
                     count(d.customer_table_nodes_with_reference)+'/'+count(d.existing_customer_table_nodes));
-                  console.log('SMA_N8N_PUBLISHED_VERSION_STABLE_RECHECK=NO');
+                  // The new audit re-reads activeVersionId even on mismatch.
+                  // This flag is metadata stability only, not execution safety.
+                  const t=result?.path_trace;
+                  console.log('SMA_N8N_PUBLISHED_VERSION_STABLE_RECHECK='+
+                    (result.published_version_stability_rechecked===true?'YES':'NO'));
+                  if(t?.status==='PUBLISHED_PAYMENT_MAIN_GRAPH_TRACE_NOT_E2E' &&
+                    t.active_version_stability_verified===true){
+                    const bounded=x=>Number.isSafeInteger(x)&&x>=0&&x<=50000?x:0;
+                    console.log('SMA_N8N_PAYMENT_STATIC_TRACE=READ_ONLY_NOT_E2E');
+                    console.log('SMA_N8N_MAIN_EDGE_COUNT='+bounded(t.graph_main_edges));
+                    console.log('SMA_N8N_UNKNOWN_MAIN_TARGET_COUNT='+bounded(t.unknown_edge_targets));
+                    for(const [prefix,key] of [
+                      ['FIRST_PAYMENT','first_payment'],
+                      ['RENEWAL_PAYMENT','renewal']
+                    ]){
+                      const p=t[key];
+                      if(!p)continue;
+                      console.log('SMA_N8N_'+prefix+'_ENTRY_UNIQUE='+(p.entry_count===1?'YES':'NO'));
+                      console.log('SMA_N8N_'+prefix+'_ENTRY_CONFIG_MATCHES='+
+                        (p.response_mode_matches===true?'YES':'NO'));
+                      console.log('SMA_N8N_'+prefix+'_OUTGOING_EDGES='+bounded(p.outgoing_edges));
+                      console.log('SMA_N8N_'+prefix+'_REACHABLE_NODES='+bounded(p.reachable_nodes));
+                      console.log('SMA_N8N_'+prefix+'_REACHABLE_RESPONSES='+
+                        bounded(p.reachable_respond_to_webhook));
+                      console.log('SMA_N8N_'+prefix+'_REACHABLE_CODE='+bounded(p.reachable_code_nodes));
+                      console.log('SMA_N8N_'+prefix+'_REACHABLE_HTTP='+bounded(p.reachable_http_requests));
+                      console.log('SMA_N8N_'+prefix+'_REACHABLE_DATA_TABLE='+
+                        bounded(p.reachable_data_table_nodes));
+                      console.log('SMA_N8N_'+prefix+'_REACHABLE_SUBWORKFLOW='+
+                        bounded(p.reachable_subworkflow_calls));
+                      console.log('SMA_N8N_'+prefix+'_NAMED_FOLDER_GUARD_REACHABLE='+
+                        (p.named_folder_guard_reachable===true?'YES':'NO'));
+                    }
+                    console.log('SMA_N8N_PAYMENT_SAFE_E2E=NOT_VERIFIED');
+                  }
                 }
               }
             }
