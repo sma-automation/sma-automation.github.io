@@ -6,35 +6,49 @@ const {spawnSync}=require('node:child_process');
 const {build}=require('../n8n/package-payment/build-worker.cjs');
 const {inspectLivePaymentWorker}=require('../n8n/package-payment/audit-live-worker.cjs');
 const url='https://johnmusic.app.n8n.cloud/api/v1/workflows/8v2wcz5lh0yUf3sw';
+const workflowId='8v2wcz5lh0yUf3sw';
+const versionId='published-fixture-v1';
+const versionUrl=url+'/versions/'+versionId;
 
-function published(){
+function fixture(){
   const source={nodes:[
     {name:'SMA – Mollie – Erste Zahlung erstellen',credentials:{httpHeaderAuth:{id:'merchant-fixture'}}},
     {name:'SMA – Supabase – Bestellung spiegeln',credentials:{httpHeaderAuth:{id:'db-fixture'}}},
     {name:'SMA – Paketauswahl – Kunde prüfen',parameters:{dataTableId:{value:'table-fixture'}}}
   ]};
-  return JSON.parse(JSON.stringify({...build(source),id:'8v2wcz5lh0yUf3sw',
-    active:true,versionId:'published-fixture-v1',activeVersionId:'published-fixture-v1'}));
+  const built=JSON.parse(JSON.stringify(build(source)));
+  return {
+    meta:{id:workflowId,active:true,versionId:'newer-unpublished-draft',
+      activeVersionId:versionId,isArchived:false,
+      nodes:[{name:'Draft can differ',parameters:{jsCode:'NOT THE LIVE PAYMENT GRAPH'}}]},
+    version:{workflowId,versionId,nodes:built.nodes,connections:built.connections}
+  };
 }
 const jsonResponse=(value,status=200,headers={})=>new Response(JSON.stringify(value),{
   status,headers:{'content-type':'application/json',...headers}
 });
-
-test('Live preflight reads only the exact n8n workflow through GET with no executions',async()=>{
-  let calls=0;
+function fakeApi({meta,version,metaAfter}={}){
+  const setup=fixture(),calls=[];
+  const first=meta??setup.meta,published=version??setup.version,last=metaAfter??first;
   const fetchImpl=async (target,options)=>{
-    calls++;
-    assert.equal(target,url);
+    calls.push({url:target,method:options.method});
     assert.equal(options.method,'GET');
     assert.equal(options.redirect,'error');
     assert.equal(options.credentials,'omit');
     assert.equal(options.cache,'no-store');
-    assert.equal(options.headers['X-N8N-API-KEY'],'fixture-key');
     assert.equal(options.body,undefined);
-    return jsonResponse(published());
+    assert.equal(options.headers['X-N8N-API-KEY'],'fixture-key');
+    if(target===versionUrl)return jsonResponse(published);
+    assert.equal(target,url);
+    return jsonResponse(calls.filter(c=>c.url===url).length===1?first:last);
   };
-  const report=await inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl});
-  assert.equal(calls,1);
+  return {calls,fetchImpl,first,published,last};
+}
+async function run(fake){return inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl:fake.fetchImpl});}
+
+test('Published graph is fetched from the exact version endpoint, independent of newer draft',async()=>{
+  const fake=fakeApi();const report=await run(fake);
+  assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl,url]);
   assert.equal(report.ok,true);
   assert.equal(report.status,'ACTIVE_PAYMENT_GRAPH_STRUCTURALLY_MATCHES_NOT_E2E');
   assert.equal(report.scope,'n8n_public_api_live_readonly');
@@ -45,88 +59,117 @@ test('Live preflight reads only the exact n8n workflow through GET with no execu
   assert.doesNotMatch(JSON.stringify(report),/fixture-key|merchant-fixture|db-fixture|table-fixture/);
 });
 
-test('Never infer that a newer draft is the published worker',async()=>{
-  const g=published();
-  g.versionId='unpublished-edit';
-  g.nodes.find(n=>n.name==='Ordnerzuordnung vor Aktivierung prüfen').parameters.jsCode='return $input.all();';
-  const report=await inspectLivePaymentWorker({
-    apiKey:'fixture-key',fetchImpl:async()=>jsonResponse(g)
-  });
+test('An unchanged draft that looks correct cannot excuse an unsafe published activation graph',async()=>{
+  const data=fixture();data.meta.nodes=structuredClone(data.version.nodes);
+  data.version.nodes.find(n=>n.name==='Ordnerzuordnung vor Aktivierung prüfen')
+    .parameters.jsCode='return $input.all();';
+  const fake=fakeApi(data),report=await run(fake);
   assert.equal(report.ok,false);
-  assert.ok(report.issues.includes('published_active_graph_not_confirmed'));
-  assert.equal(report.allows_checkout,false);
+  assert.ok(report.issues.includes('payment_node_parameters_not_matching'));
+  assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl]);
+  assert.equal(report.activates_customer,false);
 });
 
-test('A genuine activeVersion is audited rather than a drifted editor version',async()=>{
-  const g=published();
-  g.activeVersion={versionId:g.activeVersionId,nodes:structuredClone(g.nodes),
-    connections:structuredClone(g.connections)};
-  g.versionId='unpublished-edit';
-  g.nodes.find(n=>n.name==='Ordnerzuordnung vor Aktivierung prüfen').parameters.jsCode='return $input.all();';
-  const report=await inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl:async()=>jsonResponse(g)});
-  assert.equal(report.ok,true);
-  g.activeVersion.nodes.find(n=>n.name==='Ordnerzuordnung vor Aktivierung prüfen').parameters.jsCode='return $input.all();';
-  const blocked=await inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl:async()=>jsonResponse(g)});
-  assert.equal(blocked.ok,false);
-  assert.ok(blocked.issues.includes('payment_node_parameters_not_matching'));
-});
-
-test('Unverified publication, wrong workflow id and missing credentials fail closed',async()=>{
+test('Unpublished, wrong-ID, archived or missing version state cannot lead to an active verdict',async()=>{
   for(const [change,expected] of [
-    [g=>{g.activeVersionId=null;},'N8N_PUBLISHED_VERSION_NOT_VERIFIED'],
-    [g=>{g.id='different-workflow';},'N8N_WORKFLOW_ID_MISMATCH'],
-    [g=>{g.nodes.find(n=>n.name==='Mollie first').credentials={};},
-      'mollie_credential_reference_mismatch']
+    [g=>{g.meta.activeVersionId=null;},'N8N_PUBLISHED_VERSION_NOT_VERIFIED'],
+    [g=>{g.meta.activeVersionId='invalid/slash';},'N8N_PUBLISHED_VERSION_NOT_VERIFIED'],
+    [g=>{g.meta.id='unrelated';},'N8N_WORKFLOW_ID_MISMATCH'],
+    [g=>{g.meta.isArchived=true;},'N8N_WORKFLOW_ARCHIVED']
   ]){
-    const g=published();change(g);
-    const r=await inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl:async()=>jsonResponse(g)});
-    assert.equal(r.ok,false);assert.ok(r.issues.includes(expected));
-    assert.equal(r.activates_customer,false);
-  }
-});
-
-test('Missing key does not initiate a request; rejected keys and HTTP failures stay private',async()=>{
-  let calls=0;const read=async()=>{calls++;return jsonResponse(published());};
-  const bad=await inspectLivePaymentWorker({apiKey:'',fetchImpl:read});
-  assert.equal(bad.ok,false);assert.deepEqual(bad.issues,['N8N_READ_API_KEY_REQUIRED']);
-  assert.equal(calls,0);
-  for(const [status,expected] of [[401,'N8N_READ_AUTH_REQUIRED'],
-    [403,'N8N_READ_AUTH_REQUIRED'],[404,'N8N_WORKFLOW_NOT_FOUND'],[429,'N8N_READ_UNAVAILABLE']]){
-    const r=await inspectLivePaymentWorker({apiKey:'secret-fixture-key',
-      fetchImpl:async()=>jsonResponse({private_secret:'must-not-appear'},status)});
+    const f=fixture();change(f);
+    const fake=fakeApi(f),r=await run(fake);
+    assert.equal(r.ok,false);
     assert.deepEqual(r.issues,[expected]);
-    assert.doesNotMatch(JSON.stringify(r),/private_secret|must-not-appear|secret-fixture-key/);
+    assert.equal(fake.calls.length,1);
   }
 });
 
-test('Malformed, oversized or redirected responses cannot prove active publication',async()=>{
-  for(const response of [
+test('Version ID, workflow owner, nodes and connections must match the published version metadata',async()=>{
+  for(const change of [
+    g=>{g.version.workflowId='foreign-workflow';},
+    g=>{g.version.versionId='other-version';},
+    g=>{delete g.version.nodes;},
+    g=>{g.version.connections=null;}
+  ]){
+    const f=fixture();change(f);
+    const fake=fakeApi(f),r=await run(fake);
+    assert.equal(r.ok,false);
+    assert.deepEqual(r.issues,['N8N_ACTIVE_VERSION_MISMATCH']);
+    assert.deepEqual(fake.calls.map(c=>c.url),[url,versionUrl]);
+  }
+});
+
+test('Publication changes during inspection are refused, even after a matching version',async()=>{
+  for(const change of [
+    m=>{m.activeVersionId='published-fixture-v2';},
+    m=>{m.isArchived=true;},
+    m=>{m.id='foreign';}
+  ]){
+    const f=fixture(),after=structuredClone(f.meta);
+    change(after);
+    const fake=fakeApi({...f,metaAfter:after}),r=await run(fake);
+    assert.equal(r.ok,false);
+    assert.deepEqual(r.issues,['N8N_PUBLISHED_VERSION_CHANGED_DURING_AUDIT']);
+    assert.equal(fake.calls.length,3);
+  }
+});
+
+test('Missing or rejected API access fails without triggering any n8n execution',async()=>{
+  let called=0;
+  const noKey=await inspectLivePaymentWorker({
+    apiKey:'',fetchImpl:async()=>{called++;throw Error('unexpected network');}
+  });
+  assert.deepEqual(noKey.issues,['N8N_READ_API_KEY_REQUIRED']);
+  assert.equal(called,0);
+  for(const [target,status,expected] of [
+    [url,401,'N8N_READ_AUTH_REQUIRED'],
+    [versionUrl,403,'N8N_READ_AUTH_REQUIRED'],
+    [url,404,'N8N_WORKFLOW_NOT_FOUND'],
+    [versionUrl,404,'N8N_ACTIVE_VERSION_UNAVAILABLE'],
+    [versionUrl,429,'N8N_READ_UNAVAILABLE']
+  ]){
+    const fake=fakeApi();
+    const r=await inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl:async(u,options)=>{
+      if(u===target)return jsonResponse({private_secret:'never-print-me'},status);
+      return fake.fetchImpl(u,options);
+    }});
+    assert.equal(r.ok,false);
+    assert.deepEqual(r.issues,[expected]);
+    assert.doesNotMatch(JSON.stringify(r),/private_secret|never-print-me|fixture-key/);
+  }
+});
+
+test('Misleading size header, malformed JSON, redirects and unexpected body type fail closed',async()=>{
+  const cases=[
     new Response('<html>login</html>',{headers:{'content-type':'text/html'}}),
     new Response('{not-json',{headers:{'content-type':'application/json'}}),
     new Response('{}',{headers:{'content-type':'application/json','content-length':String(12*1024*1024+1)}}),
-    new Response('{}',{status:302,headers:{location:'https://somewhere.invalid'}})
-  ]){
-    const r=await inspectLivePaymentWorker({apiKey:'fixture-key',fetchImpl:async()=>response});
+    new Response('{}',{headers:{'content-type':'application/json','content-length':'999'}}),
+    new Response('{}',{status:302,headers:{location:'https://foreign.invalid'}})
+  ];
+  for(const response of cases){
+    const r=await inspectLivePaymentWorker({apiKey:'fixture-key',
+      fetchImpl:async u=>u===url?jsonResponse(fixture().meta):response});
     assert.equal(r.ok,false);
     assert.equal(r.activates_customer,false);
   }
 });
 
-test('One deadline covers a transport that never responds',async()=>{
-  const result=await inspectLivePaymentWorker({
-    apiKey:'fixture-key',timeoutMs:20,fetchImpl:()=>new Promise(()=>{})
-  });
-  assert.equal(result.ok,false);
-  assert.deepEqual(result.issues,['N8N_READ_TIMEOUT']);
+test('One bounded deadline also covers the version endpoint that hangs after metadata',async()=>{
+  const r=await inspectLivePaymentWorker({apiKey:'fixture-key',timeoutMs:40,
+    fetchImpl:async u=>u===url?jsonResponse(fixture().meta):new Promise(()=>{})});
+  assert.equal(r.ok,false);
+  assert.deepEqual(r.issues,['N8N_READ_TIMEOUT']);
 });
 
-test('CLI with missing private API key prints only a safe refusal, with no network attempt',()=>{
-  const run=spawnSync(process.execPath,['n8n/package-payment/audit-live-worker.cjs'],{
+test('Private CLI without key refuses locally without any network access',()=>{
+  const processResult=spawnSync(process.execPath,['n8n/package-payment/audit-live-worker.cjs'],{
     encoding:'utf8',env:{...process.env,SMA_N8N_READ_API_KEY:''}
   });
-  assert.equal(run.status,1);
-  assert.equal(run.stderr,'');
-  const report=JSON.parse(run.stdout);
+  assert.equal(processResult.status,1);
+  assert.equal(processResult.stderr,'');
+  const report=JSON.parse(processResult.stdout);
   assert.deepEqual(report.issues,['N8N_READ_API_KEY_REQUIRED']);
   assert.equal(report.allows_checkout,false);
   assert.equal(report.activates_customer,false);
