@@ -539,3 +539,34 @@ Er ersetzt weder eine neue reale Kundenanmeldung,
 die n8n-Kundentabellen-/Drive-Ordnerfreigabe,
 den vollständigen Zahlungs-/Dashboard-Erstkundentest
 noch die erforderlichen Veröffentlichungs- und Providerfreigaben.
+
+
+## Version 6 – Kundenmusik fehlt trotz fälliger Galerieaufträge (18.11.2026)
+
+Die rein lesende Bestandsabfrage unterscheidet ab Version 6 zusätzlich
+**fehlende freigegebene Musiktitel** von tatsächlich fehlgeschlagenen
+Galerieaufträgen. Die neue Rubrik `media` zählt
+`gallery_pending_without_track` und `gallery_pending_with_failures`
+getrennt und meldet einen festen `music_customer_state`.
+
+Der echte Live-Abgleich vom 18.11.2026 ergab: **drei fällige ausstehende
+Galerieaufträge, keiner mit zugeordnetem Track oder bisherigem Fehler,
+und null für Kunden gelistete Tracks**. Ein vierter Auftrag ist historisch
+abgeschlossen, besitzt aber keinen aktuellen revisionsgebundenen
+technischen Evidenzdatensatz. Die bisher erfolgreichen Cron-Ausführungen
+sind kein Beleg für abspielbare, lizenzierte Musikfassung.
+
+Dementsprechend meldet der Startcheck bei fälligen Aufträgen und
+null gelisteten Tracks `NO_LISTED_TRACK_FOR_PENDING_JOBS`. Er kann
+**nicht** feststellen, ob genau deshalb die Aufträge warten: Dazu
+wären die aktuelle n8n-Arbeitsstrecke und ein tatsächlich freigegebener
+Musiktitel im geschützten Testkonto praktisch zu prüfen.
+
+Wenn später Titel gelistet sind, zeigt der Check ausdrücklich nur
+`GALLERY_DUE_WORK_NEEDS_REVIEW` bzw.
+`LISTED_TRACK_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED` an und **niemals**
+eine automatische Provider-/Musikfreigabe. Das Feld
+`music_customer_e2e` bleibt grundsätzlich
+`NOT_VERIFIED_BY_THIS_QUERY`. Keine Kundendaten, Dateipfade,
+Tokens oder Medienbytes werden ausgelesen. Dieser Nachweis erstellt
+keine Songs, löst keine Verarbeitung und keine Gutschriften aus.
