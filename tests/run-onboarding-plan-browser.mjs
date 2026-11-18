@@ -65,7 +65,7 @@ try {
     const order='80000000-0000-4000-8000-000000000001';
     const returnUrl=site+'/app/paketwahl.html?buchung='+order;
     let paymentState='booked',statusReads=0,closeOnRefresh=false,pausedReads=0;
-    let holdBooking=null,holdPayment=null,holdChoiceRead=null,holdOfferRead=null,captureOwnerRedirect=false;
+    let holdBooking=null,holdPayment=null,holdChoiceRead=null,holdOfferRead=null,captureOwnerRedirect=false,paymentUnavailableOnce=false;
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
@@ -107,6 +107,7 @@ try {
         assert.deepEqual(req.postDataJSON(),{owner:'fixture',order:offer.id});
         assert.ok(['actual-booking','retry-booking'].includes(offer.id));
         paymentCalls++;
+        if(paymentUnavailableOnce){paymentUnavailableOnce=false;return route.fulfill({status:503,json:{code:'RETRY'}});}
         if(offer.state==='paid') return route.fulfill({status:503,json:{code:'RETRY'}});
         if(closeOnRefresh){
           closeOnRefresh=false;
@@ -299,7 +300,7 @@ try {
     await lostBooking.wait();await page.clock.fastForward(45001);
     assert.equal(await reloadState.isVisible(),true);
     await reloadState.click();
-    await page.getByText('Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.').waitFor();
+    await page.getByText('Deine Buchung ist gespeichert. Ein offener Zahlungslink ist derzeit nicht verfügbar.').waitFor();
     assert.equal(await refresh.isVisible(),true);assert.equal(await pay.isHidden(),true);
     const completedBookingReplies=await page.evaluate(()=>window.fixtureRpcFinished.sma_onboarding_booking_v1);
     await lostBooking.release();
@@ -359,10 +360,36 @@ try {
     await page.waitForFunction(()=>!document.querySelector('#logout').disabled && !document.querySelector('#retry').hidden);
     assert.match(await page.locator('#status').innerText(),/Abmeldung/);
     if(mobile)await reloadState.tap();else await reloadState.press('Enter');
-    await page.getByText('Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.').waitFor();
+    await page.getByText('Deine Buchung ist gespeichert. Ein offener Zahlungslink ist derzeit nicht verfügbar.').waitFor();
     assert.equal(await refresh.isVisible(),true);assert.equal(await pay.isHidden(),true);
     assert.deepEqual({bookings,paymentCalls,writes,sessionReads},{...beforeLogout,bookings:beforeLogout.bookings+1});
     console.log((mobile?'Handy':'Desktop')+': Kontowechsel verwirft alte Zahlungslinks; Abmelden stoppt eine laufende Buchung und Wiederholung liest nur den gespeicherten Stand.');
+    // A real booking may be persisted before the payment backend can return
+    // a checkout link (for example, because customer folders are not ready).
+    // Never tell the customer that payment confirmation is merely pending;
+    // do not create a second booking when they explicitly retry its status.
+    offer={id:'no-link-offer',state:'offered',plan:saved,terms:'2026-11-15-v1',automated:true,checkout:null};
+    paymentUnavailableOnce=true;
+    await page.reload();await book.waitFor();
+    const beforeUnavailable={bookings,paymentCalls};
+    await book.click();
+    await page.getByText(/Ein offener Zahlungslink ist derzeit nicht verfügbar/).waitFor();
+    assert.match(await page.locator('#status').innerText(),/Zahlungsprüfung konnte noch nicht abgeschlossen/);
+    assert.equal(await pay.isHidden(),true);
+    assert.equal(await book.isHidden(),true);
+    assert.equal(bookings,beforeUnavailable.bookings+1);
+    assert.equal(paymentCalls,beforeUnavailable.paymentCalls+1);
+    await page.reload();await page.getByText(/Ein offener Zahlungslink ist derzeit nicht verfügbar/).waitFor();
+    assert.equal(await pay.isHidden(),true);
+    paymentUnavailableOnce=true;
+    await refresh.click();await page.getByText(/Zahlungsprüfung konnte noch nicht abgeschlossen/).waitFor();
+    assert.equal(await pay.isHidden(),true);
+    assert.equal(bookings,beforeUnavailable.bookings+1);
+    await refresh.click();await pay.waitFor();
+    assert.equal(await pay.getAttribute('href'),'https://www.mollie.com/checkout/fixture');
+    assert.equal(bookings,beforeUnavailable.bookings+1);
+    assert.equal(paymentCalls,beforeUnavailable.paymentCalls+3);
+    console.log((mobile?'Handy':'Desktop')+': Gespeicherte Buchung ohne Zahlungslink wird korrekt erklärt und ohne zweite Buchung wiederaufgenommen.');
     assert.deepEqual(errors,[]);
     console.log((mobile?'Handy':'Desktop')+': Mollie-Rückkehr, verspätete und sofortige Freischaltung, Abbruch, Wiederanmeldung und begrenzte Statusabfragen bestanden.');
     console.log((mobile?'Handy':'Tastatur')+': Dashboard → Paketvormerkung, Neuladen und Konflikt bestanden.');
