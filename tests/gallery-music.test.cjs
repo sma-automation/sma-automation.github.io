@@ -117,8 +117,15 @@ test('hiding mid-job preserves a leased upload and receipt but does not claim an
   await pending;
   assert.deepEqual(calls.map(x=>x[0]),['claim','reserve','complete']);
   assert.equal(uploads.length,1);
-  assert.equal(updates.length,1);
+  assert.equal(updates.length,0,'hidden chapter must not reload the file catalogue');
   await worker.wake();
   assert.equal(calls.length,3,'no new claim while page is hidden');
+  visible=true;notify();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(updates.length,1,'return refreshes the saved music result exactly once');
+  assert.deepEqual(calls.map(x=>x[0]),['claim','reserve','complete','claim']);
+  visible=false;notify();visible=true;notify();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(updates.length,1,'later visibility changes must not duplicate the refresh');
  }finally{worker.destroy();}
 });
