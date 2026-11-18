@@ -15,8 +15,10 @@ function published(){
     {name:'SMA – Supabase – Bestellung spiegeln',credentials:{httpHeaderAuth:{id:'fixture-service'}}},
     {name:'SMA – Paketauswahl – Kunde prüfen',parameters:{dataTableId:{value:'fixture-customer-table'}}}
   ]};
-  return {...build(source),id:'active-payment-worker-fixture',active:true,
-    versionId:'published-version-v1',activeVersionId:'published-version-v1'};
+  // Mimic a real n8n JSON readback: independent node credential objects.
+  // The generator intentionally reuses credential object references in memory.
+  return JSON.parse(JSON.stringify({...build(source),id:'active-payment-worker-fixture',active:true,
+    versionId:'published-version-v1',activeVersionId:'published-version-v1'}));
 }
 function node(graph,name){
   const hit=graph.nodes.find(x=>x.name===name);
