@@ -138,3 +138,27 @@ test('incomplete or malformed exports fail closed and do not print personal data
     assert.equal(broken.stderr,'');
   }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+test('named published payment nodes reject disabled guards and permissive error behavior',()=>{
+  blocked(g=>{node(g,'Ordnerzuordnung vor Aktivierung prüfen').disabled=true;},
+    'payment_node_settings_not_matching');
+  blocked(g=>{node(g,'Kundenzeile activate').continueOnFail=true;},
+    'payment_node_settings_not_matching');
+  blocked(g=>{node(g,'Mollie first').onError='continueRegularOutput';},
+    'payment_node_settings_not_matching');
+  blocked(g=>{node(g,'Mollie first').retryOnFail=true;},
+    'payment_node_settings_not_matching');
+  blocked(g=>{node(g,'Kundenzeile account').alwaysOutputData=false;},
+    'payment_node_settings_not_matching');
+});
+test('named payment service blocks unexpected non-MAIN input or error outputs',()=>{
+  blocked(g=>{
+    g.connections['Mollie first'].error=[
+      [{node:'Antwort',type:'error',index:0}]];
+  },'unreviewed_payment_nonmain_route');
+  blocked(g=>{
+    g.nodes.push({name:'Outside',type:'n8n-nodes-base.code'});
+    g.connections.Outside={error:[
+      [{node:'Kundenzeile activate',type:'error',index:0}]]};
+  },'unexpected_input_to_payment_guard');
+});
