@@ -42,6 +42,20 @@ test('public lookup reaches a product beyond page one and exposes only its own a
  }
  assert.deepEqual(t.signed,['one/same/photo.png']);
 });
+test('missing catalogue currency is not silently converted to EUR',async()=>{
+ const t=fixture();
+ t.products[0].waehrung=null;
+ const result=await t.get('shop=shop-one&produkt=p0');
+ assert.equal(result.status,200);
+ const data=await result.json();
+ assert.equal(data.produkte.length,1);
+ assert.equal(data.produkte[0].waehrung,null);
+ assert.equal(data.produkte[0].preis,10);
+ assert.equal(data.produkte[0].bestand,1);
+ // The checkout API requires an actual currency; the public list must not
+ // make an unavailable item look purchasable by inventing EUR.
+});
+
 test('invalid, ambiguous, unavailable and cross-shop product links expose no product',async()=>{
  const t=fixture();
  for(const q of ['shop=shop-one&produkt=','shop=shop-one&produkt=p1&produkt=p2','shop=shop-one&shop=shop-two&produkt=p1',
