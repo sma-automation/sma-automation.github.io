@@ -9,7 +9,7 @@
 import {refreshMediaCatalog} from './assets/media-metadata.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './assets/catalog-refresh.mjs?v=1';
 
-import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=7';
+import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=8';
 import {createMusicViewGate} from './assets/gallery-music-view-gate.mjs?v=1';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
 import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
@@ -113,7 +113,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','56');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','57');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -572,7 +572,7 @@ function attachFileList(doc,page,editorHref){
    if(musicGate.isVisible()&&(loading||retryStep||scanRunning))return;
    notify();
   }),
-  onComplete:()=>load(false),
+  onComplete:()=>load(false,{wakeMusicAfter:false}),
   onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
@@ -754,7 +754,7 @@ function attachFileList(doc,page,editorHref){
    throw Error(interruptedNotice);
   }
  }
- async function load(sync=false){
+ async function load(sync=false,{wakeMusicAfter=true}={}){
   if(loading||disposed||signedOut||owner!==dashboardOwnerId)return;
   const retryingCatalog=retryStep==='catalog';
   const checkingStatus=!sync&&scanRunning;
@@ -785,7 +785,7 @@ function attachFileList(doc,page,editorHref){
    if(scanRunning)folderNotice=runningNotice;
    else if(data.sync_state==='interrupted')folderNotice=attemptNotice===rateLimitNotice?interruptedNotice+' '+rateLimitNotice:interruptedNotice;
    else if(data.sync_state==='complete'||data.sync_state==='idle')folderNotice=attemptNotice===rateLimitNotice?rateLimitNotice:'';
-   if(!retryingCatalog&&!checkingStatus)wakeMusic();
+   if(!retryingCatalog&&!checkingStatus&&wakeMusicAfter)wakeMusic();
    if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;
    if(!finishReload())draw(true);
    say(catalogWarning()||(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.'));
