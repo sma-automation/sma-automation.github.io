@@ -88,7 +88,7 @@ test('dashboard and standalone optimizer both reference the updated worker safel
  const standalone=read('app/assets/publication-preview.js');
  const page=read('app/publication-preview.html');
  assert.match(dashboard,/gallery-music-view-gate\.mjs\?v=1/);
- assert.match(dashboard,/gallery-music-worker\.mjs\?v=8/);
+ assert.match(dashboard,/gallery-music-worker\.mjs\?v=9/);
  assert.match(dashboard,/isVisible:musicGate\.isVisible/);
  assert.match(dashboard,/subscribeVisibility:notify=>musicGate\.subscribeVisibility/);
  assert.match(dashboard,/musicGate\.isVisible\(\)\&\&\(loading\|\|retryStep\|\|scanRunning\)/);
@@ -96,7 +96,8 @@ test('dashboard and standalone optimizer both reference the updated worker safel
  assert.match(dashboard,/page\.classList\.contains\('sma-optimizing'\)/);
  assert.match(dashboard,/onComplete:\(\)=>load\(false,\{wakeMusicAfter:false\}\)/);
  assert.match(dashboard,/if\(!retryingCatalog&&!checkingStatus&&wakeMusicAfter\)wakeMusic\(\);/);
- assert.match(standalone,/gallery-music-worker\.mjs\?v=8/);
- assert.match(page,/publication-preview\.js\?v=111/);
+ assert.match(standalone,/gallery-music-worker\.mjs\?v=9/);
+ assert.match(page,/publication-preview\.js\?v=112/);
+ assert.match(dashboard,/url\.searchParams\.set\('v','58'\)/);
  assert.match(worker,/isVisible,subscribeVisibility\}\)\{/);
 });

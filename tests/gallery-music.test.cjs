@@ -175,3 +175,10 @@ test('repeated uncertain uploads retain their warning and do not spin or alter a
  }finally{worker.destroy();}
  assert.equal(timers.size,0);
 });
+
+
+test('dashboard loads the current bounded-claim worker module rather than the cached previous revision',()=>{
+ const source=require('node:fs').readFileSync('app/dashboard.html','utf8');
+ assert.match(source,/gallery-music-worker\.mjs\?v=9/);
+ assert.doesNotMatch(source,/gallery-music-worker\.mjs\?v=8/);
+});
