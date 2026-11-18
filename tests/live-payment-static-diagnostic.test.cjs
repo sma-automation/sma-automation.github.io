@@ -25,6 +25,10 @@ test('A structurally complete candidate lists only counts and no private referen
  assert.equal(r.database_nodes_with_credential_reference,2);
  assert.equal(r.existing_customer_table_nodes,4);
  assert.equal(r.customer_table_nodes_with_reference,4);
+ assert.equal(r.first_payment_webhook_present,true);
+ assert.equal(r.renewal_payment_webhook_present,true);
+ assert.equal(r.activation_folder_guard_present,true);
+ assert.equal(r.activation_customer_update_present,true);
  assert.equal(r.required_payment_webhooks_present,true);
  assert.equal(r.activation_or_payment_authorized,false);
  assert.equal(r.billing_or_customer_e2e_verified,false);
@@ -38,6 +42,8 @@ test('Missing expected nodes are named only from the audited template; arbitrary
  assert.ok(r.missing_expected_nodes.includes('Ordnerzuordnung vor Aktivierung prüfen'));
  assert.ok(r.missing_expected_nodes.includes('Mollie customer'));
  assert.equal(r.existing_merchant_nodes,5);
+ assert.equal(r.activation_folder_guard_present,false);
+ assert.equal(r.activation_customer_update_present,true);
  assert.equal(r.merchant_nodes_with_credential_reference,5);
  assert.equal(r.expected_payment_nodes_present,r.expected_payment_nodes_count-2);
  assert.doesNotMatch(JSON.stringify(r),/PRIVATE|SECRET|example\.invalid/);
@@ -63,6 +69,8 @@ test('Unknown webhook routes, malformed structures and overflow cannot claim pay
  const primary=nodes.find(n=>n.name==='Zahlungsdienst');
  primary.parameters.path='UNTRUSTED_PATH_SECRET';
  const r=summarizeActivePaymentGraph(nodes);
+ assert.equal(r.first_payment_webhook_present,false);
+ assert.equal(r.renewal_payment_webhook_present,true);
  assert.equal(r.required_payment_webhooks_present,false);
  assert.doesNotMatch(JSON.stringify(r),/UNTRUSTED_PATH_SECRET/);
  assert.deepEqual(summarizeActivePaymentGraph(null),{status:'UNAVAILABLE'});
