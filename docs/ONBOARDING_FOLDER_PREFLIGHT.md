@@ -12,11 +12,11 @@ Metadaten-GETs beim festen Google-Drive-Endpunkt:
 1. Die angemeldete Drive-Identität entspricht der vorher bestätigten
    `permissionId` der von SMA tatsächlich verwendeten Verbindung.
 2. `upload_folder_id` ist ein vorhandener, nicht gelöschter Ordner mit
-   `canListChildren=true` **und** `canAddChildren=true`.
+   `canListChildren=true`. Das zusätzliche `canAddChildren`-Feld wird
+   als **separate Diagnose** der SMA-Dienstverbindung zurückgegeben.
 3. `processing_folder_id` ist ein anderer vorhandener, nicht gelöschter Ordner
    mit `canListChildren=true` und `canAddChildren=true`.
-   Fehlendes oder bloß als Text zurückgegebenes `canAddChildren` wird bei
-   **beiden** Ordnern als nicht nachgewiesenes Schreibrecht behandelt.
+   Dort ist die eigene Schreibfähigkeit der SMA-Verbindung erforderlich.
 
 Es werden weder Ordnerinhalte aufgelistet noch Medien heruntergeladen. Es
 werden keine Ordner erstellt, Berechtigungen geändert, Webhooks aufgerufen,
@@ -73,10 +73,14 @@ Drive-Identität. Die Ausgabe enthält ausdrücklich:
 Die Zugehörigkeit der Ordner zum richtigen Kunden, die unveränderte
 SMA_Kunden-Zuordnung und die tatsächlich installierte n8n-Verbindung sind
 zusätzlich zu prüfen. Google-Berechtigungen können sich später ändern.
-Das zusätzlich geforderte `canAddChildren=true` beim Eingangsordner ist
-eine **konservative Betreiberprüfung der SMA-Drive-Identität**, kein Beweis
-für das Schreibrecht einer möglicherweise anderen, angemeldeten
-Kundenidentität. Auch nach einem positiven Prüfergebnis muss der reale
+Das zusätzliche Prüfergebnis `checks.upload_folder_service_can_add_children`
+unterscheidet die Schreibfähigkeit der SMA-Drive-Identität von der
+möglicherweise anderen Google-Identität eines Kunden, der dort Dateien
+ablegt. Ist es `false`, erscheint der feste Hinweis
+`UPLOAD_SERVICE_WRITE_NOT_CONFIRMED`. Dieser Hinweis blockiert die
+**Leseprüfung** des Eingangsordners nicht, darf aber auch nicht als
+Nachweis eines funktionierenden Uploads interpretiert werden.
+Auch nach einem positiven Prüfergebnis muss der reale
 Kunden-Upload- und Weiterverarbeitungsweg gesondert getestet werden.
 `canAddChildren=true` ist kein Beweis für erfolgreiche Dateiübertragung,
 verfügbaren Speicher, das Entfernen oder Verschieben bereits vorhandener
@@ -95,11 +99,12 @@ wiederholen. Ein älterer Bericht darf keine spätere Aktivierung autorisieren.
 Konfiguration. In beiden Fällen erfolgt kein Netzaufruf. `ACCOUNT_MISMATCH`
 stoppt vor dem ersten Kundenordnerabruf.
 
-`AUTH_REQUIRED`, `ACCESS_UNAVAILABLE`, `FOLDER_UNAVAILABLE`,
-`UPLOAD_NOT_WRITABLE` und `PROCESSING_NOT_WRITABLE` erfordern die Prüfung
-von Verbindung, Zuordnung beziehungsweise Rechten. Ein Eingangsordner,
-den die kontrollierte SMA-Drive-Identität nur auflisten kann, besteht den
-vorsichtigen Vorabcheck nicht mehr. Eine 404-Antwort beweist nicht, dass der Ordner
+`AUTH_REQUIRED`, `ACCESS_UNAVAILABLE`, `FOLDER_UNAVAILABLE`
+und `PROCESSING_NOT_WRITABLE` erfordern die Prüfung von Verbindung,
+Zuordnung beziehungsweise Rechten. `UPLOAD_SERVICE_WRITE_NOT_CONFIRMED`
+ist dagegen ein **Diagnosehinweis**: Ein vom Kunden selbst befüllter
+Eingangsordner kann korrekt eingerichtet sein, obwohl die SMA-Dienstverbindung
+dort keine neuen Dateien erstellen kann. Eine 404-Antwort beweist nicht, dass der Ordner
 weltweit nicht existiert; der verwendete Zugang konnte ihn nicht lesen.
 `RATE_LIMITED`, `READ_FAILED`, `UNEXPECTED_RESPONSE` und `TIMEOUT` liefern
 keinen erfolgreichen Nachweis. Nach Klärung kann der Betreiber ausdrücklich
@@ -137,16 +142,23 @@ Google Drive API v3:
 Die abgefragten Fähigkeiten sind ausdrücklich Eigenschaften des jeweiligen
 Google-Nutzers und Ordners, keine Freigabeentscheidung von SMA.
 
-## Korrektur vom 18.11.2026 – Eingangsordner darf nicht nur lesbar sein
+## Präzisierung vom 18.11.2026 – Eingangsordner und Upload-Rechte
 
-Der frühere Vorabcheck akzeptierte einen Eingangsordner selbst bei
-`canAddChildren=false`, solange `canListChildren=true` gemeldet wurde.
-Das war für eine Abnahme der Schreibfähigkeit der verwendeten
-SMA-Drive-Verbindung zu schwach. Die neue Abfrage fordert für
-**beide Ordner** ausdrücklich beide Fähigkeiten an und verweigert
-bei fehlender Schreibfähigkeit mit `UPLOAD_NOT_WRITABLE` bzw.
-`PROCESSING_NOT_WRITABLE` einen erfolgreichen Vorabbericht.
-Die Abfragezahl bleibt bei maximal drei reinen Metadaten-GETs.
+Beim SMA-Geräte-Upload ist der Zielordner ausdrücklich
+`02 Verarbeitung`, während `01 Upload – Eingang` außerdem über den
+bestehenden Drive-Eingangspfad bedient wird. Eine Kunden-Drive-Identität
+kann dort Dateien hinzufügen, ohne dass die SMA-Dienstidentität selbst
+`canAddChildren=true` benötigt. Daher bleiben die ursprünglichen
+**zwingenden** Regeln erhalten: beide Ordner müssen lesbar und der
+Verarbeitungsordner muss für die SMA-Dienstidentität beschreibbar sein.
+
+Neu ist die klare, nicht-sensitive Diagnose des Schreibrechts der
+SMA-Dienstverbindung für `01 Upload`. `false` ist weder ein
+Berechtigungsbeweis für den Kunden noch ein genereller Fehler.
+Der tatsächliche Drive-Kunden-Upload und das Verschieben sind getrennt
+praktisch zu prüfen; der Vorabcheck löst sie absichtlich nicht aus.
+Die Abfragezahl bleibt unverändert bei maximal drei reinen
+Metadaten-GETs.
 
 Dieser Vorabcheck wird weiterhin nicht automatisch ausgelöst und
 blockiert oder aktiviert **keine** echten Zahlungen; die gesonderte
