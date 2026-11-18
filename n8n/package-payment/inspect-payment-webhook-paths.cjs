@@ -97,6 +97,7 @@ function inspectPaymentWebhookPaths(graph) {
         static_response_terminal_nodes:0,
         static_nonresponse_terminal_nodes:0,
         explicit_empty_decision_output_ports:0,
+        missing_if_output_ports:0,
         path_is_proven_safe:false,
         config_markers:{status:'UNAVAILABLE'}
       };
@@ -114,14 +115,21 @@ function inspectPaymentWebhookPaths(graph) {
     const terminalResponses=terminalNames.filter(n=>
       nodes.get(n)?.type==='n8n-nodes-base.respondToWebhook').length;
     const terminalWithoutResponse=terminalNames.length-terminalResponses;
+    let missingIfOutputs=0;
     const emptyDecisionOutputs=[...seen].reduce((total,n)=>{
       const item=nodes.get(n);
       if(!['n8n-nodes-base.if','n8n-nodes-base.switch'].includes(item?.type))
         return total;
       const outputs=graph.connections[n]?.main;
-      // A missing output entry is not proof of a valid false/fallback path.
-      if(!Array.isArray(outputs)||outputs.length===0)return total+1;
-      return total+outputs.filter(port=>Array.isArray(port)&&port.length===0).length;
+      // IF has two binary slots. A missing false/true slot must not be
+      // mistaken for a fully connected decision with no dead ends.
+      if(item.type==='n8n-nodes-base.if')
+        missingIfOutputs+=Math.max(0,2-(Array.isArray(outputs)?outputs.length:0));
+      // A null slot is explicitly disconnected in n8n's exported graph.
+      // Switch port counts vary with rules/fallback; do not guess omissions.
+      if(!Array.isArray(outputs))return total;
+      return total+outputs.filter(port=>
+        port===null||(Array.isArray(port)&&port.length===0)).length;
     },0);
     const count=type=>selected.filter(n=>n.type===type).length;
     const connected=count('n8n-nodes-base.respondToWebhook');
@@ -145,6 +153,7 @@ function inspectPaymentWebhookPaths(graph) {
       static_response_terminal_nodes:terminalResponses,
       static_nonresponse_terminal_nodes:terminalWithoutResponse,
       explicit_empty_decision_output_ports:emptyDecisionOutputs,
+      missing_if_output_ports:missingIfOutputs,
       // These flags describe the explicit MAIN graph only, not zero-item
       // execution behavior, Code errors, implicit fallback or runtime paths.
       // Even a reachable reply does not mean every conditional branch responds,
