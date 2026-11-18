@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin e7d195537e308b11c5e8e95264edfc8817d9dadf
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 630447cc13b629e6af2ed12a983655f989afbb3e
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = 'e7d195537e308b11c5e8e95264edfc8817d9dadf'
+          test "$(git rev-parse HEAD)" = '630447cc13b629e6af2ed12a983655f989afbb3e'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
@@ -115,6 +115,8 @@ jobs:
                         bounded(p.static_nonresponse_terminal_nodes));
                       console.log('SMA_N8N_'+prefix+'_EMPTY_DECISION_OUTPUT_PORTS='+
                         bounded(p.explicit_empty_decision_output_ports));
+                      console.log('SMA_N8N_'+prefix+'_MISSING_IF_OUTPUT_PORTS='+
+                        bounded(p.missing_if_output_ports));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_CODE='+bounded(p.reachable_code_nodes));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_HTTP='+bounded(p.reachable_http_requests));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_DATA_TABLE='+
