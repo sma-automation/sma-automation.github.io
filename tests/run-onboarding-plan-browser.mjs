@@ -139,11 +139,25 @@ try {
     else {await beta.focus();await beta.press('Space');await beta.press('Tab');await page.keyboard.press('Enter');}
     await page.getByText('Beta ist für dein Konto vorgemerkt.').waitFor();
     assert.equal(writes,1);assert.equal(await save.isDisabled(),true);
+    const linkCheck=page.getByRole('button',{name:'Kontozuordnung prüfen'});
+    await linkCheck.waitFor();
+    assert.match(await page.locator('#status').innerText(),/Kundenkonto wird eingerichtet/);
+    assert.match(await page.locator('#status').innerText(),/noch nichts bezahlen/);
+    assert.equal(bookings,0);assert.equal(paymentCalls,0);
+    await linkCheck.click();
+    await linkCheck.waitFor();
+    assert.equal(writes,1,'link status must not change the reserved plan');
+    assert.equal(bookings,0,'link status must not accept a booking');
+    assert.equal(paymentCalls,0,'link status must not start a payment');
     await page.reload();
     await page.getByText('Beta ist für dein Konto vorgemerkt.').waitFor();
     assert.equal(await beta.isChecked(),true);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     linked=true;
+    await linkCheck.click();
+    await page.getByText('Beta ist für dein Konto vorgemerkt. Dein SMA-Kundenkonto ist zugeordnet.').waitFor();
+    assert.equal(await linkCheck.isHidden(),true);
+    assert.equal(writes,1);assert.equal(bookings,0);assert.equal(paymentCalls,0);
     await page.reload();
     await page.getByText('Beta ist für dein Konto vorgemerkt. Dein SMA-Kundenkonto ist zugeordnet.').waitFor();
     assert.equal(await beta.isChecked(),true);

@@ -200,6 +200,13 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       if (value.linked === true) status.textContent += ' Dein SMA-Kundenkonto ist zugeordnet.';
     }
     if (value.linked === true) displayOffer(bookingData);
+    // A reserved plan does not mean the n8n customer account is provisioned.
+    // Offer only an explicit, read-only status check: never poll or create a booking.
+    if (saved && value.linked !== true) {
+      status.textContent += ' Dein SMA-Kundenkonto wird eingerichtet. Du musst noch nichts bezahlen.';
+      retry.textContent = 'Kontozuordnung prüfen';
+      retry.hidden = false;
+    } else retry.textContent = 'Erneut laden';
     if (paymentWaiting && offer?.automated && offer.state === 'booked') status.textContent = offer.checkout
       ? 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.'
       : missingCheckoutNotice + ' Die Zahlungsprüfung konnte noch nicht abgeschlossen werden. Bitte rufe den Stand erneut ab.';
@@ -214,6 +221,7 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       : timedOut
         ? 'Die Prüfung dauert zu lange. Bitte lade deinen Paket- und Zahlungsstand erneut.'
         : 'Der Stand deiner Vormerkung konnte nicht bestätigt werden. Bitte lade ihn erneut.';
+    retry.textContent = 'Erneut laden';
     retry.hidden = false;
   } finally {
     clearTimeout(deadline);
@@ -259,6 +267,7 @@ logout.addEventListener('click', async () => {
   } catch {
     if (!leaving) {
       status.textContent = 'Die Abmeldung konnte nicht bestätigt werden. Du kannst sie erneut versuchen oder deinen Kontostand neu laden.';
+      retry.textContent = 'Erneut laden';
       retry.hidden = false;
     }
   } finally {
