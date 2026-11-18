@@ -197,3 +197,50 @@ test('Private CLI without key refuses locally without any network access',()=>{
   assert.equal(report.allows_checkout,false);
   assert.equal(report.activates_customer,false);
 });
+
+function renamePublishedFixture(version){
+  const graph=structuredClone(version);
+  const names=new Map(graph.nodes.map((n,i)=>[n.name,'Installed payment '+i]));
+  const rewrite=value=>{
+    if(typeof value==='string'){
+      for(const [oldName,newName] of names)
+        value=value.replaceAll("$('"+oldName+"')","$('"+newName+"')");
+      return value;
+    }
+    if(Array.isArray(value))return value.map(rewrite);
+    if(value&&typeof value==='object')
+      return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,rewrite(v)]));
+    return value;
+  };
+  graph.nodes=graph.nodes.map(n=>({...n,name:names.get(n.name),
+    parameters:rewrite(n.parameters)}));
+  graph.connections=Object.fromEntries(Object.entries(graph.connections).map(([from,conn])=>
+    [names.get(from),{main:conn.main.map(port=>
+      port.map(link=>({...link,node:names.get(link.node)})))}]));
+  return {graph,names};
+}
+test('Renamed installed payment source is accepted only on exact logic and stable published version',async()=>{
+  const f=fixture(),renamed=renamePublishedFixture(f.version);
+  f.version=renamed.graph;
+  const api=fakeApi(f),r=await run(api);
+  assert.deepEqual(api.calls.map(x=>x.url),[url,versionUrl,url]);
+  assert.equal(r.ok,true);
+  assert.equal(r.status,'PUBLISHED_PAYMENT_EXACT_SOURCE_EQUIVALENCE_NOT_E2E');
+  assert.equal(r.matched_template_nodes,26);
+  assert.equal(r.name_based_contract_matching,false);
+  for(const key of ['allows_checkout','activates_customer',
+    'real_customer_e2e_verified','billed_n8n_executions_measured'])
+    assert.equal(r[key],false);
+  assert.doesNotMatch(JSON.stringify(r),/Installed payment|merchant-fixture|db-fixture/);
+});
+test('Renamed unsafe activation guard remains blocked and live version is rechecked',async()=>{
+  const f=fixture(),renamed=renamePublishedFixture(f.version);
+  f.version=renamed.graph;
+  f.version.nodes.find(n=>n.name===renamed.names.get('Ordnerzuordnung vor Aktivierung prüfen'))
+    .parameters.jsCode='return $input.all();';
+  const api=fakeApi(f),r=await run(api);
+  assert.equal(r.ok,false);
+  assert.ok(r.issues.includes('PAYMENT_NODE_LOGIC_MISMATCH'));
+  assert.equal(r.published_version_stability_rechecked,true);
+  assert.deepEqual(api.calls.map(x=>x.url),[url,versionUrl,url]);
+});
