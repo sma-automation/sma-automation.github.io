@@ -566,11 +566,24 @@ Der Check zählt außerdem `music_ready_tracks` aus der tatsächlich im
 SMA-Renderer verwendeten View `music_catalog_ready_v1`: Dort erscheinen
 nur gelistete Titel mit passendem gespeichertem Objekt und Metadaten.
 Ein bloß gelisteter, aber fehlender Audio-Master erzeugt daher
-`LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS` statt eines falschen
-„bereits bereit“-Signals. Mit vorhandenem bereiten Titel meldet der Check
-nur `GALLERY_DUE_WORK_NEEDS_REVIEW` bzw.
-`READY_TRACK_EXISTS_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED` – **niemals**
-eine automatische Provider-/Musikfreigabe. Das Feld
+`LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS`.
+
+Zusätzlich zählt `music_aac_ready_tracks` nur Master mit mindestens
+einem **passenden AAC-Renderobjekt** in `storage.objects` nach demselben
+Namens-, MIME- und Größenvertrag wie der private Galerie-Dispatcher.
+Ein Master ohne dazugehörige AAC-Datei erzeugt
+`READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS`; selbst mit gültigem
+AAC-Objekt meldet der Check nur `GALLERY_DUE_WORK_NEEDS_REVIEW` bzw.
+`AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED` – **niemals**
+eine automatische Provider-/Musikfreigabe.
+
+Im zusätzlichen echten Leseabgleich war der einzige private Katalogmaster
+mit seinem Speicherobjekt vorhanden, aber **kein passendes AAC-Renderobjekt
+diesem Master zuordenbar**. Ein weiteres vorhandenes AAC-Objekt war kein
+Nachweis für genau diesen Master. Eine blinde Freigabe des
+privaten Techniktons wäre daher sowohl rechtlich als auch technisch
+ungeeignet. Der erste eigens freigegebene Master mit passendem AAC und
+tatsächlichem Kunden-Musikrecht bleibt Voraussetzung für den Praxistest. Das Feld
 `music_customer_e2e` bleibt grundsätzlich
 `NOT_VERIFIED_BY_THIS_QUERY`. Keine Kundendaten, Dateipfade,
 Tokens oder Medienbytes werden ausgelesen. Dieser Nachweis erstellt
