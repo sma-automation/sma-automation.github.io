@@ -63,6 +63,28 @@ jobs:
               if(!result?.ok){
                 allOk=false;
                 console.log('SMA_N8N_PAYMENT_CHECK_CODES='+onlyCodes(result?.issues).join(','));
+                // Only derived, bounded counters and fixed booleans. Never print
+                // the active workflow graph, node parameters, credentials,
+                // arbitrary live node names or customer references.
+                const d=result?.diagnostic;
+                if(d?.status==='STRUCTURE_DIAGNOSTIC_NOT_E2E'){
+                  const count=x=>Number.isSafeInteger(x)&&x>=0&&x<=5000?x:0;
+                  const flag=x=>x===true?'YES':'NO';
+                  console.log('SMA_N8N_PUBLISHED_NODE_COUNT='+count(d.published_nodes_count));
+                  console.log('SMA_N8N_EXPECTED_PAYMENT_NODES_PRESENT='+
+                    count(d.expected_payment_nodes_present)+'/'+count(d.expected_payment_nodes_count));
+                  console.log('SMA_N8N_FIRST_PAYMENT_WEBHOOK_PRESENT='+flag(d.first_payment_webhook_present));
+                  console.log('SMA_N8N_RENEWAL_WEBHOOK_PRESENT='+flag(d.renewal_payment_webhook_present));
+                  console.log('SMA_N8N_ACTIVATION_FOLDER_GUARD_PRESENT='+flag(d.activation_folder_guard_present));
+                  console.log('SMA_N8N_ACTIVATION_CUSTOMER_WRITE_PRESENT='+flag(d.activation_customer_update_present));
+                  console.log('SMA_N8N_MOLLIE_CREDENTIAL_NODE_COUNTS='+
+                    count(d.merchant_nodes_with_credential_reference)+'/'+count(d.existing_merchant_nodes));
+                  console.log('SMA_N8N_DATABASE_CREDENTIAL_NODE_COUNTS='+
+                    count(d.database_nodes_with_credential_reference)+'/'+count(d.existing_database_nodes));
+                  console.log('SMA_N8N_CUSTOMER_TABLE_REFERENCE_NODE_COUNTS='+
+                    count(d.customer_table_nodes_with_reference)+'/'+count(d.existing_customer_table_nodes));
+                  console.log('SMA_N8N_PUBLISHED_VERSION_STABLE_RECHECK=NO');
+                }
               }
             }
             if(check==='both'||check==='executions'){
@@ -72,6 +94,13 @@ jobs:
                 (result.more_saved_pages_available===true ? 'PARTIAL_SAVED_HISTORY_NOT_BILLING' : 'SAVED_HISTORY_NOT_BILLING') :
                 'UNAVAILABLE';
               console.log('SMA_N8N_EXECUTION_METADATA='+status);
+              if(result?.ok===true){
+                const count=x=>Number.isSafeInteger(x)&&x>=0?x:0;
+                console.log('SMA_N8N_SAVED_EXECUTIONS_IN_WINDOW='+count(result.records_in_window));
+                console.log('SMA_N8N_SAVED_WEBHOOK_TRIGGER_CANDIDATES='+count(result.production_mode_candidates));
+                console.log('SMA_N8N_SAVED_HISTORY_PAGINATION_PARTIAL='+
+                  (result.more_saved_pages_available===true?'YES':'NO'));
+              }
               if(!result?.ok){
                 allOk=false;
                 const code=result?.issue;
