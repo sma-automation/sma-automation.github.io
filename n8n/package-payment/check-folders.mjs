@@ -95,11 +95,15 @@ export async function checkFolders({uploadFolderId,processingFolderId,accessToke
       const item=await json(url);
       if(item?.id!==id||item.mimeType!==folderType||item.trashed!==false||
         item.capabilities?.canListChildren!==true)fail('FOLDER_UNAVAILABLE');
+      // An input folder that is only readable is not a reliable destination
+      // for SMA service-side additions. Do not mistake list access for write access.
+      if(role==='upload'&&item.capabilities?.canAddChildren!==true)fail('UPLOAD_NOT_WRITABLE');
       if(role==='processing'&&item.capabilities?.canAddChildren!==true)fail('PROCESSING_NOT_WRITABLE');
     }
     return {ok:true,code:'FOLDER_ACCESS_VERIFIED',scope:'drive_metadata_only',
       checked_at:new Date().toISOString(),checks:{drive_account_matches:true,
-        upload_folder_readable:true,processing_folder_readable:true,processing_folder_writable:true},...noGrant};
+        upload_folder_readable:true,upload_folder_writable:true,
+        processing_folder_readable:true,processing_folder_writable:true},...noGrant};
   }catch(error){
     return {ok:false,code:error instanceof CheckFailure?error.code:'READ_FAILED',step,...noGrant};
   }finally{
