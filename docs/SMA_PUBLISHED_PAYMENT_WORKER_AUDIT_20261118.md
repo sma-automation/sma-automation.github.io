@@ -6,7 +6,7 @@ Stand: 18.11.2026. **Offline-Bestandsprüfung, keine Inbetriebnahme.**
 
 Das GitHub-Werkzeug `n8n/package-payment/build-worker.cjs` erzeugt
 den erwarteten Zahlungsdienst. Die auf Supabase produktiv installierte
-Edge Function `sma-package-payment` wurde am 18.11.2026 als Version 7
+Edge Function `sma-package-payment` wurde am 18.11.2026 als Version 9
 gelesen: Die drei installierten Programmdateien stimmen **bytegenau**
 mit `website-v1` überein. Das beweist aber nicht, dass der separat bei
 n8n **veröffentlichte** Zahlungsworkflow die passenden Knoten hat.
@@ -119,49 +119,57 @@ verändert weder die signierten Mollie- und Schedule-Routen noch die
 existierenden HMAC-Proofs oder n8n-Ziele. Dieser Codecheck ist kein
 Ersatz für eine Aktivversions- und Zahlungsverifikationsprobe.
 
-## Direkter n8n-Cloud-Leseabgleich ohne Exportdatei (Ergänzung 18.11.2026)
+## Direkter n8n-Cloud-Leseabgleich der veröffentlichten Version (18.11.2026)
 
-Zusätzlich zum Offline-Exportprüfer steht jetzt ein **rein lesender** Prüfaufruf
-bereit. Er verwendet genau einen GET auf die n8n-Cloud-API für den bekannten
-Zahlungsworkflow und ruft weder dessen Webhook noch eine n8n-Execution auf.
-Er verändert keine Kundendaten, Credits, Tickets oder Zahlungen.
+Der Direktprüfer `n8n/package-payment/audit-live-worker.cjs` verwendet die
+**offizielle n8n Public API** ausschließlich zum Lesen. Damit ist er auch
+bei einem neueren, **unveröffentlichten Editorentwurf** nutzbar.
 
-Ein bestehender berechtigter n8n-API-Schlüssel wird **nur in der privaten
-Betreiberumgebung** unter SMA_N8N_READ_API_KEY bereitgestellt; nicht im
-Chat, Repository, Shell-Befehl, CI-Artefakt oder in Protokollen speichern.
+Mit einem vorhandenen, berechtigten und ausschließlich in der **privaten
+Betreiberumgebung** gesetzten `SMA_N8N_READ_API_KEY`:
 
-~~~sh
+```sh
 node n8n/package-payment/audit-live-worker.cjs
 node --test tests/live-published-payment-worker-audit.test.cjs
-~~~
+```
 
-Der feste Aufruf liest ausschließlich die n8n-Cloud-API per GET für
-Workflow 8v2wcz5lh0yUf3sw. Ohne API-Schlüssel meldet er
-N8N_READ_API_KEY_REQUIRED **ohne einen Netzaufruf**. HTTP-Fehler,
-Weiterleitungen, Abweichungen der Workflow-ID, nicht bestätigte Aktivversionen
-und unvollständige Knotengraphen schlagen fehl. Ein Lesezeitlimit von zwölf
-Sekunden und eine Antwortgrößengrenze von zwölf MiB sind integriert.
-Antworten und Credential-Referenzen werden ausschließlich im Arbeitsspeicher
-ausgewertet, nicht ausgegeben oder gespeichert. Der Prüfbericht enthält nur
-feste Fehlercodes und Freigabewerte, niemals das zurückgelieferte Workflow-JSON.
+Bei fehlendem Schlüssel beendet sich das Werkzeug **ohne Netzwerkaufruf**
+mit `N8N_READ_API_KEY_REQUIRED`. Den Schlüssel weder in den Chat noch in
+Repository, Shell-Argumente, Protokolle oder CI-Artefakte kopieren.
 
-**Wichtig:** Die öffentliche n8n-API kann den **neueren Editorentwurf**
-zurückgeben. activeVersionId allein ist daher **kein Beweis**, dass diese
-Nodes veröffentlicht sind. Der Direktprüfer verwendet denselben strengen
-Vertragsvergleich wie der Offline-Prüfer und akzeptiert den Top-Level-Graphen
-nur, wenn versionId mit activeVersionId übereinstimmt. Ist der Entwurf neuer
-oder die aktive Versionsstruktur nicht enthalten, lautet das Ergebnis
-PUBLISHED_PAYMENT_CONTRACT_REVIEW_REQUIRED. Dann ausschließlich die aktive
-Version separat über die berechtigte n8n-Versionsansicht abrufen und mit
-audit-published-worker.cjs in der privaten Betreiberumgebung prüfen.
+Drei auf den bekannten Zahlungsworkflow beschränkte **GET**-Abrufe sind
+möglich, mit einem gemeinsamen Timeout von 12 Sekunden und maximal 12 MiB
+pro Antwort:
 
-Auch ein positives Ergebnis lautet ausdrücklich
-ACTIVE_PAYMENT_GRAPH_STRUCTURALLY_MATCHES_NOT_E2E; es berechtigt nicht zu
-Kundenaktivierung oder Checkout und ersetzt weder die tatsächliche Drive-
-Berechtigung noch den ersten Kunden-/Mollie-End-to-End-Test. Bei fehlendem
-API-Zugang ist **keine** aktive Version bestätigt; das neue Werkzeug darf
-nicht als Ersatzbeleg aus GitHub heraus ausgeführt oder simuliert werden.
+1. `GET /api/v1/workflows/8v2wcz5lh0yUf3sw`: veröffentlichte
+   `activeVersionId` und richtige Workflow-ID feststellen; einen archivierten
+   oder nicht veröffentlichten Workflow zurückweisen. Das alte Feld
+   `active` ist laut n8n-API inzwischen veraltet.
+2. `GET /api/v1/workflows/8v2wcz5lh0yUf3sw/versions/{activeVersionId}`:
+   **genau diese** veröffentlichte Version auslesen. Die unabhängigen
+   `workflowId`- und `versionId`-Werte müssen übereinstimmen. Nodes und
+   Verbindungen werden mit dem bisherigen strengen
+   `audit-published-worker.cjs`-Vertrag verglichen. Ein neuer Editorentwurf
+   wird ausdrücklich **nicht** als aktive Version geprüft.
+3. `GET /api/v1/workflows/8v2wcz5lh0yUf3sw`: unveränderte aktive
+   Versionsbindung nochmals prüfen. Bei Wechsel oder Archivierung wird der
+   Bericht verworfen. Ein späterer Workflow-Wechsel erfordert einen neuen Check.
 
-Offizielle Grundlage: n8n Public API Authentifizierung und API-Referenz
-(https://docs.n8n.io/api/authentication/ und
-https://docs.n8n.io/api/api-reference/).
+Fehlende Berechtigungen für den Versionsabruf, gekürzte Credential-Referenzen,
+nicht unterstützte API-Routen, Abweichungen und Zeitüberschreitungen liefern
+**kein positives Prüfergebnis**. Gegebenenfalls muss die tatsächlich
+veröffentlichte Version in der privaten n8n-Betreiberumgebung separat über
+die Versionsansicht exportiert und mit dem Offline-Prüfer abgeglichen werden.
+Die Versions-API ist von der n8n-Instanz und deren verfügbaren Funktionen
+abhängig; sie wird nicht durch einen Editorentwurf ersetzt.
+
+JSON-Antworten und Referenzen bleiben nur im Arbeitsspeicher; der Prüfer
+gibt keine Credentials oder Graphen aus. Es gibt **keine** Workflow-
+Execution, keinen Webhook-Aufruf, keine Zahlung, keine Kundenaktivierung und
+keine Freigabe. Selbst bei einem strukturellen Treffer bleibt der Status
+`ACTIVE_PAYMENT_GRAPH_STRUCTURALLY_MATCHES_NOT_E2E`. Drive-Zugriff,
+Zahlungsnachweis, kostenpflichtige n8n-Starts und Kunden-End-to-End-Prüfung
+bleiben separat offen.
+
+n8n-Quellen: [API-Authentifizierung](https://docs.n8n.io/api/authentication/)
+und [Public-API-Referenz](https://docs.n8n.io/api/api-reference/).
