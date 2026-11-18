@@ -31,6 +31,15 @@ test('report never upgrades preflight counts into permission to publish or pay',
  assert.match(source,/'initiates_checkout',false/);
  assert.match(source,/'external_e2e_status','NOT_VERIFIED_BY_THIS_QUERY'/);
  assert.match(source,/'payment_mode','VERIFY_SHOPIFY_PAYMENTS_EXTERNALLY'/);
+ assert.match(source,/'settlement_evidence','NOT_VERIFIED_BY_THIS_QUERY'/);
+ for(const key of ['non_test_orders','non_test_provider_paid_status_orders',
+   'non_test_provider_pending_status_orders','unknown_test_status_orders','state'])
+   assert.ok(source.includes("'"+key+"'"),key);
+ for(const code of ['NON_TEST_ORDERS_REQUIRE_PAYMENT_REVIEW','UNKNOWN_TEST_STATUS_REVIEW_REQUIRED',
+   'ONLY_TEST_FLAGGED_SHOP_ORDERS','NO_SHOP_ORDERS'])
+   assert.ok(source.includes(code),code);
+ assert.match(source,/ist_testbestellung IS FALSE/);
+ assert.match(source,/lower\(coalesce\(zahlungsstatus,''\)\)='paid'/);
  assert.match(source,/'requires_personal_approval',true/);
  assert.match(source,/'BLOCKED_NO_EXPLICIT_APPROVAL'/);
  assert.match(source,/verified_at >= now\(\)-interval '15 minutes'/);
@@ -68,7 +77,7 @@ test('gallery counts separate pending work from completed clips and never call a
  ]) assert.match(source,check);
  assert.ok(source.includes('count(DISTINCT g.id) FROM sma_private.gallery_music_v1 g'));
  assert.match(source,/gallery_completed_jobs-gallery_current_revision_evidence_jobs/);
- assert.match(noComments,/'version',6/);
+ assert.match(noComments,/'version',7/);
  assert.match(noComments,/'NO_LISTED_TRACK_FOR_PENDING_JOBS'/);
  assert.match(noComments,/'LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS'/);
  assert.match(noComments,/'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'/);
