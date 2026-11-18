@@ -22,7 +22,7 @@ async function mount(state){
  const [{parseHTML},{filterDashboardFiles,dashboardFileDescription,searchFilePage},{refreshMediaCatalog}]=await runtime;
  const {document}=parseHTML('<html><head></head><body><nav><button id="publicationNav">Veröffentlichung</button></nav><main><div id="publishingFilesSlot"></div></main></body></html>');
  class Clock extends Date {static now(){return state.now;}}
- const env={AbortController,setTimeout,clearTimeout,Date:Clock,
+ const env={document,AbortController,setTimeout,clearTimeout,Date:Clock,
   dashboardOwnerId:'own-customer',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
   portalNames:{youtube:'YouTube'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
   createSharedThumbnailClient:()=>({dispose(){}}),
