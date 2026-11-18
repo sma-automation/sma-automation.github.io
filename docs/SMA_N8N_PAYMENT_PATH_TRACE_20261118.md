@@ -92,16 +92,55 @@ guard, or credentials withheld by the n8n API. The static report keeps
 `mollie_receipt_validation_proven=false`, and
 `customer_activation_authorized=false`.
 
-The operator-only GitHub workflow must still be manually triggered
-after it is pinned to the reviewed source. No report may print node
-source, arbitrary names, URLs, credential IDs, customer IDs, API keys
-or actual workflow data. The live values of these new counters
-**have not yet been obtained**.
+The operator-only GitHub workflow was pinned to reviewed product source and manually started for run #4 below. No report may print node source, arbitrary names, URLs, credential IDs, customer IDs, API keys or actual workflow data. These counts are read-only configuration clues, not a customer-launch authorization.
 
 ## To finish the first customer blocker
 
-After regression tests/merge, the separate **manual-only** GitHub Actions workflow can be pinned to this audited commit and enhanced to print only selected graph counters. One deliberate operator-run `payment` audit will then reveal whether each payment webhook actually reaches a response and whether the route has HTTP/Code/Data Table stages.
-
-If either route is disconnected or lacks a response, examine the active n8n editor version privately. **Do not alter the published payment graph until the linked order, one-time ticket, Mollie idempotency, customer-row matching, folder checks, and pause/recovery paths have been compared.** The exact customer-level Drive permissions and the full paid-customer E2E remain separate blockers.
+The next task is a **private semantic review** of the actual published Code/HTTP/Data Table logic against linked bookings, signed single-use tickets, Mollie idempotency and receipts, customer-row and Drive-folder guards, and suspension/recovery paths. The route counters from run #4 below are insufficient for this review. **Do not alter the published payment graph or authorize customer activation** on the basis of marker counts. A real customer-level Drive permission check and an authorized practical payment E2E remain separate blockers.
 
 No changes to live Supabase, n8n, Mollie or the customer dashboard are made by this trace.
+
+
+## Published-graph live readback – manual GET-only run #4 (18 Nov 2026)
+
+The operator manually requested [GitHub Actions run #4](https://github.com/sma-automation/sma-automation.github.io/actions/runs/44398122927) using branch `main` and `check=both` after PRs #401/#402. GitHub checked out reviewed product commit `630447cc13b629e6af2ed12a983655f989afbb3e`. The GET-only audit successfully read the unchanged published n8n graph. The overall workflow conclusion remains `failure` solely because the **separately generated 26-node standalone payment contract** does not match the 391-node published workflow by exact node names. Authentication did not fail; **do not rename or replace the live nodes to force a green outcome**.
+
+| Redacted aggregate diagnostic | First payment | Renewal |
+|---|---:|---:|
+| Reachable nodes | 17 | 9 |
+| Reachable `RespondToWebhook` | 1 | 1 |
+| Static response terminals | 1 | 1 |
+| Static non-response terminals | 0 | 0 |
+| Explicit empty/null decision ports | 0 | 0 |
+| Missing binary IF ports | 0 | 0 |
+| Reachable Code nodes | 5 | 3 |
+| Reachable HTTP nodes | 6 | 2 |
+| Reachable Data Table nodes | 3 | 1 |
+| Static literal SMA RPC targets | 1 | 1 |
+| Dynamic/unresolved HTTP targets | 5 | 1 |
+| HTTP nodes configured for write methods | 4 | 1 |
+| HTTP nodes with header-auth references | 6 | 2 |
+| Idempotency header-name markers | 3 | 0 |
+| Data Table write operations | 2 | 1 |
+| Data Table write nodes with all customer identity filter markers | 0 | 0 |
+| Data Table write nodes with both folder filter markers | 1 | 0 |
+| Code nodes mentioning a ticket marker | 1 | 1 |
+| Code nodes mentioning both saved folder fields | 2 | 0 |
+| Code nodes with a payment/merchant text pair | 1 | 1 |
+
+Other static metadata: **391** published nodes, **410** MAIN edges, **0** unknown MAIN targets, both webhook entries unique `POST/responseNode`, and **stable published version** across the readback. The strict standalone matcher still sees **0/26** exact expected names; the separately named standalone activation-folder guard is not found by that name. The latter two findings are **not proof** that equivalent embedded checks are absent.
+
+**Interpretation, without false assurance:**
+- The traced explicit MAIN paths do not expose a visible non-response terminal or missing binary IF exit. This does **not** prove that every runtime branch replies: Code returning no items, Switch fallback configuration, exceptions, provider delays and internal RPC errors still need runtime evaluation.
+- Three first-payment idempotency-header **name** markers are visible; their values, coverage, acceptance and the side effects behind dynamic HTTP targets are **not proven**. The renewal path's zero idempotency headers does not prove unsafe behavior because the single configured write may be a different operation.
+- Zero all-identity Data Table filter marker counts mean this particular strict static signature was not found. Customer/merchant binding **might** be enforced inside Code or Supabase RPC, but its semantic correctness is **unverified**. One first-payment Data Table write has both folder-field markers, but ownership and Drive permissions remain unproven.
+- Ticket and payment receipt text markers are hints, **not** validated one-time tickets, cryptographic checks, provider receipt proofs or guaranteed suspension/recovery.
+
+The saved execution query returned **49** records in its queried UTC month window, including **27** webhook/trigger-mode candidates, with no partial pagination reported. It is **not** the n8n Cloud invoice, billable execution counter, or executions-per-file measurement. No n8n workflow execution, payment, customer activation, social publishing, Drive mutation or Supabase write was initiated by this read-only audit.
+
+### Evidence-led next acceptance checks
+
+1. Privately compare the **published** Code/HTTP/Data Table logic against the three checked-in `sma-package-payment` Edge source files: one-time ticket consumption, customer and merchant identity, Mollie payment/subscription retrieval, idempotency, matching folder pair, post-activation readback, and renewal suspension/restoration. Do not publish private node source, customer references, URLs or credential values.
+2. Independently attest the actual n8n Google Drive credential identity and `01 Upload – Eingang` / `02 Verarbeitung` folder metadata + rights for the same customer. The static n8n payment graph cannot prove Drive access.
+3. After authorization, run one practical non-charging customer test with signed-off provider boundaries, then measure genuine external starts per file and separately inspect the n8n Cloud billing meter.
+4. Maintain the existing customer-start block until all acceptance evidence is present. **No additional read-only n8n dispatch is warranted solely to repeat run #4.**
