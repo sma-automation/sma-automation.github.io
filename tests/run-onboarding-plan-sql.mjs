@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {prepareRenewalCheck} from '../n8n/sync-onboarding-payment.mjs';
 import {checkScheduledSubscription} from './check-onboarding-subscription.mjs';
-import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
+const {confirmationSql}=createRequire(import.meta.url)('../n8n/confirm-onboarding-row.cjs');
 import {readFile, readdir} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 
@@ -157,19 +158,19 @@ try {
   const address = "o'brien+pilot@example.invalid";
   await db.query('update public.sma_kunden set kunde_email=$1 where user_id=$2',[address,second]);
   await db.query('update auth.users set email=$1 where id=$2',[address,second]);
-  const prepare = (state,token='AUS') => spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
-    input: [beta.n8n_ref,'124',beta.n8n_ref,address,'',state,'AUS','AUS',
-      token,'AUS','AUS','AUS'].join('\n')+'\n', encoding:'utf8'
-  });
-  const denied = prepare('EIN');
-  assert.equal(denied.status,1); assert.equal(denied.stdout,'');
-  const reused = prepare('AUS','EIN');
-  assert.equal(reused.status,1); assert.equal(reused.stdout,'');
-  const checked = prepare('AUS');
-  assert.equal(checked.status,0,checked.stderr);
-  assert.equal(checked.stdout.includes(address),false);
-  assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'LINKED');
-  assert.equal((await one(checked.stdout)).confirm_onboarding_n8n_v1,'ALREADY_LINKED');
+  // The SQL integration remains synthetic: test the exact existing seven-field
+  // payload without a live Google request. Actual operator CLI issuance is
+  // separately gated on the verified SMA Drive metadata in its own tests.
+  const rowEvidence={id:124,kunde_id:beta.n8n_ref,kunde_email:address,paket:null,
+    zugang_aktiv:false,zahlung_bestaetigt:false,demo_delta_aktiv:false,
+    zugangs_token_vorhanden:false,zugangs_link_vorhanden:false,
+    mollie_customer_id_vorhanden:false,mollie_subscription_id_vorhanden:false};
+  assert.throws(()=>confirmationSql(beta.n8n_ref,{...rowEvidence,zugang_aktiv:true}),/Status/);
+  assert.throws(()=>confirmationSql(beta.n8n_ref,{...rowEvidence,zugangs_token_vorhanden:true}),/n8n-Zeile/);
+  const checkedSql=confirmationSql(beta.n8n_ref,rowEvidence);
+  assert.equal(checkedSql.includes(address),false);
+  assert.equal((await one(checkedSql)).confirm_onboarding_n8n_v1,'LINKED');
+  assert.equal((await one(checkedSql)).confirm_onboarding_n8n_v1,'ALREADY_LINKED');
   const booking=async(owner,offer=null,plan=null,terms=offer?'2026-11-15-v1':null)=>(await one('select public.sma_onboarding_booking_v1($1,$2,$3,$4) as result',[owner,offer,plan,terms])).result;
   const sync=async(p,row=null)=>(await one('select sma_private.sync_onboarding_booking_v1($1,$2) as result',[p,row])).result;
   const future=new Date(Date.now()+3600_000).toISOString();
