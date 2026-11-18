@@ -32,7 +32,7 @@ test('preflight uses exactly three fixed metadata GETs and never claims payment,
  assert.equal(result.code,'FOLDER_ACCESS_VERIFIED');assert.equal(result.scope,'drive_metadata_only');
  assert.ok(Number.isFinite(Date.parse(result.checked_at)));
  assert.deepEqual(result.checks,{drive_account_matches:true,upload_folder_readable:true,
-  processing_folder_readable:true,processing_folder_writable:true});
+  upload_folder_writable:true,processing_folder_readable:true,processing_folder_writable:true});
  assert.equal(x.requests.length,3);
  const urls=x.requests.map(r=>new URL(r.url));
  assert.deepEqual(urls.map(u=>u.pathname),['/drive/v3/about','/drive/v3/files/'+config.uploadFolderId,'/drive/v3/files/'+config.processingFolderId]);
@@ -99,13 +99,31 @@ test('a read-only processing folder cannot pass; missing and string write capabi
  }
 });
 
-test('the incoming folder need only be listable; both My Drive and shared folders use the same rules',async()=>{
- const x=fixture({},index=>{
-  const value=index===0?{user:{permissionId:config.expectedPermissionId}}:metadata(index===1?config.uploadFolderId:config.processingFolderId);
-  if(index===1){value.capabilities.canAddChildren=false;value.driveId='private_shared_drive';}
-  return reply(value);
- });
- const r=await x.run();assert.equal(r.ok,true);noGrant(r);assert.equal(JSON.stringify(r).includes('private_shared_drive'),false);
+test('a readable input folder without a true add-children capability does not pass preflight',async()=>{
+ for(const canAddChildren of [false,undefined,null,'true',1]){
+  const x=fixture({},index=>{
+   const value=index===0?{user:{permissionId:config.expectedPermissionId}}:metadata(index===1?config.uploadFolderId:config.processingFolderId);
+   if(index===1)value.capabilities.canAddChildren=canAddChildren;
+   return reply(value);
+  });
+  const r=await x.run();
+  assert.equal(r.ok,false);assert.equal(r.code,'UPLOAD_NOT_WRITABLE');
+  assert.equal(r.step,'upload');assert.equal(x.requests.length,2);noGrant(r);
+ }
+});
+
+test('both shared-drive and My Drive folders pass only when readable and writable',async()=>{
+ for(const shared of [false,true]){
+  const x=fixture({},index=>{
+   const value=index===0?{user:{permissionId:config.expectedPermissionId}}:metadata(index===1?config.uploadFolderId:config.processingFolderId);
+   if(shared&&index>0)value.driveId='private_shared_drive';
+   return reply(value);
+  });
+  const r=await x.run();
+  assert.equal(r.ok,true);assert.equal(r.checks.upload_folder_writable,true);
+  assert.equal(r.checks.processing_folder_writable,true);
+  noGrant(r);assert.equal(JSON.stringify(r).includes('private_shared_drive'),false);
+ }
 });
 
 test('metadata acceptance agrees with the existing catalog gate, but cannot activate a dormant customer',async()=>{
