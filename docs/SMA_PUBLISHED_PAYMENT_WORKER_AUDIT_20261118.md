@@ -90,3 +90,31 @@ Dafür weiterhin `docs/ONBOARDING_FOLDER_PREFLIGHT.md` und
 Keine Zugangsdaten anfordern oder speichern, keine Workflowversion
 veröffentlichen, keine Datenbankmigration, keine Zahlungen,
 Medienuploads, Freigaben oder Beiträge auslösen.
+
+## Übergabe: fest gebundene Webhook-Ziele und Signatur-Schlüssel (18.11.2026)
+
+Der installierte Einstieg `supabase/functions/sma-package-payment/index.ts`
+verwendet **zwei feste n8n-Cloud-Webhook-Ziele** für den Paketdienst und die
+Folgezahlung. Bei einer späteren privaten Servermigration sind diese URLs
+nicht automatisch auf den neuen Server umgestellt. Ein DNS-Wechsel der
+öffentlichen Website allein ersetzt die beiden Zieladressen nicht.
+Die Zielworkflows müssen vor einer koordinierten Umschaltung mit der
+**tatsächlich veröffentlichten n8n-Aktivversion** und allen Antwortfeldern
+verglichen sein; eine ungetestete URL-Änderung kann die Zahlungskette
+unterbrechen.
+
+Die signierten Mollie-Rückruflinks verwenden einen HMAC-Schlüssel, der im
+derzeitigen Einstieg aus `SUPABASE_SERVICE_ROLE_KEY` abgeleitet wird.
+Eine Rotation dieses Schlüssels ohne Übergangskonzept macht **bereits
+ausgegebene** Rückruf-Proofs ungültig. Vor einem Schlüssel- oder
+Backendwechsel muss der Betreiber offene Erstzahlungen, Folgezahlungen,
+laufende Leasing-/Ticket-Zustände und ausstehende Provider-Rückrufe erfassen.
+Die sichere Migration benötigt entweder unveränderte gültige Proofs bis zur
+Abarbeitung oder eine gesondert getestete, eng begrenzte Schlüsselübergangs-
+Verifikation. Den Schlüssel selbst niemals in Chat, Export, Repository,
+CI-Protokoll oder Übergabedokument kopieren.
+
+Die eng begrenzte Eingabeprüfung für **angemeldete** Kunden in PR #380
+verändert weder die signierten Mollie- und Schedule-Routen noch die
+existierenden HMAC-Proofs oder n8n-Ziele. Dieser Codecheck ist kein
+Ersatz für eine Aktivversions- und Zahlungsverifikationsprobe.
