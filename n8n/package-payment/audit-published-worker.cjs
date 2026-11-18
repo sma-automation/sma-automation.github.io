@@ -87,21 +87,33 @@ function auditPublishedPackageWorker(readback){
       'payment_node_types_not_matching');
     flag(!isDeepStrictEqual(normalizedParameters(node),normalizedParameters(expected)),
       'payment_node_parameters_not_matching');
-    for(const key of ['alwaysOutputData']){
-      if(Object.hasOwn(expected,key))
-        flag(node[key]!==expected[key],'payment_node_settings_not_matching');
-    }
+    // Node-level runtime behavior is outside "parameters": a disabled
+    // folder guard or continue-on-error can silently bypass a valid-looking
+    // payment contract. Reject non-default execution switches.
+    flag(['disabled','continueOnFail','executeOnce','retryOnFail'].some(
+      key=>node[key]===true&&expected[key]!==true
+    )||(node.onError??'stopWorkflow')!==(expected.onError??'stopWorkflow')||
+      (node.alwaysOutputData===true)!==(expected.alwaysOutputData===true),
+      'payment_node_settings_not_matching');
     flag(!isDeepStrictEqual(outgoing(graph,expected.name),outgoing(template,expected.name)),
       'payment_routes_not_matching');
   }
   // An extra direct route to the data-table update may bypass the required
   // folder check even when the checked route itself is still intact.
   for(const [source,conn] of Object.entries(graph.connections||{})){
-    if(templateNames.has(source))continue;
-    for(const port of conn?.main||[]){
-      if(!Array.isArray(port)){issues.add('invalid_extra_route');continue;}
-      if(port.some(edge=>protectedNames.has(edge?.node)))
-        issues.add('unexpected_input_to_payment_guard');
+    if(!record(conn)){issues.add('invalid_extra_route');continue;}
+    for(const [channel,ports] of Object.entries(conn)){
+      if(templateNames.has(source)&&channel!=='main')
+        issues.add('unreviewed_payment_nonmain_route');
+      if(!Array.isArray(ports)){issues.add('invalid_extra_route');continue;}
+      for(const port of ports){
+        if(!Array.isArray(port)){issues.add('invalid_extra_route');continue;}
+        if(port.some(edge=>protectedNames.has(edge?.node)&&
+          !templateNames.has(source)))
+          issues.add('unexpected_input_to_payment_guard');
+        if(channel!=='main'&&port.some(edge=>protectedNames.has(edge?.node)))
+          issues.add('unreviewed_payment_nonmain_route');
+      }
     }
   }
   for(const path of publicPaths){
