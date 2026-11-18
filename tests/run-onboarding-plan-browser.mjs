@@ -61,7 +61,7 @@ try {
     const context=await browser.newContext({viewport:mobile?{width:375,height:812}:{width:1200,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
     const page=await context.newPage();
     const errors=[];
-    let saved=null, writes=0, sessionReads=0, linked=false, offer=null, bookings=0, paymentCalls=0;
+    let saved=null, writes=0, choiceReads=0, sessionReads=0, linked=false, offer=null, bookings=0, paymentCalls=0;
     const order='80000000-0000-4000-8000-000000000001';
     const returnUrl=site+'/app/paketwahl.html?buchung='+order;
     let paymentState='booked',statusReads=0,closeOnRefresh=false,pausedReads=0;
@@ -90,6 +90,7 @@ try {
         if (p_plan && p_expected_plan!==saved && p_plan!==saved)
           return route.fulfill({json:{ok:false,code:'CONFLICT',plan:saved}});
         if (p_plan) {saved=p_plan;writes++;}
+        else choiceReads++;
         if(!p_plan && holdChoiceRead){const held=holdChoiceRead;holdChoiceRead=null;return held.send(route,{ok:true,plan:saved,linked});}
         return route.fulfill({json:{ok:true,plan:saved,linked}});
       }
@@ -162,10 +163,15 @@ try {
     await page.getByText('Beta ist für dein Konto vorgemerkt. Dein SMA-Kundenkonto ist zugeordnet.').waitFor();
     assert.equal(await beta.isChecked(),true);
     saved='delta'; // A second tab saved a newer preference.
+    const readsBeforeConflict=choiceReads;
     await page.getByRole('radio',{name:/Alpha 100/}).check();await save.click();
     await page.getByText(/zwischenzeitlich geändert/).waitFor();
     assert.equal(await page.getByRole('radio',{name:/Delta 500/}).isChecked(),true);
-    assert.equal(writes,1);
+    assert.equal(choiceReads,readsBeforeConflict+1,'a conflict needs exactly one read-only ownership check');
+    assert.equal(writes,1,'a conflict must not repeat the package write');
+    assert.equal(bookings,0);assert.equal(paymentCalls,0);
+    assert.equal(await linkCheck.isHidden(),true,'linked accounts must not show a false n8n setup notice');
+    assert.doesNotMatch(await page.locator('#status').innerText(),/Kundenkonto wird eingerichtet|noch nichts bezahlen/);
     offer={id:'fixture-order',plan:'delta',terms:'2026-11-15-v1',state:'offered',checkout:null};
     await page.reload();
     const book=page.getByRole('button',{name:'Zahlungspflichtig buchen'});

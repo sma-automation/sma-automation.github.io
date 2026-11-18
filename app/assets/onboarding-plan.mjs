@@ -173,7 +173,18 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
     }).abortSignal(controller.signal));
     if (!await sameOwner()) return;
     if (result.error) throw result.error;
-    const value = result.data;
+    let value = result.data;
+    if (value?.code === 'CONFLICT') {
+      // A compare-and-set conflict returns only the newer plan, without the
+      // already verified n8n-link flag. One owner-checked read restores the
+      // authoritative link state; never repeat the plan write or book/pay.
+      const current = await run(() => client.rpc('sma_onboarding_plan_choice_v1', {
+        p_owner:owner
+      }).abortSignal(controller.signal));
+      if (!await sameOwner()) return;
+      if (current.error || current.data?.ok !== true) throw Error('Plan unavailable');
+      value = {...current.data,code:'CONFLICT'};
+    }
     if (value?.code === 'ACCOUNT_UNAVAILABLE') {
       form.hidden = true;
       status.textContent = 'Die Paketvormerkung ist für dieses Konto nicht verfügbar. Prüfe deinen Dashboard-Zugang.';
