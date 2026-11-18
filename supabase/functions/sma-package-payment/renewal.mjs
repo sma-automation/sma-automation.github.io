@@ -23,6 +23,10 @@ function cents(money){
 export async function assessRenewal({order,sub,event,today,readPage}){
   const anchor=sub.startDate;
   valid(/^\d{4}-\d\d-\d\d$/.test(anchor)&&monthDate(anchor,0)===anchor);
+  // Never treat an unrecognized provider status as a continuing subscription.
+  // Mollie documents exactly these five subscription states; fail closed
+  // before reading payment pages or considering customer access.
+  valid(['pending','active','canceled','suspended','completed'].includes(sub.status));
   const [start]=period(anchor,today);
   let cursor=null,found=false,coveredUntil=null,pending=false,failed=false,review=false;
   const seen=new Set(),cursors=new Set();
