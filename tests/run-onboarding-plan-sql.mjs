@@ -38,6 +38,10 @@ try {
   await db.exec(await readFile('supabase/migrations/'+statusMigration,'utf8'));
   const retryMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_booking_retry_v1.sql'));
   await db.exec(await readFile('supabase/migrations/'+retryMigration,'utf8'));
+  const settingsGuardMigration=(await readdir('supabase/migrations'))
+    .find(name=>name.endsWith('_onboarding_absent_payment_setting_fail_closed_v1.sql'));
+  assert.ok(settingsGuardMigration,'The fail-closed payment settings migration must be present');
+  await db.exec(await readFile('supabase/migrations/'+settingsGuardMigration,'utf8'));
   const renewalMigration=(await readdir('supabase/migrations')).find(name=>name.endsWith('_onboarding_subscription_renewal_v1.sql'));
   await db.exec(await readFile('supabase/migrations/'+renewalMigration,'utf8'));
   // The scheduler and HTTP transport are captured locally; the application SQL runs unmodified.
@@ -225,6 +229,22 @@ try {
   assert.equal((await booking(second)).offer,null);
   await db.exec('reset role');
   await db.exec('update sma_private.onboarding_payment_settings_v1 set enabled=true');
+  // An absent settings singleton must NOT silently enable a payable first booking.
+  // Each negative case uses a rolled-back synthetic transaction: no provider calls.
+  await db.exec('begin');
+  await db.exec('delete from sma_private.onboarding_payment_settings_v1');
+  await db.exec('set local role authenticated');
+  assert.equal((await booking(second)).offer,null);
+  assert.equal((await booking(second,'00000000-0000-4000-8000-000000000001','delta','2026-11-15-v1')).code,'OFFER_CHANGED');
+  await db.exec('rollback');
+  // Even after table drift, a linked account without a saved plan gets no offer.
+  await db.exec('begin');
+  await db.exec('alter table sma_private.onboarding_plan_choices_v1 alter column plan drop not null');
+  await db.query('update sma_private.onboarding_plan_choices_v1 set plan=null where user_id=$1',[second]);
+  await db.exec('set local role authenticated');
+  assert.equal((await booking(second)).offer,null);
+  assert.equal((await booking(second,'00000000-0000-4000-8000-000000000001',null,'2026-11-15-v1')).code,'OFFER_CHANGED');
+  await db.exec('rollback');
   await db.exec('set role authenticated');
   const virtual=(await booking(second)).offer;
   assert.deepEqual([virtual.plan,virtual.automated,virtual.state],['delta',true,'offered']);
