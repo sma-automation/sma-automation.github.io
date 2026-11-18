@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin d973dc7e3ad638a84d870415b136f20360cfca8a
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin b5712bbc1a387320322db7b7321f80710e414a5f
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = 'd973dc7e3ad638a84d870415b136f20360cfca8a'
+          test "$(git rev-parse HEAD)" = 'b5712bbc1a387320322db7b7321f80710e414a5f'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
@@ -68,6 +68,26 @@ jobs:
               if(!result?.ok){
                 allOk=false;
                 console.log('SMA_N8N_PAYMENT_CHECK_CODES='+onlyCodes(result?.issues).join(','));
+                // Public template position (1..26) + fixed field category only.
+                // Never log live node names, raw code/values, URLs, or secrets.
+                const allowedCategories=new Set([
+                  'CODE','TARGET','METHOD','AUTH','AUTH_TYPE','HEADERS','SEND_HEADERS',
+                  'SEND_BODY','BODY','BODY_FORMAT','OPTIONS','FILTERS','COLUMNS',
+                  'MATCH_TYPE','OPERATION','ROUTES','LIMIT','WEBHOOK_METHOD',
+                  'WEBHOOK_PATH','WEBHOOK_REPLY_MODE','REPLY_FORMAT','REPLY_BODY',
+                  'TABLE_REF','OTHER','PARAMETERS_FORMAT'
+                ]);
+                const mismatches=Array.isArray(result?.parameter_mismatches)
+                  ? result.parameter_mismatches.slice(0,26).flatMap(item=>{
+                    const pos=item?.template_position;
+                    if(!Number.isSafeInteger(pos)||pos<1||pos>26||
+                      !Array.isArray(item?.categories))return [];
+                    return item.categories.slice(0,12)
+                      .filter(key=>typeof key==='string'&&allowedCategories.has(key))
+                      .map(key=>'N'+String(pos).padStart(2,'0')+'_'+key);
+                  }) : [];
+                console.log('SMA_N8N_PAYMENT_PARAMETER_DIFF='+
+                  [...new Set(mismatches)].slice(0,100).join(','));
                 // Only derived, bounded counters and fixed booleans. Never print
                 // the active workflow graph, node parameters, credentials,
                 // arbitrary live node names or customer references.
