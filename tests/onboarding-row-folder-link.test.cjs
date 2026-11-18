@@ -67,7 +67,7 @@ test('Absent credentials, invalid/matched folder IDs or active row reject linkin
   {...safeRow(),mollie_customer_id_vorhanden:true}
  ]){
   const f=fixture();
-  await assert.rejects(run(row,f.fetchImpl),/Ordner|Status|Zeile/);
+  await assert.rejects(run(row,f.fetchImpl),/Kundenordner|Status|Zeile/);
   assert.equal(f.calls.length,0);
  }
  const f=fixture();
