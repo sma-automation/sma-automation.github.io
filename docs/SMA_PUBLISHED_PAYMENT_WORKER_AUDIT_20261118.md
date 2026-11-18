@@ -1,6 +1,6 @@
 # SMA – Tatsächlich veröffentlichte n8n-Zahlungsstrecke vor dem ersten Kunden prüfen
 
-Stand: 18.11.2026. **Offline-Bestandsprüfung, keine Inbetriebnahme.**
+Stand: 18.11.2026. **Offline- und produktiver API-Leseabgleich, keine Inbetriebnahme.**
 
 ## Warum dieser Vergleich benötigt wird
 
@@ -22,10 +22,30 @@ Die notwendige `account`-Antwort muss die **beiden verschiedenen**
 der zugeordneten Kundenzeile enthalten. Ein vorhandener String ist
 noch kein Google-Drive-Berechtigungsnachweis.
 
-Die produktiv gespeicherte n8n-Aktivversion ist **noch nicht separat
-gelesen oder verglichen**. Ein im Repository gebauter Kandidat,
-ein grüner GitHub-Test oder ein erfolgreicher Webhook-HTTP-Status
-schließen diese Lücke nicht.
+**Aktualisierung vom 18.11.2026:** Die tatsächlich veröffentlichte
+n8n-Aktivversion wurde inzwischen zweimal über die n8n Public API
+**ausschließlich lesend** abgerufen. Es wurden 391 Nodes und beide
+bekannten Zahlungs-Webhook-Pfade gefunden. **Keiner der 26 exakt
+benannten Nodes** aus dem unabhängig erzeugten *separaten*
+Zahlungsdienst wurde anhand dieses Namens gefunden. Damit hat der
+strenge Standalone-Vertragsvergleich **nicht bestanden**.
+
+Das belegt eine strukturelle Abweichung vom erwarteten Standalone-Graphen,
+aber noch nicht, dass die Zahlungswege im größeren veröffentlichten
+Workflow fehlen oder funktionsunfähig sind. Insbesondere sind die
+abweichenden Credential-/Tabellenreferenz-Codes bei 0/26 exakten
+Node-Namentreffern kein eigenständiger Nachweis falscher Credentials.
+Die beiden Webhooks wurden gefunden; ihre tatsächlichen Verbindungspfade
+und die effektive Aktivierungsabsicherung sind **noch nicht live
+abgenommen**.
+
+Der neu hinzugefügte rein lesende
+[Webhook-Verbindungspfadprüfer](SMA_N8N_PAYMENT_PATH_TRACE_20261118.md)
+ermöglicht diesen strukturellen Nachweis ohne Ausführung, Kundendaten
+oder Token-Ausgabe. Seine vollständige Live-Ausgabe steht bis zum nächsten
+ausdrücklichen manuellen GitHub-Actions-Lesecheck aus. Ein grüner
+GitHub-Regressionstest oder ein erfolgreicher HTTP-Status ist
+weiterhin keine Zahlungs- oder Kundenfreigabe.
 
 ## Neuer fail-closed Offline-Prüfer
 
