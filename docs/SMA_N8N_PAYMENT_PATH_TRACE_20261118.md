@@ -18,6 +18,7 @@ The manual GitHub Actions n8n API run **#2** (ID `44376710959`) was authenticate
 
 - Whether each payment webhook is unique and configured for `POST` with `responseNode`.
 - Each entry's number of outgoing edges, reachable nodes, reachable `respondToWebhook` nodes and terminal nodes.
+- **New:** separate counts of terminal nodes that are `respondToWebhook`, terminal nodes that are **not** `respondToWebhook`, and explicitly empty output ports on reachable `If`/`Switch` nodes. A reachable response alongside a nonresponse dead end is not complete response coverage.
 - Counts of reachable code, HTTP, data-table, conditional and subworkflow nodes.
 - The number of reachable HTTP nodes **configured** with mutating HTTP methods (not evidence they ran).
 - Reachability of the **specific standalone** activation folder-guard node name, if present.
@@ -25,7 +26,7 @@ The manual GitHub Actions n8n API run **#2** (ID `44376710959`) was authenticate
 
 It **never prints arbitrary names, provider URLs, API keys, tables, credentials, customer data, node code, route parameters, workflow JSON, execution IDs or external requests**. The graph is inspected in memory only.
 
-The true safety properties of a payment branch cannot be determined from reachability alone. A path to `respondToWebhook` does not prove every conditional branch responds; a reachable guard does not prove that the guard is effective. The output always states that customer activation, billing and E2E remain unverified.
+The true safety properties of a payment branch cannot be determined from reachability alone. A path to `respondToWebhook` does not prove every conditional branch responds; a reachable guard does not prove that the guard is effective. The additional terminal and explicit empty-output counts highlight some incomplete branches, but **still cannot detect omitted implicit fallback routes, Code nodes returning zero items, runtime exceptions or provider timeouts**. Even a zero nonresponse-terminal count is not a passed E2E. The output always states that customer activation, billing and E2E remain unverified.
 
 ## Extra published-version protection
 
