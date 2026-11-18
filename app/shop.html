@@ -176,8 +176,28 @@ function blankImage(label='Noch kein Produktbild'){
  const node=document.createElement('div');node.className='photo-placeholder';node.textContent=label;return node;
 }
 function image(url,alt){if(!url)return blankImage();const pic=document.createElement('img');pic.alt=alt||'Produktbild';pic.loading='lazy';pic.src=url;pic.onerror=()=>{pic.replaceWith(blankImage('Bild derzeit nicht verfügbar'))};return pic}
+// The public list must not invent a 0 € price or available stock when the
+// catalogue value is missing, malformed or contains fractional cents.
+// Mirror the checkout service's exact-cent rule without creating a cart URL.
+function exactShopCents(value){
+ if(typeof value!=='number'&&typeof value!=='string')return null;
+ const raw=String(value);
+ if(raw.length>64||!/^\d+(?:\.\d+)?$/.test(raw))return null;
+ const [whole,fraction='']=raw.split('.');
+ if(fraction.length>2&&!/^0+$/.test(fraction.slice(2)))return null;
+ const cents=Number(whole)*100+Number(fraction.slice(0,2).padEnd(2,'0'));
+ return Number.isSafeInteger(cents)&&cents>=0?cents:null;
+}
 function normalized(p){
- return {id:String(p.produkt_id),title:String(p.name||'Produkt'),description:String(p.beschreibung||''),category:String(p.typ||'Produkt'),price:Number(p.preis)||0,currency:String(p.waehrung||'EUR'),stock:Math.max(0,Number(p.bestand)||0),shopifyReady:p.shopify_aktiv===true,images:Array.isArray(p.bilder)?p.bilder.filter(url=>typeof url==='string'&&url.startsWith('https://')).slice(0,8):[]};
+ const cents=exactShopCents(p.preis);
+ const validCurrency=typeof p.waehrung==='string'&&/^[A-Z]{3}$/.test(p.waehrung);
+ const price=cents===null||!validCurrency?null:cents/100;
+ const validStock=Number.isSafeInteger(p.bestand)&&p.bestand>=0;
+ const stock=validStock?p.bestand:0;
+ return {id:String(p.produkt_id),title:String(p.name||'Produkt'),description:String(p.beschreibung||''),category:String(p.typ||'Produkt'),
+  price,currency:validCurrency?p.waehrung:'EUR',stock,
+  shopifyReady:p.shopify_aktiv===true&&price!==null&&validStock,
+  images:Array.isArray(p.bilder)?p.bilder.filter(url=>typeof url==='string'&&url.startsWith('https://')).slice(0,8):[]};
 }
 function showCard(p){
  const card=document.createElement('article');card.className='product';
@@ -190,9 +210,12 @@ function showCard(p){
  }else title.textContent=p.title;
  const desc=document.createElement('p');desc.className='product-desc';desc.textContent=p.description||'Weitere Produktinformationen werden ergänzt.';
  const price=document.createElement('div');price.className='price-row';
- const amount=document.createElement('span');amount.className='price';amount.textContent=euros(p.price,p.currency);
+ const amount=document.createElement('span');amount.className='price';amount.textContent=p.price===null?'Preis nicht verfügbar':euros(p.price,p.currency);
  const stock=document.createElement('small');stock.className='stock'+(p.stock<=5?' low':'');stock.textContent=p.stock>0?p.stock+' verfügbar':'Derzeit nicht lieferbar';price.append(amount,stock);
- const add=document.createElement('button');add.type='button';add.className='add';add.disabled=p.stock<=0||!p.shopifyReady;add.textContent=!p.shopifyReady?'Noch nicht bestellbar':p.stock>0?'In den Warenkorb':'Nicht verfügbar';add.title=!p.shopifyReady?'Dieses Produkt ist noch nicht für Shopify freigegeben.':'';add.onclick=()=>addToCart(p.id);
+ const add=document.createElement('button');add.type='button';add.className='add';add.disabled=p.stock<=0||!p.shopifyReady;
+ add.textContent=p.price===null?'Preis nicht verfügbar':!p.shopifyReady?'Noch nicht bestellbar':p.stock>0?'In den Warenkorb':'Nicht verfügbar';
+ add.title=p.price===null?'Für dieses Produkt liegt kein bestätigter Preis vor.':!p.shopifyReady?'Dieses Produkt ist noch nicht für Shopify freigegeben.':'';
+ add.onclick=()=>addToCart(p.id);
  body.append(category,title,desc,price,add);card.append(photo,body);return card;
 }
 function renderPager(){
@@ -247,7 +270,7 @@ function renderGallery(p){
  $('galleryPrice').textContent=p.price===null?'Preis nicht verfügbar':euros(p.price,p.currency);
  $('galleryStock').textContent=p.stock>0?p.stock+' verfügbar':'Derzeit nicht lieferbar';
  $('galleryAdd').disabled=p.stock<=0||!p.shopifyReady;
- $('galleryAdd').textContent=!p.shopifyReady?'Noch nicht bestellbar':p.stock<=0?'Nicht verfügbar':'In den Warenkorb';
+ $('galleryAdd').textContent=p.price===null?'Preis nicht verfügbar':!p.shopifyReady?'Noch nicht bestellbar':p.stock<=0?'Nicht verfügbar':'In den Warenkorb';
  $('galleryAdd').onclick=()=>{
   addToCart(p.id);
   if(linkedId===null)closeOverlay('galleryOverlay');
@@ -274,10 +297,8 @@ async function loadLinkedProduct(){
   if(result?.ok!==true||result.shop?.slug!==slug||result.produkt_filter!==linkedId||result.gesamt!==1||
      !Array.isArray(result.produkte)||result.produkte.length!==1||raw?.produkt_id!==linkedId)throw Error();
   const product=normalized(raw);
-  if(!((typeof raw.preis==='number'||typeof raw.preis==='string'&&/^\d+(?:\.\d{1,2})?$/.test(raw.preis))&&
-       Number.isFinite(Number(raw.preis))&&Number(raw.preis)>=0&&/^[A-Z]{3}$/.test(raw.waehrung))){
-   product.price=null;product.shopifyReady=false;
-  }
+  // Price, currency and stock are already checked by normalized() for
+  // both the public list and a direct product link.
   $('merchantName').textContent=result.shop.name||'SMA Shop';document.title=product.title+' · '+$('merchantName').textContent;
   shopAvailable=true;knownProducts.set(product.id,product);reconcileCart([product],false);
   renderGallery(product);
@@ -291,7 +312,7 @@ function renderGalleryImage(i){if(!currentGallery)return;const p=currentGallery;
 function addToCart(id){
  if(checkoutBusy)return;
  const p=knownProducts.get(id);
- if(!p||p.stock<=0||!p.shopifyReady)return;
+ if(!p||p.stock<=0||!p.shopifyReady||p.price===null)return;
  const qty=cart.get(id)||0;
  const totalQty=[...cart.values()].reduce((a,b)=>a+b,0);
  if(qty>=Math.min(p.stock,MAX_CHECKOUT_PER_ITEM)||totalQty>=MAX_CHECKOUT_TOTAL_QTY||(!cart.has(id)&&cart.size>=MAX_CHECKOUT_POSITIONS)){
