@@ -88,7 +88,8 @@ test('Duplicate execution IDs and repeated cursors cannot produce a passing coun
     json({data:[row('20')],nextCursor:new URL(url).searchParams.has('cursor')?null:'NEXT'}));
   assert.equal(duplicated.ok,false);
   assert.equal(duplicated.issue,'N8N_READ_INCONSISTENT_PAGES');
-  const cursorLoop=await run(async()=>json({data:[row(String(Math.random()*100000|0))],
+  let sequence=30;
+  const cursorLoop=await run(async()=>json({data:[row(String(sequence++))],
     nextCursor:'REPEAT'}));
   assert.equal(cursorLoop.ok,false);
   assert.equal(cursorLoop.issue,'N8N_READ_INCONSISTENT_PAGES');
