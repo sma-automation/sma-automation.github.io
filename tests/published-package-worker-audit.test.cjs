@@ -113,7 +113,7 @@ test('incomplete or malformed exports fail closed and do not print personal data
     const path=join(d,'private-customer-export.json');
     const g=published();
     g.secret_fixture='private-token-must-not-appear';
-    node(g,'Kundenzeile activate').credentials={httpHeaderAuth:{id:'merchant-secret-must-not-appear'}};
+    node(g,'Mollie first').credentials.httpHeaderAuth.id='merchant-secret-must-not-appear';
     writeFileSync(path,JSON.stringify(g),{mode:0o600});
     const run=spawnSync(process.execPath,['n8n/package-payment/audit-published-worker.cjs',path],
       {encoding:'utf8'});
