@@ -48,6 +48,11 @@ WITH snapshot AS (
   (SELECT count(*) FROM sma_private.gallery_music_v1) AS gallery_music_jobs,
   (SELECT count(*) FROM sma_private.gallery_music_v1 WHERE state='completed') AS gallery_completed_jobs,
   (SELECT count(*) FROM sma_private.gallery_music_v1 WHERE state='pending') AS gallery_pending_jobs,
+  -- Pending without a chosen track is a prerequisite gap, not a technical failure verdict.
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND nullif(btrim(track_sha),'') IS NULL) AS gallery_pending_without_track,
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND coalesce(failures,0)>0) AS gallery_pending_with_failures,
   -- Due is a scheduling fact, not eligibility, a failure, or permission to render.
   (SELECT count(*) FROM sma_private.gallery_music_v1
     WHERE state='pending' AND next_attempt<=now()) AS gallery_pending_due_jobs,
@@ -84,6 +89,17 @@ WITH snapshot AS (
   ) AS gallery_current_revision_evidence_jobs,
   -- Listing alone does not prove playable bytes, licensing, AAC readiness, or customer access.
   (SELECT count(*) FROM sma_private.music_catalog_v1 WHERE listed IS TRUE) AS music_listed_tracks,
+  -- The ready view also requires the matching immutable object and metadata.
+  (SELECT count(*) FROM sma_private.music_catalog_ready_v1) AS music_ready_tracks,
+  -- Mirror the background dispatcher's AAC storage validation.
+  (SELECT count(DISTINCT t.sha256) FROM sma_private.music_catalog_ready_v1 t
+    JOIN storage.objects a ON a.bucket_id='sma-katalog'
+      AND a.name LIKE 'render/'||t.sha256||'/%'
+      AND a.name ~ '^render/[a-f0-9]{64}/[a-f0-9]{64}[.]aac$'
+      AND a.metadata->>'mimetype'='audio/aac'
+      AND (CASE WHEN a.metadata->>'size' ~ '^[0-9]{1,7}$'
+        THEN (a.metadata->>'size')::integer ELSE 0 END) BETWEEN 12 AND 1500000
+  ) AS music_aac_ready_tracks,
   (SELECT count(*) FROM sma_private.customer_websites_v1
     WHERE published_at IS NOT NULL) AS published_customer_websites,
   (SELECT count(*) FROM sma_private.website_provider_connections_v1) AS website_connections,
@@ -94,7 +110,7 @@ WITH snapshot AS (
     WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
 )
 SELECT jsonb_build_object(
- 'version',5,
+ 'version',6,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
@@ -131,6 +147,8 @@ SELECT jsonb_build_object(
   'gallery_music_jobs',gallery_music_jobs,
   'gallery_completed_jobs',gallery_completed_jobs,
   'gallery_pending_jobs',gallery_pending_jobs,
+  'gallery_pending_without_track',gallery_pending_without_track,
+  'gallery_pending_with_failures',gallery_pending_with_failures,
   'gallery_pending_due_jobs',gallery_pending_due_jobs,
   'gallery_pending_scheduled_jobs',gallery_pending_scheduled_jobs,
   'gallery_pending_unscheduled_jobs',gallery_pending_unscheduled_jobs,
@@ -143,6 +161,18 @@ SELECT jsonb_build_object(
     WHEN gallery_current_revision_evidence_jobs < gallery_completed_jobs THEN 'CURRENT_GALLERY_EVIDENCE_REQUIRED'
     ELSE 'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION' END,
   'music_listed_tracks',music_listed_tracks,
+  'music_ready_tracks',music_ready_tracks,
+  'music_aac_ready_tracks',music_aac_ready_tracks,
+  'music_customer_state',CASE
+    WHEN music_listed_tracks=0 AND gallery_pending_jobs>0 THEN 'NO_LISTED_TRACK_FOR_PENDING_JOBS'
+    WHEN music_listed_tracks=0 THEN 'NO_LISTED_TRACK'
+    WHEN music_ready_tracks=0 AND gallery_pending_jobs>0 THEN 'LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS'
+    WHEN music_ready_tracks=0 THEN 'LISTED_TRACKS_NOT_READY'
+    WHEN music_aac_ready_tracks=0 AND gallery_pending_jobs>0 THEN 'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'
+    WHEN music_aac_ready_tracks=0 THEN 'READY_MASTER_WITHOUT_AAC'
+    WHEN gallery_pending_due_jobs>0 THEN 'GALLERY_DUE_WORK_NEEDS_REVIEW'
+    ELSE 'AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED' END,
+  'music_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY',
   'gallery_technical_records',gallery_technical_records,
   'state',CASE
     WHEN available_files=0 THEN 'NO_AVAILABLE_FILES'

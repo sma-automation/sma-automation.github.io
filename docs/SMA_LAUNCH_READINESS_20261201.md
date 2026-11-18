@@ -539,3 +539,52 @@ Er ersetzt weder eine neue reale Kundenanmeldung,
 die n8n-Kundentabellen-/Drive-Ordnerfreigabe,
 den vollständigen Zahlungs-/Dashboard-Erstkundentest
 noch die erforderlichen Veröffentlichungs- und Providerfreigaben.
+
+
+## Version 6 – Kundenmusik fehlt trotz fälliger Galerieaufträge (18.11.2026)
+
+Die rein lesende Bestandsabfrage unterscheidet ab Version 6 zusätzlich
+**fehlende freigegebene Musiktitel** von tatsächlich fehlgeschlagenen
+Galerieaufträgen. Die neue Rubrik `media` zählt
+`gallery_pending_without_track` und `gallery_pending_with_failures`
+getrennt und meldet einen festen `music_customer_state`.
+
+Der echte Live-Abgleich vom 18.11.2026 ergab: **drei fällige ausstehende
+Galerieaufträge, keiner mit zugeordnetem Track oder bisherigem Fehler,
+und null für Kunden gelistete Tracks**. Ein vierter Auftrag ist historisch
+abgeschlossen, besitzt aber keinen aktuellen revisionsgebundenen
+technischen Evidenzdatensatz. Die bisher erfolgreichen Cron-Ausführungen
+sind kein Beleg für abspielbare, lizenzierte Musikfassung.
+
+Dementsprechend meldet der Startcheck bei fälligen Aufträgen und
+null gelisteten Tracks `NO_LISTED_TRACK_FOR_PENDING_JOBS`. Er kann
+**nicht** feststellen, ob genau deshalb die Aufträge warten: Dazu
+wären die aktuelle n8n-Arbeitsstrecke und ein tatsächlich freigegebener
+Musiktitel im geschützten Testkonto praktisch zu prüfen.
+
+Der Check zählt außerdem `music_ready_tracks` aus der tatsächlich im
+SMA-Renderer verwendeten View `music_catalog_ready_v1`: Dort erscheinen
+nur gelistete Titel mit passendem gespeichertem Objekt und Metadaten.
+Ein bloß gelisteter, aber fehlender Audio-Master erzeugt daher
+`LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS`.
+
+Zusätzlich zählt `music_aac_ready_tracks` nur Master mit mindestens
+einem **passenden AAC-Renderobjekt** in `storage.objects` nach demselben
+Namens-, MIME- und Größenvertrag wie der private Galerie-Dispatcher.
+Ein Master ohne dazugehörige AAC-Datei erzeugt
+`READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS`; selbst mit gültigem
+AAC-Objekt meldet der Check nur `GALLERY_DUE_WORK_NEEDS_REVIEW` bzw.
+`AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED` – **niemals**
+eine automatische Provider-/Musikfreigabe.
+
+Im zusätzlichen echten Leseabgleich war der einzige private Katalogmaster
+mit seinem Speicherobjekt vorhanden, aber **kein passendes AAC-Renderobjekt
+diesem Master zuordenbar**. Ein weiteres vorhandenes AAC-Objekt war kein
+Nachweis für genau diesen Master. Eine blinde Freigabe des
+privaten Techniktons wäre daher sowohl rechtlich als auch technisch
+ungeeignet. Der erste eigens freigegebene Master mit passendem AAC und
+tatsächlichem Kunden-Musikrecht bleibt Voraussetzung für den Praxistest. Das Feld
+`music_customer_e2e` bleibt grundsätzlich
+`NOT_VERIFIED_BY_THIS_QUERY`. Keine Kundendaten, Dateipfade,
+Tokens oder Medienbytes werden ausgelesen. Dieser Nachweis erstellt
+keine Songs, löst keine Verarbeitung und keine Gutschriften aus.
