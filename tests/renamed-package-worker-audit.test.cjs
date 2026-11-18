@@ -105,3 +105,25 @@ test('malformed input cannot be interpreted as a successful audit',()=>{
     {nodes:[{name:'x'},{name:'x'}],connections:{}}])
     assert.equal(audit(graph).ok,false);
 });
+
+test('disabled or softened error handling is not equivalent to the reviewed payment service',()=>{
+  const g=renamed();node(g,'Ordnerzuordnung vor Aktivierung prüfen').disabled=true;
+  assert(audit(exposed(g)).issues.includes('PAYMENT_NODE_RUNTIME_SETTINGS_MISMATCH'));
+  const h=renamed();node(h,'Kundenzeile activate').continueOnFail=true;
+  assert(audit(exposed(h)).issues.includes('PAYMENT_NODE_RUNTIME_SETTINGS_MISMATCH'));
+  const x=renamed();node(x,'Mollie first').onError='continueRegularOutput';
+  assert(audit(exposed(x)).issues.includes('PAYMENT_NODE_RUNTIME_SETTINGS_MISMATCH'));
+  const y=renamed();node(y,'Mollie first').retryOnFail=true;
+  assert(audit(exposed(y)).issues.includes('PAYMENT_NODE_RUNTIME_SETTINGS_MISMATCH'));
+  const z=renamed();node(z,'Kundenzeile account').alwaysOutputData=false;
+  assert(audit(exposed(z)).issues.includes('PAYMENT_NODE_RUNTIME_SETTINGS_MISMATCH'));
+});
+test('non-MAIN inbound or outbound payment connections require review',()=>{
+  const g=renamed();
+  g.connections[g.names.get('Mollie first')].error=[
+    [{node:g.names.get('Antwort'),type:'error',index:0}]];
+  assert(audit(exposed(g)).issues.includes('PAYMENT_NONMAIN_ROUTE_UNREVIEWED'));
+  const h=renamed();h.nodes.push({name:'Outside',type:'n8n-nodes-base.code'});
+  h.connections.Outside={error:[[{node:h.names.get('Kundenzeile activate'),type:'error',index:0}]]};
+  assert(audit(exposed(h)).issues.includes('UNEXPECTED_PAYMENT_NODE_INGRESS'));
+});
