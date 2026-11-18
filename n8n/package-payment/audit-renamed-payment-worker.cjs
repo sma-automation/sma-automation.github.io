@@ -136,13 +136,19 @@ function auditPublishedByTopology(graph,template){
   // Disallow shortcuts into guarded worker nodes, including from other
   // subgraphs of an otherwise larger customer assistant.
   for(const [source,connections] of Object.entries(graph.connections)){
-    const ports=connections?.main;
-    if(!Array.isArray(ports))continue;
-    for(const port of ports||[]){
-      if(!Array.isArray(port))continue;
-      for(const edge of port){
-        if(reverse.has(edge?.node)&&!reverse.has(source))
-          issues.push('UNEXPECTED_PAYMENT_NODE_INGRESS');
+    if(!object(connections))continue;
+    for(const [channel,ports] of Object.entries(connections)){
+      if(reverse.has(source)&&channel!=='main')
+        issues.push('PAYMENT_NONMAIN_ROUTE_UNREVIEWED');
+      if(!Array.isArray(ports))continue;
+      for(const port of ports){
+        if(!Array.isArray(port))continue;
+        for(const edge of port){
+          if(reverse.has(edge?.node)&&!reverse.has(source))
+            issues.push('UNEXPECTED_PAYMENT_NODE_INGRESS');
+          if(reverse.has(edge?.node)&&channel!=='main')
+            issues.push('PAYMENT_NONMAIN_ROUTE_UNREVIEWED');
+        }
       }
     }
   }
@@ -150,8 +156,14 @@ function auditPublishedByTopology(graph,template){
     const e=expected.get(name),a=byName.get(actualName);
     if(!isDeepStrictEqual(normalizedParameters(a,reverse),
        normalizedParameters(e,new Map())))issues.push('PAYMENT_NODE_LOGIC_MISMATCH');
-    if(Object.hasOwn(e,'alwaysOutputData')&&
-      e.alwaysOutputData!==a.alwaysOutputData)issues.push('PAYMENT_NODE_OUTPUT_SETTING_MISMATCH');
+    // Runtime node switches can bypass correct-looking Code and payment
+    // parameters. Defaults are allowed, but permissive error routing,
+    // disabled nodes, extra retries and dropping items are not equivalent.
+    if(['disabled','continueOnFail','executeOnce','retryOnFail']
+      .some(key=>a[key]===true&&e[key]!==true)||
+      (a.onError??'stopWorkflow')!==(e.onError??'stopWorkflow')||
+      (a.alwaysOutputData===true)!==(e.alwaysOutputData===true))
+      issues.push('PAYMENT_NODE_RUNTIME_SETTINGS_MISMATCH');
   }
   const merchant=sameGroupReferences(merchants,paired,byName,'credential');
   const database=sameGroupReferences(databases,paired,byName,'credential');
