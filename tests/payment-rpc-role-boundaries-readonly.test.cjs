@@ -9,7 +9,7 @@ const sql=readFileSync(join(__dirname,'../supabase/sql/payment-rpc-role-boundari
 test('Payment-role preflight is strictly SELECT-only and does not touch customer rows',()=>{
   const query=sql.replace(/^--.*$/gm,'').trim();
   assert.match(query,/^WITH\s+expected\s*\(/i);
-  assert.match(query,/\bFROM\s+pg_proc\s+p\b/i);
+  assert.match(query,/\bLEFT\s+JOIN\s+pg_proc\s+p\b/i);
   assert.match(query,/\bLEFT\s+JOIN\s+pg_namespace\s+n\b/i);
   assert.match(query,/\bhas_function_privilege\(/i);
   assert.match(query,/\bSELECT\s+CASE\s+WHEN\b/i);
