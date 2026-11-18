@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 7b6a41a78f3cfaf1a82c9b24a8b2557a5f775a1c
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 0245a98440924c96327b5af033b02035d156e861
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = '7b6a41a78f3cfaf1a82c9b24a8b2557a5f775a1c'
+          test "$(git rev-parse HEAD)" = '0245a98440924c96327b5af033b02035d156e861'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
@@ -115,6 +115,30 @@ jobs:
                         bounded(p.reachable_subworkflow_calls));
                       console.log('SMA_N8N_'+prefix+'_NAMED_FOLDER_GUARD_REACHABLE='+
                         (p.named_folder_guard_reachable===true?'YES':'NO'));
+                      // Static marker presence only: a URL, Data Table filter,
+                      // credential reference or code token is not a guard proof.
+                      const c=p.config_markers;
+                      if(c?.status==='CONFIG_MARKERS_PRESENT_NOT_VALIDATED'){
+                        const fields=[
+                          ['LITERAL_MOLLIE_API','http_literal_mollie_v2'],
+                          ['LITERAL_SMA_RPC','http_literal_sma_supabase_rpc'],
+                          ['DYNAMIC_HTTP_TARGET','http_dynamic_or_missing_target'],
+                          ['OTHER_LITERAL_HTTP_TARGET','http_other_literal_target'],
+                          ['HTTP_WRITE_METHODS','http_configured_mutating_method'],
+                          ['HEADER_AUTH_REFERENCES','http_with_header_auth_reference'],
+                          ['IDEMPOTENCY_HEADER_MARKERS','http_with_idempotency_key_header'],
+                          ['DATA_TABLE_WRITES','data_table_write_operations'],
+                          ['DATA_TABLE_IDENTITY_FILTER_MARKERS','data_table_writes_with_identity_filter_markers'],
+                          ['DATA_TABLE_BOTH_FOLDER_FILTER_MARKERS','data_table_writes_with_both_folder_filter_markers'],
+                          ['CODE_TICKET_TEXT_MARKERS','code_nodes_with_ticket_marker'],
+                          ['CODE_BOTH_FOLDER_TEXT_MARKERS','code_nodes_with_both_folder_markers'],
+                          ['CODE_PAYMENT_RECEIPT_TEXT_MARKERS','code_nodes_with_payment_receipt_markers'],
+                          ['CODE_NODES_SKIPPED_OVERSIZE','code_nodes_skipped_oversize']
+                        ];
+                        for(const [label,key] of fields)
+                          console.log('SMA_N8N_'+prefix+'_'+label+'='+bounded(c[key]));
+                        console.log('SMA_N8N_'+prefix+'_EFFECTIVE_PAYMENT_GUARDS=NOT_VERIFIED');
+                      }
                     }
                     console.log('SMA_N8N_PAYMENT_SAFE_E2E=NOT_VERIFIED');
                   }
