@@ -236,12 +236,12 @@ try {
     music_customer_state:'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'});
   await db.query("INSERT INTO storage.objects VALUES('sma-katalog',$1,$2)",
     ['render/'+masterSha+'/'+masterSha+'.aac',{size:'1234',mimetype:'audio/aac'}]);
-  await checkGallery({music_aac_ready_tracks:1,music_customer_state:'GALLERY_DUE_WORK_NEEDS_REVIEW'});
+  await checkGallery({music_aac_ready_tracks:1,music_customer_state:'AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED'});
   await db.exec("UPDATE storage.objects SET metadata=jsonb_build_object('size','1234','mimetype','application/octet-stream')");
   await checkGallery({music_aac_ready_tracks:0,music_customer_state:'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'});
   await db.exec("UPDATE storage.objects SET metadata=jsonb_build_object('size','1234','mimetype','audio/aac')");
   await db.exec("UPDATE sma_private.gallery_music_v1 SET failures=2 WHERE state='pending'");
-  await checkGallery({gallery_pending_with_failures:2,music_customer_state:'GALLERY_DUE_WORK_NEEDS_REVIEW'});
+  await checkGallery({gallery_pending_with_failures:2,music_customer_state:'AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED'});
   await db.exec('INSERT INTO sma_private.music_catalog_v1 VALUES(false),(NULL)');
   await checkGallery({music_listed_tracks:1});
   await db.query('DELETE FROM sma_private.gallery_music_v1 WHERE id=$1',[completed]);
