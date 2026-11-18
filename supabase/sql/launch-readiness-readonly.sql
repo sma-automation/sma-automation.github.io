@@ -89,6 +89,8 @@ WITH snapshot AS (
   ) AS gallery_current_revision_evidence_jobs,
   -- Listing alone does not prove playable bytes, licensing, AAC readiness, or customer access.
   (SELECT count(*) FROM sma_private.music_catalog_v1 WHERE listed IS TRUE) AS music_listed_tracks,
+  -- The ready view also requires the matching immutable object and metadata.
+  (SELECT count(*) FROM sma_private.music_catalog_ready_v1) AS music_ready_tracks,
   (SELECT count(*) FROM sma_private.customer_websites_v1
     WHERE published_at IS NOT NULL) AS published_customer_websites,
   (SELECT count(*) FROM sma_private.website_provider_connections_v1) AS website_connections,
@@ -150,11 +152,14 @@ SELECT jsonb_build_object(
     WHEN gallery_current_revision_evidence_jobs < gallery_completed_jobs THEN 'CURRENT_GALLERY_EVIDENCE_REQUIRED'
     ELSE 'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION' END,
   'music_listed_tracks',music_listed_tracks,
+  'music_ready_tracks',music_ready_tracks,
   'music_customer_state',CASE
     WHEN music_listed_tracks=0 AND gallery_pending_jobs>0 THEN 'NO_LISTED_TRACK_FOR_PENDING_JOBS'
     WHEN music_listed_tracks=0 THEN 'NO_LISTED_TRACK'
+    WHEN music_ready_tracks=0 AND gallery_pending_jobs>0 THEN 'LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS'
+    WHEN music_ready_tracks=0 THEN 'LISTED_TRACKS_NOT_READY'
     WHEN gallery_pending_due_jobs>0 THEN 'GALLERY_DUE_WORK_NEEDS_REVIEW'
-    ELSE 'LISTED_TRACK_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED' END,
+    ELSE 'READY_TRACK_EXISTS_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED' END,
   'music_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY',
   'gallery_technical_records',gallery_technical_records,
   'state',CASE
