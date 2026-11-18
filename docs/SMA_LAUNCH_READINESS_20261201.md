@@ -562,9 +562,14 @@ null gelisteten Tracks `NO_LISTED_TRACK_FOR_PENDING_JOBS`. Er kann
 wären die aktuelle n8n-Arbeitsstrecke und ein tatsächlich freigegebener
 Musiktitel im geschützten Testkonto praktisch zu prüfen.
 
-Wenn später Titel gelistet sind, zeigt der Check ausdrücklich nur
-`GALLERY_DUE_WORK_NEEDS_REVIEW` bzw.
-`LISTED_TRACK_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED` an und **niemals**
+Der Check zählt außerdem `music_ready_tracks` aus der tatsächlich im
+SMA-Renderer verwendeten View `music_catalog_ready_v1`: Dort erscheinen
+nur gelistete Titel mit passendem gespeichertem Objekt und Metadaten.
+Ein bloß gelisteter, aber fehlender Audio-Master erzeugt daher
+`LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS` statt eines falschen
+„bereits bereit“-Signals. Mit vorhandenem bereiten Titel meldet der Check
+nur `GALLERY_DUE_WORK_NEEDS_REVIEW` bzw.
+`READY_TRACK_EXISTS_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED` – **niemals**
 eine automatische Provider-/Musikfreigabe. Das Feld
 `music_customer_e2e` bleibt grundsätzlich
 `NOT_VERIFIED_BY_THIS_QUERY`. Keine Kundendaten, Dateipfade,
