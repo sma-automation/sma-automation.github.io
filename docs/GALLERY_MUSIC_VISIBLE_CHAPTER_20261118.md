@@ -33,7 +33,9 @@ Die kleine, browserlokale Gate-Funktion
 `app/assets/gallery-music-view-gate.mjs` beobachtet relevante
 Klassen-, `hidden`- und Sichtbarkeitsänderungen. Bei einem
 **tatsächlichen** Wechsel von nicht sichtbar zu sichtbar weckt sie
-den bestehenden Worker einmal. Unveränderte DOM-Änderungen lösen
+den bestehenden Worker einmal, **außer** wenn die Dateiliste gerade
+neu geladen wird, ein Fehler erneut geprüft wird oder ein Ordnerabgleich
+läuft. Diese Vorgänge dürfen keine zweite Musik-Statusabfrage erzeugen. Unveränderte DOM-Änderungen lösen
 keine weiteren Aufträge aus. Sie selbst verwendet **keinen Timer,
 keinen Netzwerkaufruf und kein Kunden-Credential**.
 

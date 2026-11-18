@@ -565,7 +565,13 @@ function attachFileList(doc,page,editorHref){
    (page.classList.contains('sma-optimizing')||
     dashboardChapters?.controllers.get('publishing')?.selected==='files')});
  const soundtrack=owner?mountGalleryMusic({owner,
-  isVisible:musicGate.isVisible,subscribeVisibility:musicGate.subscribeVisibility,
+  isVisible:musicGate.isVisible,
+  // A catalogue recovery must not start an unrelated new music claim.
+  // The normal successful first load already calls wakeMusic exactly once.
+  subscribeVisibility:notify=>musicGate.subscribeVisibility(()=>{
+   if(musicGate.isVisible()&&(loading||retryStep||scanRunning))return;
+   notify();
+  }),
   onComplete:()=>load(false),
   onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
