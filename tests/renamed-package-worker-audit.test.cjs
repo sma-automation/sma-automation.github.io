@@ -155,3 +155,78 @@ test('unexpected property names are represented by OTHER, never returned verbati
   assert(result.parameter_mismatches.some(x=>x.categories.includes('OTHER')));
   assert.doesNotMatch(JSON.stringify(result),/DO_NOT_LOG|private_property/);
 });
+
+test('documented n8n GET and value-equality defaults do not create false payment mismatches',()=>{
+  const g=renamed();
+  for(const name of ['Mollie payment','Mollie subscription','Mollie Abozahlungen lesen']){
+    delete node(g,name).parameters.method;
+  }
+  for(const name of ['Kundenzeile account','Kundenzeile activate','Kundenzeile disable',
+    'Bestehenden Zugang fortsetzen']){
+    for(const filter of node(g,name).parameters.filters.conditions){
+      if(Object.hasOwn(filter,'keyValue')&&!Object.hasOwn(filter,'condition'))
+        filter.condition='eq';
+    }
+  }
+  const r=audit(exposed(g));
+  assert.deepEqual(r.issues,[]);
+  assert.equal(r.ok,true);
+  assert.deepEqual(r.parameter_mismatches,[]);
+  assert.equal(r.filter_checks.length,4);
+  assert(r.filter_checks.every(f=>f.status==='FILTER_KEYS_AND_PREDICATES_MATCH'&&f.all_conditions));
+  assert.equal(r.real_customer_e2e_verified,false);
+});
+test('method default is only recognized for missing GET, never missing POST or explicit wrong verbs',()=>{
+  const wrong=renamed();
+  delete node(wrong,'Mollie subscribe').parameters.method;
+  assert(audit(exposed(wrong)).parameter_mismatches.some(
+    p=>p.categories.includes('METHOD')));
+  const wrongGet=renamed();
+  node(wrongGet,'Mollie payment').parameters.method='POST';
+  assert(audit(exposed(wrongGet)).parameter_mismatches.some(
+    p=>p.categories.includes('METHOD')));
+});
+test('required identity and folder filters are enforced, not just counted as markers',()=>{
+  const g=renamed();
+  const conditions=node(g,'Kundenzeile activate').parameters.filters.conditions;
+  const pos=conditions.findIndex(c=>c.keyName==='kunde_id');
+  assert(pos>=0);conditions.splice(pos,1);
+  const r=audit(exposed(g));
+  assert.equal(r.ok,false);
+  const f=r.filter_checks.find(c=>c.status==='REQUIRED_FILTERS_MISSING');
+  assert(f.missing_required_fields.includes('CUSTOMER_REF'));
+  const other=renamed();
+  node(other,'Kundenzeile activate').parameters.filters.conditions=
+    node(other,'Kundenzeile activate').parameters.filters.conditions
+      .filter(c=>c.keyName!=='processing_folder_id');
+  assert(audit(exposed(other)).filter_checks.some(c=>
+    c.missing_required_fields.includes('PROCESSING_FOLDER')));
+});
+test('weak operators, foreign filter values, extra keys and unsafe OR conditions are distinct',()=>{
+  const g=renamed();
+  node(g,'Kundenzeile account').parameters.filters.conditions[0].condition='neq';
+  assert(audit(exposed(g)).filter_checks.some(c=>c.operator_differences>0));
+  const x=renamed();
+  node(x,'Kundenzeile disable').parameters.filters.conditions[0].keyValue=
+    'PRIVATE_OTHER_IDENTITY_DO_NOT_LOG';
+  const result=audit(exposed(x));
+  assert(result.filter_checks.some(c=>c.expression_differences>0));
+  assert(!JSON.stringify(result).includes('PRIVATE_OTHER_IDENTITY'));
+  const y=renamed();
+  node(y,'Kundenzeile account').parameters.matchType='anyCondition';
+  assert(audit(exposed(y)).filter_checks.some(c=>c.all_conditions===false));
+  const z=renamed();
+  node(z,'Bestehenden Zugang fortsetzen').parameters.filters.conditions.push(
+    {keyName:'PRIVATE_UNKNOWN_COLUMN_DO_NOT_LOG',condition:'eq',keyValue:'sensitive'});
+  const report=audit(exposed(z));
+  assert(report.filter_checks.some(c=>c.unexpected_fields===1));
+  assert.doesNotMatch(JSON.stringify(report),/PRIVATE_UNKNOWN|sensitive/);
+});
+test('malformed and duplicate filter keys never produce a passing safety report',()=>{
+  const g=renamed();
+  node(g,'Kundenzeile account').parameters.filters.conditions.push(
+    {...node(g,'Kundenzeile account').parameters.filters.conditions[0]});
+  assert(audit(exposed(g)).filter_checks.some(c=>c.duplicate_field_keys));
+  const h=renamed();node(h,'Kundenzeile account').parameters.filters.conditions=[];
+  assert(audit(exposed(h)).filter_checks.some(c=>c.missing_required_fields.length>0));
+});

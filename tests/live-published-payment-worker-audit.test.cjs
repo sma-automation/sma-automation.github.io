@@ -244,6 +244,25 @@ test('Renamed unsafe activation guard remains blocked and live version is rechec
   assert.ok(r.parameter_mismatches.some(x=>x.categories.includes('CODE')));
   assert.ok(r.parameter_mismatches.every(x=>
     Number.isInteger(x.template_position)&&x.template_position>0));
+  assert.equal(r.filter_checks.length,4);
+  assert.ok(r.filter_checks.every(x=>x.all_conditions===true&&
+    x.status==='FILTER_KEYS_AND_PREDICATES_MATCH'));
   assert.equal(r.published_version_stability_rechecked,true);
+  assert.deepEqual(api.calls.map(x=>x.url),[url,versionUrl,url]);
+});
+
+test('published graph filter omissions yield bounded flags without identity data or source',async()=>{
+  const f=fixture(),renamed=renamePublishedFixture(f.version);
+  f.version=renamed.graph;
+  const guard=f.version.nodes.find(n=>
+    n.name===renamed.names.get('Kundenzeile activate'));
+  guard.parameters.filters.conditions=guard.parameters.filters.conditions.filter(
+    c=>c.keyName!=='kunde_id'&&c.keyName!=='processing_folder_id');
+  const api=fakeApi(f),r=await run(api);
+  assert.equal(r.ok,false);
+  assert.equal(r.published_version_stability_rechecked,true);
+  assert.ok(r.filter_checks.some(check=>check.missing_required_fields.includes('CUSTOMER_REF')&&
+    check.missing_required_fields.includes('PROCESSING_FOLDER')));
+  assert.doesNotMatch(JSON.stringify(r),/merchant-fixture|db-fixture|table-fixture|private/);
   assert.deepEqual(api.calls.map(x=>x.url),[url,versionUrl,url]);
 });
