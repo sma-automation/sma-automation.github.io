@@ -12,9 +12,11 @@ Metadaten-GETs beim festen Google-Drive-Endpunkt:
 1. Die angemeldete Drive-Identität entspricht der vorher bestätigten
    `permissionId` der von SMA tatsächlich verwendeten Verbindung.
 2. `upload_folder_id` ist ein vorhandener, nicht gelöschter Ordner mit
-   `canListChildren=true`.
+   `canListChildren=true` **und** `canAddChildren=true`.
 3. `processing_folder_id` ist ein anderer vorhandener, nicht gelöschter Ordner
    mit `canListChildren=true` und `canAddChildren=true`.
+   Fehlendes oder bloß als Text zurückgegebenes `canAddChildren` wird bei
+   **beiden** Ordnern als nicht nachgewiesenes Schreibrecht behandelt.
 
 Es werden weder Ordnerinhalte aufgelistet noch Medien heruntergeladen. Es
 werden keine Ordner erstellt, Berechtigungen geändert, Webhooks aufgerufen,
@@ -71,8 +73,14 @@ Drive-Identität. Die Ausgabe enthält ausdrücklich:
 Die Zugehörigkeit der Ordner zum richtigen Kunden, die unveränderte
 SMA_Kunden-Zuordnung und die tatsächlich installierte n8n-Verbindung sind
 zusätzlich zu prüfen. Google-Berechtigungen können sich später ändern.
+Das zusätzlich geforderte `canAddChildren=true` beim Eingangsordner ist
+eine **konservative Betreiberprüfung der SMA-Drive-Identität**, kein Beweis
+für das Schreibrecht einer möglicherweise anderen, angemeldeten
+Kundenidentität. Auch nach einem positiven Prüfergebnis muss der reale
+Kunden-Upload- und Weiterverarbeitungsweg gesondert getestet werden.
 `canAddChildren=true` ist kein Beweis für erfolgreiche Dateiübertragung,
-verfügbaren Speicher oder ausreichende OAuth-Schreibrechte. Der vollständige
+verfügbaren Speicher, das Entfernen oder Verschieben bereits vorhandener
+Dateien oder ausreichende OAuth-Schreibrechte. Der vollständige
 Kunden-/Uploadtest bleibt eine getrennte Abnahme. Ebenso beweist dieser Check
 keine leere Galerie, da er keine Dateiliste abruft.
 
@@ -87,9 +95,11 @@ wiederholen. Ein älterer Bericht darf keine spätere Aktivierung autorisieren.
 Konfiguration. In beiden Fällen erfolgt kein Netzaufruf. `ACCOUNT_MISMATCH`
 stoppt vor dem ersten Kundenordnerabruf.
 
-`AUTH_REQUIRED`, `ACCESS_UNAVAILABLE`, `FOLDER_UNAVAILABLE` und
-`PROCESSING_NOT_WRITABLE` erfordern die Prüfung von Verbindung, Zuordnung
-beziehungsweise Rechten. Eine 404-Antwort beweist nicht, dass der Ordner
+`AUTH_REQUIRED`, `ACCESS_UNAVAILABLE`, `FOLDER_UNAVAILABLE`,
+`UPLOAD_NOT_WRITABLE` und `PROCESSING_NOT_WRITABLE` erfordern die Prüfung
+von Verbindung, Zuordnung beziehungsweise Rechten. Ein Eingangsordner,
+den die kontrollierte SMA-Drive-Identität nur auflisten kann, besteht den
+vorsichtigen Vorabcheck nicht mehr. Eine 404-Antwort beweist nicht, dass der Ordner
 weltweit nicht existiert; der verwendete Zugang konnte ihn nicht lesen.
 `RATE_LIMITED`, `READ_FAILED`, `UNEXPECTED_RESPONSE` und `TIMEOUT` liefern
 keinen erfolgreichen Nachweis. Nach Klärung kann der Betreiber ausdrücklich
@@ -107,7 +117,7 @@ verspätete Antworten können keinen Erfolg erzeugen.
 node --test tests/onboarding-folder-preflight.test.cjs
 ```
 
-24 isolierte Tests prüfen gültige und ungültige Metadaten, Kontoverwechslung,
+25 isolierte Tests prüfen gültige und ungültige Metadaten, Kontoverwechslung,
 fehlende Rechte, HTTP-Fehler, Geheimnisschutz, Größen- und Zeitgrenzen,
 verspätete Antworten sowie den Abgleich mit dem bestehenden Katalog-Validator.
 Sämtliche Google-Antworten sind simuliert; keine echten Ordner wurden damit
@@ -126,3 +136,18 @@ Google Drive API v3:
 [User.permissionId](https://developers.google.com/workspace/drive/api/reference/rest/v3/User).
 Die abgefragten Fähigkeiten sind ausdrücklich Eigenschaften des jeweiligen
 Google-Nutzers und Ordners, keine Freigabeentscheidung von SMA.
+
+## Korrektur vom 18.11.2026 – Eingangsordner darf nicht nur lesbar sein
+
+Der frühere Vorabcheck akzeptierte einen Eingangsordner selbst bei
+`canAddChildren=false`, solange `canListChildren=true` gemeldet wurde.
+Das war für eine Abnahme der Schreibfähigkeit der verwendeten
+SMA-Drive-Verbindung zu schwach. Die neue Abfrage fordert für
+**beide Ordner** ausdrücklich beide Fähigkeiten an und verweigert
+bei fehlender Schreibfähigkeit mit `UPLOAD_NOT_WRITABLE` bzw.
+`PROCESSING_NOT_WRITABLE` einen erfolgreichen Vorabbericht.
+Die Abfragezahl bleibt bei maximal drei reinen Metadaten-GETs.
+
+Dieser Vorabcheck wird weiterhin nicht automatisch ausgelöst und
+blockiert oder aktiviert **keine** echten Zahlungen; die gesonderte
+Abnahme des Drive-Kundenwegs bleibt verpflichtend.
