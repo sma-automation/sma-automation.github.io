@@ -10,7 +10,7 @@ const source={nodes:[
   {name:'SMA – Paketauswahl – Kunde prüfen',parameters:{dataTableId:{value:'customer-table'}}}
 ]};
 function renamed(){
-  const graph=build(source),names=new Map(graph.nodes.map((n,i)=>[n.name,'Einbindung '+(i+1)]));
+  const graph=JSON.parse(JSON.stringify(build(source))),names=new Map(graph.nodes.map((n,i)=>[n.name,'Einbindung '+(i+1)]));
   const change=v=>{
     if(typeof v==='string'){
       for(const [from,to] of names)v=v.replaceAll("$('"+from+"')","$('"+to+"')");
