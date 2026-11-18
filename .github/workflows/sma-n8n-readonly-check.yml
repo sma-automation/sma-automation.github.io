@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           git init -q .
           git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
-          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin a9d5237b690dcf9cf24d69cfb9f443ce4d2eb628
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin 940180177ba49b875cf5694d7e0da2bb78b76625
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = 'a9d5237b690dcf9cf24d69cfb9f443ce4d2eb628'
+          test "$(git rev-parse HEAD)" = '940180177ba49b875cf5694d7e0da2bb78b76625'
 
       - name: Inspect only the n8n Public API GET endpoints
         shell: bash
