@@ -1,0 +1,87 @@
+name: SMA n8n read-only connection check
+
+# Operator-started only: never runs on push, PR, cron or schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      check:
+        description: Read the published payment graph, saved execution metadata, or both
+        type: choice
+        required: true
+        default: both
+        options:
+          - both
+          - payment
+          - executions
+
+# Do not issue a GitHub repository token to this job.
+permissions: {}
+concurrency:
+  group: sma-n8n-readonly-audit
+  cancel-in-progress: false
+
+jobs:
+  readonly:
+    if: github.repository == 'sma-automation/sma-automation.github.io' && github.actor == 'sma-automation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      SMA_N8N_READ_API_KEY: ${{ secrets.SMA_N8N_READ_API_KEY }}
+      SMA_CHECK: ${{ inputs.check }}
+    steps:
+      - name: Check out the reviewed SMA audit code (no repository credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin https://github.com/sma-automation/sma-automation.github.io.git
+          git -c protocol.version=2 fetch --quiet --no-tags --depth=1 origin a9d5237b690dcf9cf24d69cfb9f443ce4d2eb628
+          git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = 'a9d5237b690dcf9cf24d69cfb9f443ce4d2eb628'
+
+      - name: Inspect only the n8n Public API GET endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SMA_N8N_READ_API_KEY:-}" ]; then
+            echo 'N8N_READ_API_KEY_REQUIRED: set the encrypted GitHub Actions repository secret; never paste it in a chat or log.'
+            exit 1
+          fi
+          node <<'NODE'
+          'use strict';
+          const onlyCodes = issues => Array.isArray(issues) ?
+            issues.filter(i => typeof i === 'string' && /^[A-Za-z0-9_]{1,70}$/.test(i)).slice(0,8) : [];
+          async function main(){
+            const check=process.env.SMA_CHECK;
+            if(!['both','payment','executions'].includes(check)) throw Error('INVALID_CHECK');
+            let allOk=true;
+            if(check==='both'||check==='payment'){
+              const {inspectLivePaymentWorker}=require('./n8n/package-payment/audit-live-worker.cjs');
+              const result=await inspectLivePaymentWorker({timeoutMs:12000});
+              const status=result?.ok===true ? 'STRUCTURE_MATCHES_NOT_E2E' : 'REVIEW_REQUIRED';
+              console.log('SMA_N8N_PAYMENT_GRAPH='+status);
+              if(!result?.ok){
+                allOk=false;
+                console.log('SMA_N8N_PAYMENT_CHECK_CODES='+onlyCodes(result?.issues).join(','));
+              }
+            }
+            if(check==='both'||check==='executions'){
+              const {inspectSavedExecutionMetadata}=require('./n8n/consolidation/read-execution-metadata.cjs');
+              const result=await inspectSavedExecutionMetadata({maxPages:10,timeoutMs:15000});
+              const status=result?.ok===true ?
+                (result.more_saved_pages_available===true ? 'PARTIAL_SAVED_HISTORY_NOT_BILLING' : 'SAVED_HISTORY_NOT_BILLING') :
+                'UNAVAILABLE';
+              console.log('SMA_N8N_EXECUTION_METADATA='+status);
+              if(!result?.ok){
+                allOk=false;
+                const code=result?.issue;
+                console.log('SMA_N8N_EXECUTION_CHECK_CODE='+
+                  (typeof code==='string' && /^[A-Z0-9_]{1,70}$/.test(code) ? code:'UNAVAILABLE'));
+              }
+            }
+            console.log('SMA_N8N_REAL_CUSTOMER_E2E=NOT_VERIFIED');
+            console.log('SMA_N8N_BILLING_METER=NOT_VERIFIED');
+            if(!allOk) process.exitCode=1;
+          }
+          main().catch(()=>{console.log('SMA_N8N_READONLY_AUDIT=FAILED');process.exitCode=1;});
+          NODE
