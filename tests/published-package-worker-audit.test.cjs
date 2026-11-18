@@ -68,6 +68,11 @@ test('an unchanged update node cannot be reached by bypassing the folder gate',(
       parameters:{jsCode:'return $input.all();'}});
     g.connections['Unsafe replacement path']={main:[[{node:'Kundenzeile activate',type:'main',index:0}]]};
   },'unexpected_input_to_payment_guard');
+  blocked(g=>{
+    g.nodes.push({name:'Untrusted skip-ticket entry',type:'n8n-nodes-base.webhook',typeVersion:2.1,
+      parameters:{path:'unreviewed-alternative',httpMethod:'POST',responseMode:'responseNode'}});
+    g.connections['Untrusted skip-ticket entry']={main:[[{node:'Vorgang auswählen',type:'main',index:0}]]};
+  },'unexpected_input_to_payment_guard');
 });
 test('removing or weakening folder checks cannot appear to pass',()=>{
   blocked(g=>{node(g,'Ordnerzuordnung vor Aktivierung prüfen').parameters.jsCode='return $input.all();';},
