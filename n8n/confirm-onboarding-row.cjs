@@ -1,5 +1,6 @@
 // Operator helper for a single, already inspected row in the private SMA_Kunden table.
-// No provider request is made. Only the seven existing SQL evidence fields are emitted.
+// Before printing SQL, the CLI checks the actual SMA Google Drive identity and
+// both folder metadata records. No n8n execution, payment or Drive write occurs.
 const {createInterface}=require('node:readline');
 
 const hiddenFields=['zugangs_token','zugangs_link','mollie_customer_id','mollie_subscription_id'];
@@ -30,6 +31,35 @@ function confirmationSql(reference,row){
   return "select sma_private.confirm_onboarding_n8n_v1('"+reference+"', convert_from(decode('"+evidence+"', 'hex'), 'UTF8')::jsonb);";
 }
 
+// SQL remains the existing seven-field row evidence. Folder metadata is checked
+// using the exact IDs just read from the SAME n8n customer row. A positive GET
+// does not itself prove customer ownership or authorize billing/publication.
+async function confirmationSqlAfterFolders(reference,row,{
+  accessToken=process.env.SMA_GOOGLE_DRIVE_READ_TOKEN,
+  expectedPermissionId=process.env.SMA_GOOGLE_DRIVE_EXPECTED_PERMISSION_ID,
+  fetchImpl
+}={}){
+  const sql=confirmationSql(reference,row); // reject reused, active or wrong rows before HTTP
+  const {checkFolders}=await import('./package-payment/check-folders.mjs');
+  const status=await checkFolders({
+    uploadFolderId:row.upload_folder_id,
+    processingFolderId:row.processing_folder_id,
+    accessToken,expectedPermissionId,
+    ...(fetchImpl?{fetchImpl}:{})
+  });
+  if(status.ok!==true || status.code!=='FOLDER_ACCESS_VERIFIED' ||
+    status.checks?.drive_account_matches!==true ||
+    status.checks?.upload_folder_readable!==true ||
+    status.checks?.processing_folder_readable!==true ||
+    status.checks?.processing_folder_writable!==true){
+    // Only fixed codes; never print the returned Drive metadata or identifiers.
+    const code=typeof status.code==='string'&&/^[A-Z_]{3,48}$/.test(status.code)?
+      status.code:'UNEXPECTED_RESPONSE';
+    throw Error('Kundenordner mit der SMA-Drive-Verbindung nicht bestätigt: '+code);
+  }
+  return sql;
+}
+
 async function main(){
   const lines=createInterface({input:process.stdin});
   const answers=lines[Symbol.asyncIterator]();
@@ -58,12 +88,16 @@ async function main(){
       row[key]=await flag(key+' aus n8n');
     for(const key of hiddenFields)
       row[key+'_vorhanden']=await flag(key+' in n8n vorhanden?');
-    console.log(confirmationSql(reference,row));
+    // Folder IDs are entered only in the private terminal, never included in
+    // the generated SQL, console output or a public customer response.
+    row.upload_folder_id=(await ask('upload_folder_id aus derselben n8n-Zeile')).trim();
+    row.processing_folder_id=(await ask('processing_folder_id aus derselben n8n-Zeile')).trim();
+    console.log(await confirmationSqlAfterFolders(reference,row));
   }finally{
     lines.close();
   }
 }
-module.exports={confirmationSql};
+module.exports={confirmationSql,confirmationSqlAfterFolders};
 if(require.main===module){
   main().catch(error=>{console.error(error.message);process.exitCode=1;});
 }
