@@ -107,6 +107,14 @@ jobs:
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_NODES='+bounded(p.reachable_nodes));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_RESPONSES='+
                         bounded(p.reachable_respond_to_webhook));
+                      // These are explicit MAIN-graph terminal counts, not
+                      // runtime success or complete conditional coverage.
+                      console.log('SMA_N8N_'+prefix+'_RESPONSE_TERMINAL_NODES='+
+                        bounded(p.static_response_terminal_nodes));
+                      console.log('SMA_N8N_'+prefix+'_NONRESPONSE_TERMINAL_NODES='+
+                        bounded(p.static_nonresponse_terminal_nodes));
+                      console.log('SMA_N8N_'+prefix+'_EMPTY_DECISION_OUTPUT_PORTS='+
+                        bounded(p.explicit_empty_decision_output_ports));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_CODE='+bounded(p.reachable_code_nodes));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_HTTP='+bounded(p.reachable_http_requests));
                       console.log('SMA_N8N_'+prefix+'_REACHABLE_DATA_TABLE='+
