@@ -129,7 +129,8 @@ async function inspectLivePaymentWorker({
         account_assignment_verified:false,drive_folder_access_verified:false,
         mollie_payment_verified:false}
       : equivalence
-        ? {...strict,issues:[...new Set([...strict.issues,...equivalence.issues])].sort()}
+        ? {...strict,issues:[...new Set([...strict.issues,...equivalence.issues])].sort(),
+          parameter_mismatches:equivalence.parameter_mismatches}
         : strict;
     // Even a mismatch must be bound to a stable PUBLISHED version. Never
     // interpret a stale snapshot as evidence about the current active graph.
