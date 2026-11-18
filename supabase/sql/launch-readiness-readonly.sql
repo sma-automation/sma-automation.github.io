@@ -48,6 +48,11 @@ WITH snapshot AS (
   (SELECT count(*) FROM sma_private.gallery_music_v1) AS gallery_music_jobs,
   (SELECT count(*) FROM sma_private.gallery_music_v1 WHERE state='completed') AS gallery_completed_jobs,
   (SELECT count(*) FROM sma_private.gallery_music_v1 WHERE state='pending') AS gallery_pending_jobs,
+  -- Pending without a chosen track is a prerequisite gap, not a technical failure verdict.
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND nullif(btrim(track_sha),'') IS NULL) AS gallery_pending_without_track,
+  (SELECT count(*) FROM sma_private.gallery_music_v1
+    WHERE state='pending' AND coalesce(failures,0)>0) AS gallery_pending_with_failures,
   -- Due is a scheduling fact, not eligibility, a failure, or permission to render.
   (SELECT count(*) FROM sma_private.gallery_music_v1
     WHERE state='pending' AND next_attempt<=now()) AS gallery_pending_due_jobs,
@@ -94,7 +99,7 @@ WITH snapshot AS (
     WHERE ist_testbestellung IS NULL) AS unknown_test_status_orders
 )
 SELECT jsonb_build_object(
- 'version',5,
+ 'version',6,
  'inspected_at',inspected_at,
  'scope','aggregate_read_only',
  'accounts',jsonb_build_object(
@@ -131,6 +136,8 @@ SELECT jsonb_build_object(
   'gallery_music_jobs',gallery_music_jobs,
   'gallery_completed_jobs',gallery_completed_jobs,
   'gallery_pending_jobs',gallery_pending_jobs,
+  'gallery_pending_without_track',gallery_pending_without_track,
+  'gallery_pending_with_failures',gallery_pending_with_failures,
   'gallery_pending_due_jobs',gallery_pending_due_jobs,
   'gallery_pending_scheduled_jobs',gallery_pending_scheduled_jobs,
   'gallery_pending_unscheduled_jobs',gallery_pending_unscheduled_jobs,
@@ -143,6 +150,12 @@ SELECT jsonb_build_object(
     WHEN gallery_current_revision_evidence_jobs < gallery_completed_jobs THEN 'CURRENT_GALLERY_EVIDENCE_REQUIRED'
     ELSE 'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION' END,
   'music_listed_tracks',music_listed_tracks,
+  'music_customer_state',CASE
+    WHEN music_listed_tracks=0 AND gallery_pending_jobs>0 THEN 'NO_LISTED_TRACK_FOR_PENDING_JOBS'
+    WHEN music_listed_tracks=0 THEN 'NO_LISTED_TRACK'
+    WHEN gallery_pending_due_jobs>0 THEN 'GALLERY_DUE_WORK_NEEDS_REVIEW'
+    ELSE 'LISTED_TRACK_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED' END,
+  'music_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY',
   'gallery_technical_records',gallery_technical_records,
   'state',CASE
     WHEN available_files=0 THEN 'NO_AVAILABLE_FILES'
