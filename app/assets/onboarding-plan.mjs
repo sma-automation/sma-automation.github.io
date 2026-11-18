@@ -13,6 +13,7 @@ const checkout = document.querySelector('#checkout');
 const refreshPayment = document.querySelector('#refresh-payment');
 const logout = document.querySelector('#logout');
 const prices = {alpha:100,beta:300,delta:500};
+const missingCheckoutNotice = 'Deine Buchung ist gespeichert. Ein offener Zahlungslink ist derzeit nicht verfügbar.';
 const requestTimeout = 45000;
 let offer = null;
 let owner, activeRequest, activeLogout, saved = null, busy = false, leaving = false, signingOut = false;
@@ -90,7 +91,11 @@ function displayOffer(value) {
   book.hidden = offer.state !== 'offered';
   if (offer.state === 'booked') {
     refreshPayment.hidden = offer.automated !== true;
-    status.textContent = 'Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.';
+    status.textContent = offer.checkout
+      ? 'Deine Buchung ist gespeichert. Die Zahlungsbestätigung steht aus.'
+      : missingCheckoutNotice + (offer.automated === true
+        ? ' Du kannst den Zahlungsstand erneut abrufen.'
+        : ' SMA prüft die Bereitstellung.');
     if (offer.checkout) {
       const url = new URL(offer.checkout);
       if (!/^https:\/\/(www|checkout)\.mollie\.com\/checkout\/[A-Za-z0-9/_-]+$/.test(url.href)) throw Error('Invalid checkout');
@@ -195,7 +200,9 @@ async function request(plan = null, selectedOffer = null, paymentOrder = null) {
       if (value.linked === true) status.textContent += ' Dein SMA-Kundenkonto ist zugeordnet.';
     }
     if (value.linked === true) displayOffer(bookingData);
-    if (paymentWaiting && offer?.automated && offer.state === 'booked') status.textContent = 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.';
+    if (paymentWaiting && offer?.automated && offer.state === 'booked') status.textContent = offer.checkout
+      ? 'Deine Buchung ist gespeichert. Der Zahlungsstand wird geprüft. Du kannst ihn erneut abrufen.'
+      : missingCheckoutNotice + ' Die Zahlungsprüfung konnte noch nicht abgeschlossen werden. Bitte rufe den Stand erneut ab.';
     if (paymentClosed && offer?.state === 'offered') status.textContent = 'Die vorherige Zahlung wurde nicht abgeschlossen. Für einen neuen Versuch kannst du das Paket erneut buchen.';
     if (changedOffer) status.textContent = 'Dein Zahlungsangebot hat sich geändert. Prüfe den aktuellen Stand.';
   } catch {
