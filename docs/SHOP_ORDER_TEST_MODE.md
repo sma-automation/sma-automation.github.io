@@ -104,3 +104,36 @@ refresh, owner filters and RLS are unchanged.
 Validation: the repository suite (536 tests) includes the existing order-page,
 stale-response, refresh and test-classification checks adjusted for five-row
 pages, plus preservation of unsaved product input when switching sections.
+
+
+## Neuer autoritativer Live-Abgleich – 18.11.2026
+
+Shopify Admin GraphQL (verbundener SMA-Shop) und die aktuelle
+SMA-Supabase-Datenbank wurden **getrennt und ausschließlich lesend** abgefragt.
+Die vollständige Shopify-Ergebnisseite enthielt zehn Bestellungen
+(`hasNextPage=false`), ebenso der Supabase-Bestellspiegel.
+
+Für jede dieser zehn Shopify-Bestellkennungen wurden sieben Werte geprüft:
+
+1. exakte externe Bestellkennung;
+2. Shopifys tatsächliches `Order.test`-Kennzeichen;
+3. die Quellrevision `Order.updatedAt`;
+4. der normalisierte Zahlungsstatus;
+5. der normalisierte Liefer-/Fulfillmentstatus;
+6. der Betrag in Euro-Cent (also unabhängig von `34.9` versus `34.90`);
+7. die Währung.
+
+**Ergebnis: 10 von 10 vollständig passend, 0 fehlende, 0 zusätzliche
+und 0 abweichende Spiegelzeilen.** Die historischen sechs Test- und
+vier Nicht-Testkennzeichnungen sind weiterhin korrekt. Unter den
+vier Shopify-Nicht-Testbestellungen haben zwei den Status `PAID` und
+zwei `PENDING`. Die Einstufung `test=false` und der Anbieterstatus
+`PAID` sind **kein unabhängiger Nachweis**, dass ein Betrag tatsächlich
+auf einem Bankkonto eingegangen ist. Ältere Nicht-Testbestellungen
+nicht nachträglich als Testbestellungen umkennzeichnen.
+
+Weder Checkout, Zahlung, Shopify-Bestellstatus, Lager, n8n, Medien,
+Kundendaten noch Supabase-Zeilen wurden für diesen Vergleich verändert.
+Der Abgleich bestätigt den *bereits vorhandenen*
+Shopify→SMA-Bestellspiegel, nicht neue Verkaufsfähigkeit und nicht den
+separat noch offenen ersten zahlenden SMA-Paketkunden.
