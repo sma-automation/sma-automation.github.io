@@ -92,7 +92,7 @@ test('dashboard and standalone optimizer both reference the updated worker safel
  assert.match(dashboard,/isVisible:musicGate\.isVisible,subscribeVisibility:musicGate\.subscribeVisibility/);
  assert.match(dashboard,/dashboardChapters\?\.controllers\.get\('publishing'\)\?\.selected==='files'/);
  assert.match(dashboard,/page\.classList\.contains\('sma-optimizing'\)/);
- assert.match(dashboard,/onComplete:\(\)=>musicGate\.isVisible\(\)\?load\(false\):undefined/);
+ assert.match(dashboard,/onComplete:\(\)=>load\(false\)/);
  assert.match(standalone,/gallery-music-worker\.mjs\?v=7/);
  assert.match(page,/publication-preview\.js\?v=110/);
  assert.match(worker,/isVisible,subscribeVisibility\}\)\{/);

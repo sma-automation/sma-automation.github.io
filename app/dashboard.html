@@ -566,7 +566,7 @@ function attachFileList(doc,page,editorHref){
     dashboardChapters?.controllers.get('publishing')?.selected==='files')});
  const soundtrack=owner?mountGalleryMusic({owner,
   isVisible:musicGate.isVisible,subscribeVisibility:musicGate.subscribeVisibility,
-  onComplete:()=>musicGate.isVisible()?load(false):undefined,
+  onComplete:()=>load(false),
   onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);

@@ -38,9 +38,10 @@ keine weiteren Aufträge aus. Sie selbst verwendet **keinen Timer,
 keinen Netzwerkaufruf und kein Kunden-Credential**.
 
 `app/dashboard.html` gibt den sichtbaren Kapitelstatus an den
-Worker weiter. Die automatische Galerielisten-Aktualisierung nach
-einem abgeschlossenen Musikauftrag wird nur im sichtbar aktiven
-Bereich ausgelöst. Bereits beanspruchte Aufträge und bestätigte
+Worker weiter. Die einmalige Galerielisten-Aktualisierung nach einem tatsächlich
+abgeschlossenen Musikauftrag bleibt auch bei einem zwischenzeitlichen
+Kapitelwechsel erhalten. Gespart werden Leerlauf-Abfragen, nicht die
+Bestätigung einer gespeicherten Datei. Bereits beanspruchte Aufträge und bestätigte
 Upload-Receipts werden unverändert zu Ende geführt.
 
 `app/assets/publication-preview.js` verwendet jetzt die aktuelle
