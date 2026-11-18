@@ -91,6 +91,15 @@ WITH snapshot AS (
   (SELECT count(*) FROM sma_private.music_catalog_v1 WHERE listed IS TRUE) AS music_listed_tracks,
   -- The ready view also requires the matching immutable object and metadata.
   (SELECT count(*) FROM sma_private.music_catalog_ready_v1) AS music_ready_tracks,
+  -- Mirror the background dispatcher's AAC storage validation.
+  (SELECT count(DISTINCT t.sha256) FROM sma_private.music_catalog_ready_v1 t
+    JOIN storage.objects a ON a.bucket_id='sma-katalog'
+      AND a.name LIKE 'render/'||t.sha256||'/%'
+      AND a.name ~ '^render/[a-f0-9]{64}/[a-f0-9]{64}\\.aac$'
+      AND a.metadata->>'mimetype'='audio/aac'
+      AND (CASE WHEN a.metadata->>'size' ~ '^[0-9]{1,7}$'
+        THEN (a.metadata->>'size')::integer ELSE 0 END) BETWEEN 12 AND 1500000
+  ) AS music_aac_ready_tracks,
   (SELECT count(*) FROM sma_private.customer_websites_v1
     WHERE published_at IS NOT NULL) AS published_customer_websites,
   (SELECT count(*) FROM sma_private.website_provider_connections_v1) AS website_connections,
@@ -153,13 +162,16 @@ SELECT jsonb_build_object(
     ELSE 'REVISION_BOUND_EVIDENCE_PRESENT_NOT_PUBLISH_PERMISSION' END,
   'music_listed_tracks',music_listed_tracks,
   'music_ready_tracks',music_ready_tracks,
+  'music_aac_ready_tracks',music_aac_ready_tracks,
   'music_customer_state',CASE
     WHEN music_listed_tracks=0 AND gallery_pending_jobs>0 THEN 'NO_LISTED_TRACK_FOR_PENDING_JOBS'
     WHEN music_listed_tracks=0 THEN 'NO_LISTED_TRACK'
     WHEN music_ready_tracks=0 AND gallery_pending_jobs>0 THEN 'LISTED_TRACKS_NOT_READY_FOR_PENDING_JOBS'
     WHEN music_ready_tracks=0 THEN 'LISTED_TRACKS_NOT_READY'
+    WHEN music_aac_ready_tracks=0 AND gallery_pending_jobs>0 THEN 'READY_MASTER_WITHOUT_AAC_FOR_PENDING_JOBS'
+    WHEN music_aac_ready_tracks=0 THEN 'READY_MASTER_WITHOUT_AAC'
     WHEN gallery_pending_due_jobs>0 THEN 'GALLERY_DUE_WORK_NEEDS_REVIEW'
-    ELSE 'READY_TRACK_EXISTS_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED' END,
+    ELSE 'AAC_BACKED_TRACK_NOT_LICENSE_OR_MEDIA_E2E_VERIFIED' END,
   'music_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY',
   'gallery_technical_records',gallery_technical_records,
   'state',CASE
