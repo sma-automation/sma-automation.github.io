@@ -87,6 +87,7 @@ export async function checkFolders({uploadFolderId,processingFolderId,accessToke
     const about=new URL('about',origin);about.searchParams.set('fields','user(permissionId)');
     const identity=await json(about);
     if(identity?.user?.permissionId!==expectedPermissionId)fail('ACCOUNT_MISMATCH');
+    let uploadServiceCanAddChildren=false;
     for(const [role,id] of [['upload',uploadFolderId],['processing',processingFolderId]]){
       step=role;
       const url=new URL('files/'+id,origin);
@@ -95,15 +96,17 @@ export async function checkFolders({uploadFolderId,processingFolderId,accessToke
       const item=await json(url);
       if(item?.id!==id||item.mimeType!==folderType||item.trashed!==false||
         item.capabilities?.canListChildren!==true)fail('FOLDER_UNAVAILABLE');
-      // An input folder that is only readable is not a reliable destination
-      // for SMA service-side additions. Do not mistake list access for write access.
-      if(role==='upload'&&item.capabilities?.canAddChildren!==true)fail('UPLOAD_NOT_WRITABLE');
+      // The customer's Drive identity may differ from SMA's service identity:
+      // report a missing input write capability without rejecting a valid reader.
+      if(role==='upload')uploadServiceCanAddChildren=item.capabilities?.canAddChildren===true;
       if(role==='processing'&&item.capabilities?.canAddChildren!==true)fail('PROCESSING_NOT_WRITABLE');
     }
     return {ok:true,code:'FOLDER_ACCESS_VERIFIED',scope:'drive_metadata_only',
       checked_at:new Date().toISOString(),checks:{drive_account_matches:true,
-        upload_folder_readable:true,upload_folder_writable:true,
-        processing_folder_readable:true,processing_folder_writable:true},...noGrant};
+        upload_folder_readable:true,
+        upload_folder_service_can_add_children:uploadServiceCanAddChildren,
+        processing_folder_readable:true,processing_folder_writable:true},
+      warnings:uploadServiceCanAddChildren?[]:['UPLOAD_SERVICE_WRITE_NOT_CONFIRMED'],...noGrant};
   }catch(error){
     return {ok:false,code:error instanceof CheckFailure?error.code:'READ_FAILED',step,...noGrant};
   }finally{
