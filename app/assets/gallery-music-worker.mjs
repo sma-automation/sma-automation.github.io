@@ -13,7 +13,7 @@ function observeVisibility(handler){
 export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onComplete,onStatus,
   isVisible=browserVisible,subscribeVisibility=observeVisibility,
   setTimer=setTimeout,cancelTimer=clearTimeout}){
- let disposed=false,running=null,again=false,timer=null,transientStatus=false;
+ let disposed=false,running=null,again=false,timer=null,transientStatus=false,pendingGalleryRefresh=false;
  const controller=new AbortController(),signal=controller.signal;
  // Queue notices expire when the server reports idle; saved results and review warnings do not.
  function report(text,transient=false){
@@ -33,12 +33,20 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
   clearScheduled();
   if(!disposed&&foreground())timer=setTimer(()=>{timer=null;wake();},ms);
  }
- async function refreshGallery(){try{await onComplete();}catch{/* The saved file also appears on the next gallery refresh. */}}
+ async function refreshGallery(){
+  // A completed upload still has its receipt while the customer is elsewhere.
+  // Do not start a hidden file-catalogue read; refresh once on return.
+  if(!foreground()){pendingGalleryRefresh=true;return;}
+  pendingGalleryRefresh=false;
+  try{await onComplete();}catch{/* The saved file also appears on the next gallery refresh. */}
+ }
  async function drain(){
   do{
    again=false;
    // A claimed job continues to its existing receipt; no *next* claim starts
    // while the page is hidden. This does not disable the background n8n worker.
+   if(!foreground())return;
+   if(pendingGalleryRefresh)await refreshGallery();
    if(!foreground())return;
    const job=await call('claim');
    if(job.state==='waiting'){report('Die automatische Vertonung wartet. Der Status wird später erneut geprüft.',true);later(Math.max(1000,Math.min(job.retry_ms,86400000)));return;}
