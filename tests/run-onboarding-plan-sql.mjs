@@ -157,11 +157,14 @@ try {
   const address = "o'brien+pilot@example.invalid";
   await db.query('update public.sma_kunden set kunde_email=$1 where user_id=$2',[address,second]);
   await db.query('update auth.users set email=$1 where id=$2',[address,second]);
-  const prepare = state => spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
-    input: [beta.n8n_ref,'124',beta.n8n_ref,address,'',state,'AUS','AUS'].join('\n')+'\n', encoding:'utf8'
+  const prepare = (state,token='AUS') => spawnSync(process.execPath,['n8n/confirm-onboarding-row.cjs'],{
+    input: [beta.n8n_ref,'124',beta.n8n_ref,address,'',state,'AUS','AUS',
+      token,'AUS','AUS','AUS'].join('\n')+'\n', encoding:'utf8'
   });
   const denied = prepare('EIN');
   assert.equal(denied.status,1); assert.equal(denied.stdout,'');
+  const reused = prepare('AUS','EIN');
+  assert.equal(reused.status,1); assert.equal(reused.stdout,'');
   const checked = prepare('AUS');
   assert.equal(checked.status,0,checked.stderr);
   assert.equal(checked.stdout.includes(address),false);
