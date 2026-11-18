@@ -67,7 +67,11 @@ export async function assessRenewal({order,sub,event,today,readPage}){
   if(review)return {decision:'REVIEW',checkOn:null};
   const ended=['canceled','completed'].includes(sub.status);
   const billingStopped=ended||sub.status==='suspended';
-  if(pending||(!failed&&!billingStopped))return {decision:'WAIT',checkOn:null};
+  // A pending/open/authorized charge is not paid coverage. Once Mollie has
+  // explicitly stopped collecting for this subscription, such a charge must
+  // not keep an otherwise uncovered customer active indefinitely.
+  // A verified paid charge still wins above until its covered period ends.
+  if(!billingStopped&&(pending||!failed))return {decision:'WAIT',checkOn:null};
   return {decision:'SUSPEND',checkOn:ended?monthDate(today,1):null};
 }
 

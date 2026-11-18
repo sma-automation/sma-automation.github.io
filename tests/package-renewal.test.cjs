@@ -59,7 +59,7 @@ test('Fehlende Meldung allein sperrt weder aktive Abos noch offene oder strittig
     readPage:async()=>({payments,next:null})});
   assert.deepEqual(await run('active',[]),{decision:'WAIT',checkOn:null});
   assert.deepEqual(await run('suspended',[]),{decision:'SUSPEND',checkOn:null});
-  assert.deepEqual(await run('canceled',[bill('tr_open','2028-01-31','open')]),{decision:'WAIT',checkOn:null});
+  assert.deepEqual(await run('canceled',[bill('tr_open','2028-01-31','open')]),{decision:'SUSPEND',checkOn:'2028-03-01'});
   const partial={...bill('tr_partial','2028-01-31'),amountRefunded:{currency:'EUR',value:'1.00'}};
   assert.deepEqual(await run('completed',[partial]),{decision:'REVIEW',checkOn:null});
 });
@@ -87,5 +87,40 @@ test('Alle fünf dokumentierten Mollie-Abostatus bleiben bei bestätigter Deckun
     const r=await assessRenewal({order,sub:{...sub,status},today:'2028-02-01',event:paid.id,
       readPage:async()=>({payments:[paid],next:null})});
     assert.deepEqual(r,{decision:'ACTIVE',checkOn:'2028-02-29'});
+  }
+});
+
+test('Stopped subscriptions never keep unpaid access through open, pending or authorized attempts',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  for(const status of ['canceled','suspended','completed']){
+    for(const paymentStatus of ['open','pending','authorized']){
+      const payment=bill('tr_waiting','2028-02-29',paymentStatus);
+      const result=await assessRenewal({order,sub:{...sub,status},today:'2028-03-03',
+        event:payment.id,readPage:async()=>({payments:[payment],next:null})});
+      assert.equal(result.decision,'SUSPEND',status+':'+paymentStatus);
+      assert.equal(result.checkOn,status==='suspended'?null:'2028-04-03');
+    }
+  }
+});
+test('A verified paid period still covers stopped subscriptions, then expires without paid renewal',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  const paid=bill('tr_paid','2028-02-29','paid');
+  const open=bill('tr_open','2028-03-31','open');
+  for(const status of ['canceled','completed','suspended']){
+    const run=today=>assessRenewal({order,sub:{...sub,status},today,event:null,
+      readPage:async()=>({payments:[paid,...(today>='2028-03-31'?[open]:[])],next:null})});
+    assert.deepEqual(await run('2028-03-30'),{decision:'ACTIVE',checkOn:'2028-03-31'});
+    const after=await run('2028-03-31');
+    assert.equal(after.decision,'SUSPEND');
+    assert.equal(after.checkOn,status==='suspended'?null:'2028-04-30');
+  }
+});
+test('Active subscriptions still wait on genuinely pending or unconfirmed renewal attempts',async()=>{
+  const {assessRenewal}=await import('../supabase/functions/sma-package-payment/renewal.mjs');
+  for(const status of ['open','pending','authorized']){
+    const due=bill('tr_pending','2028-02-29',status);
+    assert.deepEqual(await assessRenewal({order,sub:{...sub,status:'active'},today:'2028-03-03',
+      event:due.id,readPage:async()=>({payments:[due],next:null})}),
+      {decision:'WAIT',checkOn:null});
   }
 });
