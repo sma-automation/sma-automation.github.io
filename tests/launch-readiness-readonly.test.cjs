@@ -44,7 +44,9 @@ test('report never upgrades preflight counts into permission to publish or pay',
 test('gallery counts separate pending work from completed clips and never call a renderer or evidence writer',()=>{
  for(const field of ['gallery_completed_jobs','gallery_pending_jobs','gallery_pending_due_jobs',
   'gallery_pending_scheduled_jobs','gallery_pending_unscheduled_jobs','gallery_other_jobs',
-  'gallery_completed_without_record','music_listed_tracks'])assert.ok(source.includes("'"+field+"'"),field);
+  'gallery_completed_without_record','music_listed_tracks',
+  'gallery_pending_without_track','gallery_pending_with_failures',
+  'music_customer_state','music_customer_e2e'])assert.ok(source.includes("'"+field+"'"),field);
  assert.match(noComments,/g\.state='completed' AND NOT EXISTS/);
  assert.match(noComments,/e\.gallery_job_id=g\.id/);
  for (const field of ['gallery_current_revision_evidence_jobs',
@@ -66,7 +68,11 @@ test('gallery counts separate pending work from completed clips and never call a
  ]) assert.match(source,check);
  assert.ok(source.includes('count(DISTINCT g.id) FROM sma_private.gallery_music_v1 g'));
  assert.match(source,/gallery_completed_jobs-gallery_current_revision_evidence_jobs/);
- assert.match(noComments,/'version',5/);
+ assert.match(noComments,/'version',6/);
+ assert.match(noComments,/'NO_LISTED_TRACK_FOR_PENDING_JOBS'/);
+ assert.match(noComments,/'LISTED_TRACK_NOT_AUDIO_OR_LICENSE_E2E_VERIFIED'/);
+ assert.match(noComments,/'music_customer_e2e','NOT_VERIFIED_BY_THIS_QUERY'/);
+ assert.match(noComments,/nullif\(btrim\(track_sha\),'\) IS NULL/);
  assert.match(noComments,/ENTITLED_N8N_REFERENCE_REVIEW_REQUIRED/);
  assert.match(noComments,/entitled_accounts-entitled_accounts_without_n8n_reference/);
  assert.doesNotMatch(noComments,/\b(?:gallery_background_(?:tick|pick)|gallery_music_(?:request|enqueue)|publication_gallery_technical_register|gallery_worker_snapshot)_v1\s*\(/i);
