@@ -1,4 +1,5 @@
 'use strict';
+const {inspectRouteConfigMarkers}=require('./inspect-payment-route-config.cjs');
 
 // Pure, bounded structural inspection of the published n8n payment routes.
 // This function reads an already fetched graph; it never requests credentials,
@@ -93,7 +94,8 @@ function inspectPaymentWebhookPaths(graph) {
         possible_http_mutations:0,
         named_folder_guard_reachable:false,
         static_terminal_nodes:0,
-        path_is_proven_safe:false
+        path_is_proven_safe:false,
+        config_markers:{status:'UNAVAILABLE'}
       };
       overlap=null;
       continue;
@@ -126,7 +128,8 @@ function inspectPaymentWebhookPaths(graph) {
       static_terminal_nodes:[...seen].filter(n=>(edges.get(n)||[]).length===0).length,
       // Even a reachable reply does not mean every conditional branch responds,
       // nor that a guard is effective: those require private dynamic E2E tests.
-      path_is_proven_safe:false
+      path_is_proven_safe:false,
+      config_markers:inspectRouteConfigMarkers(selected)
     };
   }
   return {

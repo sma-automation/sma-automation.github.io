@@ -62,6 +62,41 @@ The next blocker is therefore not discovering whether the webhook routes exist (
 
 This run did not start any n8n execution, Mollie payment, Drive write, social post or customer activation. **Do not substitute a synthetic graph or rename nodes to make the static checker green.**
 
+## Additional offline configuration-marker analysis (operator aid)
+
+The read-only tracer now includes `config_markers` for **reachable**
+HTTP, Data Table, and Code nodes on each payment route. The markers count
+only fixed, allowlisted metadata and never echo live configuration.
+
+- Literal HTTPS targets matching the exact `api.mollie.com/v2/` API or
+  the exact SMA Supabase RPC host/path, separately from dynamic,
+  unresolved or other literal targets.
+- Configured HTTP write methods, header-auth references and exact
+  `Idempotency-Key` header names, **not** confirmation that an
+  idempotency key was sent or accepted.
+- Data Table get/write operations; write nodes with all-conditions
+  filters naming the customer row identity fields `id`, `kunde_id`,
+  `kunde_email` or **both** saved Drive folder fields.
+- Code-node text containing a ticket marker, both folder field names,
+  or a payment/merchant reference pair.
+
+These are **presence counters, not semantic assertions**. A field name
+may be in an unreachable branch of a Code node or a comment; an HTTP
+node with a Mollie URL is not proof that the merchant transaction was
+created correctly. Conversely, a zero count can mean provider URL
+expressions, differently named data fields, a private Supabase RPC
+guard, or credentials withheld by the n8n API. The static report keeps
+`ticket_validation_proven=false`,
+`folder_ownership_and_write_proven=false`,
+`mollie_receipt_validation_proven=false`, and
+`customer_activation_authorized=false`.
+
+The operator-only GitHub workflow must still be manually triggered
+after it is pinned to the reviewed source. No report may print node
+source, arbitrary names, URLs, credential IDs, customer IDs, API keys
+or actual workflow data. The live values of these new counters
+**have not yet been obtained**.
+
 ## To finish the first customer blocker
 
 After regression tests/merge, the separate **manual-only** GitHub Actions workflow can be pinned to this audited commit and enhanced to print only selected graph counters. One deliberate operator-run `payment` audit will then reveal whether each payment webhook actually reaches a response and whether the route has HTTP/Code/Data Table stages.

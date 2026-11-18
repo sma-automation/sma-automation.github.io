@@ -42,6 +42,12 @@ test('Pure, bounded trace follows separate webhook MAIN edges but claims no safe
   assert.equal(r.renewal.reachable_http_requests,1);
   assert.equal(r.renewal.reachable_data_table_nodes,1);
   assert.equal(r.renewal.possible_http_mutations,1);
+  assert.equal(r.first_payment.config_markers.status,'CONFIG_MARKERS_PRESENT_NOT_VALIDATED');
+  assert.equal(r.first_payment.config_markers.http_literal_mollie_v2,0);
+  assert.equal(r.renewal.config_markers.http_other_literal_target,1);
+  assert.equal(r.renewal.config_markers.data_table_write_operations,1);
+  assert.equal(r.renewal.config_markers.ticket_validation_proven,false);
+  assert.equal(r.renewal.config_markers.customer_activation_authorized,false);
   assert.equal(r.renewal.reachable_respond_to_webhook,1);
   assert.equal(r.shared_reachable_nodes,0);
   assert.equal(r.active_version_stability_verified,false);
@@ -67,6 +73,7 @@ test('Duplicate webhook paths do not count as one known production entry',()=>{
   assert.equal(r.first_payment.entry_count,2);
   assert.equal(r.first_payment.reachable_nodes,0);
   assert.equal(r.first_payment.response_mode_matches,false);
+  assert.deepEqual(r.first_payment.config_markers,{status:'UNAVAILABLE'});
   assert.equal(r.shared_reachable_nodes,null);
   assert.doesNotMatch(JSON.stringify(r),/private-synthetic-duplicate/);
 });
