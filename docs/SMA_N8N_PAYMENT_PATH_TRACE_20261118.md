@@ -92,16 +92,11 @@ guard, or credentials withheld by the n8n API. The static report keeps
 `mollie_receipt_validation_proven=false`, and
 `customer_activation_authorized=false`.
 
-The operator-only GitHub workflow must still be manually triggered
-after it is pinned to the reviewed source. No report may print node
-source, arbitrary names, URLs, credential IDs, customer IDs, API keys
-or actual workflow data. The live values of the counters were first obtained in **manual run #4** below. They remain read-only configuration clues, not a customer-launch authorization.
+The operator-only GitHub workflow was pinned to reviewed product source and manually started for run #4 below. No report may print node source, arbitrary names, URLs, credential IDs, customer IDs, API keys or actual workflow data. These counts are read-only configuration clues, not a customer-launch authorization.
 
 ## To finish the first customer blocker
 
-After regression tests/merge, the separate **manual-only** GitHub Actions workflow can be pinned to this audited commit and enhanced to print only selected graph counters. One deliberate operator-run `payment` audit will then reveal whether each payment webhook actually reaches a response and whether the route has HTTP/Code/Data Table stages.
-
-If either route is disconnected or lacks a response, examine the active n8n editor version privately. **Do not alter the published payment graph until the linked order, one-time ticket, Mollie idempotency, customer-row matching, folder checks, and pause/recovery paths have been compared.** The exact customer-level Drive permissions and the full paid-customer E2E remain separate blockers.
+The next task is a **private semantic review** of the actual published Code/HTTP/Data Table logic against linked bookings, signed single-use tickets, Mollie idempotency and receipts, customer-row and Drive-folder guards, and suspension/recovery paths. The route counters from run #4 below are insufficient for this review. **Do not alter the published payment graph or authorize customer activation** on the basis of marker counts. A real customer-level Drive permission check and an authorized practical payment E2E remain separate blockers.
 
 No changes to live Supabase, n8n, Mollie or the customer dashboard are made by this trace.
 
