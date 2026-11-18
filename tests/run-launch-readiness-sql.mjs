@@ -27,7 +27,7 @@ async function checkGallery(expected) {
       (SELECT jsonb_agg(to_jsonb(t)) FROM sma_private.music_catalog_v1 t) AS tracks`)).rows;
     const before = await snapshot();
     const {rows:[{readiness}]} = await db.query(report);
-    assert.equal(readiness.version,6);
+    assert.equal(readiness.version,7);
     const media=readiness.media;
     for (const [key,value] of Object.entries(expected)) assert.equal(media[key],value,key);
     assert.equal(media.gallery_music_jobs,media.gallery_completed_jobs+media.gallery_pending_jobs+media.gallery_other_jobs);
@@ -63,6 +63,24 @@ async function checkGallery(expected) {
   } finally {await db.exec('ROLLBACK');}
 }
 
+async function checkShop(expected) {
+  await db.exec('BEGIN READ ONLY');
+  try {
+    const {rows:[{readiness}]} = await db.query(report);
+    const shop = readiness.shop;
+    for (const [key,value] of Object.entries(expected))
+      assert.equal(shop[key],value,'shop.'+key);
+    assert.equal(readiness.version,7);
+    assert.equal(shop.orders,shop.test_orders+shop.non_test_orders+shop.unknown_test_status_orders);
+    assert.ok(shop.non_test_provider_paid_status_orders<=shop.non_test_orders);
+    assert.ok(shop.non_test_provider_pending_status_orders<=shop.non_test_orders);
+    assert.equal(shop.settlement_evidence,'NOT_VERIFIED_BY_THIS_QUERY');
+    assert.equal(shop.payment_mode,'VERIFY_SHOPIFY_PAYMENTS_EXTERNALLY');
+    assert.equal(readiness.initiates_checkout,false);
+    assert.equal(readiness.allows_publication,false);
+  } finally {await db.exec('ROLLBACK');}
+}
+
 try {
   await db.exec(`
     CREATE SCHEMA sma_private;
@@ -75,7 +93,7 @@ try {
     );
     CREATE TABLE sma_private.onboarding_n8n_accounts_v1 (n8n_row_id bigint);
     CREATE TABLE sma_private.onboarding_payment_settings_v1 (enabled boolean);
-    CREATE TABLE public.sma_bestellungen (ist_testbestellung boolean);
+    CREATE TABLE public.sma_bestellungen (ist_testbestellung boolean, zahlungsstatus text);
     CREATE TABLE sma_private.publication_files_v1 (
       id uuid PRIMARY KEY, customer_id bigint, user_id uuid, revision text, size_bytes bigint,
       available boolean, verified_at timestamptz);
@@ -246,6 +264,29 @@ try {
   await checkGallery({music_listed_tracks:1});
   await db.query('DELETE FROM sma_private.gallery_music_v1 WHERE id=$1',[completed]);
   await checkGallery({gallery_music_jobs:3,gallery_completed_jobs:0,gallery_completed_without_record:0,gallery_technical_records:3});
+  // Shopify source test=false and provider status paid are distinct facts.
+  // These synthetic rows never represent money movements or real store orders.
+  await checkShop({orders:0,test_orders:0,non_test_orders:0,
+    non_test_provider_paid_status_orders:0,non_test_provider_pending_status_orders:0,
+    unknown_test_status_orders:0,state:'NO_SHOP_ORDERS'});
+  await db.exec(`INSERT INTO public.sma_bestellungen VALUES
+    (true,'paid'),(true,'pending'),(false,'paid'),(false,'pending'),(NULL,'pending');`);
+  await checkShop({orders:5,test_orders:2,non_test_orders:2,
+    non_test_provider_paid_status_orders:1,non_test_provider_pending_status_orders:1,
+    unknown_test_status_orders:1,state:'UNKNOWN_TEST_STATUS_REVIEW_REQUIRED'});
+  await db.exec('DELETE FROM public.sma_bestellungen WHERE ist_testbestellung IS NULL');
+  await checkShop({orders:4,test_orders:2,non_test_orders:2,
+    non_test_provider_paid_status_orders:1,non_test_provider_pending_status_orders:1,
+    unknown_test_status_orders:0,state:'NON_TEST_ORDERS_REQUIRE_PAYMENT_REVIEW'});
+  await db.exec('DELETE FROM public.sma_bestellungen WHERE ist_testbestellung IS FALSE');
+  await checkShop({orders:2,test_orders:2,non_test_orders:0,
+    non_test_provider_paid_status_orders:0,non_test_provider_pending_status_orders:0,
+    unknown_test_status_orders:0,state:'ONLY_TEST_FLAGGED_SHOP_ORDERS'});
+  await db.exec('DELETE FROM public.sma_bestellungen');
+  await checkShop({orders:0,test_orders:0,non_test_orders:0,
+    non_test_provider_paid_status_orders:0,non_test_provider_pending_status_orders:0,
+    unknown_test_status_orders:0,state:'NO_SHOP_ORDERS'});
+
   // The publication-permission account was rolled back above. Set up an
   // independent, eligible synthetic fixture for the account coverage checks.
   await db.exec(`INSERT INTO public.sma_kunden (id,aktiv,zahlung_bestaetigt,demo_delta_aktiv)
