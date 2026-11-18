@@ -4,21 +4,21 @@ Stand: 18.11.2026. **Offline-Bestandsprüfung, keine Inbetriebnahme.**
 
 ## Warum dieser Vergleich benötigt wird
 
-Das GitHub-Werkzeug \`n8n/package-payment/build-worker.cjs\` erzeugt
+Das GitHub-Werkzeug `n8n/package-payment/build-worker.cjs` erzeugt
 den erwarteten Zahlungsdienst. Die auf Supabase produktiv installierte
-Edge Function \`sma-package-payment\` wurde am 18.11.2026 als Version 7
+Edge Function `sma-package-payment` wurde am 18.11.2026 als Version 7
 gelesen: Die drei installierten Programmdateien stimmen **bytegenau**
-mit \`website-v1\` überein. Das beweist aber nicht, dass der separat bei
+mit `website-v1` überein. Das beweist aber nicht, dass der separat bei
 n8n **veröffentlichte** Zahlungsworkflow die passenden Knoten hat.
 
 Gerade bei einem neuen Kunden muss der n8n-Weg folgende Kette erhalten:
 
-\`sma-paket-dienst-v1\` → validiertes einmaliges Ticket → feste Operation
-\`activate\` → **Ordnerzuordnung vor Aktivierung prüfen** → bedingt gesicherte
-\`SMA_Kunden\`-Änderung → begrenzte Antwort an die private Zahlungsfunktion.
+`sma-paket-dienst-v1` → validiertes einmaliges Ticket → feste Operation
+`activate` → **Ordnerzuordnung vor Aktivierung prüfen** → bedingt gesicherte
+`SMA_Kunden`-Änderung → begrenzte Antwort an die private Zahlungsfunktion.
 
-Die notwendige \`account\`-Antwort muss die **beiden verschiedenen**
-\`upload_folder_id\`- und \`processing_folder_id\`-Werte aus exakt
+Die notwendige `account`-Antwort muss die **beiden verschiedenen**
+`upload_folder_id`- und `processing_folder_id`-Werte aus exakt
 der zugeordneten Kundenzeile enthalten. Ein vorhandener String ist
 noch kein Google-Drive-Berechtigungsnachweis.
 
@@ -29,15 +29,15 @@ schließen diese Lücke nicht.
 
 ## Neuer fail-closed Offline-Prüfer
 
-\`\`\`sh
+```sh
 node n8n/package-payment/audit-published-worker.cjs /private/AKTIVE_N8N_VERSION.json
 node --test tests/published-package-worker-audit.test.cjs
-\`\`\`
+```
 
 Die Eingabe muss eine **frische, tatsächlich veröffentlichte n8n-
-Workflowantwort** mit \`active=true\`, \`activeVersionId\` und
-entweder \`versionId=activeVersionId\` für denselben aktiven Graphen
-oder \`activeVersion.versionId=activeVersionId\` mit den tatsächlichen
+Workflowantwort** mit `active=true`, `activeVersionId` und
+entweder `versionId=activeVersionId` für denselben aktiven Graphen
+oder `activeVersion.versionId=activeVersionId` mit den tatsächlichen
 Aktivversions-Knoten und Verbindungen enthalten. Ein gewöhnlicher
 Editorentwurf ohne aktive Versionsbelege genügt absichtlich nicht.
 
@@ -47,21 +47,21 @@ mit dem vorhandenen GitHub-Generator. Er verlangt u. a.:
 - unveränderte Einmal- und Folgezahlungs-Webhooks samt Response-Mode;
 - alle ursprünglichen Ticket-, Mollie-, Kunden- und Antwort-Knoten;
 - exakte feste Operationsrouten ohne zusätzlichen Umweg zur Aktivierung;
-- originale Codeprüfungen und \`SMA_Kunden\`-Filter für Konto-/Paket-/
+- originale Codeprüfungen und `SMA_Kunden`-Filter für Konto-/Paket-/
   Kundenordnerbindung und Zugangstoken;
 - dieselbe Datentabelle in den Kundenoperationen sowie konsistente,
   voneinander getrennte Referenzen für Händler- und Datenbankzugang.
 
 Abweichende, fehlende, unvollständige oder nicht als veröffentlicht
 nachgewiesene Graphen liefern
-\`PUBLISHED_PAYMENT_CONTRACT_REVIEW_REQUIRED\` und Exit-Code 1.
+`PUBLISHED_PAYMENT_CONTRACT_REVIEW_REQUIRED` und Exit-Code 1.
 Ein strukturell passender Aktivgraph liefert
-\`ACTIVE_PAYMENT_GRAPH_STRUCTURALLY_MATCHES_NOT_E2E\` mit Exit-Code 0.
+`ACTIVE_PAYMENT_GRAPH_STRUCTURALLY_MATCHES_NOT_E2E` mit Exit-Code 0.
 
-**Wichtig:** Auch bei Exit-Code 0 bleiben \`allows_checkout\`,
-\`activates_customer\`, \`real_customer_e2e_verified\`,
-\`mollie_payment_verified\`, \`drive_folder_access_verified\` und
-\`billed_n8n_executions_measured\` ausdrücklich \`false\`.
+**Wichtig:** Auch bei Exit-Code 0 bleiben `allows_checkout`,
+`activates_customer`, `real_customer_e2e_verified`,
+`mollie_payment_verified`, `drive_folder_access_verified` und
+`billed_n8n_executions_measured` ausdrücklich `false`.
 Der Prüfer startet keinen Zahlungsvorgang und erteilt keine Freigabe.
 
 ## Sicherheit und Grenzen
@@ -84,8 +84,8 @@ eine eindeutig bestätigte neue Supabase-/n8n-Kontozuordnung,
 die tatsächlich zugänglichen kundeneigenen Google-Drive-Eingangs-
 und Verarbeitungsordner, ein bestätigter sicherer Erstzahlungspfad
 und ein kompletter berechtigter Kunden-End-to-End-Durchlauf.
-Dafür weiterhin \`docs/ONBOARDING_FOLDER_PREFLIGHT.md\` und
-\`docs/SMA_LAUNCH_READINESS_20261201.md\` verwenden.
+Dafür weiterhin `docs/ONBOARDING_FOLDER_PREFLIGHT.md` und
+`docs/SMA_LAUNCH_READINESS_20261201.md` verwenden.
 
 Keine Zugangsdaten anfordern oder speichern, keine Workflowversion
 veröffentlichen, keine Datenbankmigration, keine Zahlungen,
