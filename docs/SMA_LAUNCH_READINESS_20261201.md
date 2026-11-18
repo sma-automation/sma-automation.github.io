@@ -497,3 +497,26 @@ Beweisdokument zu ändern. Der Test selbst schreibt ausschließlich in
 eine lokale PGlite-Testdatenbank. In der produktiven Supabase-Datenbank
 wurde nur die SELECT-Abfrage des Berichts ausgeführt – keine Migration,
 keine Medienfreigabe und kein n8n-Lauf.
+
+
+## Neukunden ohne n8n-Zuordnung verständlich begleiten (18.11.2026)
+
+PR #372 ergänzt nach einer gespeicherten Paketvormerkung ohne bestätigte
+n8n-Kontozuordnung den ausdrücklichen Status
+„Dein SMA-Kundenkonto wird eingerichtet. Du musst noch nichts bezahlen.“
+Über **„Kontozuordnung prüfen“** kann der angemeldete Kunde den aktuellen Stand
+selbst erneut abrufen. Sobald die vorhandene Backend-Zuordnung bestätigt wird,
+verschwindet der Prüfbutton, und die reguläre Buchungsansicht erscheint
+ohne erneute Vormerkung oder Seitenneuladung. Vorher gibt es keinen Checkout.
+
+Die Prüfung verwendet ausschließlich den bereits vorhandenen, eigentümergebundenen
+Leseweg in `sma_onboarding_plan_choice_v1`; für ein zugeordnetes Konto wird
+der bestehende `sma_onboarding_booking_v1`-Stand gelesen. Es gibt weder
+automatischen Zeitplan noch n8n-Aufruf, Provider-Check, Zahlung, Aktivierung,
+neue Berechtigung oder Änderung am Kundenpaket. Nur eine ausdrücklich vom
+Kunden gewünschte neue Paketauswahl darf weiterhin speichern. Desktop- und
+Mobilbrowser-Regressionen prüfen die neue Statusanzeige, reine Abfragen,
+die verzögerte Zuordnung und den Übergang ohne Doppelbuchung.
+
+Die eigentliche einmalige n8n-Kundenzeilenzuordnung und der Google-Drive-
+Ordnerzugriff müssen weiterhin vor einer echten Erstbuchung bestätigt werden.
