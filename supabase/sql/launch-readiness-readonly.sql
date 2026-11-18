@@ -95,7 +95,7 @@ WITH snapshot AS (
   (SELECT count(DISTINCT t.sha256) FROM sma_private.music_catalog_ready_v1 t
     JOIN storage.objects a ON a.bucket_id='sma-katalog'
       AND a.name LIKE 'render/'||t.sha256||'/%'
-      AND a.name ~ '^render/[a-f0-9]{64}/[a-f0-9]{64}\\.aac$'
+      AND a.name ~ '^render/[a-f0-9]{64}/[a-f0-9]{64}[.]aac$'
       AND a.metadata->>'mimetype'='audio/aac'
       AND (CASE WHEN a.metadata->>'size' ~ '^[0-9]{1,7}$'
         THEN (a.metadata->>'size')::integer ELSE 0 END) BETWEEN 12 AND 1500000
