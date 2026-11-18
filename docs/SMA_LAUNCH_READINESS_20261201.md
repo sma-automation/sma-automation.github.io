@@ -520,3 +520,22 @@ die verzögerte Zuordnung und den Übergang ohne Doppelbuchung.
 
 Die eigentliche einmalige n8n-Kundenzeilenzuordnung und der Google-Drive-
 Ordnerzugriff müssen weiterhin vor einer echten Erstbuchung bestätigt werden.
+
+
+## Shopify-Bestellspiegel: frischer Live-Nachweis vom 18.11.2026
+
+Der bereits aktive Shopify→Supabase-Bestellspiegel wurde erneut
+direkt gegen Shopify Admin GraphQL gelesen:
+**10 von 10 Bestellungen stimmen in Kennung, Teststatus,
+Quellrevision, Zahlungsstatus, Lieferstatus, Betrag und Währung
+vollständig überein; keine Abweichung.** Es wurden weder
+Käufe noch Bestelländerungen ausgeführt. Ein `PAID`-Status
+von Shopify bei Nicht-Testbestellungen ist kein unabhängiger
+Bankzahlungsbeleg. Einzelheiten und Grenzen:
+[`SHOP_ORDER_TEST_MODE.md`](SHOP_ORDER_TEST_MODE.md).
+
+Dieser Nachweis betrifft nur den **historischen Shopify-Bestellspiegel**.
+Er ersetzt weder eine neue reale Kundenanmeldung,
+die n8n-Kundentabellen-/Drive-Ordnerfreigabe,
+den vollständigen Zahlungs-/Dashboard-Erstkundentest
+noch die erforderlichen Veröffentlichungs- und Providerfreigaben.

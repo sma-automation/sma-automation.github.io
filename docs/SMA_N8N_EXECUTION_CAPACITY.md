@@ -100,3 +100,35 @@ Die Tests decken 20/60 Kunden, 30/31 Tage, Reserve, sonstige Last,
 sichere Ganzzahlarithmetik, den genauen Kapazitätsrand und fehlerhafte
 Eingaben ab. Es gibt keine Kundenoperation und keinen neuen
 automatisch gestarteten Workflow.
+
+
+## Beobachtete Shopify-Abgleich-Basislast – 18.11.2026
+
+Der veröffentlichte stündliche Kontrollabgleich
+`SMA – Shopify Bestellabgleich V1` ist separat dokumentiert in
+[`n8n/ORDER_RECONCILIATION.md`](../n8n/ORDER_RECONCILIATION.md).
+Der Workflow startet nach Zeitplan einmal je Stunde und kann
+innerhalb **derselben** Ausführung weitere fällige Marktkonten über
+seine vorhandene `claim → complete/fail → claim`-Schleife bearbeiten.
+Daher ist seine Kundenzahl nicht auf die Zahl seiner täglichen
+Schedule-Starts begrenzt. Sein 8-Minuten-Limit und die
+Shopify-Seiten-/Rate-Limits begrenzen trotzdem den Durchsatz je Lauf.
+
+Die aktuellen Supabase-Gatewaylogs wurden über 24 Stunden geprüft:
+**stabil drei POSTs zu `sma_order_reconcile_v1` je Stunde**,
+alle mit HTTP 200. Dies passt zum typischen Ablauf
+`claim → complete → abschließender leerer claim` beim derzeit
+einen aktivierten Konto. Drei HTTP-/Supabase-RPC-Aufrufe sind
+**nicht** drei kostenpflichtige n8n-Executions. Bei 24
+tatsächlich berechneten stündlichen Starts pro Kalendertag
+entspräche der laufende Kontrollabgleich allein rechnerisch
+**720 n8n-Starts bei 30 Tagen** bzw. **744 bei 31 Tagen**.
+Dies ist eine auf dem veröffentlichten Schedule beruhende
+*Planungsannahme*, kein Auszug aus n8ns Rechnungszähler.
+Manuelle Ausführungen, weitere n8n-Workflows und
+Wiederholungen können das reale Budget erhöhen.
+
+Wichtig vor größerer Kundenzahl: tatsächliche n8n-Abrechnung und
+Durchsatz je Kundenkonto unter der vorhandenen 8-Minuten-Grenze
+separat messen; keinen aus RPC-Zahlen erfundenen Monatsverbrauch
+oder eine feste 20-Kunden-Grenze verwenden.
