@@ -37,7 +37,8 @@ const parameterKeys=Object.freeze({
 function parameterDifference(a,b){
   if(!object(a)||!object(b))return ['PARAMETERS_FORMAT'];
   return [...new Set([...Object.keys(a),...Object.keys(b)].filter(key=>
-    !isDeepStrictEqual(a[key],b[key])).map(key=>parameterKeys[key]||'OTHER'))].sort();
+    !isDeepStrictEqual(a[key],b[key])).map(key=>
+      Object.hasOwn(parameterKeys,key)?parameterKeys[key]:'OTHER'))].sort();
 }
 function outcome(issues,mappedCount,mismatches=[]){
   const list=[...new Set(issues)].sort();
