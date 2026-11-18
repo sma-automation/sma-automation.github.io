@@ -36,9 +36,9 @@ async function inspectLivePaymentWorker({
     },timeoutMs);
   });
   const bounded=action=>Promise.race([Promise.resolve().then(action),deadline]);
-  let reader,done=false;
+  let reader,response,done=false;
   try{
-    const response=await bounded(()=>fetchImpl(endpoint,{
+    response=await bounded(()=>fetchImpl(endpoint,{
       method:'GET',
       headers:{'X-N8N-API-KEY':apiKey,Accept:'application/json'},
       redirect:'error',cache:'no-store',credentials:'omit',signal:controller.signal
@@ -83,8 +83,11 @@ async function inspectLivePaymentWorker({
   }finally{
     clearTimeout(timer);controller.abort();
     if(reader){
-      if(!done)try{await Promise.resolve(reader.cancel());}catch{}
+      // Never wait indefinitely for a transport which ignores cancellation.
+      if(!done)try{Promise.resolve(reader.cancel()).catch(()=>{});}catch{}
       try{reader.releaseLock();}catch{}
+    }else if(response?.body){
+      try{Promise.resolve(response.body.cancel()).catch(()=>{});}catch{}
     }
   }
 }
