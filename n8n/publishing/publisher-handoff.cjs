@@ -73,7 +73,7 @@ function makeHandoff(response, input, now = Date.now()) {
   const digistore=hasOffer&&d.offer_provider==='digistore24'&&!product&&
     typeof d.offer_product_id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(d.offer_product_id)&&
     typeof d.offer_url==='string'&&HANDOFF_DIGISTORE.test(d.offer_url);
-  if(hasOffer&&!digistore)return handoffFailure('SAVED_TEXT_INVALID');
+  if(hasOffer&&(!digistore||r.media_kind!=='video'||!['youtube','tiktok'].includes(r.platform)))return handoffFailure('SAVED_TEXT_INVALID');
   const destination = digistore?d.offer_url:product?r.shop_url + '&produkt=' + d.product_id:r.shop_url;
   const footers = digistore?['🛒 Zum Angebot: ','🛒 View offer: ']:
     product?['🛒 Zum Produkt: ', '🛒 View product: ']:['🛒 Zum Shop: ', '🛒 Visit our shop: '];
