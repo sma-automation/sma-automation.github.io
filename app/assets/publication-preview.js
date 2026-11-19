@@ -1655,7 +1655,8 @@ function restoreTabAttempt(saved,file){
  }
  const form=record.form,confirmed=record.kind!=='edit'&&sameEditableDraft(record.sent,draft);
  // Without a staged link, the editor keeps the verified server destination.
- pendingLink=form.link===undefined||(form.link?.product_id??null)===(draft.product_id??null)?undefined:form.link;
+ pendingLink=form.link===undefined||(!draft.offer_provider&&
+  (form.link?.product_id??null)===(draft.product_id??null))?undefined:form.link;
  const card=$('drafts').children[0];
  card.querySelector('[data-field=title]').value=form.title;card.querySelector('[data-field=body]').value=form.body;
  card.querySelector('[data-field=hashtags]').value=form.tags;
