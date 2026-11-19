@@ -1,7 +1,7 @@
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
-import {mountProviderOfferOptions} from './publication-offer-options.mjs?v=1';
+import {mountProviderOfferOptions,isSavedProviderOffer} from './publication-offer-options.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=9';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
@@ -190,8 +190,13 @@ function showProductContext(value,file,saved){
      await checkEditorContext(ctx,old);
      if(error||data?.ok!==true)throw fileError(data?.code||'OFFER_CHANGED');
      const draft=data.preview?.drafts?.[0];
+     const previous=old.preview?.drafts?.find(d=>d.platform===ctx.platform);
+     const unchangedSelection=data.assignment_revision===ctx.assignment_revision&&
+       isSavedProviderOffer(previous,offer)&&isSavedProviderOffer(draft,offer)&&
+       samePortalDraft(previous,draft);
      if(data.status!=='completed'||data.id!==old.id||data.revision!==old.revision||
-       data.preview?.can_publish!==false||data.assignment_revision!==ctx.assignment_revision+1||
+       data.preview?.can_publish!==false||
+        (!unchangedSelection&&data.assignment_revision!==ctx.assignment_revision+1)||
        draft?.platform!==ctx.platform||!draft?.caption?.includes(offer.url)||
        (offer.provider==='digistore24' && (draft.offer_provider!=='digistore24'||
           draft.offer_url!==offer.url||draft.offer_product_id!==offer.product_id))||
@@ -199,7 +204,8 @@ function showProductContext(value,file,saved){
           Object.hasOwn(draft,'offer_provider'))))
       throw fileError('ASSIGNMENT_CHANGED');
      render(data);fileChanged();updateTabForm();
-     status('Verkaufslink für diesen Portalentwurf gespeichert. Die Freigabe bleibt separat.');
+     status(unchangedSelection?'Dieser bestätigte Verkaufslink war für diesen Portalentwurf bereits gespeichert. Die Freigabe bleibt separat.':
+       'Verkaufslink für diesen Portalentwurf gespeichert. Die Freigabe bleibt separat.');
     }finally{lock(false);syncMedia();}
    }:undefined
   });
