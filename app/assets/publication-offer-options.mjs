@@ -15,6 +15,24 @@ export function allowedProviderOffer(value) {
  return null;
 }
 
+// Re-selecting a saved offer is idempotent: the server may return the same
+// assignment revision when nothing changed. A stale or unrelated receipt must
+// never be accepted as a harmless repeat.
+export function isSavedProviderOffer(draft,offer) {
+ if(!draft||typeof draft!=='object'||!offer||typeof offer!=='object'||
+   typeof draft.caption!=='string')return false;
+ const verified=allowedProviderOffer({...offer,requires_customer_approval:true});
+ if(!verified)return false;
+ const hasFooter=(de,en)=>draft.caption.endsWith('\n\n🛒 '+de+': '+verified.url)||
+   draft.caption.endsWith('\n\n🛒 '+en+': '+verified.url);
+ if(verified.provider==='digistore24')return !Object.hasOwn(draft,'product_id')&&
+   draft.offer_provider==='digistore24'&&draft.offer_url===verified.url&&
+   draft.offer_product_id===verified.product_id&&hasFooter('Zum Angebot','View offer');
+ return !Object.hasOwn(draft,'offer_provider')&&!Object.hasOwn(draft,'offer_url')&&
+   !Object.hasOwn(draft,'offer_product_id')&&draft.product_id===verified.product_id&&
+   hasFooter('Zum Produkt','View product');
+}
+
 export function mountProviderOfferOptions({doc,note,file,request,isCurrent,onSelect}) {
  if(!file||file.media_kind!=='video'||typeof request!=='function'||typeof isCurrent!=='function')return null;
  const button=doc.createElement('button'),details=doc.createElement('div');
