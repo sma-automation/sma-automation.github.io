@@ -117,7 +117,7 @@ begin
  end;
  rebuilt:=original||E'\n\n'||chosen_footer;
  if octet_length(rebuilt)>5000 or (p_platform='tiktok' and
-   char_length(rebuilt)+(select count(*) from regexp_split_to_table(rebuilt,'') t(c) where ascii(c)>65535)>2200)
+   char_length(rebuilt)+(select count(*) from regexp_split_to_table(rebuilt,'') glyph(symbol) where ascii(glyph.symbol)>65535)>2200)
    then return jsonb_build_object('ok',false,'code','CAPTION_TOO_LONG','can_publish',false); end if;
  result_draft:=result_draft-'product_id'-'offer_provider'-'offer_url'-'offer_product_id';
  if p_provider='shopify' then
