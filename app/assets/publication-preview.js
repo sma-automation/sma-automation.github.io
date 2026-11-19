@@ -150,7 +150,14 @@ function showProductContext(value,file,saved){
    note.textContent='Mehrere Produkte passen zu dieser Datei. Ergänze Produktname und Einsatzzweck in der Beschreibung.';
   }
  }else if(value.state==='matched'&&typeof value.name==='string'&&typeof value.purpose==='string'){
-  note.textContent=['Produkt: '+value.name,value.topic&&'Thema: '+value.topic,value.purpose].filter(Boolean).join(' · ');
+  const facts=['Produkt: '+value.name,value.topic&&'Thema: '+value.topic,value.purpose].filter(Boolean);
+  // A confirmed product profile is not proof that a matching shop listing exists.
+  // Do not suggest a direct purchase link when the catalogue match is absent.
+  if(file.media_kind==='video' && (typeof value.product_id!=='string'||
+      !/^[A-Za-z0-9_-]{1,80}$/.test(value.product_id))){
+   facts.push('Kein eindeutig passender Shopartikel für einen direkten Produktlink vorhanden. Der Entwurf verwendet nur den allgemeinen Shop-Link. Prüfe den Artikel unter Shop → Produkte.');
+  }
+  note.textContent=facts.join(' · ');
  }else{return null;}
  note.hidden=false;return value;
 }
