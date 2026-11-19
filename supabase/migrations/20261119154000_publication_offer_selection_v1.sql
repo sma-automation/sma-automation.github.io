@@ -4,8 +4,8 @@
 create function sma_private.publication_digistore_offer_valid_v1(
  p_file sma_private.publication_files_v1,p_product_id text,p_url text
 ) returns boolean language sql stable security definer set search_path='' as $sql$
- select p_file.id is not null and p_file.available and p_file.media_kind='video'
-   and p_file.revision is not null
+ select (p_file).id is not null and (p_file).available and (p_file).media_kind='video'
+   and (p_file).revision is not null
    and p_product_id ~ '^[A-Za-z0-9_-]{1,80}$'
    and (select count(*)=1
      from sma_private.publication_files_v1 f
@@ -14,8 +14,8 @@ create function sma_private.publication_digistore_offer_valid_v1(
        and p.sma_produkt_id=p_product_id and p.aktiv is true and p.digistore24_aktiv is true
      join sma_private.publication_digistore_offers_v1 d on d.product_row_id=p.id
        and d.customer_id=c.id and d.user_id=c.user_id
-     where f.id=p_file.id and f.user_id=p_file.user_id
-       and f.customer_id=p_file.customer_id and f.revision=p_file.revision and f.available
+     where f.id=(p_file).id and f.user_id=(p_file).user_id
+       and f.customer_id=(p_file).customer_id and f.revision=(p_file).revision and f.available
        and c.aktiv and (c.demo_delta_aktiv or c.zahlung_bestaetigt)
        and d.enabled is true and d.promo_url=p_url
        and d.verified_at between now()-interval '30 days' and now()
