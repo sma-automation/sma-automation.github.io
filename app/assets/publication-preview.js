@@ -136,7 +136,9 @@ function sourceProduct(text){
 function originalSource(text){return sourceProduct(text)?.source??text;}
 function showProductContext(value,file,saved){
  const renderId=++offerOptionsSerial;
- catalogLookup.setContext(value==null&&file?.media_kind==='video'&&selectedPortal?file:null,selectedPortal,saved?.catalog);
+ const canChooseListing=file?.media_kind==='video'&&selectedPortal&&
+   (value==null||(value.state==='matched'&&!value.product_id));
+ catalogLookup.setContext(canChooseListing?file:null,selectedPortal,saved?.catalog);
  const note=$('productContext'),field=$('productChoiceField'),select=$('productChoice');
  const sameFile=file&&select.dataset.asset===file.id&&select.dataset.revision===file.revision;
  const wanted=saved?.choice??(sameFile?select.value:'');
@@ -162,6 +164,35 @@ function showProductContext(value,file,saved){
    facts.push('Kein eindeutig passender Shopartikel für einen direkten Produktlink vorhanden. Der Entwurf verwendet nur den allgemeinen Shop-Link. Prüfe den Artikel unter Shop → Produkte.');
   }
   note.textContent=facts.join(' · ');
+  if(file.media_kind==='video'&&!value.product_id&&['youtube','tiktok'].includes(selectedPortal)){
+   const map=document.createElement('button');
+   map.type='button';map.className='btn';
+   map.textContent='Ausgewählten Shopartikel ausdrücklich zuordnen';
+   note.append(map);
+   map.addEventListener('click',async()=>{
+    const inScope=()=>!signedOut&&renderId===offerOptionsSerial&&
+      selectedAsset?.id===file.id&&selectedAsset?.revision===file.revision;
+    if(!inScope()||busy)return;
+    map.disabled=true;
+    try{
+     const chosen=await catalogLookup.validate();
+     if(!chosen)throw Error('Bitte zuerst einen passenden Artikel im Shopkatalog auswählen.');
+     if(!inScope())return;
+     const {data,error}=await supabase.rpc('sma_publication_catalog_confirm_v1',{
+      p_asset:file.id,p_asset_revision:file.revision,p_catalog_product_id:chosen.product_id
+     });
+     if(!inScope())return;
+     if(error||data?.ok!==true||data?.can_publish!==false||
+         data?.product_id!==chosen.product_id)throw fileError(data?.code||'PRODUCT_SELECTION_CHANGED');
+     const refresh=await fileRpc('product',{asset_id:file.id,asset_revision:file.revision,platform:selectedPortal});
+     if(!inScope())return;
+     if(refresh.product_context?.product_id!==chosen.product_id)throw fileError('PRODUCT_SELECTION_CHANGED');
+     showProductContext(refresh.product_context,file);
+     status('Shopartikel diesem bestätigten Produktprofil zugeordnet. Portaltext und Freigabe bleiben separat.');
+    }catch(e){if(inScope())status(e.message||'Die Produktzuordnung ist fehlgeschlagen.',true);}
+    finally{map.disabled=false;}
+   });
+  }
  }else{return null;}
  if(value.state==='matched'&&file.media_kind==='video'){
   mountProviderOfferOptions({doc:document,note,file,
