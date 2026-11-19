@@ -19,7 +19,7 @@ const drive = 'fixture-product-video';
 const value = async (query, args) => (await db.query(query, args)).rows[0].result;
 async function rpc(role, query, args) {
   await db.exec('set role ' + role);
-  try { return await value(query, args); } finally { await db.exec('reset role'); }
+  try { return await value(query, args); } finally { try { await db.exec('reset role'); } catch {} }
 }
 const file = (action, platform, fields = {}) => rpc('authenticated',
   'select public.sma_publication_files_v1($1,$2) result', [action, {asset_id:asset, asset_revision:revision, platform, ...fields}]);
