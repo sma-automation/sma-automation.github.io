@@ -41,7 +41,7 @@ declare
  chosen_footer text; rebuilt text; tags text; lang text;
 begin
  if actor is null then return jsonb_build_object('ok',false,'code','AUTH_REQUIRED','can_publish',false); end if;
- if p_provider not in ('shopify','digistore24') or p_platform not in ('youtube','tiktok')
+ if p_provider is null or p_platform is null or p_provider not in ('shopify','digistore24') or p_platform not in ('youtube','tiktok')
    or p_asset is null or p_asset_revision is null or p_url is null
    or length(p_url)>500 or p_assignment_revision is null or p_assignment_revision<1
    then return jsonb_build_object('ok',false,'code','INVALID_INPUT','can_publish',false); end if;
@@ -92,8 +92,8 @@ begin
    or jsonb_typeof(result_draft->'caption') is distinct from 'string'
    or length(result_draft->>'body') not between 10 and 1200
    then return jsonb_build_object('ok',false,'code','SAVED_TEXT_INVALID','can_publish',false); end if;
- if exists(select from jsonb_array_elements(result_draft->'hashtags') tag
-   where jsonb_typeof(tag)<>'string') then
+ if exists(select from jsonb_array_elements(result_draft->'hashtags') AS tags(value)
+   where jsonb_typeof(tags.value)<>'string') then
    return jsonb_build_object('ok',false,'code','SAVED_TEXT_INVALID','can_publish',false); end if;
  select string_agg('#'||tag,' ' order by pos) into tags
    from jsonb_array_elements_text(result_draft->'hashtags') with ordinality t(tag,pos);
