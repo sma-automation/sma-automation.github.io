@@ -5,6 +5,7 @@ import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index
 import {checkDraftLinkEdits} from './sql-runtime/publication-edit-draft-link-checks.mjs';
 import {checkCatalogLookup} from './sql-runtime/publication-catalog-lookup-checks.mjs';
 import {checkProductChoice} from './sql-runtime/publication-product-choice-checks.mjs';
+import {checkOfferOptions} from './sql-runtime/publication-offer-options-checks.mjs';
 import handoff from '../n8n/publishing/publisher-handoff.cjs';
 import publisher from '../n8n/publishing/publisher-text.cjs';
 
@@ -78,6 +79,8 @@ try {
   await db.exec(await load('publication-edit-draft-link'));
   await db.exec(await load('publication-draft-product-availability'));
   await db.exec(await load('publication-sale-link-guard'));
+  await db.exec('grant usage on schema sma_private to authenticated');
+  await db.exec(await load('publication-offer-options'));
   const keep = await file('save','youtube',{assignment_revision:legacy.assignment_revision,title:'Alter Entwurf',body:'Ein bearbeiteter älterer Entwurf.'});
   assert.equal(keep.preview.drafts[0].product_id,undefined);assert.equal(keep.product_link_available,null);
   assert.ok(keep.preview.drafts[0].caption.endsWith('🛒 Zum Shop: '+shop));
@@ -110,6 +113,7 @@ try {
   await checkDraftLinkEdits({db,file,saved,product,owner,other,shop});
   await checkCatalogLookup({db,file,saved,product,owner,other,shop});
   await checkProductChoice({db,file,saved,product,owner,other,shop});
+  await checkOfferOptions({db,owner,other,asset,revision,shop});
   // Product-detail links must not be mistaken for a confirmed checkout path.
   // These cases run in a rolled-back fixture transaction; no production services.
   await db.exec('begin');
