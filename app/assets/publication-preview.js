@@ -1,6 +1,7 @@
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
+import {mountProviderOfferOptions} from './publication-offer-options.mjs?v=1';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=9';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
@@ -39,7 +40,7 @@ let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSigna
 let magicLoadTicket=0;
 // Keep Magic unavailable until the owner's saved draft has finished loading.
 let loadingVideoDraft=false,magicPreparationError=null;
-let pendingProductFocus=null;
+let pendingProductFocus=null,offerOptionsSerial=0;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
 let fileSelectionTicket=0,fileSelectionController=null;
 Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
@@ -132,6 +133,7 @@ function sourceProduct(text){
 }
 function originalSource(text){return sourceProduct(text)?.source??text;}
 function showProductContext(value,file,saved){
+ const renderId=++offerOptionsSerial;
  catalogLookup.setContext(value==null&&file?.media_kind==='video'&&selectedPortal?file:null,selectedPortal,saved?.catalog);
  const note=$('productContext'),field=$('productChoiceField'),select=$('productChoice');
  const sameFile=file&&select.dataset.asset===file.id&&select.dataset.revision===file.revision;
@@ -159,6 +161,17 @@ function showProductContext(value,file,saved){
   }
   note.textContent=facts.join(' · ');
  }else{return null;}
+ if(value.state==='matched'&&file.media_kind==='video'){
+  mountProviderOfferOptions({doc:document,note,file,
+   isCurrent:()=>!signedOut&&renderId===offerOptionsSerial&&
+     selectedAsset?.id===file.id&&selectedAsset?.revision===file.revision,
+   request:async(assetId,assetRevision)=>{
+    const {data,error}=await supabase.rpc('sma_publication_offer_options_v1',
+      {p_asset:assetId,p_revision:assetRevision});
+    if(error)throw error;
+    return data;
+   }});
+ }
  note.hidden=false;return value;
 }
 async function getDraftProduct(context){
