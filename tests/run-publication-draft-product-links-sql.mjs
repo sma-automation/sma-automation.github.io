@@ -34,9 +34,14 @@ async function assign(platform, language, assignmentRevision = 0) {
   assert.equal(result.ok, true, JSON.stringify(result));
   return result;
 }
-const product = (name, sku, id, user = owner, customer = 'our', active = true) => db.query(
-  'insert into public.sma_produkte(user_id,kunde_id,produkt_name,sku,sma_produkt_id,aktiv) values ($1,$2,$3,$4,$5,$6)',
-  [user, customer, name, sku, id, active]);
+const product = (name, sku, id, user = owner, customer = 'our', active = true, sale = {}) => db.query(
+  `insert into public.sma_produkte(user_id,kunde_id,produkt_name,sku,sma_produkt_id,aktiv,
+      shopify_aktiv,digistore24_aktiv,kauf_url,bestand,preis,waehrung)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+  [user,customer,name,sku,id,active,sale.shopify??true,sale.digistore??false,
+   sale.url===undefined?'https://fixture.myshopify.com/cart/123456789012:1':sale.url,
+   sale.stock===undefined?10:sale.stock,sale.price===undefined?19.90:sale.price,
+   sale.currency===undefined?'EUR':sale.currency]);
 try {
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth;
@@ -45,8 +50,10 @@ try {
     create table public.sma_kunden(id bigint primary key,user_id uuid,kunde_id text,n8n_kunde_id text,kunde_email text,
       aktiv boolean,demo_delta_aktiv boolean,zahlung_bestaetigt boolean,shop_slug text,shop_oeffentlich boolean);
     create table public.sma_produkte(id bigint generated always as identity primary key,user_id uuid,kunde_id text,
-      produkt_name text,sku text,sma_produkt_id text,beschreibung text,aktiv boolean);
-    grant select on public.sma_kunden,public.sma_produkte to service_role;`);
+      produkt_name text,sku text,sma_produkt_id text,beschreibung text,aktiv boolean,
+      shopify_aktiv boolean,digistore24_aktiv boolean,kauf_url text,bestand bigint,preis numeric,waehrung text);
+    create table public.sma_shopify_konten(sma_kunden_id bigint,aktiv boolean,markt_konto_id text,shopify_domain text);
+    grant select on public.sma_kunden,public.sma_produkte,public.sma_shopify_konten to service_role;`);
   for (const name of ['publication-preview','publication-files','publication-caption-history','publication-assignment-history','publication-text-edits']) {
     await db.exec(await load(name));
   }
@@ -57,6 +64,7 @@ try {
     create function sma_private.publication_export_technical_v1(sma_private.publication_files_v1) returns jsonb language sql as $$select null::jsonb$$;`);
   await db.exec(await load('publication-product-context'));
   await db.query("insert into public.sma_kunden values(1,$1,'our','ours','test@example.invalid',true,true,false,'fixture',true)", [owner]);
+  await db.exec("insert into public.sma_shopify_konten values(1,true,'merchant-fixture','fixture.myshopify.com')");
   await db.query(`insert into sma_private.publication_files_v1(id,user_id,customer_id,drive_file_id,revision,name,media_kind,mime_type,modified_at,size_bytes)
     values ($1,$2,1,$3,$4,'Article-SKU.mp4','video','video/mp4',now(),1234)`, [asset,owner,drive,revision]);
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [owner]);
@@ -101,6 +109,50 @@ try {
   await checkDraftLinkEdits({db,file,saved,product,owner,other,shop});
   await checkCatalogLookup({db,file,saved,product,owner,other,shop});
   await checkProductChoice({db,file,saved,product,owner,other,shop});
+  // Product-detail links must not be mistaken for a confirmed checkout path.
+  // These cases run in a rolled-back fixture transaction; no production services.
+  await db.exec('begin');
+  try {
+    const available=async(id='good_01') => value(
+      'select sma_private.publication_product_link_available_v1(c,$1) result from public.sma_kunden c where c.id=1',[id]);
+    assert.equal(await available(),true);
+    await product('Nur Katalogeintrag','CATALOG','catalog_only',owner,'our',true,
+      {shopify:false,digistore:false,url:null});
+    assert.equal(await available('catalog_only'),false);
+    await product('Digistore Vorlage','DS-001','ds_only',owner,'our',true,
+      {shopify:false,digistore:true,url:'https://www.digistore24.com/redir/12345/test'});
+    assert.equal(await available('ds_only'),false,'Digistore-only requires a separate provider handoff');
+    for(const mutation of [
+      "update public.sma_produkte set shopify_aktiv=false where sma_produkt_id='good_01'",
+      "update public.sma_produkte set bestand=0 where sma_produkt_id='good_01'",
+      "update public.sma_produkte set preis=null where sma_produkt_id='good_01'",
+      "update public.sma_produkte set waehrung=null where sma_produkt_id='good_01'",
+      "update public.sma_produkte set kauf_url=null where sma_produkt_id='good_01'",
+      "update public.sma_produkte set kauf_url='http://fixture.myshopify.com/cart/123456789012:1' where sma_produkt_id='good_01'",
+      "update public.sma_produkte set kauf_url='https://other.myshopify.com/cart/123456789012:1' where sma_produkt_id='good_01'",
+      "update public.sma_produkte set kauf_url='https://fixture.myshopify.com/products/wrong-item' where sma_produkt_id='good_01'",
+      "update public.sma_produkte set kauf_url='https://fixture.myshopify.com/cart/123456789012:1?redirect=evil' where sma_produkt_id='good_01'",
+      "update public.sma_shopify_konten set aktiv=false",
+      "update public.sma_shopify_konten set markt_konto_id=null",
+      "insert into public.sma_shopify_konten values(1,true,'duplicate','fixture.myshopify.com')",
+    ]) {
+      await db.exec('savepoint unsafe_sale');
+      await db.exec(mutation);
+      assert.equal(await available(),false,mutation);
+      await db.exec('rollback to savepoint unsafe_sale');
+    }
+    await db.exec("update public.sma_produkte set bestand=0 where sma_produkt_id='good_01'");
+    assert.equal((await file('get','youtube')).product_link_available,false);
+    assert.equal((await saved('youtube')).code,'ASSIGNMENT_CHANGED');
+    assert.equal((await file('product','youtube')).product_context.product_id,undefined);
+    await db.exec("update sma_private.publication_files_v1 set name='neutral.mp4'");
+    const choices=await file('catalog_search','youtube',{query:'Artikel'});
+    assert.equal(choices.ok,true);
+    assert.ok(!choices.choices.some(item=>item.product_id==='good_01'));
+    assert.ok(!choices.choices.some(item=>item.product_id==='catalog_only'));
+    assert.ok(!choices.choices.some(item=>item.product_id==='ds_only'));
+  } finally {await db.exec('rollback');}
+  assert.equal((await file('get','youtube')).product_link_available,true);
   const previous = (await file('get','youtube')).assignment_revision;
   for (const modify of [
     () => product('Zweiter Treffer','Article-SKU','other-id'),
