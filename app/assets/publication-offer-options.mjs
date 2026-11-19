@@ -9,13 +9,13 @@ export function allowedProviderOffer(value) {
    typeof value.url!=='string'||typeof value.product_id!=='string'||
    !/^[A-Za-z0-9_-]{1,80}$/.test(value.product_id))return null;
  if(value.provider==='shopify' && SHOPIFY.test(value.url) && value.url.endsWith('&produkt='+value.product_id))
-   return {provider:'shopify',url:value.url,label:'Shopify-Artikel ansehen'};
+   return {provider:'shopify',url:value.url,product_id:value.product_id,label:'Shopify-Artikel ansehen'};
  if(value.provider==='digistore24' && DIGISTORE.test(value.url))
-   return {provider:'digistore24',url:value.url,label:'Digistore24-Angebot ansehen'};
+   return {provider:'digistore24',url:value.url,product_id:value.product_id,label:'Digistore24-Angebot ansehen'};
  return null;
 }
 
-export function mountProviderOfferOptions({doc,note,file,request,isCurrent}) {
+export function mountProviderOfferOptions({doc,note,file,request,isCurrent,onSelect}) {
  if(!file||file.media_kind!=='video'||typeof request!=='function'||typeof isCurrent!=='function')return null;
  const button=doc.createElement('button'),details=doc.createElement('div');
  button.type='button';button.className='btn';button.textContent='Shopify- und Digistore24-Links prüfen';
@@ -56,6 +56,21 @@ export function mountProviderOfferOptions({doc,note,file,request,isCurrent}) {
     link.referrerPolicy='no-referrer';
     link.textContent=offer.label;
     details.append(link);
+    if(typeof onSelect==='function'){
+     const choose=doc.createElement('button');choose.type='button';choose.className='btn';
+     choose.textContent='Für diesen Portalentwurf übernehmen';
+     choose.addEventListener('click',async()=>{
+      if(pending||!isCurrent()||choose.disabled)return;
+      choose.disabled=true;
+      try{
+       await onSelect(offer);
+       if(ticket===serial&&isCurrent())details.textContent='Linkauswahl gespeichert. Prüfe den aktualisierten Portaltext.';
+      }catch(error){
+       if(ticket===serial&&isCurrent())details.textContent=typeof error?.message==='string'?error.message:'Die Linkauswahl konnte nicht gespeichert werden.';
+      }finally{if(ticket===serial)choose.disabled=false;}
+     });
+     details.append(choose);
+    }
    }
   }catch{
    if(ticket===serial&&isCurrent())details.textContent='Die Verkaufslinks konnten nicht geladen werden.';
