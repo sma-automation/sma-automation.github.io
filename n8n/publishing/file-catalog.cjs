@@ -11,8 +11,9 @@ function mediaMetadata(f){
 }
 function verifiedFolders(rows,context){
  const matches=rows.filter(r=>r?.kunde_id);const k=matches.length===1?matches[0]:null;
- const norm=x=>String(x||'').trim().toLowerCase();
- if(context?.ok!==true||!k||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==norm(context.kunde_email)||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');
+ const norm=x=>typeof x==='string'?x.trim().toLowerCase():'';
+ const expectedEmail=norm(context?.kunde_email);
+ if(context?.ok!==true||!k||!expectedEmail||k.kunde_id!==context.n8n_kunde_id||norm(k.kunde_email)!==expectedEmail||k.zugang_aktiv!==true||!(k.demo_delta_aktiv===true||k.zahlung_bestaetigt===true))throw Error('FOLDER_UNAVAILABLE');
  const folders=[...new Set([k.upload_folder_id,k.processing_folder_id])];
  if(folders.length!==2||folders.some(f=>typeof f!=='string'||!DRIVE_ID.test(f)))throw Error('FOLDER_UNAVAILABLE');
  return {folders,q:"trashed = false and ("+folders.map(f=>"'"+f+"' in parents").join(' or ')+") and (mimeType contains 'image/' or mimeType contains 'video/')"};
