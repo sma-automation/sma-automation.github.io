@@ -11,7 +11,11 @@ export async function checkOfferSelection({db,file,saved,owner,other,asset,revis
     'select public.sma_publication_offer_selection_v1($1,$2,$3,$4,$5,$6) result',
     [asset,revision,platform,expected,provider,url]);
    return row.result;
-  }finally{await db.exec('reset role');}
+  }finally{
+   // A server-side rejection may abort the surrounding PGlite transaction;
+   // do not hide its original cause behind a secondary RESET ROLE failure.
+   try{await db.exec('reset role');}catch{}
+  }
  };
  await db.exec('begin');
  try {
