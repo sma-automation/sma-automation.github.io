@@ -1,8 +1,5 @@
--- Sale-only publication product link policy. Does not change the public product catalogue,
--- stored product rows, existing drafts or any checkout/provider execution.
--- Digistore24-only listings are NOT linked via the Shopify-only SMA cart;
--- they need a separate verified Digistore24 destination and provider route.
--- Baseline check prevents silent replacement of a differently modified live policy.
+-- Sale-only publication product link policy, no stored data edits or provider calls.
+-- Digistore24-only products require their own verified provider URL handoff.
 do $guard$
 begin
  if (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -21,16 +18,13 @@ returns boolean language sql stable security invoker set search_path='' as $$
    and 1=(select count(*) from public.sma_produkte p
      where p.user_id=c.user_id and p.kunde_id=c.kunde_id and p.aktiv and p.sma_produkt_id=product_id
        and p.shopify_aktiv is true and p.bestand>0
-       and p.preis is not null and p.preis>=0 and p.waehrung ~ '^[A-Z]{3}
-$$;
-       -- The public checkout accepts only the exact owner's active Shopify cart variant URL.
-       and p.kauf_url ~ '^https://[a-z0-9][a-z0-9-]*\.myshopify\.com/cart/[1-9][0-9]{5,24}:[1-9][0-9]*/?
-$$;
+       and p.preis is not null and p.preis>=0 and p.waehrung ~ '^[A-Z]{3}$'
+       -- Same exact merchant and cart format as the public Shopify checkout.
+       and p.kauf_url ~ '^https://[a-z0-9][a-z0-9-]*\.myshopify\.com/cart/[1-9][0-9]{5,24}:[1-9][0-9]*/?$'
        and 1=(select count(*) from public.sma_shopify_konten sk
          where sk.sma_kunden_id=c.id and sk.aktiv is true
            and nullif(btrim(sk.markt_konto_id),'') is not null
-           and sk.shopify_domain ~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com
-$$;
+           and sk.shopify_domain ~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com$'
            and starts_with(p.kauf_url,'https://'||sk.shopify_domain||'/cart/')));
 $$;
 revoke all on function sma_private.publication_product_link_available_v1(public.sma_kunden,text)
