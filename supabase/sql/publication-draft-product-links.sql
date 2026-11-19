@@ -1,4 +1,6 @@
 -- Only the public shop's own active, uniquely addressable listing can be linked.
+-- Only a uniquely owned, live Shopify checkout candidate can be advertised as
+-- a direct product sale link. Digistore24 needs a separate provider URL handoff.
 create function sma_private.publication_product_link_available_v1(c public.sma_kunden, product_id text)
 returns boolean language sql stable security invoker set search_path='' as $$
  select c.shop_oeffentlich is true and c.aktiv and (c.zahlung_bestaetigt or c.demo_delta_aktiv)
@@ -7,10 +9,17 @@ returns boolean language sql stable security invoker set search_path='' as $$
    and 1=(select count(*) from public.sma_kunden s where s.shop_oeffentlich and s.shop_slug=c.shop_slug)
    and 1=(select count(*) from public.sma_produkte p
      where p.user_id=c.user_id and p.kunde_id=c.kunde_id and p.aktiv and p.sma_produkt_id=product_id
-       -- A public product detail page alone is not a purchase destination.
-       and (p.shopify_aktiv is true or p.digistore24_aktiv is true)
-       and p.kauf_url=btrim(p.kauf_url)
-       and p.kauf_url ~ '^https://[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:443)?([/?][^[:space:]#]*)?
+       and p.shopify_aktiv is true
+       and p.bestand>0 and p.preis is not null and p.preis>=0
+       and p.waehrung ~ '^[A-Z]{3}$'
+       -- Same purchase-link envelope the public SMA Shopify checkout requires:
+       -- exact merchant domain, a cart variant permalink, no query or fragment.
+       and p.kauf_url ~ '^https://[a-z0-9][a-z0-9-]*\.myshopify\.com/cart/[1-9][0-9]{5,24}:[1-9][0-9]*/?$'
+       and 1=(select count(*) from public.sma_shopify_konten sk
+         where sk.sma_kunden_id=c.id and sk.aktiv is true
+           and nullif(btrim(sk.markt_konto_id),'') is not null
+           and sk.shopify_domain ~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com$'
+           and starts_with(p.kauf_url,'https://'||sk.shopify_domain||'/cart/')));
 $$;
 revoke all on function sma_private.publication_product_link_available_v1(public.sma_kunden,text)
  from public,anon,authenticated;
