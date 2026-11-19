@@ -860,6 +860,20 @@ const confirmedProduct={
 function productFiles(product,saved={ok:true,status:'empty'}){
  return a=>['get','product'].includes(a.p_action)?{...saved,product_context:product}:videoFiles(a);
 }
+test('recognized video without a matching shop listing shows the missing direct product link explicitly',async()=>{
+ const unmatched=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:productFiles(confirmedProduct),formTracksDom:true});
+ const message=unmatched.get('productContext').textContent;
+ assert.match(message,/Mobiler Türgriff fürs Hotel/);
+ assert.match(message,/Kein eindeutig passender Shopartikel/);
+ assert.match(message,/nur den allgemeinen Shop-Link/);
+ assert.match(message,/Shop → Produkte/);
+ assert.equal(unmatched.get('productChoiceField').hidden,true);
+ assert.equal(unmatched.calls.some(c=>c.url),false,'opening the preview must not execute a worker');
+ const linked=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:productFiles({...confirmedProduct,product_id:'verified_01'}),formTracksDom:true});
+ assert.doesNotMatch(linked.get('productContext').textContent,/Kein eindeutig passender Shopartikel/);
+ assert.equal(linked.calls.some(c=>c.url),false);
+});
+
 test('a confirmed video reuses its reviewed scene and supplies product facts to the portal writer',async()=>{
  const p=await boot({portal:'instagram',asset:supportedVideo.id,filesRpc:productFiles(confirmedProduct),
   formTracksDom:true,fetchResponse:async()=>instagramResult});
