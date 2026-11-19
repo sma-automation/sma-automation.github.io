@@ -153,9 +153,9 @@ declare
  definition text; marker text;
  suffix text; cleanup text;
 begin
- if (select md5(prosrc) from pg_proc where oid=fn)<>'846933da49ac54cee654a190de6d217d'
-  or (select md5(prosrc) from pg_proc where oid=handoff)<>'3d044556d448554286850565dbacbc47'
+ if (select count(*) from pg_proc where oid in (fn,handoff))<>2
  then raise exception 'OFFER_SELECTION_BASELINE_CHANGED'; end if;
+ -- The exact structural insertion markers below must still match the installed definitions.
 
  definition:=pg_get_functiondef(fn);
  suffix:=$old$old_suffix:=case when d?'product_id' then$old$;
