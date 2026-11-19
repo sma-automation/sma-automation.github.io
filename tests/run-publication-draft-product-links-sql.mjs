@@ -77,6 +77,7 @@ try {
   await db.exec(await load('publication-catalog-lookup'));
   await db.exec(await load('publication-edit-draft-link'));
   await db.exec(await load('publication-draft-product-availability'));
+  await db.exec(await load('publication-sale-link-guard'));
   const keep = await file('save','youtube',{assignment_revision:legacy.assignment_revision,title:'Alter Entwurf',body:'Ein bearbeiteter älterer Entwurf.'});
   assert.equal(keep.preview.drafts[0].product_id,undefined);assert.equal(keep.product_link_available,null);
   assert.ok(keep.preview.drafts[0].caption.endsWith('🛒 Zum Shop: '+shop));
