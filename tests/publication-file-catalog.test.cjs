@@ -3,6 +3,15 @@ const context={ok:true,n8n_kunde_id:'kunde_test',kunde_email:'test@example.com'}
 const row={kunde_id:'kunde_test',kunde_email:'test@example.com',zugang_aktiv:true,demo_delta_aktiv:true,upload_folder_id:'upload_folder_123',processing_folder_id:'processing_folder_456'};
 const file={id:'drive_file_123456',name:'Testvideo.mp4',mimeType:'video/mp4',parents:[row.upload_folder_id],version:'3',modifiedTime:'2026-11-01T10:00:00Z',size:'1024',md5Checksum:'a'.repeat(32)};
 test('folder resolution rejects other customers, duplicate mappings and query injection',()=>{assert.equal(verifiedFolders([row],context).folders.length,2);for(const rows of [[{...row,kunde_id:'foreign'}],[row,row],[{...row,upload_folder_id:"abc' or trashed=false"}],[{...row,zugang_aktiv:false}]])assert.throws(()=>verifiedFolders(rows,context),/FOLDER_UNAVAILABLE/);});
+test('missing customer email never authorizes a Drive folder mapping, even when both sides are missing',()=>{
+ for(const email of [null,undefined,'', '   ',42]){
+  assert.throws(()=>verifiedFolders([{...row,kunde_email:email}],{...context,kunde_email:email}),/FOLDER_UNAVAILABLE/);
+  assert.throws(()=>verifiedFolders([row],{...context,kunde_email:email}),/FOLDER_UNAVAILABLE/);
+  assert.throws(()=>verifiedFolders([{...row,kunde_email:email}],context),/FOLDER_UNAVAILABLE/);
+ }
+ assert.deepEqual(verifiedFolders([{...row,kunde_email:'  TEST@EXAMPLE.COM  '}],context).folders,
+  [row.upload_folder_id,row.processing_folder_id]);
+});
 test('empty file results are valid only after both configured folders are accessible',()=>{
  const mapping=verifiedFolders([row],context);
  const metadata=mapping.folders.map(id=>({id,mimeType:'application/vnd.google-apps.folder',trashed:false,capabilities:{canListChildren:true}}));
