@@ -117,6 +117,8 @@ const catalogPrefix='SMA-Artikelauswahl aus dem Shop: ';
 const catalogLookup=mountCatalogLookup(document,(context,params)=>fileRpc('catalog_search',{...context,...params}));
 const choicePrefix='SMA-Produktauswahl (Kunden-/Katalogdaten): ';
 messages.PRODUCT_SELECTION_CHANGED='Die Artikelauswahl hat sich geändert. Prüfe den Artikel und erstelle den Entwurf erneut.';
+messages.OFFER_CHANGED='Der bestätigte Verkaufslink hat sich geändert. Bitte prüfe das Angebot erneut.';
+messages.OFFER_UNAVAILABLE='Für diese Datei ist derzeit kein bestätigter Verkaufslink verfügbar.';
 
 function sourceProduct(text){
  if(typeof text!=='string')return null;
@@ -170,7 +172,37 @@ function showProductContext(value,file,saved){
       {p_asset:assetId,p_revision:assetRevision});
     if(error)throw error;
     return data;
-   }});
+   },
+   onSelect:['youtube','tiktok'].includes(selectedPortal)?async offer=>{
+    if(signedOut||busy||!current||current.status!=='completed'||
+       pendingLink!==undefined||uncertainSave||comparisonBase||hasFormChanges()||hasSourceEdits())
+      throw Error('Bitte zuerst den aktuellen Portaltext speichern und danach den Verkaufslink auswählen.');
+    const ctx=fileContext(),old=current;
+    assertFileContext(ctx);
+    if(!Number.isSafeInteger(ctx.assignment_revision)||ctx.assignment_revision<1)
+      throw Error('Bitte zuerst einen Portaltext für diese Datei speichern.');
+    lock(true);
+    try{
+     const {data,error}=await supabase.rpc('sma_publication_offer_selection_v1',{
+      p_asset:ctx.asset_id,p_asset_revision:ctx.asset_revision,p_platform:ctx.platform,
+      p_assignment_revision:ctx.assignment_revision,p_provider:offer.provider,p_url:offer.url
+     });
+     await checkEditorContext(ctx,old);
+     if(error||data?.ok!==true)throw fileError(data?.code||'OFFER_CHANGED');
+     const draft=data.preview?.drafts?.[0];
+     if(data.status!=='completed'||data.id!==old.id||data.revision!==old.revision||
+       data.preview?.can_publish!==false||data.assignment_revision!==ctx.assignment_revision+1||
+       draft?.platform!==ctx.platform||!draft?.caption?.includes(offer.url)||
+       (offer.provider==='digistore24' && (draft.offer_provider!=='digistore24'||
+          draft.offer_url!==offer.url||draft.offer_product_id!==offer.product_id))||
+       (offer.provider==='shopify' && (draft.product_id!==offer.product_id||
+          Object.hasOwn(draft,'offer_provider'))))
+      throw fileError('ASSIGNMENT_CHANGED');
+     render(data);fileChanged();updateTabForm();
+     status('Verkaufslink für diesen Portalentwurf gespeichert. Die Freigabe bleibt separat.');
+    }finally{lock(false);syncMedia();}
+   }:undefined
+  });
  }
  note.hidden=false;return value;
 }
@@ -311,7 +343,8 @@ async function runPreviewDraftAction(target){
  if(step.target!=='source_text')control.click();
 }
 function unavailableDraftLink(draft){
- return !!draft?.product_id&&current?.product_link_available===false&&pendingLink===undefined;
+ return pendingLink===undefined&&((!!draft?.product_id&&current?.product_link_available===false)||
+   (draft?.offer_provider==='digistore24'&&current?.offer_link_available===false));
 }
 function showDraftDestination(target,unavailable){
  for(const id of ['shopLink','draftLinkValue']){
@@ -324,6 +357,7 @@ function showDraftDestination(target,unavailable){
 function draftWithLink(draft){
  if(pendingLink===undefined)return draft;
  const copy={...draft};
+ delete copy.offer_provider;delete copy.offer_url;delete copy.offer_product_id;
  if(pendingLink===null)delete copy.product_id;else copy.product_id=pendingLink.product_id;
  return copy;
 }
@@ -363,14 +397,14 @@ function render(data){
  for(const d of visibleDrafts){const card=document.createElement('article');card.className='card draft';card.dataset.platform=d.platform;const h=document.createElement('h3');h.textContent=names[d.platform];card.append(h);
   for(const [key,label,max] of [['title','Titel / Einstieg',80],['body','Beitragstext',1200]]){const box=document.createElement('div');box.className='field';const l=document.createElement('label');l.htmlFor=d.platform+'-'+key;l.textContent=label;const control=document.createElement(key==='body'?'textarea':'input');control.id=l.htmlFor;control.dataset.field=key;control.maxLength=max;control.value=d[key];control.defaultValue=control.value;control.required=true;box.append(l,control);card.append(box);}
   const tags=addHashtagField(document,card,d.platform,d.hashtags);tags.defaultValue=tags.value;
-  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=d.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
+  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=d.product_id||d.offer_provider==='digistore24'?'Gesamten Text mit Verkaufslink ansehen':'Gesamten Text mit Shop-Link ansehen';const full=document.createElement('div');full.className='caption';full.textContent=d.caption;details.append(summary,full);card.append(details);
   if(d.review_notes.length){const notes=document.createElement('ul');notes.className='note';for(const text of d.review_notes){const li=document.createElement('li');li.textContent=text;notes.append(li);}card.append(notes);}
   const updateCaption=()=>{try{full.textContent=caption(draftWithLink(d),card.querySelector('textarea').value,parseHashtags(tags.value));tags.setCustomValidity('');}catch(e){tags.setCustomValidity(e.message);full.textContent=e.message;}};
   if(!$('draftLinkEditor').hidden){
    refreshDraftLink=()=>{
     const next=draftWithLink(d),destination=draftDestination(data.preview.shop_url,next,data.preview.language);
     showDraftDestination(destination,unavailableDraftLink(d));
-    summary.textContent=next.product_id?'Gesamten Text mit Produktlink ansehen':'Gesamten Text mit Shop-Link ansehen';
+    summary.textContent=next.product_id||next.offer_provider==='digistore24'?'Gesamten Text mit Verkaufslink ansehen':'Gesamten Text mit Shop-Link ansehen';
     $('draftLinkUndo').hidden=pendingLink===undefined;
     updateDraftStatus();
     updateCaption();workspace?.refreshPreview();
@@ -809,7 +843,7 @@ function expiredHistoryPreparation(order){
  return deadline?.status==='expired';
 }
 function samePortalDraft(first,second){
- return !!first&&!!second&&['platform','title','body','caption','hashtags','review_notes','product_id']
+ return !!first&&!!second&&['platform','title','body','caption','hashtags','review_notes','product_id','offer_provider','offer_url','offer_product_id']
   .every(key=>JSON.stringify(first[key])===JSON.stringify(second[key]));
 }
 function sameHistoryDraft(order,saved,draft){
@@ -1473,6 +1507,10 @@ async function verifySavedDraft({binding,post,productId}){
     result.preview.shop_url!==snapshot.preview.shop_url||result.preview.language!==snapshot.preview.language||
     !Array.isArray(drafts)||drafts.length!==1||!samePortalDraft(shown,drafts[0])||
     shown.title!==post.title||shown.caption!==post.caption||shown.product_id!==productId)throw fileError('ASSIGNMENT_CHANGED');
+ if(shown.offer_provider==='digistore24'){
+  if(result.offer_link_available!==true)throw fileError('PRODUCT_LINK_UNAVAILABLE');
+  return;
+ }
  if(!productId)return;
  if(typeof result.product_link_available!=='boolean')throw Error('SMA konnte den Produktlink gerade nicht prüfen. Bitte versuche es erneut.');
  current.product_link_available=result.product_link_available;
@@ -1487,7 +1525,7 @@ function openOutdatedDraft(){
 function setDraftLink(target){
  if(!current||!refreshDraftLink||signedOut)return;
  const original=current.preview.drafts.find(d=>d.platform===selectedPortal);
- pendingLink=(original.product_id??null)===(target?.product_id??null)?undefined:target;
+ pendingLink=!original.offer_provider&&(original.product_id??null)===(target?.product_id??null)?undefined:target;
  choosingLinkFor=null;refreshDraftLink();updateTabForm();$('draftLinkEditor').open=true;$('draftLinkEditor').scrollIntoView({block:'nearest'});
  status(pendingLink===undefined?'Gespeichertes Linkziel übernommen.':'Linkziel in der Vorschau geändert. Prüfe den Beitragstext und speichere den Entwurf.');
 }
@@ -1563,7 +1601,9 @@ function draftRoute(){
  return JSON.stringify([params.get('order'),params.get('asset'),params.get('view'),params.get('resume')]);
 }
 function editableFields(draft){
- return {title:draft.title,body:draft.body,hashtags:draft.hashtags,product_id:draft.product_id??null};
+ return {title:draft.title,body:draft.body,hashtags:draft.hashtags,product_id:draft.product_id??null,
+  offer_provider:draft.offer_provider??null,offer_url:draft.offer_url??null,
+  offer_product_id:draft.offer_product_id??null};
 }
 function forgetTabAttempt(){
  tabDrafts.forget(tabRecord);tabRecord=null;comparisonBase=null;
@@ -1615,7 +1655,8 @@ function restoreTabAttempt(saved,file){
  }
  const form=record.form,confirmed=record.kind!=='edit'&&sameEditableDraft(record.sent,draft);
  // Without a staged link, the editor keeps the verified server destination.
- pendingLink=form.link===undefined||(form.link?.product_id??null)===(draft.product_id??null)?undefined:form.link;
+ pendingLink=form.link===undefined||(!draft.offer_provider&&
+  (form.link?.product_id??null)===(draft.product_id??null))?undefined:form.link;
  const card=$('drafts').children[0];
  card.querySelector('[data-field=title]').value=form.title;card.querySelector('[data-field=body]').value=form.body;
  card.querySelector('[data-field=hashtags]').value=form.tags;
@@ -1647,7 +1688,10 @@ function finishDraftSave(result,context){
 
 function sameEditableDraft(a,b){
  return a.title===b.title&&a.body===b.body&&JSON.stringify(a.hashtags)===JSON.stringify(b.hashtags)&&
-  (a.product_id??null)===(b.product_id??null);
+  (a.product_id??null)===(b.product_id??null)&&
+  (a.offer_provider??null)===(b.offer_provider??null)&&
+  (a.offer_url??null)===(b.offer_url??null)&&
+  (a.offer_product_id??null)===(b.offer_product_id??null);
 }
 function validSaveReceipt(saved,{context,original}){
  const draft=saved?.preview?.drafts?.[0];
@@ -1735,7 +1779,10 @@ async function saveDraft(){
  const context=selectedAsset?fileContext():null,original=current;
  const recoverable=context&&['youtube','tiktok'].includes(context.platform);
  const edit=edits[0],base=original.preview.drafts.find(d=>d.platform===selectedPortal);
- const snapshot=recoverable?{original,context,sent:{...edit,product_id:draftWithLink(base).product_id??null}}:null;
+ const staged=draftWithLink(base);
+ const snapshot=recoverable?{original,context,sent:{...edit,product_id:staged.product_id??null,
+   offer_provider:staged.offer_provider??null,offer_url:staged.offer_url??null,
+   offer_product_id:staged.offer_product_id??null}}:null;
  lock(true);$('saveStatus').textContent='Wird gespeichert …';
  try{
   await ensureFreshFile(context);

@@ -90,3 +90,40 @@ test('product footers must match the exact ID on the saved file assignment in bo
   }
  }
 });
+
+
+test('verified Digistore24 footer is immutable across handoff and rejected on mismatched provider facts',()=>{
+ const url='https://www.checkout-ds24.com/redir/123456/FixtureAffiliate/Campaign_01';
+ for(const platform of ['youtube','tiktok'])for(const language of ['de','en']){
+  const item=stored(platform,language),d=item.text;
+  d.offer_provider='digistore24';d.offer_url=url;d.offer_product_id='good_01';
+  d.caption=[d.body,d.hashtags.map(t=>'#'+t).join(' '),
+    (language==='en'?'🛒 View offer: ':'🛒 Zum Angebot: ')+url].join('\n\n');
+  const bound={...selection,platform};
+  const prepared=run(item,bound);
+  assert.equal(prepared.ok,true,JSON.stringify(prepared));
+  assert.equal(prepared.can_upload,false);assert.equal(prepared.can_publish,false);
+  assert.deepEqual(prepared.draft,d);
+  const workflow=JSON.parse(fs.readFileSync('n8n/publishing/publisher-handoff-workflow.json','utf8'));
+  const finish=workflow.nodes.find(n=>n.name==='Übergabe prüfen').parameters.jsCode;
+  const returned=vm.runInNewContext('(function(){'+finish+'})()',{
+   Buffer,
+   Date:class extends Date {static now(){return now;}},
+   $input:{all:()=>[{json:item}],first:()=>({json:item})},
+   $:()=>({first:()=>({json:{selection:bound}})})
+  });
+  assert.equal(returned[0].json.draft.caption,d.caption);
+  for(const patch of [
+   {offer_provider:'shopify'},
+   {offer_url:'https://evil.invalid/redir/123456/FixtureAffiliate'},
+   {offer_url:url+'?other=evil'},
+   {offer_product_id:'../../../x'},
+   {product_id:'good_01'},
+   {caption:d.caption+'\n'+url},
+   {caption:d.caption.replace('Zum Angebot: ','Zum Shop: ').replace('View offer: ','Visit our shop: ')},
+  ]){
+   const data={...item,text:{...d,...patch}};
+   assert.equal(run(data,bound).code,'SAVED_TEXT_INVALID',JSON.stringify(patch));
+  }
+ }
+});

@@ -4,6 +4,7 @@
 const HANDOFF_PLATFORMS = ['youtube', 'instagram', 'facebook', 'tiktok'];
 const HANDOFF_UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const HANDOFF_SHOP = /^https:\/\/sma-automation\.com\/app\/shop\.html\?shop=[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const HANDOFF_DIGISTORE = /^https:\/\/www\.checkout-ds24\.com\/redir\/[1-9][0-9]{0,11}\/[A-Za-z0-9._-]{1,80}(?:\/[A-Za-z0-9._-]{1,127})?\/?$/;
 const HANDOFF_FAILURES = ['ACCESS_INACTIVE', 'FILE_UNAVAILABLE', 'FILE_CHANGED', 'ASSIGNMENT_UNAVAILABLE', 'ASSIGNMENT_CHANGED'];
 const HANDOFF_PENDING = ['DRIVE_RECHECK_REQUIRED', 'MEDIA_APPROVAL_REQUIRED', 'CONTENT_APPROVAL_REQUIRED', 'TARGET_ACCOUNT_REQUIRED', 'PUBLICATION_APPROVAL_REQUIRED', 'PUBLICATION_RESERVATION_REQUIRED'];
 const handoffObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -67,11 +68,19 @@ function makeHandoff(response, input, now = Date.now()) {
   // Preserve the stored caption byte for byte; do not regenerate, trim or append a second shop footer.
   const product = Object.hasOwn(d, 'product_id');
   if (product && (typeof d.product_id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(d.product_id))) return handoffFailure('SAVED_TEXT_INVALID');
-  const destination = product ? r.shop_url + '&produkt=' + d.product_id : r.shop_url;
-  const footers = product ? ['🛒 Zum Produkt: ', '🛒 View product: '] : ['🛒 Zum Shop: ', '🛒 Visit our shop: '];
+  const offerFields=['offer_provider','offer_url','offer_product_id'];
+  const hasOffer=offerFields.some(k=>Object.hasOwn(d,k));
+  const digistore=hasOffer&&d.offer_provider==='digistore24'&&!product&&
+    typeof d.offer_product_id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(d.offer_product_id)&&
+    typeof d.offer_url==='string'&&HANDOFF_DIGISTORE.test(d.offer_url);
+  if(hasOffer&&(!digistore||r.media_kind!=='video'||!['youtube','tiktok'].includes(r.platform)))return handoffFailure('SAVED_TEXT_INVALID');
+  const destination = digistore?d.offer_url:product?r.shop_url + '&produkt=' + d.product_id:r.shop_url;
+  const footers = digistore?['🛒 Zum Angebot: ','🛒 View offer: ']:
+    product?['🛒 Zum Produkt: ', '🛒 View product: ']:['🛒 Zum Shop: ', '🛒 Visit our shop: '];
   const captions = footers.map(footer =>
     [d.body, d.hashtags.map(t => '#' + t).join(' '), footer + destination].filter(Boolean).join('\n\n'));
-  if (!captions.includes(d.caption) || d.caption.split(r.shop_url).length !== 2 ||
+  if (!captions.includes(d.caption) || d.caption.split(destination).length !== 2 ||
+      (digistore && d.caption.includes(r.shop_url)) ||
       /(https?:|www\.|<|>)/i.test(d.title + d.body) || Buffer.byteLength(d.caption, 'utf8') > 5000 ||
       (r.platform === 'tiktok' && d.caption.length > 2200)) return handoffFailure('SAVED_TEXT_INVALID');
   const blockers = [...HANDOFF_PENDING];
@@ -80,7 +89,7 @@ function makeHandoff(response, input, now = Date.now()) {
   return {
     ok:true, version:1, stage:'handoff_preview', can_publish:false, can_upload:false,
     binding:{...r},
-    draft:{platform:d.platform, title:d.title, body:d.body, caption:d.caption, hashtags:[...d.hashtags], review_notes:[...d.review_notes], ...(product ? {product_id:d.product_id} : {})},
+    draft:{platform:d.platform, title:d.title, body:d.body, caption:d.caption, hashtags:[...d.hashtags], review_notes:[...d.review_notes], ...(product ? {product_id:d.product_id} : {}), ...(digistore ? {offer_provider:'digistore24',offer_url:d.offer_url,offer_product_id:d.offer_product_id}: {})},
     checks:{saved_selection:'matched', catalog_verified_at:media.verified_at, media:media.checks.map(c => ({code:c.code, status:c.status}))},
     blockers
   };

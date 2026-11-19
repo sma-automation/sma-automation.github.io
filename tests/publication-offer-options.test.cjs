@@ -68,3 +68,41 @@ test('missing offers, unauthorized server responses, and a switched file remain 
  assert.equal(s.button.disabled,false);
  s.destroy();assert.equal(s.button.disabled,true);
 });
+
+test('one explicit customer click selects the verified offer, not merely displaying it',async()=>{
+ const {mountProviderOfferOptions}=await import('../app/assets/publication-offer-options.mjs');
+ const host=new Node(),selections=[];let resolveWrite;
+ const view=mountProviderOfferOptions({doc,note:host,file:video,isCurrent:()=>true,
+  request:async()=>receipt([option('shopify',shop),option('digistore24',ds)]),
+  onSelect:offer=>{selections.push(offer);return new Promise(resolve=>{resolveWrite=resolve;});}});
+ assert.equal(selections.length,0);
+ view.button.click();await tick();
+ assert.equal(selections.length,0,'link review cannot save an offer');
+ const choose=view.details.children.filter(x=>x.tag==='button');
+ assert.equal(choose.length,2);
+ choose[1].click();await tick();
+ assert.equal(selections.length,1);
+ assert.deepEqual(selections[0],{provider:'digistore24',url:ds,product_id:'good_01',label:'Digistore24-Angebot ansehen'});
+ assert.equal(choose[1].disabled,true);
+ choose[1].click();await tick();
+ assert.equal(selections.length,1,'double-click cannot create a second write');
+ resolveWrite();await tick();
+ assert.equal(choose[1].disabled,false);
+});
+
+test('destination validation distinguishes a Digistore link from a Shopify product page',async()=>{
+ const {draftDestination}=await import('../app/assets/publication-destination.mjs');
+ const root=shop.split('&produkt=')[0];
+ const linked={offer_provider:'digistore24',offer_url:ds,offer_product_id:'good_01'};
+ assert.deepEqual(draftDestination(root,linked,'de'),{url:ds,label:'Zum Angebot'});
+ assert.deepEqual(draftDestination(root,linked,'en'),{url:ds,label:'View offer'});
+ for(const wrong of [
+  {...linked,offer_url:'https://evil.invalid/redir/123456/Affiliate'},
+  {...linked,offer_url:ds+'?next=https://evil.invalid'},
+  {...linked,product_id:'good_01'},
+  {...linked,offer_provider:'shopify'},
+  {...linked,offer_product_id:'../../etc'},
+ ])assert.equal(draftDestination(root,wrong,'de'),null);
+ assert.deepEqual(draftDestination(root,{product_id:'good_01'},'de'),
+  {url:root+'&produkt=good_01',label:'Zum Produkt'});
+});
