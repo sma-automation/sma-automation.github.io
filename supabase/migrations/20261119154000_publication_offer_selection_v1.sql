@@ -180,7 +180,7 @@ begin
     return jsonb_build_object('ok',false,'code','PRODUCT_LINK_UNAVAILABLE');
    end if;
    shop_footer:=(case when j.input->>'language'='en' then '🛒 Visit our shop: ' else '🛒 Zum Shop: ' end)||j.shop_url;
-   new_footer:=(case when j.input->>'language'='en' then '🛒 View offer: ' else '🛒 Zum Angebot: ' end)||b.draft->>'offer_url';
+   new_footer:=(case when j.input->>'language'='en' then '🛒 View offer: ' else '🛒 Zum Angebot: ' end)||(b.draft->>'offer_url');
    if d->>'product_id' is not null or right(d->>'caption',length(shop_footer)) is distinct from shop_footer then
     return jsonb_build_object('ok',false,'code','INVALID_EDIT');
    end if;
