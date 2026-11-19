@@ -106,3 +106,24 @@ test('destination validation distinguishes a Digistore link from a Shopify produ
  assert.deepEqual(draftDestination(root,{product_id:'good_01'},'de'),
   {url:root+'&produkt=good_01',label:'Zum Produkt'});
 });
+
+test('an unchanged, exact verified offer is recognized without accepting unrelated or tampered drafts',async()=>{
+ const {isSavedProviderOffer}=await import('../app/assets/publication-offer-options.mjs');
+ const shopOffer={provider:'shopify',url:shop,product_id:'good_01'};
+ const dsOffer={provider:'digistore24',url:ds,product_id:'good_01'};
+ const shopDraft={platform:'youtube',product_id:'good_01',
+  caption:'Original text.\n\n#Test\n\n🛒 Zum Produkt: '+shop};
+ const dsDraft={platform:'tiktok',offer_provider:'digistore24',
+  offer_product_id:'good_01',offer_url:ds,
+  caption:'Original text.\n\n#Test\n\n🛒 View offer: '+ds};
+ assert.equal(isSavedProviderOffer(shopDraft,shopOffer),true);
+ assert.equal(isSavedProviderOffer(dsDraft,dsOffer),true);
+ assert.equal(isSavedProviderOffer({...shopDraft,product_id:'other'},shopOffer),false);
+ assert.equal(isSavedProviderOffer({...shopDraft,caption:shopDraft.caption+'?ref=other'},shopOffer),false);
+ assert.equal(isSavedProviderOffer({...shopDraft,offer_provider:'digistore24'},shopOffer),false);
+ assert.equal(isSavedProviderOffer({...dsDraft,offer_url:shop},dsOffer),false);
+ assert.equal(isSavedProviderOffer({...dsDraft,product_id:'good_01'},dsOffer),false);
+ assert.equal(isSavedProviderOffer({...dsDraft,caption:'Unrelated text'},dsOffer),false);
+ assert.equal(isSavedProviderOffer(dsDraft,{...dsOffer,url:'https://example.invalid'}),false);
+ assert.equal(isSavedProviderOffer(shopDraft,{...shopOffer,product_id:'foreign'}),false);
+});
