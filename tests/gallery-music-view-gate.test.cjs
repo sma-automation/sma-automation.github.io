@@ -97,7 +97,7 @@ test('dashboard and standalone optimizer both reference the updated worker safel
  assert.match(dashboard,/onComplete:\(\)=>load\(false,\{wakeMusicAfter:false\}\)/);
  assert.match(dashboard,/if\(!retryingCatalog&&!checkingStatus&&wakeMusicAfter\)wakeMusic\(\);/);
  assert.match(standalone,/gallery-music-worker\.mjs\?v=9/);
- assert.match(page,/publication-preview\.js\?v=113/);
+ assert.match(page,/publication-preview\.js\?v=114/);
  assert.match(dashboard,/url\.searchParams\.set\('v','58'\)/);
  assert.match(worker,/isVisible,subscribeVisibility\}\)\{/);
 });
