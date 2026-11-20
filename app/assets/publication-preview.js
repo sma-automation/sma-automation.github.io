@@ -1,3 +1,4 @@
+import {mountJointPlan} from './publication-joint-plan.mjs?v=1';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
@@ -7,7 +8,7 @@ import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashta
 import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
 import {mountOriginalVideo} from './original-video-preview.mjs?v=3';
-let supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
+let jointPlan,supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './thumbnail-batch.mjs?v=1';
 import {clearSharedOriginalMediaCache} from './original-media-cache.mjs?v=1';
@@ -575,6 +576,7 @@ async function optimizerCatalog(signal){
 function renderSelectedFile(refreshCover=false){
  showProductContext(null,null);
  originalVideo?.setContext(selectedAsset);
+ jointPlan?.select(selectedAsset,signedOut?null:previewOwnerId);
  renderVideoMetadata();
  workspace?.selection(selectedAsset);
  $('selectedFileName').textContent=selectedAsset?(workspace?'Dateiname: ':'')+selectedAsset.name:'';
@@ -1875,6 +1877,16 @@ try{
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
  supabase.auth.onAuthStateChange((event,s)=>{if(event==='INITIAL_SESSION'&&previewOwnerId&&s?.user?.id!==previewOwnerId)return;syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);clearSharedOriginalMediaCache(undefined,previewOwnerId);clearSharedCatalogRefreshCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
+ if(['youtube','tiktok'].includes(selectedPortal)){
+  if(workspace)$('workspacePostView').append($('jointPlan'));
+  jointPlan=mountJointPlan(document,async args=>{
+   const owner=(await session()).user.id;
+   if(signedOut||owner!==args.p_owner)throw Object.assign(new Error(),{code:'AUTH_REQUIRED'});
+   const {data,error}=await supabase.rpc('sma_publication_joint_plan_v1',args);
+   if(error)throw error;
+   return data;
+  });
+ }
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
   galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:text=>{if(!signedOut)$('galleryMusicStatus').textContent=text;},

@@ -39,6 +39,19 @@ main,section,.card,details,fieldset,.field,.row>*{min-width:0}main{width:100%}.r
 <p>Link im Entwurf: <a id="draftLinkValue" target="_blank" rel="noopener noreferrer"></a></p>
 <div class="actions"><button id="draftLinkProduct" type="button" class="secondary">Shopartikel verwenden</button><button id="draftLinkShop" type="button" class="secondary">Shop-Startseite verwenden</button><button id="draftLinkUndo" type="button" class="secondary" hidden>Linkänderung verwerfen</button></div>
 </details><p class="notice">Noch offen: Medienformat, Bild-/Videoinhalt, Rechte und Kennzeichnungen sowie die Verbindung zum jeweiligen Portal. Ein sichtbarer Link ist nicht auf jedem Portal anklickbar. Affiliate-Zuordnung und Profil-Link werden hier noch nicht eingerichtet.</p><div class="actions"><button id="save" type="button">Änderungen speichern</button><button type="button" class="secondary" id="checkDraftSave" hidden>Speicherstand prüfen</button><button type="button" class="secondary" id="compareDraft" hidden>Änderungen vergleichen</button><span id="saveStatus" role="status" aria-live="polite"></span></div></section>
+<details id="jointPlan" hidden>
+ <summary>Gemeinsamer Termin für YouTube und TikTok</summary>
+ <p id="jointPlanChannels" style="white-space:pre-line"></p>
+ <label for="jointPlanTime">Wunschtermin (Wiener Zeit)</label>
+ <input type="datetime-local" id="jointPlanTime" step="60" disabled>
+ <div id="jointPlanFold" hidden><label for="jointPlanOccurrence">Zeitumstellung</label>
+ <select id="jointPlanOccurrence"><option value="">Bitte wählen</option><option value="0">Sommerzeit (erste Uhrzeit)</option><option value="1">Winterzeit (zweite Uhrzeit)</option></select></div>
+ <p class="note">Der Entwurf gilt für beide Portale. Eine Veröffentlichung wird separat freigegeben und beauftragt.</p>
+ <div class="actions"><button id="jointPlanSave" type="button" disabled>Terminentwurf speichern</button>
+ <button id="jointPlanClear" type="button" class="secondary" hidden>Termin verwerfen</button>
+ <button id="jointPlanRefresh" type="button" class="secondary">Gespeicherten Stand laden</button></div>
+ <p id="jointPlanStatus" class="note" role="status" aria-live="polite"></p>
+</details>
 </main>
 <dialog id="filePicker" aria-labelledby="filePickerTitle" aria-describedby="filePickerHelp">
  <div class="file-picker-header"><h2 id="filePickerTitle">Kundenordner öffnen</h2><button id="closeFilePicker" type="button" class="secondary" aria-label="Dateiauswahl schließen">✕</button></div>
@@ -72,4 +85,4 @@ main,section,.card,details,fieldset,.field,.row>*{min-width:0}main{width:100%}.r
 <div id="draftConflictFields"></div>
 <div class="actions"><button type="button" id="draftConflictApply">In Entwurf übernehmen</button><button type="button" class="secondary" id="draftConflictBack">Zurück</button></div>
 </dialog>
-<script type="module" src="assets/publication-preview.js?v=113"></script></body></html>
+<script type="module" src="assets/publication-preview.js?v=114"></script></body></html>
