@@ -11,7 +11,7 @@ export function createChapterTabs({doc,id,entries,initial=entries[0]?.key,list,o
   const button=entry.button||doc.createElement('button');entry.button=button;
   remember(button,['id','role','aria-controls','aria-selected','aria-pressed','tabindex','type']);
   button.type='button';button.id=id+'-tab-'+entry.key;button.setAttribute('role','tab');
-  if(entry.label){button.textContent=entry.label;button.dataset.de=entry.label;button.dataset.en=entry.en||entry.label;}
+  if(entry.label){button.textContent=doc.documentElement?.lang==='en'?(entry.en||entry.label):entry.label;button.dataset.de=entry.label;button.dataset.en=entry.en||entry.label;}
   if(entry.panel){
    remember(entry.panel,['id','role','aria-labelledby','tabindex','hidden']);
    entry.panel.id=entry.panel.id||id+'-panel-'+entry.key;

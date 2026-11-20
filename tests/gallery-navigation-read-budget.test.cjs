@@ -54,8 +54,6 @@ async function mount(state){
  env.refreshMediaCatalog=options=>refreshMediaCatalog({...options,host:env,now:()=>state.now,request:env.fetch,endpoint:()=>env.customerMediaEndpoint('catalog')});
  const attach=vm.runInNewContext(source+'\nattachFileList',env);
  const gallery=attach(document,document.querySelector('main'),'https://sma.test/app/media-editor.html');
- // LinkeDOM has no select.value setter; native browsers do.
- Object.defineProperty(document.querySelector('#smaFilePortalFilter'),'value',{writable:true,value:'all'});
  const refresh=document.querySelector('.sma-file-toolbar button');
  async function click(button){
   button.click();

@@ -69,7 +69,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  '#smaQuickFindPanel .sma-qf-status{font:400 12px Inter,Arial,sans-serif;color:#61708b;margin:8px 0 0}'
  ].join('');
  doc.head?.append(style);
- const button=create('button','⌕  Suche');button.type='button';button.id='smaGlobalQuickFind';
+ const button=create('input');button.type='search';button.autocomplete='off';button.placeholder='Dateien suchen';button.setAttribute('aria-label','Dashboard durchsuchen');button.id='smaGlobalQuickFind';
  button.title='Bereiche und Dateien suchen';button.setAttribute('aria-haspopup','dialog');
  button.setAttribute('aria-controls','smaQuickFindDialog');button.setAttribute('aria-expanded','false');
  anchor.prepend(button);
@@ -79,7 +79,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  const head=create('div');head.className='sma-qf-head';
  const h=create('h2','SMA durchsuchen');h.id='smaQuickFindTitle';
  const close=create('button','×');close.type='button';close.className='sma-qf-close';close.setAttribute('aria-label','Suche schließen');head.append(h,close);
- const input=create('input');input.type='search';input.id='smaQuickFindInput';input.placeholder='Datei oder Bereich eingeben …';
+ const input=create('input');input.type='search';input.id='smaQuickFindInput';input.placeholder='Dateien suchen';
  input.setAttribute('aria-label','Dashboard durchsuchen');input.autocomplete='off';
  const status=create('p');status.className='sma-qf-status';status.setAttribute('role','status');
  const retry=create('button');retry.type='button';retry.hidden=true;
@@ -96,7 +96,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   button.focus();
   if(doc.activeElement!==button)doc.querySelector('#smaMobileQuickNav [data-sma-mobile-target="search"]')?.focus();
  }
- function hide(restoreFocus=true){overlay.hidden=true;button.setAttribute('aria-expanded','false');input.value='';retainedFileId=null;results.replaceChildren();if(restoreFocus)focusLauncher();}
+ function hide(restoreFocus=true){overlay.hidden=true;button.value='';button.setAttribute('aria-expanded','false');input.value='';retainedFileId=null;results.replaceChildren();if(restoreFocus)focusLauncher();}
  function dismiss(){hide();onDismiss?.();}
  function item(title,subtitle,handler,restoreFocus=true,key=null){
   const el=create('button');el.type='button';el.className='sma-qf-item';
@@ -162,11 +162,19 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
   (hit||input).focus();
  }
  function restore(query,id,trigger=button){
-  if(disposed)return;launcher=trigger;retainedFileId=id;overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render(id);
+  if(disposed)return;launcher=trigger;retainedFileId=id;
+  const rect=button.getBoundingClientRect?.();
+  overlay.classList.toggle('sma-header-results',trigger===button&&rect?.width>0);
+  if(trigger===button&&rect?.width){
+   overlay.style.setProperty('--search-x',rect.left+'px');overlay.style.setProperty('--search-y',rect.top+'px');
+   overlay.style.setProperty('--search-width',rect.width+'px');overlay.style.setProperty('--search-height',rect.height+'px');
+  }
+  overlay.hidden=false;button.setAttribute('aria-expanded','true');input.value=query;render(id);
   focusFile(id);
  }
  function show(trigger=button){restore('',null,trigger);}
- const openFromHeader=()=>show(button);
+ const openFromHeader=()=>{if(overlay.hidden)restore(button.value,null,button);};
+ button.addEventListener('input',openFromHeader);
  const keydown=e=>{
   if(disposed)return;
   if(e.key==='Tab'&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!overlay.hidden){
@@ -190,7 +198,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  return {button,show,hide,restore,focusLauncher,refresh:render,destroy(){
   if(disposed)return;disposed=true;doc.removeEventListener('keydown',keydown);
   input.removeEventListener('input',inputHandler);overlay.removeEventListener('click',backdrop);
-  button.removeEventListener('click',openFromHeader);close.removeEventListener('click',dismiss);
+  button.removeEventListener('input',openFromHeader);button.removeEventListener('click',openFromHeader);close.removeEventListener('click',dismiss);
   button.remove();overlay.remove();style.remove();
  }};
 }

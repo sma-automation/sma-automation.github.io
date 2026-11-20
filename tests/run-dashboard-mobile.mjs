@@ -137,7 +137,7 @@ async function mockOriginalVideo(page,failFirstRead=false){
 }
 async function checkOriginalPlayback(page,width,{failFirstRead}){
  const readCount=await mockOriginalVideo(page,failFirstRead);
- const load=page.getByRole('button',{name:'Originalvideo laden'});
+ const load=page.getByRole('button',{name:'Originalvideo abspielen'});
  const video=page.locator('#originalVideoPreview video');
  await fits(load,width);await load.tap();
  if(failFirstRead){
@@ -148,8 +148,7 @@ async function checkOriginalPlayback(page,width,{failFirstRead}){
  await fits(video,width);
  await page.waitForFunction(()=>document.querySelector('#originalVideoPreview video')?.readyState>=2);
  assert.deepEqual(await video.evaluate(v=>[v.videoWidth,v.videoHeight,v.duration,v.paused]),
-  [file.width_px,file.height_px,file.duration_ms/1000,true]);
- await video.press('Space');
+  [file.width_px,file.height_px,file.duration_ms/1000,false]);
  await page.waitForFunction(()=>{const v=document.querySelector('#originalVideoPreview video');return !v.paused&&v.currentTime>0;});
  await page.locator('#workspaceDetailTab').tap();
  const [paused,ended,pausedAt]=await video.evaluate(v=>[v.paused,v.ended,v.currentTime]);
@@ -288,7 +287,7 @@ async function checkFilesShortcut(page,frame,heading,width){
  assert(await finder.evaluate(el=>el.ownerDocument.activeElement===el));
  if(mobile)assert.equal(await files.getAttribute('aria-current'),'page');
  await finder.fill(draft.title);
- await frame.getByRole('button',{name:'Datei auswählen: '+draft.title+' · Bearbeitetes Video · 3 Sek.',exact:true}).waitFor();
+ await frame.getByRole('button',{name:'Datei im Portal öffnen: '+draft.title+' · Bearbeitetes Video · 3 Sek.',exact:true}).waitFor();
  await page.goBack();await page.waitForURL(dashboard+'#optimieren/youtube/vorschau');
  await heading.waitFor();
  if(mobile)assert.equal(await files.getAttribute('aria-current'),null);
@@ -301,19 +300,17 @@ async function checkFilesShortcut(page,frame,heading,width){
 
 async function checkSearchReturn(page,frame,width){
  const finder=frame.getByRole('searchbox',{name:'Datei nach Namen oder Beitragstitel suchen'});
- const filter=frame.getByRole('combobox',{name:'Portalfilter'});
  const caption=draft.title+' · Bearbeitetes Video · 3 Sek.';
  const hit=frame.getByRole('button',{name:'Datei im Portal öffnen: '+caption,exact:true});
  const previewURL=dashboard+'#optimieren/youtube/vorschau';
  const portal=frame.frameLocator('iframe[data-portal="youtube"]:visible');
  const back=portal.getByRole('button',{name:/Zurück zu den Suchergebnissen/});
  const focused=locator=>locator.evaluate(el=>el===el.ownerDocument.activeElement);
- await filter.selectOption('youtube');
  await hit.click();await page.waitForURL(previewURL);
  await portal.getByRole('heading',{name:draft.title}).waitFor();
  await page.reload();await portal.getByRole('heading',{name:draft.title}).waitFor();
  await back.click();await page.waitForURL(dashboard);
- assert.equal(await finder.inputValue(),draft.title);assert.equal(await filter.inputValue(),'youtube');
+ assert.equal(await finder.inputValue(),draft.title);
  assert(await focused(hit),'the file action should regain focus');
  await page.goForward();await page.waitForURL(previewURL);await back.waitFor();
  await page.goBack();await page.waitForURL(dashboard);assert(await focused(hit));
@@ -398,12 +395,11 @@ async function checkDashboardPreview(browser,width,height){
   const heading=editor.getByRole('heading',{name:draft.title});
   await heading.waitFor();
   if(!mobile){
-   await editor.getByRole('button',{name:'Originalvideo laden'}).click();
+   await editor.getByRole('button',{name:'Originalvideo abspielen'}).click();
    const video=editor.locator('#originalVideoPreview video');
    const playerFrame=page.frames().find(f=>f.url().startsWith(site+'/app/publication-preview.html'));
    const state=expression=>playerFrame.waitForFunction(expression);
    await state(()=>document.querySelector('#originalVideoPreview video')?.readyState>=2);
-   await video.press('Space');
    await state(()=>{const v=document.querySelector('#originalVideoPreview video');return !v.paused&&v.currentTime>0;});
    await sidebar.getByRole('button',{name:'Übersicht'}).click();
    await frame.getByRole('heading',{name:'Übersicht'}).waitFor();
@@ -564,8 +560,7 @@ async function checkGalleryKeyboard(browser,width){
   const launcher=mobile?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
   await launcher.click();const dialog=frame.getByRole('dialog');await dialog.getByRole('searchbox').fill('Werkstatt');
   await dialog.getByRole('button',{name:/Alle 1000 Dateien anzeigen/}).click();
-  const field=frame.locator('#smaFileSearch'),filter=frame.locator('#smaFilePortalFilter');
-  await filter.selectOption('youtube');
+  const field=frame.locator('#smaFileSearch');
   const next=nav.getByRole('button',{name:'Weiter'}),back=nav.getByRole('button',{name:'Zurück'});
   const focus=loc=>loc.evaluate(el=>el.ownerDocument.activeElement===el);
   await nav.getByText('Seite 1 von 100',{exact:true}).waitFor();assert(await back.isDisabled());
@@ -582,14 +577,12 @@ async function checkGalleryKeyboard(browser,width){
   assert.equal(driveReads,0,'showing all matches must not synchronize the customer folder');
   catalog=[wanted,...rest];await page.reload();await nav.getByText('Seite 1 von 100',{exact:true}).waitFor();
   assert(await focus(next),'reloading should restore the paging control');
-  const select=frame.getByRole('button',{name:/Datei auswählen: Werkstatt Ziel/});
-  await select.focus();await page.keyboard.press('Space');
-  assert.equal(await select.getAttribute('aria-pressed'),'true');assert(await focus(select),'selecting a file must keep focus on its toggle');
+  const select=frame.getByRole('button',{name:/Datei im Portal öffnen: Werkstatt Ziel/});
+  await select.focus();
   catalog=[...rest,wanted];await page.reload();await nav.getByText('Seite 100 von 100',{exact:true}).waitFor();
-  assert.equal(await select.getAttribute('aria-pressed'),'true');assert(await focus(select));
-  await page.keyboard.press('Space');assert.equal(await select.getAttribute('aria-pressed'),'false');assert(await focus(select));
+  assert(await focus(select),'reloading restores focus to the same file on its new page');
   catalog=[];await page.reload();await frame.getByText(/Noch keine Bild- oder Videodateien/).waitFor();
-  assert(await focus(field));assert.equal(await field.inputValue(),'Werkstatt');assert.equal(await filter.inputValue(),'youtube');
+  assert(await focus(field));assert.equal(await field.inputValue(),'Werkstatt');
   const controlled=await controlCatalogTime(page);clock=controlled.now;
   startedAt=clock-60000;syncedAt=new Date(startedAt).toISOString();
   const advance=async ms=>{clock=await controlled.advance(ms);};
@@ -609,7 +602,7 @@ async function checkGalleryKeyboard(browser,width){
   await retry.waitFor({state:'hidden'});await dialog.locator('[data-quick-file]').waitFor();
   await dialog.getByRole('button',{name:'Suche schließen'}).click();await select.waitFor();
   assert.equal(driveReads,2,'An explicit refresh after the 15-second gate still starts once');
-  assert.equal(catalogReads,before+2);assert.equal(await select.getAttribute('aria-pressed'),'false');
+  assert.equal(catalogReads,before+2);assert(await select.isVisible());
   folderError='FILE_SYNC_UNAVAILABLE';await advance(15000);await manual.click();await status.filter({hasText:'zuletzt gespeicherte'}).waitFor();
   assert.equal(driveReads,3);
   await launcher.click();const input=dialog.getByRole('searchbox');await input.fill('Werkstatt');
@@ -682,14 +675,13 @@ async function galleryReloadTest(browser,width,variant){
    await firstPostRoute(route,()=>({ok:true,files:catalog}),catalog);
   }catch(e){if(!e.message.includes('has been closed'))errors.push(e.message);await route.abort().catch(()=>{});}});
   const p=await ctx.newPage();p.setDefaultTimeout(5000);p.on('pageerror',e=>errors.push(e.message));
-  const frame=p.frameLocator('#dashboard'),field=frame.locator('#smaFileSearch'),filter=frame.locator('#smaFilePortalFilter');
+  const frame=p.frameLocator('#dashboard'),field=frame.locator('#smaFileSearch');
   const pages=frame.locator('.sma-file-pages'),next=pages.getByRole('button',{name:'Weiter'});
   const hit=frame.locator('.sma-file-open[data-asset-id="'+expectedId+'"]');
   const launcher=width===320?frame.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):frame.locator('#smaGlobalQuickFind');
   await p.goto(dashboard);await launcher.click();const quick=frame.getByRole('dialog',{name:'SMA durchsuchen'});
   await quick.getByRole('searchbox').fill(query);
   await quick.getByRole('button',{name:/Alle 25 Dateien anzeigen/}).click();
-  await filter.selectOption('youtube');
   for(let i=1;i<3;i++)await next.click();
   await pages.getByText('Seite 3 von 3',{exact:true}).waitFor();
   await hit.click();
@@ -707,7 +699,7 @@ async function galleryReloadTest(browser,width,variant){
    await frame.getByRole('heading',{name:'Übersicht'}).waitFor();
    assert(!await field.isVisible());assert.equal(await field.inputValue(),'');
   }else{
-   await field.waitFor();assert.equal(await field.inputValue(),query);assert.equal(await filter.inputValue(),'youtube');
+   await field.waitFor();assert.equal(await field.inputValue(),query);
    if(recovering){
     const retry=frame.getByRole('button',{name:'Dateiliste erneut laden'});
     const status=frame.locator('.sma-file-toolbar [role=status]').first();
@@ -735,7 +727,7 @@ async function galleryReloadTest(browser,width,variant){
    else{
     await pages.getByText(variant==='move'?'Seite 1 von 3':'Seite 3 von 3',{exact:true}).waitFor();
     if(variant==='remove'){assert.equal(await hit.count(),0);assert.equal(await frame.locator('.sma-gallery-select[aria-pressed="true"]').count(),0);assert(await field.evaluate(el=>el.ownerDocument.activeElement===el));}
-    else{assert(await hit.evaluate(el=>el.ownerDocument.activeElement===el));assert.equal(await frame.locator('.sma-gallery-select[aria-pressed="true"]').count(),1);}
+    else{assert(await hit.evaluate(el=>el.ownerDocument.activeElement===el));assert.equal(await hit.count(),1);}
    }
   }
   assert.deepEqual([driveReads,editorReads],before);
@@ -814,7 +806,7 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
     assert.equal(scans,1,'The SQL-backed catalogue retry is read-only during cooldown');assert.equal(await hit.count(),0);
     await advance(15000);await retry.click();await hit.waitFor();assert.equal(scans,2);assert.equal(await input.inputValue(),'Werkstatt Finale');
     assert.equal(await retry.count(),0);await input.press('Escape');
-    await frame.getByText(/1000 von 1001 Dateien gefunden/).waitFor();
+    await frame.locator('.sma-file-pages').getByText('Seite 1 von 100',{exact:true}).waitFor();
     const complete=await dashboardList();
     await launcher.click();await input.fill('Werkstatt Finale');await hit.waitFor();await input.press('Escape');
     await advance(15000);await manual.click();await status.filter({hasText:'zuletzt gespeicherte Dateiliste'}).waitFor();
@@ -829,9 +821,9 @@ export async function checkPrivateCatalogReturn({wanted,dashboardList,portalList
     const back=editor.getByRole('button',{name:/Zurück zu den Suchergebnissen/});
     await back.waitFor();
     await editor.locator('#selectedFileName').filter({hasText:wanted.name}).waitFor({state:'attached'});
-    await editor.getByRole('button',{name:'Originalvideo laden'}).click();
+    await editor.getByRole('button',{name:'Originalvideo abspielen'}).click();
     const video=editor.locator('#originalVideoPreview video');
-    await video.waitFor();await video.evaluate(v=>v.play());
+    await video.waitFor();
     await video.evaluate(v=>new Promise((resolve,reject)=>{
      if(v.ended)return resolve();
      const timer=setTimeout(()=>reject(Error('Test video did not finish')),8000);

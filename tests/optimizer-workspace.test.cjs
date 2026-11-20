@@ -47,15 +47,15 @@ test('gallery keeps refresh while existing upload control moves to the opened pr
  assert.equal(p.get('deviceBrowse').parentElement,p.get('workspacePreviewActions'));
  assert.equal(p.get('uploadPanel').parentElement,p.get('workspacePreview'));
  assert.equal(p.get('refreshFiles').parentElement,p.get('workspaceGalleryActions'));
- assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles'],'gallery shows no upload button');
+ assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['fileSearch','refreshFiles'],'gallery shows no upload button');
  assert.equal(p.get('workspacePreview').hidden,true,'upload control is hidden until a gallery file is opened');
  assert.equal(p.get('magicActionsSource').hidden,true);assert.equal(p.get('magicActionsText').hidden,false);
  assert.equal(p.get('assetPanel').hidden,true);assert.equal(p.get('resultFileActions').hidden,true);
  assert.equal(p.get('exampleFiles').hidden,true);assert.equal(p.get('workspaceViewFile'),undefined);
 });
-test('Add File remains reachable inside the preview and its details tab, never in the gallery',()=>{
+test('A selected file opens its preview without file actions on either tab',()=>{
  const p=setup();
- assert.equal(p.get('workspaceGalleryActions').children.length,1);
+ assert.equal(p.get('workspaceGalleryActions').children.length,2);
  p.workspace.selection({id:'own',name:'SMA Testvideo.mp4',media_kind:'video'});
  p.workspace.show('preview');
  assert.equal(p.get('workspaceFiles').hidden,true);
@@ -70,7 +70,7 @@ test('Add File remains reachable inside the preview and its details tab, never i
  p.get('workspacePreviewBack').click();
  assert.equal(p.get('workspaceFiles').hidden,false);
  assert.equal(p.get('workspacePreview').hidden,true);
- assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['refreshFiles']);
+ assert.deepEqual(p.get('workspaceGalleryActions').children.map(n=>n.id),['fileSearch','refreshFiles']);
 });
 test('restored workspace can finish loading behind another focused surface without taking focus',()=>{
  const p=setup({}, {deferInitialFocus:true});
@@ -123,7 +123,7 @@ test('a customer with no files can reach the existing Add File control through a
  assert.equal(p.get('workspacePreview').hidden,false);
  assert.equal(p.get('workspaceUploadIntro').hidden,true);
  assert.equal(p.get('workspacePreviewTabs').hidden,false);
- assert.equal(p.get('workspacePreviewHeading').textContent,'Vorschau für Instagram');
+ assert.equal(p.get('workspacePreviewHeading').hidden,true);
 });
 
 test('return and browser history restore the first upload entry and focus only while available',()=>{
@@ -210,7 +210,7 @@ test('new text variant can be reviewed, repeated and adopted without replacing c
 
 test('combined content and text preserve edits, disclosure state and original language control',()=>{
  const p=setup();p.workspace.selection({id:'own',name:'Mein Video',media_kind:'video'});
- p.get('workspaceTab-source').click();assert.equal(p.get('sourcePanel').open,false);
+ p.get('workspaceTab-source').click();assert.equal(p.get('sourcePanel').open,true);
  p.get('sourcePanel').open=true;p.form.value='Überarbeitete eigene Angaben';
  p.get('workspaceTab-files').click();assert.equal(p.workspace.galleryVisible(),true);assert.equal(p.loads(),1);
  p.workspace.show('preview');assert.equal(p.get('workspacePreview').hidden,false);
@@ -218,7 +218,7 @@ test('combined content and text preserve edits, disclosure state and original la
  p.workspace.show('text');assert.equal(p.get('workspaceTab-source').attrs['aria-pressed'],'true');
  assert.equal(p.get('sourcePanel').open,true);assert.equal(p.form.value,'Überarbeitete eigene Angaben');
  assert.ok(p.get('sourcePanel').children.includes(p.form));
- assert.equal(p.get('catalogLookup').parentElement,p.get('workspaceEditor'));
+ assert.equal(p.get('catalogLookup').parentElement,p.get('workspacePreparationTools'));
  assert.equal(p.get('language').attrs.form,'previewForm');assert.equal(p.get('language').parentElement.parentElement,p.get('workspaceTextHeader'));
  assert.equal(p.get('workspaceSelectedName').textContent,'Mein Video');
 });
@@ -232,15 +232,15 @@ test('text completion and clearing switch placeholders without moving the edit f
 test('media checks remain accessible and videos pause when leaving the gallery',()=>{
  const p=setup();p.workspace.selection({id:'own',name:'Video.mp4',media_kind:'video'});
  p.workspace.show('preview');assert.equal(p.get('workspacePreview').hidden,false);
- assert.equal(p.get('mediaPanel').parentElement,p.get('workspaceDetailView'));
+ assert.equal(p.get('mediaPanel').parentElement,p.get('workspacePreparationTools'));
  const notes=p.get('workspaceResultDetails').children.filter(n=>n.textContent==='Pending verification');assert.equal(notes.length,3);
  p.video.paused=false;p.get('workspaceTab-source').click();assert.equal(p.video.paused,true);
  p.workspace.selection(null);assert.equal(p.get('workspacePreview').hidden,true);assert.equal(p.get('workspaceViewFile'),undefined);
- assert.equal(p.get('workspaceSelectedName').textContent,'Noch keine Datei ausgewählt');assert.equal(p.get('workspaceSelectedKind').textContent,'');
+ assert.equal(p.get('workspaceSelectedFile').hidden,true);assert.equal(p.get('workspaceSelectedKind').textContent,'');
 });
 test('legacy folder and text actions use the two existing sections without starting work',()=>{
  const p=setup();p.workspace.show('text');p.workspace.show('folder');
- assert.equal(p.workspace.galleryVisible(),true);assert.equal(p.get('workspaceSearch').open,true);assert.equal(p.loads(),1);
+ assert.equal(p.workspace.galleryVisible(),true);assert.equal(p.get('fileSearch').placeholder,'Dateien suchen');assert.equal(p.loads(),1);
  assert.equal(p.get('workspaceTab-files').attrs['aria-pressed'],'true');
  p.workspace.show('media');p.workspace.show('examples');assert.equal(p.workspace.galleryVisible(),true);
  assert.equal(p.get('exampleFiles').hidden,true);assert.equal(p.loads(),1);
@@ -251,9 +251,9 @@ test('post preview replaces the editor, retains the real media and shows current
  assert.equal(p.get('workspaceFiles').hidden,true);assert.equal(p.get('workspaceSource').hidden,true);assert.equal(p.get('optimizerToolbar').hidden,true);
  assert.equal(p.get('assetPreview').parentElement,p.get('workspacePost'));
  assert.equal(p.get('workspacePostTitle').textContent,data.draft.title);assert.equal(p.get('workspacePostCaption').textContent,data.draft.body);
- assert.equal(p.get('workspacePostShop').href,data.draft.shop_url);assert.equal(p.get('workspacePreviewNotes').children[0].textContent,'Angabe prüfen');
+ assert.equal(p.get('workspacePostShop').href,data.draft.shop_url);assert.equal(p.get('workspacePostProfile'),undefined);
  p.get('workspaceDetailTab').click();assert.equal(p.get('workspacePostView').hidden,true);assert.equal(p.get('workspaceDetailView').hidden,false);assert.equal(p.video.paused,true);
- assert.ok(p.get('workspacePreviewFacts').children.some(n=>n.textContent==='1920 × 1080 Pixel'));
+ assert.deepEqual(p.get('workspacePreviewFacts').children.map(n=>n.textContent),['Dateiname','Eigenes Video.mp4','Medienart','Video','Dauer','20 Sek.','Zielportal','Instagram']);
  p.get('workspacePreviewBack').click();assert.equal(p.get('workspaceFiles').hidden,false);assert.equal(p.get('optimizerToolbar').hidden,false);
  assert.equal(p.get('workspaceTab-files').focused,true);assert.equal(p.get('workspaceChangeFile'),undefined);
 });
@@ -263,7 +263,7 @@ test('clearing or changing selected files clears the separate preview and cannot
  p.workspace.selection({name:'Datei.mp4',media_kind:'video'});p.workspace.show('preview');
  assert.equal(p.get('workspacePostShop').hidden,true);assert.equal(p.get('workspacePostShop').attrs.href,undefined);
  p.get('workspacePreviewBack').click();p.workspace.selection(null);
- for(const id of ['workspacePostTitle','workspacePostCaption','workspacePreviewSource','workspacePreviewName'])assert.equal(p.get(id).textContent,'');
+ for(const id of ['workspacePostTitle','workspacePostCaption'])assert.equal(p.get(id).textContent,'');
  assert.equal(p.get('workspaceViewFile'),undefined);assert.equal(p.get('workspacePreviewFacts').children.length,0);
 });
 
@@ -281,7 +281,7 @@ test('standalone preview groups its navigation and resets the media format on se
  assert.equal(p.get('workspacePost').style['--media-aspect'],undefined);
 });
 
-test('a bound product uses its direct link in the post and file details',()=>{
+test('a bound product uses its direct link in the post',()=>{
  const shop='https://sma-automation.com/app/shop.html?shop=fixture';
  const p=setup({draft:{shop_url:shop,product_id:'article-02'},language:'en'});
  p.workspace.selection({name:'Video.mp4',media_kind:'video'});
@@ -289,7 +289,7 @@ test('a bound product uses its direct link in the post and file details',()=>{
  const target=shop+'&produkt=article-02';
  assert.equal(p.get('workspacePostShop').href,target);
  assert.equal(p.get('workspacePostShop').textContent,'View product: '+target);
- assert.ok(p.get('workspacePreviewFacts').children.some(node=>node.textContent===target));
+ assert.equal(p.get('workspacePreviewFacts').children.some(node=>node.textContent===target),false);
 });
 
 test('the separate preview shows the unavailable destination as plain text and removes the warning after correction',()=>{
@@ -320,14 +320,12 @@ test('professional preview places only publication in the primary action host',(
  p.workspace.show('preview');
  const nav=p.get('workspacePreviewNav'),header=p.get('workspacePreviewHeader');
  const menu=p.get('workspacePreviewActions'),primary=p.get('workspacePreviewPrimary'),tools=p.get('workspaceDraftTools');
- assert.equal(menu.tag,'details');
- assert.equal(menu.children[0].tag,'summary');
- assert.equal(menu.children[0].textContent,'Dateiaktionen');
+ assert.equal(menu.hidden,true);
  assert.equal(menu.parentElement,nav);
  assert.equal(p.get('deviceBrowse').parentElement,menu);
- assert.equal(menu.open,false,'The file button is collapsed by default on saved videos');
- assert.equal(primary.parentElement,header);
- assert.equal(primary.attrs['aria-label'],'Nächster Schritt');
+
+ assert.equal(primary.parentElement,nav);
+
  assert.equal(p.get('workspaceDraftState').parentElement,p.get('workspacePreview'));
  assert.equal(tools.parentElement,p.get('workspaceDraftState'));
  assert.equal(p.get('workspacePreviewRepeat').parentElement,tools);
@@ -336,19 +334,19 @@ test('professional preview places only publication in the primary action host',(
  assert.ok(page.includes("host:workspace?$('workspacePreviewPrimary'):$('save').parentElement"),
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
- assert.ok(html.includes('optimizer-workspace.css?v=19'));
- assert.ok(html.includes('publication-preview.js?v=115'));
+ assert.ok(html.includes('optimizer-workspace.css?v=20'));
+ assert.ok(html.includes('publication-preview.js?v=116'));
 });
 
 test('empty preview exposes upload action and becomes a complete preview after file choice',()=>{
  const p=setup({draft:{title:'Video',body:'Inhalt'}});
  p.workspace.openEmptyPreview();
- assert.equal(p.get('workspacePreviewActions').open,true,'An empty gallery needs visible upload access');
+ assert.equal(p.get('workspacePreviewActions').hidden,false,'An empty gallery needs visible upload access');
  assert.equal(p.get('workspacePreviewPrimary').hidden,true);
  assert.equal(p.get('workspacePreviewTabs').hidden,true);
  p.workspace.selection({id:'new',name:'Neu.mp4',media_kind:'video'});
  assert.equal(p.get('workspacePreview').hidden,false);
- assert.equal(p.get('workspacePreviewActions').open,false,'Added file restores the quiet actions menu');
+ assert.equal(p.get('workspacePreviewActions').hidden,true,'Added file restores the quiet actions menu');
  assert.equal(p.get('workspacePreviewPrimary').hidden,false);
  assert.equal(p.get('workspaceUploadIntro').hidden,true);
  assert.equal(p.get('workspacePostView').hidden,false);

@@ -18,15 +18,15 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=32';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=9';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=10';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
-import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=14';
+import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=15';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './assets/thumbnail-batch.mjs?v=1';
 import {clearSharedOriginalMediaCache} from './assets/original-media-cache.mjs?v=1';
-import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=5';
+import {galleryReloadStore,previewMatchesHistory,previewReloadSnapshot} from './assets/dashboard-gallery-reload.mjs?v=6';
 import {tabDraftStore} from './assets/publication-tab-draft.mjs?v=3';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -113,7 +113,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','59');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','60');url.searchParams.set('lang',publishingPage.ownerDocument.documentElement?.lang==='en'?'en':'de');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -358,7 +358,7 @@ frame.addEventListener('load',async()=>{
   `;doc.head.append(style);
   const editorUrl=new URL('./media-editor.html?v=16',location.href);
   if(document.documentElement.dataset.smaCustomerMedia==='pilot')editorUrl.searchParams.set('kundenmedien','pilot');
-  fileView?.clear();fileView=attachFileList(doc,page,editorUrl.href);attachOptimizerPage(doc,page);
+  fileView?.clear();fileView=attachFileList(doc,page);attachOptimizerPage(doc,page);
   for(const card of page.querySelectorAll('.platform-card')){
     const portal=Object.keys(portalNames).find(key=>portalNames[key]===card.querySelector('.platform-info strong')?.textContent.trim());
     if(!portal||card.querySelector('.sma-optimize'))continue;
@@ -384,7 +384,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=8',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=9',location.href).href,
     dailyScheduleRequest:ownerId?async args=>{
       const {data:{session}}=await supabase.auth.getSession();
       if(signedOut||ownerId!==dashboardOwnerId||ownerId!==session?.user?.id)throw Object.assign(new Error(),{code:'AUTH_REQUIRED'});
@@ -549,7 +549,7 @@ async function reopenSearchPreview(saved,list,doc,page,ownerId){
   }
  }finally{controller.abort();if(startupView===saved)startupView=null;}
 }
-function attachFileList(doc,page,editorHref){
+function attachFileList(doc,page){
  let disposed=false;const owner=dashboardOwnerId;
  const slot=doc.getElementById('publishingFilesSlot');if(!slot)return null;
  const style=doc.createElement('style');style.textContent=`#publishingFilesSlot{display:block;min-height:0;padding:16px;text-align:left}.sma-file-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.sma-file-toolbar button,.sma-file-row button,.sma-file-pages button{border:1px solid #c7d3f8;border-radius:9px;background:#edf2ff;color:#3157cd;padding:9px 13px;font:700 14px Arial,sans-serif;cursor:pointer}.sma-file-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-top:1px solid #e2e6ee}.sma-file-row>div{min-width:0}.sma-file-row strong{display:block;overflow-wrap:anywhere}.sma-file-row small{display:block;color:#65718a;margin-top:6px;line-height:1.5}.sma-file-row button[aria-pressed=true]{background:#4065d8;color:white}.sma-file-pages{display:flex;align-items:center;gap:12px;margin-top:12px}.sma-file-pages button:disabled{opacity:.45;cursor:default}.sma-file-row .sma-file-open{width:100%;padding:9px 10px;font-size:13px;text-align:center}`;doc.head.append(style);
@@ -557,12 +557,12 @@ function attachFileList(doc,page,editorHref){
  const thumbnailClient=createSharedThumbnailClient({getOwnerId:()=>!disposed&&!signedOut&&owner===dashboardOwnerId?owner:null,getSession:async()=>{const {data,error}=await supabase.auth.getSession();if(disposed||signedOut||error||!data?.session||data.session.user.id!==owner||owner!==dashboardOwnerId)throw Error('AUTH_REQUIRED');return data.session;}});
  const thumbnails=createMediaThumbnailLoader(null,{client:thumbnailClient});
  const toolbar=doc.createElement('div');toolbar.className='sma-file-toolbar';
-  const finder=doc.createElement('input');finder.type='search';finder.id='smaFileSearch';finder.placeholder='Dateiname oder Beitragstitel …';finder.setAttribute('aria-label','Datei nach Namen oder Beitragstitel suchen');finder.autocomplete='off';finder.style.cssText='min-width:180px;flex:1 1 220px;max-width:460px;border:1px solid #9baac5;border-radius:9px;padding:11px 13px;background:white;color:#17233b;font:500 14px Arial,sans-serif';
-  const portalFilter=doc.createElement('select');portalFilter.id='smaFilePortalFilter';portalFilter.setAttribute('aria-label','Portalfilter');portalFilter.style.cssText='border:1px solid #9baac5;border-radius:9px;padding:10px;background:white;color:#17233b';
-  for(const [id,label] of [['all','Alle Portale'],['youtube','YouTube'],['tiktok','TikTok'],['instagram','Instagram'],['facebook','Facebook']]){const option=doc.createElement('option');option.value=id;option.textContent=label;portalFilter.append(option);}
-  const refresh=doc.createElement('button');refresh.textContent='Dateien aktualisieren';refresh.type='button';const message=doc.createElement('span');message.setAttribute('role','status');message.style.fontSize='13px';toolbar.append(finder,portalFilter,refresh,message);
+ const finder=doc.createElement('input');finder.type='search';finder.id='smaFileSearch';finder.placeholder='Dateien suchen';finder.setAttribute('aria-label','Datei nach Namen oder Beitragstitel suchen');finder.autocomplete='off';
+ const refresh=doc.createElement('button');refresh.type='button';refresh.className='sma-refresh';refresh.textContent='Dateien aktualisieren';
+ const message=doc.createElement('span');message.setAttribute('role','status');message.style.fontSize='13px';
+ toolbar.append(finder,refresh,message);
  const selection=doc.createElement('p');selection.style.fontSize='13px';const list=doc.createElement('div');list.className='sma-file-grid';const pages=doc.createElement('div');pages.className='sma-file-pages';slot.replaceChildren(toolbar,selection,list,pages);
- const musicNote=doc.createElement('span');musicNote.setAttribute('role','status');toolbar.append(musicNote);
+
  // This iframe stays mounted while the customer navigates other SMA chapters.
  // Only the visible file gallery and optimizer need the client-side music worker;
  // background jobs remain handled by the independent n8n schedule.
@@ -579,8 +579,7 @@ function attachFileList(doc,page,editorHref){
    if(musicGate.isVisible()&&(loading||retryStep||scanRunning))return;
    notify();
   }),
-  onComplete:()=>load(false,{wakeMusicAfter:false}),
-  onStatus:text=>{if(!disposed)musicNote.textContent=text;}}):null;
+  onComplete:()=>load(false,{wakeMusicAfter:false})}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
  let files=[],pageNumber=0,loading=false,catalogState='loading',catalogController=null;
@@ -616,8 +615,8 @@ function attachFileList(doc,page,editorHref){
   if(!pendingReload||disposed||signedOut||owner!==dashboardOwnerId||catalogState!=='ready')return;
   const v=pendingReload;
   cancelReload();
-  if(!galleryVisible()||v.query!==finder.value||v.portal!==portalFilter.value)return;
-  const matches=filterDashboardFiles(files,v.query,v.portal);
+  if(!galleryVisible()||v.query!==finder.value)return;
+  const matches=filterDashboardFiles(files,v.query);
   const onFile=v.focus==='file'||v.focus==='select';
   const found=onFile?searchFilePage(matches,v.file):-1;
   selectedFileId=files.some(f=>f.id===v.selected)?v.selected:null;
@@ -625,7 +624,6 @@ function attachFileList(doc,page,editorHref){
   draw();
   if(!restoreFocus)return true;
   if(onFile)focusResult(v.file,v.focus);
-  else if(v.focus==='filter')portalFilter.focus();
   else{
    const button=v.focus==='next'?next:v.focus==='back'?back:null;
    if(!button||button.parentNode!==pages)finder.focus();
@@ -649,7 +647,7 @@ function attachFileList(doc,page,editorHref){
    }
    // Moving keyboard focus through the toolbar doesn't change the search.
    if(pendingReload&&(event.key==='Tab'||event.key==='Shift'||
-      ([finder,portalFilter].includes(event.target)&&!['input','change'].includes(event.type)))){
+      (event.target===finder&&!['input','change'].includes(event.type)))){
     restoreFocus=false;
     return;
    }
@@ -662,7 +660,7 @@ function attachFileList(doc,page,editorHref){
    if(controller.signal.aborted||disposed||signedOut||owner!==dashboardOwnerId||session?.user?.id!==owner)return;
    restoringGallery=true;
    if(!navigate())return;
-   finder.value=view.query;portalFilter.value=view.portal;pageNumber=view.page;
+   finder.value=view.query;pageNumber=view.page;
    pendingReload=view;
    finishReload();
   }catch{cancelReload();}
@@ -674,49 +672,49 @@ function attachFileList(doc,page,editorHref){
   const file=list.contains(el)?el?.dataset?.assetId||null:null;
   let focus='search';
   if(file)focus=el.classList.contains('sma-gallery-select')?'select':'file';
-  else if(el===portalFilter)focus='filter';
   else if(el===back)focus='back';
   else if(el===next)focus='next';
-  return {query:finder.value,portal:portalFilter.value,page:pageNumber,selected:selectedFileId,file,focus};
+  return {query:finder.value,portal:'all',page:pageNumber,selected:selectedFileId,file,focus};
  }
  function draw(followFocusedFile=false){
   const active=doc.activeElement;
   const focusedId=list.contains(active)?active?.dataset?.assetId:null;
   const focusedControl=focusedId&&active.classList.contains('sma-gallery-select')?'select':'file';
-  const matches=filterDashboardFiles(files,finder.value,portalFilter.value);
+  const matches=filterDashboardFiles(files,finder.value);
   if(followFocusedFile&&focusedId){
    const newPage=searchFilePage(matches,focusedId);
    if(newPage>=0)pageNumber=newPage;
   }
   updatePages(matches.length);
   thumbnails.reset();list.replaceChildren();
-  selection.textContent=files.length?matches.length+' von '+files.length+' Dateien gefunden. Datei auswählen oder direkt öffnen.':hasCatalog?'Noch keine Bild- oder Videodateien in der gespeicherten Liste.':'';
-  if(!matches.length){if(files.length)selection.textContent='Keine Treffer. Versuche einen kürzeren Namen oder „Alle Portale“.';if(focusedId)finder.focus();return;}
+  selection.hidden=matches.length>0||!hasCatalog;
+  selection.textContent=files.length?'Keine passenden Dateien gefunden.':'Noch keine Bild- oder Videodateien in der gespeicherten Liste.';
+  if(!matches.length){if(focusedId)finder.focus();return;}
   for(const f of matches.slice(pageNumber*10,pageNumber*10+10)){
-    const description=dashboardFileDescription(f,finder.value,portalFilter.value);
-    const caption=[description.title,description.version].filter(Boolean).join(' · ');
-    const row=doc.createElement('div');row.className='sma-file-row';const info=doc.createElement('details');const detailsLabel=doc.createElement('summary');detailsLabel.textContent='Dateidetails';info.append(detailsLabel);const name=doc.createElement('strong');name.textContent=f.name;const meta=doc.createElement('small');meta.textContent=(f.media_kind==='video'?'Video':'Bild')+' · '+new Date(f.modified_at).toLocaleDateString('de-AT');const assigned=doc.createElement('small');assigned.textContent=(f.assignments||[]).map(a=>(portalNames[a.platform]||a.platform)+(a.status==='assigned'?' ✓':' · neu prüfen')).join(' · ')||'Noch kein Portaltext zugeordnet';info.append(name,meta,assigned);const choose=doc.createElement('button');choose.type='button';choose.textContent=selectedFileId===f.id?'Ausgewählt':'Auswählen';choose.setAttribute('aria-pressed',String(selectedFileId===f.id));const visual=doc.createElement('span');visual.className='sma-gallery-visual';const label=doc.createElement('span');label.className='sma-gallery-label';label.textContent=(f.media_kind==='video'?'▶ ':'▧ ')+caption+(selectedFileId===f.id?' · Ausgewählt':'');label.title=caption;choose.textContent='';choose.className='sma-gallery-select';choose.dataset.assetId=f.id;choose.setAttribute('aria-label','Datei auswählen: '+caption);choose.append(visual,label);choose.addEventListener('click',()=>{selectedFileId=selectedFileId===f.id?null:f.id;draw();});const open=doc.createElement('button');open.type='button';open.textContent='Im Portal öffnen';open.className='sma-file-open';open.dataset.assetId=f.id;open.setAttribute('aria-label','Datei im Portal öffnen: '+caption);
+    const description=dashboardFileDescription(f,finder.value);
+    const row=doc.createElement('div');row.className='sma-file-row';
+    const open=doc.createElement('button');open.type='button';open.className='sma-gallery-select sma-file-open';open.dataset.assetId=f.id;
+    open.setAttribute('aria-label','Datei im Portal öffnen: '+[description.title,description.version].filter(Boolean).join(' · '));
+    const visual=doc.createElement('span');visual.className='sma-gallery-visual';
+    const title=doc.createElement('strong');title.textContent=description.title;
+    const meta=doc.createElement('small');meta.textContent=description.version||(f.media_kind==='video'?'Video':'Bild');
+    open.append(visual);row.append(open,title,meta);list.append(row);thumbnails.observe(visual,f);
     open.addEventListener('click',()=>{
-     if(!openFile(f.id,description.portal,{id:f.id,query:finder.value,portal:portalFilter.value,page:pageNumber})){
-      say('Bitte oben das gewünschte Portal auswählen.');
+     const scroller=page.closest('main')||doc.scrollingElement;
+     if(!openFile(f.id,description.portal,{id:f.id,query:finder.value,portal:'all',page:pageNumber,
+       scroll:scroller?.scrollTop,windowScroll:doc.defaultView?.scrollY})){
+      say('Das zugehörige Portal konnte nicht geöffnet werden.');
      }
     });
-    if(f.id&&f.revision){
-     const edit=doc.createElement('a');
-     edit.setAttribute('href',editorHref+'#asset='+encodeURIComponent(f.id)+'&revision='+encodeURIComponent(f.revision)+'&portal='+encodeURIComponent(description.portal));
-     edit.target='_blank';edit.rel='noopener';edit.textContent='Im Medieneditor öffnen';
-     edit.style.cssText='display:inline-block;margin-top:10px;color:#3157cd;text-decoration:underline';
-     info.append(edit);
-    }
-    row.append(choose,open,info);list.append(row);thumbnails.observe(visual,f);}
+  }
   if(focusedId)focusResult(focusedId,focusedControl);
  }
- function focusResult(id,control='file'){
-  const selector=control==='select'?'.sma-gallery-select':'.sma-file-open';
+ function focusResult(id){
+  const selector='.sma-file-open';
   const hit=[...list.querySelectorAll(selector)].find(button=>button.dataset.assetId===id);
   (hit||finder).focus();
  }
- finder.addEventListener('input',()=>{pageNumber=0;draw();});portalFilter.addEventListener('change',()=>{pageNumber=0;draw();});
+ finder.addEventListener('input',()=>{pageNumber=0;draw();});
  // Consume late auth/body replies even when their underlying operation cannot abort.
  function readCatalogWithin(signal,start){
   return new Promise((resolve,reject)=>{
@@ -795,7 +793,7 @@ function attachFileList(doc,page,editorHref){
    if(!retryingCatalog&&!checkingStatus&&wakeMusicAfter)wakeMusic();
    if(selectedFileId&&!files.some(f=>f.id===selectedFileId))selectedFileId=null;
    if(!finishReload())draw(true);
-   say(catalogWarning()||(data.synced_at?'Stand: '+new Date(data.synced_at).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}):'Bitte Dateien aktualisieren.'));
+   say(catalogWarning());
   }catch(error){
    if(disposed||signedOut||owner!==dashboardOwnerId)return;
    catalogState='error';retryStep=step;
@@ -806,7 +804,7 @@ function attachFileList(doc,page,editorHref){
    loading=false;
    if(!disposed){
     refresh.textContent=retryStep==='catalog'?'Dateiliste erneut laden':scanRunning?'Abgleichstatus prüfen':'Dateien aktualisieren';
-    refresh.disabled=false;dashboardQuickFind?.refresh();
+    refresh.title=refresh.textContent;refresh.disabled=false;dashboardQuickFind?.refresh();
    }
   }
  }
@@ -842,17 +840,19 @@ function attachFileList(doc,page,editorHref){
     openFile,
     restoreResult(origin){
       if(disposed||signedOut||owner!==dashboardOwnerId)return;
-      finder.value=origin.query;portalFilter.value=origin.portal;
-      const page=searchFilePage(filterDashboardFiles(files,finder.value,portalFilter.value),origin.id);
+      finder.value=origin.query;
+      const page=searchFilePage(filterDashboardFiles(files,finder.value),origin.id);
       pageNumber=page<0?origin.page:page;
       draw();
       focusResult(origin.id);
+      const scroller=slot.closest('main')||doc.scrollingElement;
+      if(scroller&&Number.isFinite(origin.scroll))scroller.scrollTop=origin.scroll;
+      if(Number.isFinite(origin.windowScroll))doc.defaultView.scrollTo(0,origin.windowScroll);
     },
     focusSearch(query){
       if(disposed||signedOut||owner!==dashboardOwnerId)return false;
       if(typeof query==='string'){
         finder.value=query;
-        portalFilter.value='all';
         pageNumber=0;
         draw();
       }

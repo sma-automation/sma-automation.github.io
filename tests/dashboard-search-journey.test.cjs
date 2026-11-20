@@ -333,7 +333,7 @@ for(const mobile of [false,true]){
   await picker.setFiles([]);
   await f.previewBack.click();await firstUpload.waitFor();
   await f.page.waitForFunction(()=>history.state?.smaOptimization&&history.state.view==='files'&&!history.state.assetId);
-  await f.dashboard.getByRole('button',{name:'Zurück zur Veröffentlichung',exact:true}).click();
+  await f.editor.locator('#workspaceExit').click();
   await f.dashboard.locator('#smaOptimizationPage').waitFor({state:'hidden'});
   assert.equal(await portals.getAttribute('aria-selected'),'true');
   await f.page.goForward();await firstUpload.waitFor();

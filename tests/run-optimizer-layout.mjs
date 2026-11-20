@@ -42,16 +42,13 @@ function frame([portal, width, height]) {
     const media = box('assetPreviewMedia'), body = box('workspacePostBody');
     const viewport = document.documentElement;
     const fileActions=$('workspacePreviewActions');
-    const uploadHiddenUntilOpened=!fileActions.open&&box('deviceBrowse').width===0;
-    fileActions.open=true;
-    const uploadFits=box('deviceBrowse').width>0&&box('deviceBrowse').right<=innerWidth;
-    fileActions.open=false;
+    const uploadHidden=fileActions.hidden&&box('deviceBrowse').width===0;
     const result = {
       portal, width:innerWidth, action:box('preparePublicationOrder').bottom+scrollY,
       stage:media.height, fits:viewport.scrollWidth<=innerWidth,
       uploadInPreview:$('deviceBrowse').parentElement?.id==='workspacePreviewActions',
       uploadProgressInPreview:$('uploadPanel').parentElement?.id==='workspacePreview',
-      uploadFits,uploadHiddenUntilOpened,
+      uploadHidden,
       beside:body.left>=media.right-1, page:viewport.scrollHeight
     };
     previewData.draftStep={target:'magic_text',label:'✨ Magic Effect · Beitragstext erstellen',note:'Die Dateivorschau hat noch keinen Beitrag.'};
@@ -133,7 +130,7 @@ try {
     console.log(report);
     assert.ok(report.correctionFits && report.draftActionFits && report.fits && report.action < height/2 && report.stage <= height*0.51);
     assert.ok(report.magicOfferFits&&report.manualHiddenAfterSave,'One-click Magic and manual fallback fit '+portal+' '+width);
-    assert.ok(report.uploadInPreview&&report.uploadProgressInPreview&&report.uploadFits&&report.uploadHiddenUntilOpened,'Upload control must remain hidden until the file menu opens and fit '+portal+' at '+width);
+    assert.ok(report.uploadInPreview&&report.uploadProgressInPreview&&report.uploadHidden,'File actions must be hidden on an existing post '+portal+' at '+width);
     assert.ok(report.variantFits,'Variant comparison and controls must fit '+portal+' at '+width);
     assert.ok(report.variantBeforeSaved,'Candidate must appear above the saved editor '+portal+' at '+width);
     assert.equal(report.beside,width>=660);

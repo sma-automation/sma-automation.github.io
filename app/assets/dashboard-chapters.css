@@ -74,3 +74,26 @@
 .sma-daily-schedule button:disabled{opacity:.55;cursor:default}
 .sma-daily-schedule li{overflow-wrap:anywhere;margin-bottom:.5rem}
 @media (max-width:480px){.sma-daily-schedule fieldset{padding:.4rem .4rem .7rem}.sma-daily-schedule fieldset div{gap:.25rem}.sma-daily-schedule input{padding:.3rem .15rem}}
+
+#page-publishing > .page-head > p,#sma-publishing-panel-files > .page-head,
+#smaOptimizationPage > .sma-optimization-header{display:none}
+#publishingFilesSlot .sma-file-grid .sma-file-open{padding:0}
+#publishingFilesSlot .sma-file-row small{margin:0}
+#publishingFilesSlot .sma-file-grid .sma-file-open:focus-visible{outline:3px solid #4065d8;outline-offset:2px}
+/* One compact search field in the authenticated dashboard and portal workspace. */
+:is(#smaFileSearch,#smaGlobalQuickFind,#workspaceGalleryActions #fileSearch,#smaQuickFindDialog.sma-header-results #smaQuickFindInput){
+ box-sizing:border-box;width:10.3rem;max-width:100%;min-width:0;flex:0 1 10.3rem;margin:0;
+ height:2.5rem;padding:0 .55rem 0 2.05rem;border:1px solid #c6ced8;border-radius:.65rem;
+ background:#f4f5f7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='17' height='17' viewBox='0 0 24 24' fill='none' stroke='%2357687d' stroke-width='2'%3E%3Ccircle cx='10' cy='10' r='6.5'/%3E%3Cpath d='m15 15 5 5'/%3E%3C/svg%3E") .62rem center no-repeat;
+ color:#203049;font:400 .94rem/1.4 Inter,Arial,sans-serif;cursor:text;
+}
+#page-publishing .sma-file-toolbar button.sma-refresh,body.wide #workspaceGalleryActions #refreshFiles{
+ position:relative;display:inline-grid;place-items:center;flex:none;width:40px;height:40px;padding:0;margin:0;overflow:hidden;
+ border:0;border-radius:8px;background:transparent;color:#405474;font-size:0;
+}
+.sma-refresh::before{content:'';width:20px;height:20px;background:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23415470' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 7v5h-5M19.5 11A8 8 0 1 0 18 17'/%3E%3C/svg%3E")}
+.sma-refresh:focus-visible{outline:2px solid #4065d8}
+#smaQuickFindDialog.sma-header-results{display:block;background:transparent;padding:0}
+.sma-header-results #smaQuickFindPanel{position:absolute;top:calc(var(--search-y) + var(--search-height) + 4px);
+ left:clamp(6px,var(--search-x),max(6px,100% - 26rem));width:min(26rem,calc(100% - 12px));max-height:calc(95dvh - var(--search-y) - var(--search-height));padding:10px 14px}
+#smaQuickFindDialog.sma-header-results #smaQuickFindInput{position:fixed;top:var(--search-y);left:var(--search-x);width:var(--search-width);height:var(--search-height)}
