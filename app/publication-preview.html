@@ -42,11 +42,13 @@ main,section,.card,details,fieldset,.field,.row>*{min-width:0}main{width:100%}.r
 <details id="jointPlan" hidden>
  <summary>Gemeinsamer Termin für YouTube und TikTok</summary>
  <p id="jointPlanChannels" style="white-space:pre-line"></p>
- <label for="jointPlanTime">Wunschtermin (Wiener Zeit)</label>
+ <p id="jointPlanDaily" hidden></p>
+ <div id="jointPlanManual"><label for="jointPlanTime">Wunschtermin (Wiener Zeit)</label>
  <input type="datetime-local" id="jointPlanTime" step="60" disabled>
  <div id="jointPlanFold" hidden><label for="jointPlanOccurrence">Zeitumstellung</label>
  <select id="jointPlanOccurrence"><option value="">Bitte wählen</option><option value="0">Sommerzeit (erste Uhrzeit)</option><option value="1">Winterzeit (zweite Uhrzeit)</option></select></div>
- <p class="note">Der Entwurf gilt für beide Portale. Eine Veröffentlichung wird separat freigegeben und beauftragt.</p>
+ <p class="note">Der Entwurf gilt für beide Portale. Eine Veröffentlichung wird separat freigegeben und beauftragt.</p></div>
+ <p class="note">Deine drei täglichen Zeiten findest du unter Veröffentlichung → Tagesplanung.</p>
  <div class="actions"><button id="jointPlanSave" type="button" disabled>Terminentwurf speichern</button>
  <button id="jointPlanClear" type="button" class="secondary" hidden>Termin verwerfen</button>
  <button id="jointPlanRefresh" type="button" class="secondary">Gespeicherten Stand laden</button></div>
@@ -85,4 +87,4 @@ main,section,.card,details,fieldset,.field,.row>*{min-width:0}main{width:100%}.r
 <div id="draftConflictFields"></div>
 <div class="actions"><button type="button" id="draftConflictApply">In Entwurf übernehmen</button><button type="button" class="secondary" id="draftConflictBack">Zurück</button></div>
 </dialog>
-<script type="module" src="assets/publication-preview.js?v=114"></script></body></html>
+<script type="module" src="assets/publication-preview.js?v=115"></script></body></html>

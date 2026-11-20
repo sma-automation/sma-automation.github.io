@@ -54,6 +54,10 @@ on:
       - tests/original-media-cache-browser.test.cjs
       - tests/gallery-navigation-read-budget.test.cjs
       - tests/run-original-video-preview-dom.mjs
+      - app/assets/publication-daily-schedule.mjs
+      - supabase/sql/publication-daily-schedule.sql
+      - supabase/migrations/*_publication_daily_schedule_v1.sql
+      - tests/publication-daily-schedule.test.cjs
       - app/assets/publication-order.mjs
       - tests/*publication-manual-review*
       - tests/sql-runtime/manual-review-live-baseline.json

@@ -60,3 +60,17 @@
 #page-website[data-sma-chapters] #smaWebsitePreparation [data-website-view]{max-width:1000px}
 #page-shop[data-sma-chapters]>.package-feature-list{display:none!important}
 @media(max-width:650px){.sma-chapters{gap:0 16px!important}.sma-chapters>button{font-size:16px!important}.sma-chapter-panel>.grid{grid-template-columns:minmax(0,1fr)}}
+
+.sma-daily-schedule{max-width:760px;color:#24324b}
+.sma-daily-schedule p{line-height:1.5;margin:.6rem 0 1rem}
+.sma-daily-schedule fieldset{border:1px solid #d4dcea;border-radius:10px;padding:.6rem 1rem 1rem;margin:0 0 .8rem;min-width:0}
+.sma-daily-schedule legend{font-weight:700;padding:0 .3rem}
+.sma-daily-schedule fieldset div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem}
+.sma-daily-schedule label,.sma-daily-schedule li span{display:block;font-size:.9rem}
+.sma-daily-schedule input{box-sizing:border-box;display:block;max-width:100%;width:100%;min-width:0;font:inherit;padding:.4rem;border:1px solid #a5b3c6;border-radius:6px;color:inherit;background:white}
+.sma-daily-schedule input[type=date]{width:auto;margin-top:.4rem}
+.sma-daily-schedule button{margin:.35rem .5rem .35rem 0;padding:.55rem .8rem;border:1px solid #a5b3c6;border-radius:8px;background:white;color:#2546a4;font:inherit;cursor:pointer}
+.sma-daily-schedule button[type=submit]{background:#3157cd;color:white}
+.sma-daily-schedule button:disabled{opacity:.55;cursor:default}
+.sma-daily-schedule li{overflow-wrap:anywhere;margin-bottom:.5rem}
+@media (max-width:480px){.sma-daily-schedule fieldset{padding:.4rem .4rem .7rem}.sma-daily-schedule fieldset div{gap:.25rem}.sma-daily-schedule input{padding:.3rem .15rem}}
