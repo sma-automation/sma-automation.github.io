@@ -30,11 +30,33 @@ test('workflow proxy is read-only, uses existing folder gates, and retains no ex
  assert.equal(w.nodes.filter(n=>n.name==='Eigentümer erneut prüfen').length,1);assert.equal(w.nodes.filter(n=>n.name==='Unveränderte Quelle bestätigen').length,1);
  assert.equal(fs.readFileSync('supabase/sql/publication-editor-exports.sql','utf8'),fs.readFileSync('supabase/migrations/20261106165123_publication_editor_exports_v1.sql','utf8'));
 });
-test('embedded binary reader runs with n8n global helpers and no bound this',async()=>{
- const bytes=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),Buffer.alloc(12)]),hash=crypto.createHash('sha256').update(bytes).digest('hex');
- const context={ok:true,asset_id:'own-asset',asset_revision:'sha256:'+hash+':3',mime_type:'image/png',media_kind:'image'};
- const code=JSON.parse(fs.readFileSync('n8n/publishing/editor-source-workflow.json','utf8')).nodes.find(n=>n.name==='Originalbytes prüfen').parameters.jsCode;
- const sandbox={require,Buffer,helpers:{getBinaryDataBuffer:async(index,key)=>{assert.equal(index,0);assert.equal(key,'data');return bytes;}},$:(name)=>({first:()=>({json:name==='Eigene Datei prüfen'?context:{sha256:hash,md5:null,size_bytes:bytes.length}})})};
- const run=require('node:vm').runInNewContext('(async function(){'+code+'\n})()',sandbox);
- const result=await run;assert.equal(result[0].json.sha256,hash);assert.equal(result[0].json.data_base64,bytes.toString('base64'));assert.equal(result[0].json.can_publish,false);
+test('original and thumbnail readers preserve bytes with n8n helpers in the strict consolidated workflow', async () => {
+  const video = fs.readFileSync('tests/fixtures/original-video.mp4');
+  const png = Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), Buffer.alloc(12)]);
+  const cases = [
+    ['editor-source-workflow.json', 'Originalbytes prüfen', video, 'data_base64'],
+    ['asset-preview-workflow.json', 'Vorschaubild prüfen', png, 'image_base64'],
+  ];
+  for (const [file, name, bytes, field] of cases) {
+    const workflow = JSON.parse(fs.readFileSync('n8n/publishing/' + file, 'utf8'));
+    const code = workflow.nodes.find(node => node.name === name).parameters.jsCode;
+    const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const owner = {ok:true, asset_id:'own-asset', asset_revision:'sha256:'+hash+':11', media_kind:'video', mime_type:'video/mp4'};
+    const metadata = {sha256:hash, md5:null, size_bytes:bytes.length};
+    const sandbox = {
+      require, Buffer,
+      helpers: {async getBinaryDataBuffer(index, key) {
+        assert.equal(index, 0);
+        assert.equal(key, 'data');
+        return bytes;
+      }},
+      $: node => ({first: () => ({json:node === 'Eigene Datei prüfen' ? owner : metadata})}),
+    };
+    const result = await require('node:vm').runInNewContext(
+      '(async function(){"use strict"; return await (async () => {\n' + code + '\n})();})()', sandbox);
+    assert.deepEqual(Buffer.from(result[0].json[field], 'base64'), bytes);
+    assert.equal(result[0].json.asset_revision, owner.asset_revision);
+    assert.equal(result[0].json.can_publish, false);
+    if (field === 'data_base64') assert.equal(result[0].json.sha256, hash);
+  }
 });

@@ -27,7 +27,7 @@ function engine(workflow,{latency=100,denied=[],missingFolder=false}={}){
   depth++;maxDepth=Math.max(maxDepth,depth);assert.ok(depth<=2,'native single calls may not recurse into another batch');
   const executionId='synthetic-execution-'+(++executionCount),saved=new Map();let data=[{json:clone(input),...(binary?{binary:clone(binary)}:{}),...(pairedItem?{pairedItem:clone(pairedItem)}:{})}],name=internal?workflow.nodes.find(node=>node.type.endsWith('.executeWorkflowTrigger')).name:workflow.nodes.find(node=>node.type.endsWith('.manualTrigger'))?.name||prefix+'Medienvorschau',steps=0;
   const context={helpers:{getBinaryDataBuffer:async(index,key)=>key==='fixture'?Buffer.from(data[index].binary.fixture.data,'base64'):png}};
-  const env=()=>({Buffer,Date:class extends Date{static now(){return now;}},$json:data[0]?.json,$input:{first:()=>data[0],all:()=>data},
+  const env=()=>({Buffer,helpers:context.helpers,Date:class extends Date{static now(){return now;}},$json:data[0]?.json,$input:{first:()=>data[0],all:()=>data},
    $:nodeName=>({first:()=>saved.get(nodeName)?.[0],all:()=>saved.get(nodeName)||[],isExecuted:saved.has(nodeName)}),$execution:{id:executionId},$workflow:{id:workflow.id||'synthetic-existing-qa'},setTimeout:(callback,delay)=>{now+=delay;queueMicrotask(callback);return 0;},context});
   const expression=value=>typeof value==='string'&&value.startsWith('={{')?vm.runInNewContext(value.slice(3,-2),env(),{timeout:1000}):value;
   try{
