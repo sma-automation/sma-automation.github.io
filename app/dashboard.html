@@ -18,7 +18,7 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=3';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=32';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=8';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=9';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=3';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=14';
@@ -113,7 +113,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','58');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','59');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -384,7 +384,14 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=7',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=8',location.href).href,
+    dailyScheduleRequest:ownerId?async args=>{
+      const {data:{session}}=await supabase.auth.getSession();
+      if(signedOut||ownerId!==dashboardOwnerId||ownerId!==session?.user?.id)throw Object.assign(new Error(),{code:'AUTH_REQUIRED'});
+      const {data,error}=await supabase.rpc('sma_publication_daily_schedule_v1',{...args,p_owner:ownerId});
+      if(error)throw error;
+      return data;
+    }:null,
     onPreparePost:ownerId&&page.querySelector('.sma-optimize')&&findAreaNavigation('publishing')
       ?()=>navigateDashboardArea('portals'):null
   });

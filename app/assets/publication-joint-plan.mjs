@@ -15,6 +15,7 @@ export function viennaInstants(local) {
 }
 
 const errors = {
+  DAILY_PLAN_FULL: 'Für diesen Tag sind bereits drei Dateien eingeplant.',
   AUTH_REQUIRED: 'Bitte melde dich erneut im SMA-Dashboard an.',
   FILE_CHANGED: 'Die Datei hat sich geändert. Öffne die aktuelle Dateiversion.',
   ACCESS_INACTIVE: 'Dein SMA-Zugang ist derzeit inaktiv.',
@@ -24,11 +25,21 @@ const errors = {
 const orderLabels = {blocked: 'Auftrag blockiert', checking: 'Auftrag wird geprüft',
   approved: 'Freigabe gespeichert', checked: 'Auftragsprüfung abgeschlossen'};
 
-export function mountJointPlan(doc, request) {
+export function mountJointPlan(doc, request, portal='youtube') {
   const el = id => doc.getElementById(id);
   const panel = el('jointPlan'), field = el('jointPlanTime'), status = el('jointPlanStatus');
   const fold = el('jointPlanOccurrence'), save = el('jointPlanSave'), clear = el('jointPlanClear');
   const refresh = el('jointPlanRefresh');
+  const sharedPortal = ['youtube','tiktok'].includes(portal);
+  const summary = panel.querySelector('summary');
+  const sharedTitle = summary.textContent;
+  function displayMode(daily) {
+    const manual = sharedPortal && !daily;
+    summary.textContent = manual ? sharedTitle : 'Tagesplanung für diese Datei';
+    el('jointPlanManual').hidden = !manual;
+    save.hidden = !manual;
+    el('jointPlanDaily').hidden = !daily;
+  }
   let subject = null, generation = 0, record = null, busy = false;
 
   function controls() {
@@ -37,14 +48,17 @@ export function mountJointPlan(doc, request) {
     field.disabled = !record || busy;
     fold.disabled = !record || busy;
     save.disabled = !record || busy || !field.value;
-    clear.hidden = !record?.desired_at;
+    clear.hidden = !record?.desired_at || (!sharedPortal && !record?.daily_slot);
     clear.disabled = busy;
     refresh.disabled = busy;
   }
 
   function render(data) {
     record = data;
-    const labels = data.channels.map(channel => {
+    displayMode(!!data.daily_slot);
+    const at = data.portal_times?.[portal];
+    el('jointPlanDaily').textContent = at ? 'Datei '+data.daily_slot+' · '+viennaMinute(at).replace('T',' · ')+' Uhr (Wien)' : '';
+    const labels = (sharedPortal ? data.channels : []).map(channel => {
       const name = channel.platform === 'youtube' ? 'YouTube' : 'TikTok';
       return name + ' · ' + (channel.target || 'Zielkonto offen') + ' · ' +
         (orderLabels[channel.order_state] || 'Freigabe offen');
@@ -52,7 +66,9 @@ export function mountJointPlan(doc, request) {
     el('jointPlanChannels').textContent = labels.join('\n');
     field.value = data.desired_at ? viennaMinute(data.desired_at) : '';
     fold.value = data.desired_at ? String(viennaInstants(field.value).indexOf(new Date(data.desired_at).toISOString())) : '';
-    status.textContent = data.desired_at ? 'Gemeinsamer Terminentwurf gespeichert.' : 'Noch kein Terminentwurf gespeichert.';
+    status.textContent = data.daily_slot ? 'Privater Tagesentwurf. Eine Veröffentlichung erfordert eine eigene Freigabe.' :
+      !sharedPortal ? 'Für dieses Portal ist kein Tagesentwurf gespeichert.' :
+      data.desired_at ? 'Gemeinsamer Terminentwurf gespeichert.' : 'Noch kein Terminentwurf gespeichert.';
   }
 
   async function run(action) {
@@ -96,6 +112,7 @@ export function mountJointPlan(doc, request) {
     if (next && subject && next.p_asset === subject.p_asset && next.p_owner === subject.p_owner && next.p_revision === subject.p_revision) return;
     generation++;
     subject = next; record = null; busy = false;
+    displayMode(false); el('jointPlanDaily').textContent = '';
     panel.open = false; panel.hidden = !next; field.value = ''; fold.value = '';
     el('jointPlanChannels').textContent = ''; status.textContent = ''; controls();
   }};

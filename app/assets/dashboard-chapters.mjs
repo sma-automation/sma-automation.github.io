@@ -1,3 +1,4 @@
+import {mountDailySchedule} from './publication-daily-schedule.mjs?v=1';
 import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=1';
 // Presentation only: move the existing elements, never copy forms or customer data.
 export function createChapterTabs({doc,id,entries,initial=entries[0]?.key,list,onSelect}){
@@ -42,7 +43,7 @@ export function placeChapterBar(page,nav){
  page.setAttribute('data-sma-chapters','');
 }
 
-export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPreparePost:openPortals}){
+export function mountDashboardChapters({doc,stylesheetUrl,websiteView,dailyScheduleRequest,onPreparePost:openPortals}){
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
  const cleanups=[],controllers=new Map();
  const children=(el,selector)=>el?[...el.children].filter(child=>child.matches(selector)):[];
@@ -53,7 +54,7 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPrepareP
    restore.push(()=>{if(anchor.parentNode){anchor.replaceWith(node);}});
   }
  }
- function mount(name,groups,{shared,sharedIn=[]}={}){
+ function mount(name,groups,{shared,sharedIn=[],onSelect}={}){
   const root=page(name);if(!root||controllers.has(name))return null;
   groups=groups.map(group=>({...group,nodes:group.nodes.filter(Boolean)})).filter(group=>group.nodes.length||group.emptyPanel);
   if(groups.length<2)return null;
@@ -65,7 +66,7 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPrepareP
    moveGroup(target,group.nodes,restore);return {...group,panel};
   });
   if(shared){const anchor=doc.createComment('shared chapter result');shared.before(anchor);restore.push(()=>anchor.parentNode&&anchor.replaceWith(shared));}
-  const syncShared=key=>{if(shared){const entry=entries.find(e=>e.key===key);if(sharedIn.includes(key))entry.panel.append(shared);else entries.find(e=>sharedIn.includes(e.key))?.panel.append(shared);}};
+  const syncShared=key=>{onSelect?.(key);if(shared){const entry=entries.find(e=>e.key===key);if(sharedIn.includes(key))entry.panel.append(shared);else entries.find(e=>sharedIn.includes(e.key))?.panel.append(shared);}};
   const tabs=createChapterTabs({doc,id:'sma-'+name,entries,onSelect:syncShared});placeChapterBar(root,tabs.nav);syncShared(tabs.selected);
   controllers.set(name,tabs);
   cleanups.push(()=>{tabs.destroy();restore.reverse().forEach(fn=>fn());panels.forEach(panel=>panel.remove());root.removeAttribute('data-sma-chapters');});
@@ -77,10 +78,16 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,onPrepareP
   {key:'account',label:'Konto & Paket',en:'Account & plan',nodes:overview.slice(2),grid:true}
  ]);
  const publishing=page('publishing'),heads=children(publishing,'.page-head');
- mount('publishing',[
+ let scheduleView;
+ const publishingTabs=mount('publishing',[
   {key:'portals',label:'Portale',en:'Platforms',nodes:children(publishing,'.card')},
-  {key:'files',label:'Dateien',en:'Files',nodes:[...heads.slice(1),doc.getElementById('publishingFilesSlot')]}
- ]);
+  {key:'files',label:'Dateien',en:'Files',nodes:[...heads.slice(1),doc.getElementById('publishingFilesSlot')]},
+  {key:'schedule',label:'Tagesplanung',en:'Daily schedule',emptyPanel:!!dailyScheduleRequest,nodes:[]}
+ ],{onSelect:key=>{if(key==='schedule')scheduleView?.open();}});
+ if(dailyScheduleRequest&&publishingTabs){
+  scheduleView=mountDailySchedule(doc,publishingTabs.entries.find(e=>e.key==='schedule').panel,dailyScheduleRequest);
+  cleanups.push(()=>scheduleView.destroy());
+ }
  const social=page('social');
  const connections=mountPortalConnections(doc,publishing,social);
  if(connections)cleanups.push(()=>connections.destroy());

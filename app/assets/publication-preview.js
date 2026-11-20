@@ -1,4 +1,4 @@
-import {mountJointPlan} from './publication-joint-plan.mjs?v=1';
+import {mountJointPlan} from './publication-joint-plan.mjs?v=2';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
@@ -1877,7 +1877,7 @@ try{
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
  supabase.auth.onAuthStateChange((event,s)=>{if(event==='INITIAL_SESSION'&&previewOwnerId&&s?.user?.id!==previewOwnerId)return;syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);clearSharedOriginalMediaCache(undefined,previewOwnerId);clearSharedCatalogRefreshCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
- if(['youtube','tiktok'].includes(selectedPortal)){
+ if(['youtube','tiktok','instagram','facebook'].includes(selectedPortal)){
   if(workspace)$('workspacePostView').append($('jointPlan'));
   jointPlan=mountJointPlan(document,async args=>{
    const owner=(await session()).user.id;
@@ -1885,7 +1885,7 @@ try{
    const {data,error}=await supabase.rpc('sma_publication_joint_plan_v1',args);
    if(error)throw error;
    return data;
-  });
+  },selectedPortal);
  }
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
