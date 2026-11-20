@@ -86,6 +86,43 @@ test('one view closing cannot abort an image still requested by another view',as
  controller.abort();a.dispose();assert.equal(f.requests[0].signal.aborted,false);f.hold(null);await f.release(0);
  const results=await all;assert.equal(results[0].status,'rejected');assert.equal(results[1].status,'fulfilled');assert.equal(f.requests.length,1);b.dispose();
 });
+test('a reopened portal joins its thumbnail already in flight with another visible file', async () => {
+ const f=fixture({hold:'http'}), gallery=f.client(), portal=f.client(f.realm());
+ const left=new AbortController();
+ const cancelled=gallery.request(file(1),left.signal).catch(error=>error);
+ const visible=gallery.request(file(2));
+ await f.tick(16);
+ left.abort();
+ const reopened=portal.request(file(1));
+ await f.tick(16);
+ assert.equal(f.requests.length,1);
+ assert.equal(f.requests[0].input.assets.length,2);
+ f.hold(null);
+ await f.release(0);
+ assert.equal((await cancelled).message,'PREVIEW_ABORTED');
+ const [original,other]=await Promise.all([reopened,visible]);
+ assert.equal(original.type,'image/png');
+ assert.equal(other.type,'image/png');
+ gallery.dispose();portal.dispose();
+});
+
+test('an abandoned thumbnail in a successful batch is neither cached nor left pending', async () => {
+ const f=fixture({hold:'http'}), client=f.client(), left=new AbortController();
+ const cancelled=client.request(file(1),left.signal).catch(error=>error);
+ const visible=client.request(file(2));
+ await f.tick(16);
+ left.abort();
+ f.hold(null);
+ await f.release(0);
+ await visible;
+ assert.equal((await cancelled).message,'PREVIEW_ABORTED');
+ const next=client.request(file(1));
+ await f.tick(16);
+ assert.equal(f.requests.length,2);
+ assert.equal((await next).type,'image/png');
+ client.dispose();
+});
+
 test('a gallery closed before dispatch cannot supply authentication for its still-open portal',async()=>{
  const f=fixture(),closed=f.env.createSharedThumbnailClient({host:f.host,getOwnerId:()=> 'owner-one',getSession:()=>{throw Error('Closed gallery session must not be read');},endpoint:()=> 'fixture:thumbnail'}),portal=f.client();
  const results=Promise.allSettled([closed.request(file(1)),portal.request(file(1))]);closed.dispose();await f.tick(16);

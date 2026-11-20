@@ -76,8 +76,13 @@ export function createSharedThumbnailClient({getSession,getOwnerId,host=sharedHo
  function remove(job,consumer){
   consumer.signal?.removeEventListener('abort',consumer.abort);job.consumers.delete(consumer);ownConsumers.delete(consumer);consumer.life.abort();
   if(job.consumers.size||state.pending.get(job.key)!==job)return;
-  state.pending.delete(job.key);
-  if(job.batch&&job.batch.jobs.every(item=>state.pending.get(item.key)!==item||!item.consumers.size))job.batch.scope.close();
+  if(!job.batch){state.pending.delete(job.key);return;}
+  // A batch still needed by another file can supply this thumbnail if its view reopens.
+  if(job.batch.jobs.some(item=>item.consumers.size))return;
+  for(const item of job.batch.jobs){
+   if(state.pending.get(item.key)===item)state.pending.delete(item.key);
+  }
+  job.batch.scope.close();
  }
  function drain(){
   while(state.batches.size<MAX_BATCHES){
@@ -117,8 +122,10 @@ export function createSharedThumbnailClient({getSession,getOwnerId,host=sharedHo
    const results=readBatch(body,jobs);
    if(state.epoch!==batch.epoch||state.owner!==first.owner)return;
    for(const job of jobs){
-    if(state.pending.get(job.key)!==job||!job.consumers.size)continue;
-    const result=results.get(job);state.pending.delete(job.key);
+    if(state.pending.get(job.key)!==job)continue;
+    state.pending.delete(job.key);
+    if(!job.consumers.size)continue;
+    const result=results.get(job);
     if(result.blob){state.cache.delete(job.key);state.cache.set(job.key,{blob:result.blob,time:Date.now()});if(state.cache.size>CACHE_ENTRIES)state.cache.delete(state.cache.keys().next().value);}
     settle(job,result.error,result.blob);
    }
