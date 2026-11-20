@@ -18,6 +18,11 @@ let offline=false;
 export function createClient(){return {auth:{onAuthStateChange(){},getSession:async()=>({data:{session:{user:{id:'fixture-owner'},access_token:'fixture'}}})},
  rpc(name,args){
   const call=(async()=>{
+   if(name==='sma_publication_joint_plan_v1') {
+     const channels=[{platform:'youtube',target:'YouTube-Test',order_state:'checked'},{platform:'tiktok',target:'Testkonto',order_state:'blocked'}];
+     if(args.p_action==='save')sessionStorage.jointTime=args.p_time;
+     return {data:{ok:true,channels,version:sessionStorage.jointTime?1:0,desired_at:sessionStorage.jointTime||null}};
+   }
    if(name==='sma_publication_order_v1'){
     const order=window.fixtureTargetOrder;
     if(args.p_action!=='get'||!order||args.p_input?.id!==order.id||Object.keys(args.p_input).length!==1)throw Error('Unexpected synthetic stored-order action');
@@ -135,6 +140,15 @@ try{
   const frame=window.frameElement;
   await until(()=>$('filePickerList')?.querySelector('.gallery-select'));
   $('filePickerList').querySelector('.gallery-select').click();await until(()=>frame.dataset.view==='preview',frame);
+  if($('jointPlan').hidden||!$('workspacePostView').contains($('jointPlan')))throw Error('Plan fehlt in der Beitragsvorschau');
+  $('jointPlan').querySelector('summary').click();
+  await until(()=>$('jointPlanChannels').textContent.includes('Testkonto'));
+  $('jointPlanTime').value='2099-07-25T15:45';
+  $('jointPlanTime').dispatchEvent(new Event('input'));
+  $('jointPlanSave').click();
+  await until(()=>$('jointPlanStatus').textContent==='Gemeinsamer Terminentwurf gespeichert.');
+  if(sessionStorage.jointTime!=='2099-07-25T13:45:00.000Z')throw Error('Falscher UTC-Zeitpunkt');
+  $('jointPlan').querySelector('summary').click();
   const returned=new Promise(resolve=>parent.addEventListener('popstate',resolve,{once:true}));
   $('workspaceEditPost').click();await returned;
   if(parent.history.state?.view!=='source'||$('workspaceSource').hidden||document.activeElement!==body)throw Error('Editing lost the selected text field');
