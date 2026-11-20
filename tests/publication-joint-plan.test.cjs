@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {readFile} = require('node:fs/promises');
+const sqlRuntime = './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 
 test('Vienna time resolves ordinary minutes, the spring gap and both autumn occurrences', async () => {
   const {viennaInstants} = await import('../app/assets/publication-joint-plan.mjs');
@@ -11,8 +12,9 @@ test('Vienna time resolves ordinary minutes, the spring gap and both autumn occu
   assert.deepEqual(viennaInstants('2030-02-31T15:00'), []);
 });
 
-test('a shared editorial time survives portal switches and cannot modify orders or cross owners or revisions', async t => {
-  const {PGlite} = await import('./sql-runtime/node_modules/@electric-sql/pglite/dist/index.js');
+test('a shared editorial time survives portal switches and cannot modify orders or cross owners or revisions',
+  {skip: require('node:fs').existsSync('tests/'+sqlRuntime) ? false : 'SQL runtime runs in Publication history checks'}, async t => {
+  const {PGlite} = await import(sqlRuntime);
   const db = new PGlite();
   t.after(() => db.close());
   await db.exec(`create role authenticated; create role anon; create role service_role bypassrls; create schema auth;
