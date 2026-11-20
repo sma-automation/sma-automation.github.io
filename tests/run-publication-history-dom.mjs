@@ -23,9 +23,9 @@ function fixture({active=true,hash='',requestOrderPage,requestFind,request=()=>r
  return {doc,window,page,view,calls,$:s=>page.querySelector(s),owner(id,notify=true){owner=id;if(notify)callback(id);},focus(){window.dispatchEvent(new window.Event('focus'));},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));},get unsubscribed(){return unsubscribed;}};
 }
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
-await test('renders saved status with text-only untrusted title and no action links',async()=>{
+await test('renders saved status with text-only untrusted title and a bound link to the blocked order',async()=>{
  const f=fixture({request:()=>result([entry(1,{title:'<img src=x onerror=alert(1)>',target_name:'<script>bad</script>'})])});await tick();
- assert.match(f.$('ol').textContent,/Blockiert/);assert.match(f.$('ol').textContent,/<img/);assert.equal(f.$('img'),null);assert.equal(f.$('script'),null);assert.equal(f.$('a'),null);assert.deepEqual(f.calls,[{}]);assert.equal(f.$('#historyActivitySlot').querySelectorAll('button').length,3);f.view.destroy();
+ assert.match(f.$('ol').textContent,/Blockiert/);assert.match(f.$('ol').textContent,/<img/);assert.equal(f.$('img'),null);assert.equal(f.$('script'),null);assert.equal(f.$('a').getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+entry().id+'&view=review');assert.deepEqual(f.calls,[{}]);assert.equal(f.$('#historyActivitySlot').querySelectorAll('button').length,3);f.view.destroy();
 });
 await test('expanded orders show their own saved caption as plain multiline text, with no further request',async()=>{
  const caption='Historischer Text 🛒\n\n#Video\nhttps://example.test/?produkt=alt\n<img src=x>';

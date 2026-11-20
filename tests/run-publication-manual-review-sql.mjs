@@ -42,6 +42,9 @@ try{
  eq(cancelPreparation,await readFile(new URL('../supabase/migrations/20261108085618_publication_cancel_preparation_v1.sql',import.meta.url),'utf8'));
  await db.exec(cancelPreparation);
  await assert.rejects(()=>db.exec(cancelPreparation),/PUBLICATION_CANCEL_PREPARATION_BASELINE_CHANGED/);n++;
+ const supplementSql=await src('publication-supplemental-review');
+ eq(supplementSql,await readFile(new URL('../supabase/migrations/20261120190645_publication_supplemental_review_v1.sql',import.meta.url),'utf8'));
+ await db.exec(supplementSql);
  const history=async()=>asRole('authenticated',async()=>(await db.query("select public.sma_publication_history_v3('{\"month\":null}') as r")).rows[0].r);
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
  for(const [age,expected] of [['1 minute','active'],['30 minutes','expired'],['1 day','expired']]){
@@ -136,6 +139,34 @@ try{
  eq((await request('approve',approval)).code,'ORDER_NOT_PREPARED');
  eq((await db.query('select count(*)::int as n from sma_private.publication_journal_v1')).rows[0].n,0);
  await db.exec('rollback');
+ // Exercise the public customer RPC, then explicitly run the existing worker in isolation.
+ {
+ await db.exec('begin');
+ const first=await request('approve',{...approval,review:base});
+ const evidenceData={target,drive_verified:true,text_verified:true,account_check:evidence,blockers:[]};
+ const initialLease=await worker('claim');
+ const supplementBlocked=await worker('finish_check',evidenceData,initialLease.lease_id);
+ eq(supplementBlocked.state,'blocked');eq(supplementBlocked.supplemental_review_option,v.human_review_option);
+ const supplement={id:supplementBlocked.id,confirm:true,review:human};
+ eq((await request('supplement',supplement,other)).code,'ORDER_UNAVAILABLE');
+ eq((await request('supplement',{...supplement,confirm:false})).code,'HUMAN_REVIEW_UNAVAILABLE');
+ eq((await request('supplement',{...supplement,review:{...human,source_fingerprint:'f'.repeat(64)}})).code,'HUMAN_REVIEW_UNAVAILABLE');
+ await setMedia({...media,checks:[...media.checks,check('VIDEO_CODEC','fail')]});
+ eq((await request('supplement',supplement)).code,'HUMAN_REVIEW_UNAVAILABLE');
+ await setMedia(media);
+ const receipt=await request('supplement',supplement);
+ eq(receipt.id,supplementBlocked.id);eq(receipt.state,'blocked');eq(receipt.approved_at,first.approved_at);
+ eq(receipt.approval_review,base);eq(receipt.supplemental_review,human);eq(receipt.supplemental_review_option,null);
+ eq(receipt.media_check.human_review.reviewed_at,receipt.supplemental_review_at);
+ eq((await request('supplement',supplement)).supplemental_review_at,receipt.supplemental_review_at);
+ eq((await request('approve',{...approval,review:base})).approved_at,first.approved_at);
+ eq((await db.query('select count(*)::int as n from sma_private.publication_journal_v1')).rows[0].n,1);
+ const checkLease=await worker('claim');
+ eq((await worker('finish_check',evidenceData,checkLease.lease_id)).state,'checked');
+ eq((await provider({...evidenceData,size_bytes:2000})).code,'UPLOAD_TEST_APPROVAL_REQUIRED');
+ eq((await db.query('select count(*)::int as n from sma_private.publication_provider_attempts_v1')).rows[0].n,0);
+ await db.exec('rollback');
+ }
  const approved=await request('approve',approval);eq(approved.state,'approved');eq(approved.media_check.human_review.method,'customer_attestation');eq(approved.media_check.content_review,media.content_review);eq(approved.can_publish,false);eq(approved.can_upload,false);
  eq((await cancel()).code,'ORDER_NOT_CANCELLABLE');
  eq((await request('get',cancelInput)).approved_at,approved.approved_at);
@@ -274,6 +305,23 @@ try{
  await setMedia({...ttMedia,facts:{...ttMedia.facts,duration_ms:61000}});eq((await view()).human_review_option,null);await setMedia(ttMedia);
  const ttApproval={...approval,review:{...base,tiktok_music_terms:true,human_review:{...human,...tt.human_review_option}}};
  eq((await request('approve',{...ttApproval,review:{...ttApproval.review,tiktok_music_terms:false}})).code,'FINAL_APPROVAL_REQUIRED');
+ await db.exec('savepoint supplement_tiktok');
+ await db.exec('delete from sma_private.publication_journal_v1');
+ const ttRights={...base,tiktok_music_terms:true};
+ const firstTikTok=await request('approve',{...ttApproval,review:ttRights});
+ const tLease=await worker('claim');
+ const ttBlocked=await worker('finish_check',{...data,target:ttTarget,account_check:ttEvidence},tLease.lease_id);
+ eq(ttBlocked.state,'blocked');
+ const expiredEvidence={...ttEvidence,checked_at:new Date(Date.now()-360000).toISOString(),expires_at:new Date(Date.now()-60000).toISOString()};
+ await db.query('update sma_private.publication_orders_v1 set account_check=$1',[expiredEvidence]);
+ const staleTikTok=await view();eq(staleTikTok.supplemental_review_option,tt.human_review_option);
+ eq(staleTikTok.media_check.checks.find(x=>x.code==='TIKTOK_CREATOR_LIMIT').status,'pending');
+ const ttReceipt=await request('supplement',{id:ttBlocked.id,confirm:true,review:ttApproval.review.human_review});
+ eq(ttReceipt.approved_at,firstTikTok.approved_at);eq(ttReceipt.supplemental_review,ttApproval.review.human_review);
+ eq(ttReceipt.media_check.human_review,undefined);eq(ttReceipt.can_upload,false);
+ const tFresh=await worker('claim');
+ eq((await worker('finish_check',{...data,target:ttTarget,account_check:ttEvidence},tFresh.lease_id)).state,'checked');
+ await db.exec('rollback to savepoint supplement_tiktok');
  await db.exec('delete from sma_private.publication_journal_v1');tt=await request('approve',ttApproval);eq(tt.state,'approved');eq(tt.media_check.human_review.method,'customer_attestation');
  await assignLaterDraft('tiktok');
  eq(await request('prepare',{...prepareInput,platform:'tiktok',expected_target_id:ttTarget.id,choices:ttChoices}),existing);

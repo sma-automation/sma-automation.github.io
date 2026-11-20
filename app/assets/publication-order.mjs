@@ -73,6 +73,16 @@ export function humanReviewAvailable(order) {
   return order?.state==='prepared'&&!preparationEnded(order)&&!order.check_error&&['youtube','tiktok'].includes(order.binding?.platform)&&
     order.human_review_option?.policy_version===humanReviewPolicy&&/^[a-f0-9]{64}$/.test(order.human_review_option?.source_fingerprint||'');
 }
+function supplementalReviewAvailable(order) {
+  const option=order?.supplemental_review_option;
+  return blockedHistoryOrder(order)&&!order.check_error&&!order.supplemental_review_at&&
+    option?.policy_version===humanReviewPolicy&&/^[a-f0-9]{64}$/.test(option.source_fingerprint||'');
+}
+function confirmHumanReview(option,values) {
+  const checks=['full_playback','visual_clear','speech_text_checked','claims_match'];
+  if(!option||values?.human_review_enabled!==true||!checks.every(key=>values[key]===true))throw Error(orderError('HUMAN_REVIEW_UNAVAILABLE'));
+  return {policy_version:humanReviewPolicy,source_fingerprint:option.source_fingerprint,...Object.fromEntries(checks.map(key=>[key,true]))};
+}
 export function reviewConfirmation(order,values) {
   const tiktok=order?.binding?.platform==='tiktok',branded=tiktok&&order?.choices?.brand_content_toggle===true;
   if(order?.approval_policy!==approvalPolicy||!['youtube','tiktok','instagram','facebook'].includes(order?.binding?.platform)||
@@ -80,8 +90,8 @@ export function reviewConfirmation(order,values) {
     (tiktok&&values?.tiktok_music_terms!==true)||(branded&&values?.tiktok_branded_terms!==true))throw Error(orderError('MEDIA_CONFIRMATION_REQUIRED'));
   const result={policy_version:approvalPolicy,content_checked:true,media_rights:true,music_rights:true,tiktok_music_terms:tiktok,tiktok_branded_terms:branded};
   if(values.human_review_enabled===true){
-    if(!humanReviewAvailable(order)||!['full_playback','visual_clear','speech_text_checked','claims_match'].every(k=>values[k]===true))throw Error(orderError('HUMAN_REVIEW_UNAVAILABLE'));
-    result.human_review={policy_version:humanReviewPolicy,source_fingerprint:order.human_review_option.source_fingerprint,full_playback:true,visual_clear:true,speech_text_checked:true,claims_match:true};
+    if(!humanReviewAvailable(order))throw Error(orderError('HUMAN_REVIEW_UNAVAILABLE'));
+    result.human_review=confirmHumanReview(order.human_review_option,values);
   }
   return result;
 }
@@ -114,8 +124,10 @@ function recordedApproval(row){
     Number.isFinite(Date.parse(row.approved_at));
 }
 
-export function checkedHistoryOrder(row){
-  return row?.state==='checked'&&recordedApproval(row)&&row.can_upload===false&&row.can_publish===false&&
+export function checkedHistoryOrder(row){return row?.state==='checked'&&boundHistoryOrder(row);}
+export function blockedHistoryOrder(row){return row?.state==='blocked'&&boundHistoryOrder(row);}
+function boundHistoryOrder(row){
+  return recordedApproval(row)&&row.can_upload===false&&row.can_publish===false&&
     row.approval_token===null&&row.approval_review!=null&&!!row.target?.id&&
     ['youtube','tiktok'].includes(row.target.platform)&&row.target.platform===row.binding?.platform;
 }
@@ -196,7 +208,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-haspopup','dialog');host.append(button);
@@ -223,18 +235,21 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   for(const [key,text] of [['full_playback','Ich habe das gesamte Video einschließlich Ton bis zum Ende angesehen.'],['visual_clear','Ich habe alle Szenen geprüft: keine Nacktheit oder sexualisierten Inhalte, Gewalt, Waffen, drastischen Verletzungen, Hasssymbole, Drogen oder Selbstverletzung. Bei Unsicherheit bestätige ich nicht.'],['speech_text_checked','Ich habe Sprache, Musiktext und Einblendungen geprüft; sie enthalten keine der genannten problematischen Inhalte.'],['claims_match','Titel und Beitragstext passen zum Video. Enthaltene Aussagen und Versprechen habe ich auf Richtigkeit geprüft.']]){
     const label=make('label'),input=make('input');input.type='checkbox';input.id='order-human-'+key;label.append(input,doc.createTextNode(' '+text));humanFields.set(key,input);humanChecklist.append(label);
   }
-  humanControls.append(humanChecklist,make('p','Dies ist deine eigene Prüfung, kein automatisches Prüfergebnis und keine Garantie für die Annahme durch das Portal. Gespeichert wird sie erst zusammen mit deiner gesonderten Veröffentlichungsfreigabe.'));
+  humanControls.append(humanChecklist,make('p','Dies ist deine eigene Prüfung, kein automatisches Prüfergebnis und keine Garantie für die Annahme durch das Portal. Die Bestätigung gehört zur hier angezeigten Datei und zum gespeicherten Beitrag.'));
   const consentLabel=make('label'),consent=make('input');consent.type='checkbox';
   consent.id='order-final-consent';
   consentLabel.append(consent,doc.createTextNode(' Ich habe Zielkonto, Beitrag, Rechte und Kennzeichnungen geprüft und gebe diesen Auftrag zur Veröffentlichung frei.'));
   const approve=make('button','Veröffentlichung freigeben');approve.type='button';approve.disabled=true;
+  const supplement=make('button','Inhaltsprüfung am Auftrag speichern');
+  supplement.type='button';supplement.hidden=true;supplement.id='order-save-supplement';
+  let historyReview=null;
   const checkTarget=make('button','Zielkonto prüfen');checkTarget.type='button';checkTarget.hidden=true;
   const retryAccount=make('button','Zielkonto erneut prüfen');retryAccount.type='button';retryAccount.className='secondary';retryAccount.hidden=true;
   const statusButton=make('button','Status erneut laden');statusButton.type='button';statusButton.className='secondary';statusButton.hidden=true;
   const restart=make('button','Vorbereitung neu starten');restart.type='button';restart.className='secondary';restart.hidden=true;
   const cancel=make('button','Vorbereitung abbrechen');cancel.type='button';cancel.className='secondary';cancel.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
-  const actions=make('div');actions.className='actions';actions.append(approve,checkTarget,retryAccount,restart,statusButton,cancel,close);
+  const actions=make('div');actions.className='actions';actions.append(approve,supplement,checkTarget,retryAccount,restart,statusButton,cancel,close);
   dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
   const client=createOrderClient({session,...(command?{command:(action,input,options)=>command(action,input,context?.binding,options)}:{})});let order=null,context=null,working=false,epoch=0,account=null;
   let recovery=null,preparationToResume=null,opening=false;
@@ -325,11 +340,15 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     cancel.hidden=!cancelStoredOrder||!!recovery||order?.approved_at!==null||!['preparing','prepared'].includes(order.state);
     cancel.disabled=value||cancel.hidden;
     for(const input of reviewFields.values())input.disabled=value||order?.state!=='prepared'||locked;
-    humanEnabled.disabled=value||!humanReviewAvailable(order);humanChecklist.hidden=!humanEnabled.checked;
-    for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!humanReviewAvailable(order);
+    const canSupplement=!!saveSupplementalReview&&supplementalReviewAvailable(order);
+    const canAssess=humanReviewAvailable(order)||canSupplement;
+    supplement.hidden=!canSupplement||locked;
+    supplement.disabled=value||supplement.hidden||!humanEnabled.checked||![...humanFields.values()].every(input=>input.checked);
+    humanEnabled.disabled=value||!canAssess;humanChecklist.hidden=!humanEnabled.checked;
+    for(const input of humanFields.values())input.disabled=value||!humanEnabled.checked||!canAssess;
     checkTarget.hidden=!pendingTarget(order)||locked;
     checkTarget.disabled=value||checkTarget.hidden||!!order?.check_error;
-    statusButton.textContent=!recovery&&recordedApproval(order)?'Auftrag prüfen und fortsetzen':'Status erneut laden';
+    statusButton.textContent=!historyReview&&!recovery&&recordedApproval(order)?'Auftrag prüfen und fortsetzen':'Status erneut laden';
     statusButton.disabled=value;approve.disabled=value||order?.state!=='prepared'||locked||!consent.checked||!reviewReady();
     if(locked){
       consent.checked=false;humanEnabled.checked=false;
@@ -407,7 +426,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       expiryTimer=setTimeout(()=>{if(order===r)setWorking(working);},Math.max(0,until-Date.now()+1));
     }
     consent.checked=false;consentLabel.hidden=r.state!=='prepared';controls.hidden=true;
-    humanControls.hidden=!humanReviewAvailable(r);humanEnabled.checked=false;for(const input of humanFields.values())input.checked=false;
+    humanControls.hidden=!(humanReviewAvailable(r)||(saveSupplementalReview&&supplementalReviewAvailable(r)));humanEnabled.checked=false;for(const input of humanFields.values())input.checked=false;
     reviewControls.hidden=r.state!=='prepared';for(const [key,input] of reviewFields){input.checked=false;input.parentElement.hidden=key==='tiktok_music_terms'?context.binding.platform!=='tiktok':key==='tiktok_branded_terms'?context.binding.platform!=='tiktok'||r.choices?.brand_content_toggle!==true:false;}
     details.append(make('p','Datei: '+context.name),make('p','Zielkonto: '+(r.account_check?.display_name||r.target?.name||'Noch nicht zugeordnet')+(r.target?.id?' · '+r.target.id:'')));
     const decisionLabels={visibility:'Sichtbarkeit',made_for_kids:'Speziell für Kinder',contains_synthetic_media:'Synthetische Inhalte',disable_comment:'Kommentare deaktiviert',disable_duet:'Duette deaktiviert',disable_stitch:'Stitch deaktiviert',brand_content_toggle:'Werbung für Dritte',brand_organic_toggle:'Eigene Marke',is_aigc:'KI-generierter Inhalt'};
@@ -437,6 +456,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     else if(r.approved_at)notice.textContent=r.state==='blocked'?'Deine Freigabe ist gespeichert. Eine offene Prüfung blockiert den Auftrag.':'Deine Freigabe ist gespeichert.';
     else if(pendingTarget(r))notice.textContent='Die Einstellungen sind gespeichert. Prüfe das Zielkonto, um diesen Auftrag weiter vorzubereiten.';
     else notice.textContent='Die Zielkontoprüfung ist noch nicht abgeschlossen.';
+    if(r.supplemental_review_at)details.append(make('p','Persönliche Inhaltsprüfung am bestehenden Auftrag gespeichert.'));
     if(r.blockers?.length){const list=make('ul');for(const code of r.blockers)list.append(make('li',blockerText(code)));details.append(list);}
     if(recordedApproval(r)){
       if(r.state==='checked'&&readTransferStatus)appendTransferStatus(r);
@@ -658,9 +678,35 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     pendingAccounts.set(key,request);
     return request;
   }
+  function bindHistoryReview(previous){
+    if(!blockedHistoryOrder(previous))return false;
+    historyReview=previous;
+    button.textContent='Auftragsprüfung öffnen';
+    return true;
+  }
+  async function openHistoryReview(){
+    const previous=historyReview;
+    if(!dialog.open)dialog.showModal();
+    onOpen();notice.textContent='Auftrag wird geladen …';
+    const generation=++epoch;
+    controls.hidden=true;details.replaceChildren();humanControls.hidden=true;
+    reviewControls.hidden=true;consentLabel.hidden=true;approve.hidden=true;
+    order=null;setWorking(true);
+    try{
+      context=getContext();
+      const current=validatedOrder(await readStoredOrder(previous.id),previous.id);
+      if(generation!==epoch)return;
+      unchanged();checkBinding(current);
+      if(!boundHistoryOrder(current)||current.target.id!==previous.target.id||current.approved_at!==previous.approved_at||
+        !matchesPost(current.draft))throw Error(orderError('ORDER_CHANGED'));
+      showOrder(current);
+    }catch(error){if(generation===epoch)notice.textContent=error.message||orderError();}
+    finally{if(generation===epoch)setWorking(false);}
+  }
   async function openPreparation(){
     if(opening&&!dialog.open)leaveOpening();
     if(working)return;
+    if(historyReview)return openHistoryReview();
     retryAccount.hidden=true;
     if(!recovery){
       if(order?.state==='prepared'||pendingTarget(order))recovery=savedPreparation();
@@ -779,6 +825,19 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   for(const input of reviewFields.values())input.addEventListener('change',()=>setWorking(working));
   humanEnabled.addEventListener('change',()=>{for(const input of humanFields.values())input.checked=false;consent.checked=false;setWorking(working);});
   for(const input of humanFields.values())input.addEventListener('change',()=>setWorking(working));
+  supplement.addEventListener('click',()=>{
+    if(supplement.disabled||supplement.hidden||!supplementalReviewAvailable(order))return;
+    const previous=order,review=confirmHumanReview(order.supplemental_review_option,reviewValues());
+    return run(async()=>{
+      const result=await saveSupplementalReview(previous.id,review);
+      if(result?.ok===false)throw Error(orderError(result.code));
+      validatedOrder(result,previous.id);
+      if(result.approved_at!==previous.approved_at||result.target?.id!==previous.target.id||
+        !matchesPost(result.draft)||!Number.isFinite(Date.parse(result.supplemental_review_at))||
+        !sameOptions(result.supplemental_review,review))throw Error(orderError('ORDER_CHANGED'));
+      return result;
+    });
+  });
   approve.addEventListener('click',()=>{if(!approve.disabled)return run(()=>client.approve(order,consent.checked,reviewValues()),{approval:true});});
   checkTarget.addEventListener('click',()=>{if(!checkTarget.disabled)return continuePending(true);});
   statusButton.addEventListener('click',()=>{
@@ -795,7 +854,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   close.addEventListener('click',()=>{if(!close.disabled)closeDialog();});
   dialog.addEventListener('close',()=>{if(!dialog.open){leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
   dialog.addEventListener('cancel',e=>{if(working){e.preventDefault();if(opening)closeDialog();}});
-  return {rememberVideoChoices,resumePrepared,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {rememberVideoChoices,resumePrepared,bindHistoryReview,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
