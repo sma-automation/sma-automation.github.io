@@ -63,7 +63,7 @@ if(params.get('wide')==='1'&&!dashboardLanguage){
  try{const saved=window.localStorage?.getItem('sma_language');if(['de','en'].includes(saved))dashboardLanguage=saved;}catch{}
 }
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
- editorUrl:document.body.classList.contains?.('embedded')?params.get('kundenmedien')==='pilot'?'media-editor.html?v=16&kundenmedien=pilot':'media-editor.html?v=16':null,
+ editorUrl:params.get('kundenmedien')==='pilot'?'media-editor.html?v=16&kundenmedien=pilot':'media-editor.html?v=16',
  onExit:window.parent!==window?()=>window.top.postMessage({type:'sma-publication-preview-close'},location.origin):null,
  fromSearch:window.parent!==window&&params.get('fromSearch')==='1',
  deferInitialFocus:params.get('restoring')==='1',
@@ -92,11 +92,13 @@ if(workspace){
  const dashboardRoot=window.frameElement?.ownerDocument?.documentElement;
  const applyLanguage=(language)=>{
   if(!['en','de'].includes(language))return;
+  const changed=dashboardLanguage!==language;
   const hadEdits=hasSourceEdits();
   dashboardLanguage=language;
   if(!hadEdits&&sourceBaseline!==null)sourceBaseline=sourceFormKey();
   document.documentElement.lang=dashboardLanguage;
   $('language').value=dashboardLanguage;
+  if(changed&&hadEdits)updateTabForm();
   const en=dashboardLanguage==='en';
   $('workspaceTab-files').textContent=en?'File':'Datei';$('workspaceTab-source').textContent=en?'Content & goal':'Inhalt und Ziel';
   if($('workspaceExit'))$('workspaceExit').textContent=en?'← Publishing':'← Veröffentlichung';
@@ -1734,7 +1736,7 @@ function restoreTabAttempt(saved,file){
  const card=$('drafts').children[0];
  card.querySelector('[data-field=title]').value=form.title;card.querySelector('[data-field=body]').value=form.body;
  card.querySelector('[data-field=hashtags]').value=form.tags;
- if(form.source){$('source_text').value=form.source.text;$('language').value=form.source.language;}
+ if(form.source){$('source_text').value=form.source.text;$('language').value=dashboardLanguage||form.source.language;}
  if(!hasDraftEdits()&&!hasSourceEdits()){
   tabDrafts.forget(record);
   return {edited:false,message:confirmed?'Die Fassung aus diesem Tab ist als Entwurf gespeichert.':'Die aktuelle Fassung ist geladen. Die Eingabefelder stimmen mit ihr überein.'};

@@ -21,12 +21,17 @@ const files=Array.from({length:14},(_,i)=>({id:uuid(i+1),name:'Suchweg Datei '+(
  modified_at:'2026-11-16T00:00:00Z',assignments:[{platform:'youtube',revision:1,status:'assigned',title:'Suchweg Beitrag '+(i+1)}]}));
 const shell=`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}.page:not(.active){display:none}@media(max-width:650px){aside{display:none}}main{padding:16px}.platform-card{display:grid;gap:14px;padding:16px}.card{padding:12px}</style>
-<body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"><button id="fixtureLogout" onclick="parent.postMessage({type:'sma-dashboard-logout'},top.location.origin)">Abmelden</button></div></header>
+<body data-sma-customer-id="fixture"><header class="topbar"><div class="topbar-actions"><button class="language-button" data-lang="de">DE</button><button class="language-button" data-lang="en">EN</button><button id="fixtureLogout" onclick="parent.postMessage({type:'sma-dashboard-logout'},top.location.origin)">Abmelden</button></div></header>
 <aside><p>Arbeitsbereich</p><button data-page="overview">Übersicht</button><button data-page="publishing">Veröffentlichung</button></aside><main>
 <section class="page active" id="page-overview"><div class="page-head"><h1>Übersicht</h1></div><div class="grid"><div class="card">Social Media</div><div class="card">Content</div><div class="card">Konto</div></div></section>
 <section class="page" id="page-publishing"><div class="page-head"><h1>Veröffentlichung</h1></div>
 <div class="card"><div class="platform-list"><article class="platform-card"><div class="platform-icon"></div><div class="platform-info"><strong>YouTube</strong></div></article></div></div><div id="publishingFilesSlot"></div></section></main>
-<script>document.querySelector('aside').onclick=e=>{const nav=e.target.closest('[data-page]');if(nav)for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+nav.dataset.page)}</script></body></html>`;
+<script>
+document.documentElement.lang=localStorage.getItem('sma_language')||'de';
+for(const button of document.querySelectorAll('[data-lang]'))button.onclick=()=>{
+ document.documentElement.lang=button.dataset.lang;localStorage.setItem('sma_language',button.dataset.lang);
+};
+document.querySelector('aside').onclick=e=>{const nav=e.target.closest('[data-page]');if(nav)for(const p of document.querySelectorAll('.page'))p.classList.toggle('active',p.id==='page-'+nav.dataset.page)}</script></body></html>`;
 const client=`export function createClient(){
  const auth=window.top.smaFixtureAuth;
  return {
@@ -154,7 +159,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false,start
  t.after(async()=>{closing=true;for(const gate of gates)gate.released.resolve();await context.close();assert.deepEqual(unexpected,[],'all requests are isolated and allowlisted');assert.deepEqual(errors,[],'no browser errors');});
  await page.goto(startAtLogin?site+'/app/index.html':url);
  const dashboard=page.frameLocator('#dashboard');
- const account=dashboard.getByRole('tab',{name:'Konto & Paket'});
+ const account=dashboard.locator('#sma-overview-tab-account');
  const launcher=mobile?dashboard.getByRole('navigation',{name:'SMA Schnellnavigation'}).getByRole('button',{name:'Suche'}):dashboard.locator('#smaGlobalQuickFind');
  const dialog=dashboard.getByRole('dialog',{name:'SMA durchsuchen'}),input=dialog.getByRole('searchbox');
  const hit=dialog.locator('[data-quick-file="'+wanted+'"]');
@@ -202,7 +207,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false,start
  async function switchOwner(owner){
   await page.evaluate(owner=>window.smaFixtureAuth.emit('SIGNED_IN',owner),owner);
   await page.waitForFunction(owner=>document.getElementById('dashboard')?.contentDocument?.body?.dataset.smaCustomerId===owner,owner);
-  await dashboard.getByRole('tab',{name:'Konto & Paket'}).waitFor();
+  await dashboard.locator('#sma-overview-tab-account').waitFor();
  }
  async function signIn(owner='fixture'){
   // Auth notification and explicit logout may both replace the same login URL.
@@ -211,7 +216,7 @@ async function fixture(t,mobile,{distinctDrafts=false,allowDraftSave=false,start
   await page.locator('#email').fill(owner+'@example.test');await page.locator('#password').fill('Fixture-only_123!');
   await page.locator('#authSubmit').click();
   await page.waitForFunction(owner=>document.getElementById('dashboard')?.contentDocument?.body?.dataset.smaCustomerId===owner,owner);
-  await dashboard.getByRole('tab',{name:'Konto & Paket'}).waitFor();
+  await dashboard.locator('#sma-overview-tab-account').waitFor();
  }
  function advanceDraft(id,fields){
   const saved=drafts.get(id),file=ownedFiles.find(file=>file.id===id);assert.ok(saved&&file);
@@ -427,7 +432,7 @@ for(const mobile of [false,true]){
   await openSearchFile(f,wanted);await showSource(editorA,f);await bodyA.fill(later);
   await editorA.locator('#youtube-hashtags').fill(rawTags);
   if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
-  await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
+  await editorA.locator('#source_text').fill(pendingSource);await f.dashboard.getByRole('button',{name:'EN',exact:true}).click();
   const gate=f.holdDraft();f.allowDraftRead(wanted);
   await editorA.locator('#checkDraftSave').click();await gate.started;
   assert.equal(await bodyA.isDisabled(),true,'A stays locked while its receipt read is pending');
@@ -471,7 +476,7 @@ for(const mobile of [false,true]){
   const localB='Die offenen Eingaben von B bleiben während weiterer A-Versionen erhalten.';
   await f.open();await f.edit();await bodyA.fill(localA);
   if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
-  await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
+  await editorA.locator('#source_text').fill(pendingSource);await f.dashboard.getByRole('button',{name:'EN',exact:true}).click();
   await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill(localB);
   const otherCheckpoint=await checkpoint(f,other);assert.ok(otherCheckpoint);
   await openSearchFile(f,wanted);
@@ -531,7 +536,7 @@ for(const mobile of [false,true]){
   await f.open();await f.edit();await bodyA.fill(textA);
   if(choice==='stored'){
    if(await editorA.locator('#sourcePanel').getAttribute('open')===null)await editorA.locator('#sourceSummary').click();
-   await editorA.locator('#source_text').fill(pendingSource);await editorA.locator('#language').selectOption('en');
+   await editorA.locator('#source_text').fill(pendingSource);await f.dashboard.getByRole('button',{name:'EN',exact:true}).click();
   }
   await openSearchFile(f,other);await showSource(editorB,f);await bodyB.fill(textB);
   const otherCheckpoint=await checkpoint(f,other);assert.ok(otherCheckpoint);
@@ -693,7 +698,7 @@ for(const mobile of [false,true]){
    const f=await fixture(t,mobile);await f.open();await f.edit();
    const source=f.editor.locator('#source_text'),language=f.editor.locator('#language');
    if(await f.editor.locator('#sourcePanel').getAttribute('open')===null)await f.editor.locator('#sourceSummary').click();
-   await source.fill(pendingSource);await language.selectOption('en');
+   await source.fill(pendingSource);await f.dashboard.getByRole('button',{name:'EN',exact:true}).click();
    if(view==='preview'){
     await f.editor.locator('#workspacePreviewEdits').click();
     await f.page.waitForFunction(()=>history.state?.view==='preview');
@@ -719,7 +724,7 @@ for(const mobile of [false,true]){
    });
    assert.equal(await f.body.inputValue(),pending,'ordinary typing is restored without a server save');
    assert.equal(await source.inputValue(),pendingSource,'the unsaved file description survives reload');
-   assert.equal(await language.inputValue(),'en','the unsaved language selection survives reload');
+   assert.equal(await language.inputValue(),'en','the central language selection survives reload');
    await f.editor.locator(view==='source'?'#workspaceSource':'#workspacePreview').waitFor();
    await f.page.waitForFunction(expected=>history.state?.view===expected,view);
    const restored=await f.page.evaluate(()=>history.state);
