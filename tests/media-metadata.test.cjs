@@ -43,6 +43,6 @@ test('rebind runs only in explicit video-metadata refresh with no draft, edits, 
  assert.match(segment,/if\(e.code==='FILE_CHANGED'\)/);
  assert.match(segment,/clearDraft\(\);renderSelectedFile\(\);renderFilePicker\(\)/);
  assert.doesNotMatch(segment,/generatePreview\(|client\.approve\(|runMagicAction\(|fetch\(uploadEndpoint/);
- assert.match(fs.readFileSync('app/publication-preview.html','utf8'),/publication-preview\.js\?v=112/);
+ assert.match(fs.readFileSync('app/publication-preview.html','utf8'),/publication-preview\.js\?v=113/);
  assert.match(fs.readFileSync('app/dashboard.html','utf8'),/url\.searchParams\.set\('v','58'\)/);
 });

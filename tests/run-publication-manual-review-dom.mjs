@@ -5,7 +5,7 @@ import {parseHTML} from './dom-runtime/node_modules/linkedom/esm/index.js';
 const source=(await readFile(new URL('../app/assets/publication-order.mjs',import.meta.url),'utf8')).replaceAll('export function','function').replaceAll('export const','const');
 const keys=['full_playback','visual_clear','speech_text_checked','claims_match'];let checks=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
-function fixture({option=true,platform='youtube',post={title:'Synthetic title',caption:'Synthetic caption'},verifySavedDraft=async()=>{},onOutdatedDraft,accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,readTransferStatus,refresh=async()=>{}}={}){
+function fixture({option=true,platform='youtube',post={title:'Synthetic title',caption:'Synthetic caption'},verifySavedDraft=async()=>{},onOutdatedDraft,accountResponse,approvalResponse,storedResponse,prepareResponse,cancelResponse,saveSupplementalReview,readTransferStatus,refresh=async()=>{}}={}){
  const {document:doc}=parseHTML('<html><head></head><body></body></html>'),requests=[],reads=[],create=doc.createElement.bind(doc);
  doc.createElement=tag=>{const e=create(tag);e.handlers={};e.addEventListener=(name,fn)=>{e.handlers[name]=fn;};
   if(tag==='dialog'){e.showModal=()=>e.open=true;e.close=()=>e.open=false;}
@@ -34,7 +34,7 @@ function fixture({option=true,platform='youtube',post={title:'Synthetic title',c
  }};
  vm.runInNewContext(source+';this.install=installOrderReview;this.confirm=reviewConfirmation;',scope);
  const cancellations=[];
- const view=scope.install(doc,{host:doc.body,portalName:platform,readTransferStatus,cancelStoredOrder:async id=>{
+ const view=scope.install(doc,{host:doc.body,portalName:platform,saveSupplementalReview,readTransferStatus,cancelStoredOrder:async id=>{
   cancellations.push(id);
   return cancelResponse(id,savedPreparation);
  },readStoredOrder:async id=>{
@@ -51,6 +51,31 @@ function fixture({option=true,platform='youtube',post={title:'Synthetic title',c
  const ready=()=>{for(const key of ['content_checked','media_rights','music_rights',...(platform==='tiktok'?['tiktok_music_terms']:[])])change('order-review-'+key);for(const key of keys)change('order-human-'+key);change('order-final-consent');};
  const open=async()=>{await $('preparePublicationOrder').handlers.click();$('order-visibility').value=platform==='youtube'?'private':'SELF_ONLY';if(platform==='youtube'){$('order-made_for_kids').value='false';$('order-contains_synthetic_media').value='false';}await dialog.querySelector('form').handlers.submit({preventDefault(){}});};
  return {$,doc,view,binding,requests,reads,cancellations,approve,status,change,ready,open,advance:ms=>{clock+=ms;timer?.();},patch:v=>reloadPatch=v,setDirty:value=>dirty=value,changeBinding:()=>currentBinding={...binding,asset_revision:'changed'}};
+}
+{
+ let saved,stored,writes=0;
+ const t=fixture({
+  storedResponse:()=>stored,
+  saveSupplementalReview:async(id,review)=>{
+   writes++;eq(id,stored.id);
+   saved={...stored,supplemental_review:review,supplemental_review_option:null,supplemental_review_at:new Date().toISOString()};
+   return saved;
+  }
+ });
+ stored={ok:true,id:'ab660000-0000-4000-9000-000000000099',state:'blocked',binding:t.binding,approved_at:new Date().toISOString(),
+  approval_token:null,approval_review:{content_checked:true},target:{id:'synthetic-channel',platform:'youtube'},choices:{visibility:'private'},
+  can_publish:false,can_upload:false,draft:{title:'Synthetic title',caption:'Synthetic caption'},
+  supplemental_review_option:{policy_version:'human-video-2026-11-06.1',source_fingerprint:'b'.repeat(64)}};
+ eq(t.view.bindHistoryReview(stored),true);
+ await t.$('preparePublicationOrder').handlers.click();
+ eq(t.reads,[stored.id]);eq(t.requests.length,0);
+ const submit=t.$('order-save-supplement');
+ eq(submit.hidden,false);eq(submit.disabled,true);eq(t.approve.hidden,true);
+ t.change('order-human-enabled');for(const key of keys.slice(0,-1))t.change('order-human-'+key);
+ eq(submit.disabled,true);t.change('order-human-claims_match');eq(submit.disabled,false);
+ await submit.handlers.click();eq(writes,1);eq(submit.hidden,true);eq(t.requests.length,0);
+ eq(t.doc.body.textContent.includes('Persönliche Inhaltsprüfung am bestehenden Auftrag gespeichert.'),true);
+ await submit.handlers.click();eq(writes,1);
 }
 {
  const t=fixture();await t.open();

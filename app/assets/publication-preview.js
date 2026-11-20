@@ -17,7 +17,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=26';
-import {installOrderReview,checkedHistoryOrder} from './publication-order.mjs?v=29';
+import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=30';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -842,9 +842,9 @@ async function readTransferStatus(id,platform){
   : historyStatuses[entry.status][0]+'. '+historyStatuses[entry.status][1];
  return {message,canContinue:true};
 }
-async function storedOrderRequest(action,id){
+async function storedOrderRequest(action,id,extra={}){
  if(!orderUuid.test(id)||signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
- const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:action,p_input:{id}})
+ const {data,error}=await supabase.rpc('sma_publication_order_v1',{p_action:action,p_input:{...extra,id}})
   .abortSignal(AbortSignal.timeout(20000));
  if(error)throw fileError('FILE_SYNC_UNAVAILABLE');
  if(signedOut||(await session()).user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);
@@ -864,11 +864,12 @@ async function readHistoryOrder(id,currentPost=false){
      (order.state==='prepared'&&order.preparation_window!=null))throw Object.assign(Error(unavailable),{code:'ORDER_UNAVAILABLE'});
  }
  const transferView=params.get('view')==='transfer';
- const allowedState=transferView ? params.get('resume')==='1'&&checkedHistoryOrder(order) : currentPost
+ const reviewView=params.get('view')==='review';
+ const allowedState=reviewView ? blockedHistoryOrder(order) : transferView ? params.get('resume')==='1'&&checkedHistoryOrder(order) : currentPost
   ? order?.state==='cancelled'&&order.approved_at===null&&order.approval_token===null&&order.approval_review==null
     &&order.approval_window==null&&order.preparation_window==null&&['youtube','tiktok'].includes(selectedPortal)
   : ['preparing','prepared'].includes(order?.state);
- if(order?.ok!==true||order.id!==id||!allowedState||(!transferView&&order.approved_at!=null)||
+ if(order?.ok!==true||order.id!==id||!allowedState||(!reviewView&&!transferView&&order.approved_at!=null)||
     order.can_publish!==false||order.can_upload!==false||binding?.platform!==selectedPortal||!orderUuid.test(binding.asset_id)||
     !orderUuid.test(binding.preview_id)||typeof binding.asset_revision!=='string'||
     !Number.isSafeInteger(binding.assignment_revision)||!Number.isSafeInteger(binding.preview_revision))throw Object.assign(Error(unavailable),{code:'ORDER_UNAVAILABLE'});
@@ -984,9 +985,11 @@ async function showHistoryPost({owner,catalog,file,saved,repairLink,previousOrde
  await loadMediaCheck();await loadMagicEffect(false);
  if(signedOut||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
  lock(false);syncMedia();
+ if(params.get('view')==='review'&&previousOrder)orderReview.bindHistoryReview(previousOrder);
  if(restored?.edited)return;
  if(repairLink){openDraftLinkEditor();status(messages.PRODUCT_LINK_UNAVAILABLE,true);return;}
  if(restored)return;
+ if(params.get('view')==='review')return;
  if(resume&&!orderReview.resumePrepared(previousOrder)){
   status('Die gespeicherte Vorbereitung kann nicht fortgesetzt werden. Du kannst sie für diesen Beitrag neu starten.');
  }
@@ -998,7 +1001,7 @@ async function loadHistoryPreview(){
  $('refreshFiles').textContent='Dateien aktualisieren';
  status('Beitragsvorschau wird geladen …');
  try{
-  if(startupDraft){
+  if(startupDraft&&params.get('view')!=='review'){
    if(params.has('order')){
     const order=await readHistoryOrder(params.get('order'),params.get('view')==='current');
     if(order.binding.asset_id!==startupDraft.fileId||order.binding.asset_revision!==startupDraft.fileRevision)throw fileError('FILE_CHANGED');
@@ -1841,7 +1844,9 @@ async function saveDraft(){
 }
 $('save').addEventListener('click',saveDraft);
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
-if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
+if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,
+ saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
+ readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
  command:async(action,input,binding,options)=>{
   if(action==='get')return new Response(JSON.stringify(await readStoredOrder(input.id)),{status:200,headers:{'Content-Type':'application/json'}});
   const operations={account:'account',prepare:'order_prepare',approve:'order_approve'};

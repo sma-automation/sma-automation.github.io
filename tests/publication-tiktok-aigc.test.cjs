@@ -26,8 +26,8 @@ test('TikTok AIGC UI is an explicit choice and review remains linked to immutabl
  assert.match(ui,/is_aigc:'KI-generierter Inhalt'/);
  assert.match(ui,/s\.required=true/);
  assert.match(ui,/reviewConfirmation\(order,reviewValues\(\)\)/);
- assert.match(read('app/assets/publication-preview.js'),/publication-order\.mjs\?v=29/);
- assert.match(read('app/publication-preview.html'),/publication-preview\.js\?v=112/);
+ assert.match(read('app/assets/publication-preview.js'),/publication-order\.mjs\?v=30/);
+ assert.match(read('app/publication-preview.html'),/publication-preview\.js\?v=113/);
 });
 test('generated dispatcher requires exact flag and sends explicit post_info.is_aigc',()=>{
  const source=read('n8n/publishing/patch-provider-cover.py');

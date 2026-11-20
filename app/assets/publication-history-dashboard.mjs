@@ -179,6 +179,9 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    if((entry.status==='checked'&&supportsCurrentPost)||privateCoverPending){
     previewLink=create('a',privateCoverPending?'Ausstehendes Cover öffnen':'Geprüften Auftrag öffnen','sma-history-preview-link');
     previewLink.href=previewUrl+'&view=transfer&resume=1';previewLink.target='_top';
+   }else if(entry.status==='blocked'&&supportsCurrentPost){
+    previewLink=create('a','Blockierten Auftrag öffnen','sma-history-preview-link');
+    previewLink.href=previewUrl+'&view=review';previewLink.target='_top';
    }else if(window||currentPost){
     previewLink=create('a',currentPost?'Aktuellen Beitrag öffnen':'Beitragsvorschau öffnen','sma-history-preview-link');
     previewLink.href=currentPost?previewUrl+'&view=current':previewUrl;previewLink.target='_top';
