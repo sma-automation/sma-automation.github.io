@@ -97,3 +97,10 @@
 .sma-header-results #smaQuickFindPanel{position:absolute;top:calc(var(--search-y) + var(--search-height) + 4px);
  left:clamp(6px,var(--search-x),max(6px,100% - 26rem));width:min(26rem,calc(100% - 12px));max-height:calc(95dvh - var(--search-y) - var(--search-height));padding:10px 14px}
 #smaQuickFindDialog.sma-header-results #smaQuickFindInput{position:fixed;top:var(--search-y);left:var(--search-x);width:var(--search-width);height:var(--search-height)}
+
+.sma-account-tabs-header .language-button[data-lang]{
+ display:inline-flex!important;align-items:center;justify-content:center;min-height:42px!important;padding:8px 12px!important;
+ border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:transparent!important;
+ color:#57667c!important;font:600 14px/1.4 Inter,Arial,sans-serif!important;cursor:pointer
+}
+.sma-account-tabs-header .language-button[data-lang].active{border-bottom-color:#4065d8!important;color:#3157cd!important}

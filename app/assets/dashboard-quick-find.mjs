@@ -53,7 +53,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  const anchor=header.querySelector('.topbar-actions,.top-bar-actions')||header;
  const create=(tag,text)=>{const el=doc.createElement(tag);if(text)el.textContent=text;return el;};
  const style=create('style');style.textContent=[
- '#smaGlobalQuickFind{border:0;border-bottom:1px solid #aeb8c8;border-radius:0;background:transparent;color:inherit;padding:9px 12px;margin:0 8px;font:600 13px Inter,Arial,sans-serif;cursor:pointer}',
+ '#smaGlobalQuickFind{max-width:100%}',
  '#smaGlobalQuickFind:focus-visible{outline:2px solid #4065d8;outline-offset:2px}',
  '#smaQuickFindDialog[hidden]{display:none!important}',
  '#smaQuickFindDialog{position:fixed;z-index:2147483000;inset:0;background:rgba(10,20,40,.55);display:flex;justify-content:center;align-items:flex-start;padding:9vh 16px 16px}',
@@ -89,6 +89,17 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  const results=create('div');results.id='smaQuickFindResults';
  panel.append(head,input,status,retry,results);overlay.append(panel);doc.body.append(overlay);
  let disposed=false,launcher=button,retainedFileId=null;
+ function translateSearch(){
+  const en=doc.documentElement.lang==='en';
+  const label=en?'Search files':'Dateien suchen';
+  button.placeholder=input.placeholder=label;
+  const files=doc.getElementById('smaFileSearch');if(files)files.placeholder=label;
+  button.title=en?'Search sections and files':'Bereiche und Dateien suchen';
+  button.setAttribute('aria-label',en?'Search dashboard':'Dashboard durchsuchen');
+ }
+ translateSearch();
+ const languageObserver=new doc.defaultView.MutationObserver(translateSearch);
+ languageObserver.observe(doc.documentElement,{attributes:true,attributeFilter:['lang']});
  function focusLauncher(target=launcher){
   if(target&&target!==doc.body&&target!==doc.documentElement){
    target.focus?.();if(doc.activeElement===target)return;
@@ -196,7 +207,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  overlay.addEventListener('click',backdrop);input.addEventListener('input',inputHandler);
  doc.addEventListener('keydown',keydown);
  return {button,show,hide,restore,focusLauncher,refresh:render,destroy(){
-  if(disposed)return;disposed=true;doc.removeEventListener('keydown',keydown);
+  if(disposed)return;disposed=true;languageObserver.disconnect();doc.removeEventListener('keydown',keydown);
   input.removeEventListener('input',inputHandler);overlay.removeEventListener('click',backdrop);
   button.removeEventListener('input',openFromHeader);button.removeEventListener('click',openFromHeader);close.removeEventListener('click',dismiss);
   button.remove();overlay.remove();style.remove();

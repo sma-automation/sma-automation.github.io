@@ -83,7 +83,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     (selected || firstUploadEntry() || buttons.files).focus();
   }
   let fromSearch = Boolean(options.fromSearch);
-  const backText = () => fromSearch ? '← Zurück zu den Suchergebnissen' : '← Zu den Dateien';
+  const backText = () => fromSearch||selectedFile ? '← Zurück zu den Suchergebnissen' : '← Zu den Dateien';
   const previewBack = button('workspacePreviewBack', backText(), () => {
     if (fromSearch) { options.onSearchReturn(); return; }
     show('files');
@@ -209,8 +209,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   selectedRow.append(selectedLabel);
   const editor = make('div', 'workspaceEditor');
   selectedRow.hidden=true;source.append(selectedRow);
-  if($('videoMetadataPanel'))source.append($('videoMetadataPanel'));
-  if($('exportCoverPanel'))source.append($('exportCoverPanel'));
   source.append(editor);
   $('magicActionsSource').hidden = true;
   $('magicActionsText').hidden = false;
@@ -298,7 +296,12 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('save').parentElement.append(previewEdits);
   text.append(textHeader, variantPanel, empty, $('result'));
   const tools=make('div','workspacePreparationTools');
-  tools.append($('catalogLookup'),evidence,$('mediaPanel'));
+  const fileTools=make('div','workspaceFileTools');
+  const addFile=button('workspaceAddFile','Datei hinzufügen',()=>{if(!$('deviceBrowse').disabled)$('deviceBrowse').click();});
+  const editorLink=make('a','workspaceMediaEditor','Im Medieneditor öffnen');editorLink.hidden=true;
+  editorLink.target='_blank';editorLink.rel='noopener';
+  fileTools.append(addFile,editorLink);
+  tools.append($('catalogLookup'),evidence,$('mediaPanel'),fileTools);
   if($('videoMetadataPanel'))tools.append($('videoMetadataPanel'));
   if($('exportCoverPanel'))tools.append($('exportCoverPanel'));
   const createActions=$('generate').parentElement;
@@ -401,10 +404,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       variantStatus.dataset.error = String(error);
     },
     lockVariant(value) {
-      for (const node of [repeat, previewRepeat, adopt, next, discard]) node.disabled = value;
+      for (const node of [repeat, previewRepeat, adopt, next, discard, addFile]) node.disabled = value;
     },
     selection(file) {
-      selectedFile = file; variantPanel.hidden = true; clearPreview();
+      editorLink.hidden=!(file?.id&&file.revision&&options.editorUrl);
+      if(editorLink.hidden)editorLink.removeAttribute('href');
+      else editorLink.href=options.editorUrl+'#asset='+encodeURIComponent(file.id)+'&revision='+encodeURIComponent(file.revision)+'&portal='+encodeURIComponent(portalName.toLowerCase());
+      selectedFile = file; previewBack.textContent=backText(); variantPanel.hidden = true; clearPreview();
       const description = file ? describe(file) : null;
       selectedRow.hidden=!file;
       selectedName.textContent = description?.title || '';

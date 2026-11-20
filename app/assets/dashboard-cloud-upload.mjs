@@ -158,8 +158,8 @@ export function mountDashboardCloudUpload({doc,onPortal,stylesheetUrl}){
   button.title=en?'Upload media and choose a platform':'Datei hochladen und Portal auswählen';
   heading.textContent=en?'Upload & optimize':'Hochladen & optimieren';
   explain.textContent=en?
-    'Choose a platform. Then use File to upload or select a file and Content & goal to prepare its own post.':
-    'Portal auswählen. Unter „Datei“ hochladen oder auswählen und unter „Inhalt und Ziel“ den eigenen Beitrag vorbereiten.';
+    'Choose a platform. Use File to select an existing file, or Content & goal to add a file and prepare its post.':
+    'Portal auswählen. Unter „Datei“ eine vorhandene Datei auswählen. Unter „Inhalt und Ziel“ kannst du eine Datei hinzufügen und den Beitrag vorbereiten.';
   for(const portal of portals)labels[portal.id].textContent=en?'File · Content & goal':'Datei · Inhalt und Ziel';
   note.textContent=en?'Nothing will be published automatically. Open the cloud again for another platform.':
     'Es wird nichts automatisch veröffentlicht. Für ein weiteres Portal die Wolke erneut öffnen.';

@@ -615,3 +615,5 @@ body.wide #workspaceResultDetails.workspace-controlled>summary{display:none}
 body.wide #workspaceFullCaption .caption{white-space:pre-wrap;overflow-wrap:anywhere}
 body.wide.post-preview-open #workspacePreviewActions:not([hidden]) #deviceBrowse{position:static;box-shadow:none}
 body.wide #workspaceSelectedFile[hidden],body.wide #workspaceTabBar[hidden]{display:none}
+body.wide #workspaceFileTools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+body.wide #workspaceFileTools :is(button,a){border:0;background:transparent;color:#3157cd;font:500 14px/1.5 Inter,Arial,sans-serif;padding:6px 0;text-decoration:underline}
