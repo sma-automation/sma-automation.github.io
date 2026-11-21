@@ -9,7 +9,7 @@
 import {refreshMediaCatalog} from './assets/media-metadata.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './assets/catalog-refresh.mjs?v=1';
 
-import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=9';
+import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=10';
 import {createMusicViewGate} from './assets/gallery-music-view-gate.mjs?v=1';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
 import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
@@ -563,6 +563,7 @@ function attachFileList(doc,page){
  toolbar.append(finder,refresh,message);
  const selection=doc.createElement('p');selection.style.fontSize='13px';const list=doc.createElement('div');list.className='sma-file-grid';const pages=doc.createElement('div');pages.className='sma-file-pages';slot.replaceChildren(toolbar,selection,list,pages);
 
+ const musicNote=doc.createElement('span');musicNote.setAttribute('role','status');toolbar.append(musicNote);
  // This iframe stays mounted while the customer navigates other SMA chapters.
  // Only the visible file gallery and optimizer need the client-side music worker;
  // background jobs remain handled by the independent n8n schedule.
@@ -579,7 +580,8 @@ function attachFileList(doc,page){
    if(musicGate.isVisible()&&(loading||retryStep||scanRunning))return;
    notify();
   }),
-  onComplete:()=>load(false,{wakeMusicAfter:false})}):null;
+  onComplete:()=>load(false,{wakeMusicAfter:false}),
+  onStatus:(text,reason)=>{if(!disposed)musicNote.textContent=reason==='no_track'?'':text;}}):null;
  const wakeMusic=()=>{if(!disposed&&!signedOut&&owner===dashboardOwnerId)void soundtrack?.wake();};
  doc.addEventListener('sma-music-unlocked',wakeMusic);
  let files=[],pageNumber=0,loading=false,catalogState='loading',catalogController=null;

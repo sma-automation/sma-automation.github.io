@@ -3,7 +3,7 @@ import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './ca
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountProviderOfferOptions,isSavedProviderOffer} from './publication-offer-options.mjs?v=2';
-import {mountGalleryMusic} from './gallery-music-worker.mjs?v=9';
+import {mountGalleryMusic} from './gallery-music-worker.mjs?v=10';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
@@ -1923,7 +1923,7 @@ try{
  }
  startupDraft=tabDrafts.read(selectedPortal,coverOwner,draftRoute());
  if(selectedPortal&&!params.has('order')&&window.top===window){
-  galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:text=>{if(!signedOut)$('galleryMusicStatus').textContent=text;},
+  galleryMusic=mountGalleryMusic({owner:coverOwner,onStatus:(text,reason)=>{if(!signedOut)$('galleryMusicStatus').textContent=reason==='no_track'?'':text;},
    onComplete:async()=>{const list=await optimizerCatalog();if(!signedOut&&(await session()).user.id===coverOwner&&galleryConfirmed){assets=list.files;renderFilePicker();}}
   });
  }
