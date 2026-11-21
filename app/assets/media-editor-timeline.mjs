@@ -53,6 +53,7 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
   const video = original?.video;
   const handlers = [], handles = [element('trimStart'), element('trimEnd')];
   let file = null, duration = 0, cursor = 0, pending = null, ready = false, dragging = null, gripOffset = 0, cancelFrames;
+  let followPlayback = false;
   function on(target, type, handler) {
     if (!target) return;
     target.addEventListener(type, handler);
@@ -99,6 +100,7 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
   }
   function requestAction(action) {
     if (!original || !originalVideoSupported(file)) return;
+    followPlayback = action === 'play';
     pending = action;
     if (ready) applyPending();
     else void original.load();
@@ -141,6 +143,13 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
     });
   });
   on(scrub,'input',() => moveCursor(Number(scrub.value)));
+  on(scrub,'keydown',event => {
+    const step = event.shiftKey ? 1000 : 40;
+    const positions = {Home:0, End:duration, ArrowLeft:cursor-step, ArrowRight:cursor+step};
+    if (!Object.hasOwn(positions,event.key)) return;
+    event.preventDefault();
+    moveCursor(positions[event.key]);
+  });
   on(element('useCover'),'click',() => {
     if (!duration || !canEdit()) return;
     const [a,b] = bounds(), value = clamp(cursor,a,b-1);
@@ -164,7 +173,9 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
   }
   for (const event of ['pause','waiting','seeking','ended','emptied']) on(video,event,()=>music.stopPreview());
   on(video,'timeupdate',() => {
-    if (!ready || dragging !== null) return;
+    // The slider owns the cursor during manual seeking. A delayed timeupdate
+    // from the previous seek must never replace the user's cover selection.
+    if (!ready || !followPlayback || dragging !== null) return;
     cursor = clamp(Math.round(video.currentTime * 1000), 0, duration);
     paintCursor();
   });
@@ -182,7 +193,7 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
   function setFile(next) {
     const total = next?.media_kind === 'video' && next.duration_ms > 0 ? next.duration_ms : 0;
     if (file?.id !== next?.id || file?.revision !== next?.revision || duration !== total || !next) {
-      pending = null; dragging = null; cursor = 0;
+      pending = null; followPlayback = false; dragging = null; cursor = 0;
       readyChange(false);
     }
     file = next;
@@ -200,6 +211,6 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
     paint();
   }
   return {setFile,paint,readyChange,prepare(){if(originalVideoSupported(file))void original?.load();},
-    pause(){pending = null; music.stopPreview(); original?.stop();},
+    pause(){pending = null; followPlayback = false; music.stopPreview(); original?.stop();},
     destroy(){pending = null; cancelFrames?.(); handlers.forEach(remove => remove());}};
 }

@@ -79,7 +79,7 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=!!editorStage;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});
  video.addEventListener('loadeddata',()=>{if(url&&!disposed&&!video.hidden)onReadyChange?.(true);});
  function seekTo(seconds){
-  if(disposed||!url||video.hidden||video.readyState<2||!Number.isFinite(seconds)||seconds<0||!Number.isFinite(video.duration)||seconds>=video.duration)return false;
+  if(disposed||!url||video.hidden||video.readyState<1||!Number.isFinite(seconds)||seconds<0||!Number.isFinite(video.duration)||seconds>=video.duration)return false;
   try{stop();video.currentTime=seconds;return true;}catch{return false;}
  }
  function playRange(start,requestedEnd){
