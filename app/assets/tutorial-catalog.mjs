@@ -52,7 +52,7 @@ export const guides = [
       "Wähle bei einem neuen Konto „Verbinden“. Beim Anbieter meldest du dich mit dem gewünschten Konto an und prüfst die angefragten Berechtigungen.",
       "Nach der Bestätigung kehrst du zu SMA zurück. Prüfe beim gewählten Portal, ob dort „Verbunden“ steht.",
       "Steht am Portal „Meta-Freigabe offen“, ist die Verbindung dort noch gesperrt. Du kannst mit einem verfügbaren Portal weiterarbeiten.",
-      "Für externe Links in Langvideos braucht dein Kanal die erweiterten Funktionen. Bei Shorts führt ein anklickbarer Link im Kanalprofil zum Produkt.",
+      "Prüfe am Computer in YouTube Studio unter „Einstellungen“ → „Kanal“ → „Verfügbarkeit der Funktionen“, ob bei den erweiterten Funktionen „Aktiviert“ steht. Dann können Zuschauer externe Produktlinks in der Beschreibung eines Langvideos anklicken. Bei Shorts hinterlegst du den Produktlink im Kanalprofil und weist im Clip darauf hin.",
     ]
   },
   {
