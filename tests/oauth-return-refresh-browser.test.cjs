@@ -72,7 +72,8 @@ async function setup(browser,mobile){
     if(url.pathname==='/oauth-parent.mjs')return route.fulfill({contentType:'text/javascript',body:parentCode});
     if(url.pathname==='/oauth-child.mjs')return route.fulfill({contentType:'text/javascript',body:childCode});
     if(url.pathname==='/synthetic-chapters.css')return route.fulfill({contentType:'text/css',body:fs.readFileSync(path.join(root,'app/assets/dashboard-chapters.css'),'utf8')});
-    if(['/app/assets/dashboard-chapters.mjs','/app/assets/dashboard-portal-connections.mjs','/app/assets/publication-daily-schedule.mjs'].includes(url.pathname))
+    if(['/app/assets/dashboard-chapters.mjs','/app/assets/dashboard-portal-connections.mjs','/app/assets/publication-daily-schedule.mjs',
+        '/app/assets/dashboard-tutorials.mjs','/app/assets/tutorial-catalog.mjs'].includes(url.pathname))
      return route.fulfill({contentType:'text/javascript',body:fs.readFileSync(path.join(root,url.pathname.slice(1)),'utf8')});
    }
    unexpected.push(request.url());return route.abort();
