@@ -169,10 +169,12 @@ async function selectedRow(frame,width){
  assert.match(await frame.locator('#historyActivitySlot [role=status]').first().innerText(),/Seite 2 von 2/);
  const visible=await row.evaluate(el=>{
   const doc=el.ownerDocument,r=el.getBoundingClientRect();
-  return doc.activeElement===el&&r.top>=0&&r.bottom<=doc.documentElement.clientHeight&&
-    el.contains(doc.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
+  const hit=doc.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+  return {focus:doc.activeElement?.tagName,focused:doc.activeElement===el,top:r.top,bottom:r.bottom,
+    height:doc.documentElement.clientHeight,hit:hit?.outerHTML.slice(0,120),reachable:el.contains(hit)};
  });
- assert(visible,'Selected row should be focused, visible and reachable above the mobile navigation');
+ assert(visible.focused&&visible.top>=0&&visible.bottom<=visible.height&&visible.reachable,
+   'Selected row should be focused, visible and reachable above the mobile navigation: '+JSON.stringify(visible));
 }
 // First visit with an empty gallery. The shell provides only the customer's
 // existing dashboard elements. Production code builds the navigation and preview.

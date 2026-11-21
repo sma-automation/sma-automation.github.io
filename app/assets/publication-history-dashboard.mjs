@@ -134,6 +134,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  }
  const firstPage=()=>pagesBeforeBatch+pageNumber===0;
  function clear(text=''){
+  if(orderId&&list.contains(doc.activeElement)&&doc.activeElement?.matches('details[open] > summary'))focusOnReturn=true;
   clearExpiryTimers();
   requestedChapters.clear();
   for(const reader of Object.values(chapterReaders))reader?.clear();
@@ -217,7 +218,16 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   nav.hidden=!entries.length;previous.disabled=firstPage();more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;
   syncSearchMode();
   if(focusOnReturn&&selectedToggle&&!list.hidden){
-   focusOnReturn=false;selectedToggle.focus();selectedToggle.scrollIntoView?.({block:'center'});
+   focusOnReturn=false;
+   selectedToggle.focus({preventScroll:true});
+   const center=()=>selectedToggle.scrollIntoView?.({block:'center',behavior:'instant'});
+   center();
+   // A deep link can resolve before the iframe's dynamically added stylesheets.
+   const centerIfFocused=()=>{if(selectedToggle.isConnected&&doc.activeElement===selectedToggle)center();};
+   for(const sheet of doc.querySelectorAll('link[rel="stylesheet"]')){
+    if(!sheet.sheet)sheet.addEventListener('load',centerIfFocused,{once:true});
+   }
+   doc.defaultView.requestAnimationFrame?.(centerIfFocused);
   }
  }
  function syncSearchMode(){
