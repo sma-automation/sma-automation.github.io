@@ -52,6 +52,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   syncOriginal();
   if(key==='time')timeline.prepare();
  }});
+ for(const {button} of tabs.entries)button.setAttribute('aria-label',button.textContent);
  caption.setActive(true);
  const say=(text,error=false)=>{$('status').textContent=text;$('status').dataset.error=String(error);};
  const current=g=>!disposed&&!invalidOwner&&g===generation;
