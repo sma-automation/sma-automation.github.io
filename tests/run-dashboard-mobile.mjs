@@ -319,7 +319,19 @@ async function checkSearchReturn(page,frame,width){
  assert(await portal.locator('#workspaceResultDetails[open] .checks').isVisible());
  await portal.locator('#workspacePreviewEdits').click();
  await portal.getByRole('heading',{name:draft.title}).waitFor();
- await page.reload();await portal.getByRole('heading',{name:draft.title}).waitFor();
+ await page.waitForURL(previewURL);
+ await page.waitForFunction(()=>history.state?.view==='preview'&&Boolean(history.state.searchKey));
+ await page.reload();
+ try{await portal.getByRole('heading',{name:draft.title}).waitFor();}
+ catch(error){
+  const route=await page.evaluate(()=>{
+   const doc=document.querySelector('#dashboard').contentDocument;
+   const frame=doc?.querySelector('#smaOptimizerFrames iframe:not([hidden])');
+   return {view:history.state?.view,search:!!history.state?.searchKey,portal:frame?.dataset.portal,child:frame?.dataset.view,
+    section:doc?.querySelector('.page.active')?.id,frameStatus:frame?.contentDocument?.getElementById('portalStatus')?.textContent};
+  });
+  throw Error('Private fixture failed to restore its preview '+JSON.stringify(route),{cause:error});
+ }
  await back.click();await page.waitForURL(dashboard);
  assert.equal(await finder.inputValue(),draft.title);
  assert(await focused(hit),'the file action should regain focus');
