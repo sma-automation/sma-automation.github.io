@@ -134,3 +134,21 @@
 .sma-schedule-thumbnail img{width:100%;height:100%;object-fit:cover}
 .sma-daily-schedule [hidden],.sma-daily-schedule p:empty{display:none!important}
 @media(max-width:480px){.sma-schedule-times{grid-template-columns:minmax(0,1fr)}.sma-daily-schedule li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:.15rem .4rem}.sma-daily-schedule li:has(small) strong,.sma-daily-schedule li small{grid-column:3}.sma-daily-schedule li time,.sma-daily-schedule li .sma-schedule-thumbnail{grid-row:span 2}}
+
+#page-tutorials [hidden]{display:none!important}
+.sma-tutorials{display:grid;grid-template-columns:minmax(170px,240px) minmax(0,1fr);align-items:start;gap:clamp(16px,2vw,32px);margin:8px 0 28px}
+.sma-lesson-list{display:grid;gap:5px}
+.sma-lesson-list button{padding:11px 14px;min-height:44px;border:1px solid transparent;border-radius:9px;background:transparent;color:#3e4f67;text-align:left;font:600 16px/1.4 system-ui,sans-serif;cursor:pointer;overflow-wrap:anywhere}
+.sma-lesson-list button:hover{background:#e9eef8}
+.sma-lesson-list button[aria-pressed=true]{color:#244aaf;border-color:#c6d4f6;background:#e9effc}
+.sma-lesson-list button:focus-visible,.sma-lesson-view summary:focus-visible{outline:3px solid #5077cf;outline-offset:2px}
+.sma-lesson-view{min-width:0;padding:clamp(12px,2vw,24px);background:white;border:1px solid #dce3ef;border-radius:14px}
+.sma-lesson-view header{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 16px;justify-content:space-between;margin-bottom:14px}
+.sma-lesson-view h2{margin:0;font:700 clamp(19px,2.3vw,27px)/1.3 system-ui,sans-serif;color:#1b2639}
+.sma-lesson-view header span{font:500 14px/1.5 system-ui,sans-serif;color:#53647b}
+.sma-lesson-view video{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;border-radius:8px;background:#101626}
+.sma-lesson-view details{margin-top:15px;color:#33445b;line-height:1.55}
+.sma-lesson-view summary{cursor:pointer;font-weight:600;padding:5px 0}
+.sma-lesson-view ol{padding-left:1.5em}
+.sma-lesson-view li+li{margin-top:.5em}
+@media(max-width:760px){.sma-tutorials{grid-template-columns:minmax(0,1fr);gap:12px}.sma-lesson-list{display:flex;gap:5px;flex-wrap:wrap}.sma-lesson-list button{font-size:14px;padding:8px 10px}.sma-lesson-view{padding:12px}}

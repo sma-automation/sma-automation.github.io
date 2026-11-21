@@ -84,6 +84,29 @@ await test('switches preserve exact form nodes, unsaved values, listeners and ge
  assert.equal(f.$('#unsaved'),f.input);assert.equal(f.input.value,'Keep this unsaved input');assert.equal(result.textContent,'New result');assert.equal(result.parentNode.dataset.chapter,'optimizer');f.$('#existing-action').click();assert.equal(f.actions,2);
  const tutorial=f.view.controllers.get('tutorials'),guide=f.$('#tutorialContentSlot');tutorial.select('guides');tutorial.select('help');assert.equal(guide.parentNode.dataset.chapter,'help');f.destroy();
 });
+await test('opens all tutorial videos inline, with reading steps and the original help slot',()=>{
+ const f=fixture(),tabs=f.view.controllers.get('tutorials'),ids=new Set();
+ for(const [key,count] of [['start',4],['guides',8]]){
+  tabs.select(key);
+  const panel=f.$('#sma-tutorials-panel-'+key);
+  const buttons=[...panel.querySelectorAll('.sma-lesson-list button')];
+  assert.equal(buttons.length,count);
+  for(const button of buttons){
+   button.click();
+   const id=button.dataset.lesson,video=panel.querySelector('video');
+   assert.equal(video.src.endsWith('/tutorials/'+id+'.mp4'),true);
+   assert.equal(video.poster.endsWith('/tutorials/'+id+'.jpg'),true);
+   assert.equal(panel.querySelectorAll('video').length,1);
+   assert.equal(button.getAttribute('aria-pressed'),'true');
+   assert.equal(panel.querySelectorAll('.sma-lesson-list [aria-pressed=true]').length,1);
+   assert.ok(panel.querySelectorAll('details li').length>=2);
+   ids.add(id);
+  }
+ }
+ assert.equal(ids.size,12);
+ tabs.select('help');assert.equal(f.$('#tutorialContentSlot').parentNode.dataset.chapter,'help');
+ f.destroy();assert.equal(f.$('.sma-tutorials'),null);
+});
 await test('keyboard navigation has one focusable tab and matching accessible panels',()=>{
  const f=fixture(),tabs=f.view.controllers.get('social');let focused;for(const entry of tabs.entries)entry.button.focus=()=>focused=entry.key;
  function key(key){const event=new f.window.Event('keydown',{bubbles:true,cancelable:true});event.key=key;tabs.entries.find(e=>e.key===tabs.selected).button.dispatchEvent(event);}

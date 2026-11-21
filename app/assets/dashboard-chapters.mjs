@@ -1,3 +1,4 @@
+import {mountTutorials} from './dashboard-tutorials.mjs';
 import {mountDailySchedule} from './publication-daily-schedule.mjs?v=2';
 import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=1';
 // Presentation only: move the existing elements, never copy forms or customer data.
@@ -144,11 +145,13 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,dailySched
   {key:'connections',label:'Schnittstellen',en:'Connections',nodes:settingCards.slice(0,2)}
  ]);
  const tutorials=page('tutorials'),tutorialCards=children(tutorials?.querySelector('.grid'),'.card');
- mount('tutorials',[
+ const tutorialTabs=mount('tutorials',[
   {key:'start',label:'Schnellstart',en:'Quick start',nodes:children(tutorials,'.card')},
   {key:'guides',label:'Anleitungen',en:'Guides',nodes:tutorialCards.slice(0,-1),grid:true},
   {key:'help',label:'Hilfe',en:'Help',nodes:tutorialCards.slice(-1)}
  ],{shared:doc.getElementById('tutorialContentSlot'),sharedIn:['guides','help']});
+ const disposeTutorials=mountTutorials(doc,tutorialTabs);
+ if(disposeTutorials)cleanups.push(disposeTutorials);
  const seller=page('seller');
  mount('seller',[
   {key:'chat',label:'Beratung',en:'Advice',nodes:children(seller,'div').filter(el=>!el.matches('.page-head,.package-module-status,.package-feature-list'))},
