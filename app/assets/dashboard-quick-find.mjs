@@ -54,6 +54,7 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  const create=(tag,text)=>{const el=doc.createElement(tag);if(text)el.textContent=text;return el;};
  const style=create('style');style.textContent=[
  '#smaGlobalQuickFind{max-width:100%}',
+ '#smaGlobalQuickFind[aria-expanded=true]{visibility:hidden}',
  '#smaGlobalQuickFind:focus-visible{outline:2px solid #4065d8;outline-offset:2px}',
  '#smaQuickFindDialog[hidden]{display:none!important}',
  '#smaQuickFindDialog{position:fixed;z-index:2147483000;inset:0;background:rgba(10,20,40,.55);display:flex;justify-content:center;align-items:flex-start;padding:9vh 16px 16px}',
