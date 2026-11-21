@@ -1,12 +1,12 @@
-import {drawMediaOverlay} from './media-text-overlay.mjs?v=2';
+import {drawMediaOverlay} from './media-text-overlay.mjs?v=3';
 import {verifyMusicBytes,verifyMusicProbe} from './media-music-model.mjs?v=1';
-import {exportPlan,exportArguments,verifyMediaProbe,EXPORT_MAX_BYTES,sha256} from './media-export-model.mjs?v=3';
+import {exportPlan,exportArguments,verifyMediaProbe,EXPORT_MAX_BYTES,sha256} from './media-export-model.mjs?v=4';
 const coreBase='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/';
 const coreFiles=[['ffmpeg-core.js','text/javascript',111804,'67a48f11645f85439f3fde4f2119042c16b374b910206b7a7a24f342e28dcae3'],['ffmpeg-core.wasm','application/wasm',32232419,'9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7']];
 async function checkedCoreFile(entry,signal){const [name,type,size,hash]=entry,response=await fetch(coreBase+name,{credentials:'omit',referrerPolicy:'no-referrer',signal});if(!response.ok)throw Error('RENDERER_UNAVAILABLE');const data=await response.arrayBuffer();if(data.byteLength!==size||await sha256(data)!==hash)throw Error('RENDERER_UNAVAILABLE');return URL.createObjectURL(new Blob([data],{type}));}
 export async function overlayPNG(doc,plan){
  const canvas=doc.createElement('canvas');
- if(!drawMediaOverlay(canvas,plan.width,plan.height,plan.settings.overlay_text,plan.settings.overlay_position))throw Error('RENDERER_UNAVAILABLE');
+ if(!drawMediaOverlay(canvas,plan.width,plan.height,plan.settings.overlay_text,plan.settings.overlay_position,plan.settings.overlay_style))throw Error('RENDERER_UNAVAILABLE');
  return new Uint8Array(await (await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('RENDERER_UNAVAILABLE')),'image/png'))).arrayBuffer());
 }
 export async function withMediaEngine(signal,action){

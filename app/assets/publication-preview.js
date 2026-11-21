@@ -17,7 +17,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=27';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=28';
 import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=30';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
@@ -63,7 +63,8 @@ if(params.get('wide')==='1'&&!dashboardLanguage){
  try{const saved=window.localStorage?.getItem('sma_language');if(['de','en'].includes(saved))dashboardLanguage=saved;}catch{}
 }
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
- editorUrl:params.get('kundenmedien')==='pilot'?'media-editor.html?v=16&kundenmedien=pilot':'media-editor.html?v=16',
+ editorUrl:params.get('kundenmedien')==='pilot'?'media-editor.html?v=17&kundenmedien=pilot':'media-editor.html?v=17',
+ onSchedule:window.parent!==window?()=>window.top.postMessage({type:'sma-publication-open-schedule'},location.origin):null,
  onExit:window.parent!==window?()=>window.top.postMessage({type:'sma-publication-preview-close'},location.origin):null,
  fromSearch:window.parent!==window&&params.get('fromSearch')==='1',
  deferInitialFocus:params.get('restoring')==='1',
@@ -101,6 +102,7 @@ if(workspace){
   if(changed&&hadEdits)updateTabForm();
   const en=dashboardLanguage==='en';
   $('workspaceTab-files').textContent=en?'File':'Datei';$('workspaceTab-source').textContent=en?'Content & goal':'Inhalt und Ziel';
+  if($('workspaceSchedule'))$('workspaceSchedule').textContent=en?'Daily schedule':'Tagesplanung';
   if($('workspaceExit'))$('workspaceExit').textContent=en?'← Publishing':'← Veröffentlichung';
   $('workspacePostTab').textContent=en?'Post preview':'Beitragsvorschau';$('workspaceDetailTab').textContent=en?'File details':'Dateidetails';
   $('fileSearch').placeholder=en?'Search files':'Dateien suchen';$('fileSearch').setAttribute('aria-label',$('fileSearch').placeholder);

@@ -1,10 +1,11 @@
 // Explicit, read-only access to the exact original. No analysis or attestation.
 export function originalVideoSupported(file){return file?.media_kind==='video'&&file.mime_type==='video/mp4'&&Number.isInteger(file.size_bytes)&&file.size_bytes>=12&&file.size_bytes<=24000000&&Number.isFinite(file.duration_ms)&&file.duration_ms>0&&file.duration_ms<=60000;}
-export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOwnerId,source,onReadyChange,inlinePlay=false,loadedText='Originalvideo geladen. Abspielen speichert keine Prüfbestätigung oder Freigabe.',createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL}){
+export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOwnerId,source,onReadyChange,editorStage=null,inlinePlay=false,loadedText='Originalvideo geladen. Abspielen speichert keine Prüfbestätigung oder Freigabe.',createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL}){
  const box=doc.createElement('div'),button=doc.createElement('button'),video=doc.createElement('video'),status=doc.createElement('p');
  box.id='originalVideoPreview';box.hidden=true;button.type='button';button.className='secondary';button.textContent='Originalvideo laden';
  video.controls=true;video.playsInline=true;video.preload='metadata';video.hidden=true;video.setAttribute('aria-label','Originalvideo der ausgewählten Datei');video.style.cssText='display:block;width:100%;max-height:var(--original-video-max-height,500px);object-fit:contain;background:#111827';
  status.className='note';status.setAttribute('role','status');status.setAttribute('aria-live','polite');box.append(button,video,status);host.append(box);
+ if(editorStage){editorStage.prepend(video);video.controls=false;video.removeAttribute('style');video.className='editor-video-layer';button.hidden=true;}
  let stage=null;
  if(inlinePlay){
   stage=doc.createElement('div');stage.className='original-video-stage';
@@ -12,7 +13,7 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
   button.className='original-video-play';button.textContent='▶';button.setAttribute('aria-label','Originalvideo abspielen');
   button.hidden=true;
  }
- function showPoster(){button.hidden=inlinePlay&&!originalVideoSupported(file);}
+ function showPoster(){button.hidden=Boolean(editorStage)||inlinePlay&&!originalVideoSupported(file);}
  function visiblePlayer(){
   if(doc.hidden||!video.getClientRects().length)return false;
   let frame=doc.defaultView.frameElement;
@@ -48,8 +49,8 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.disabled=false;showPoster();status.textContent='';}
  const current=g=>!disposed&&g===generation;
  async function owner(g,read){if(!current(g))return false;if(await read(()=>getOwnerId())!==expectedOwnerId){if(current(g)){reset();file=null;key='';box.hidden=true;showPoster();}return false;}return current(g);}
- button.addEventListener('click',async()=>{
-  if(disposed||controller||!originalVideoSupported(file))return;
+ async function load(){
+  if(disposed||controller||url||!originalVideoSupported(file))return;
   const g=generation,selected=file,attempt=new AbortController(),signal=attempt.signal;
   controller=attempt;button.disabled=true;status.textContent='Originalvideo wird geprüft und geladen …';
   let timedOut=false;
@@ -69,12 +70,13 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
   try{
    if(!await owner(g,read))return;const blob=await read(()=>source(selected,signal));signal.throwIfAborted();if(!await owner(g,read))return;
    if(!(blob instanceof Blob)||blob.type!=='video/mp4'||blob.size!==selected.size_bytes)throw Error('SOURCE_UNAVAILABLE');
-   release();url=createURL(blob);video.src=url;video.hidden=false;thumbnailHost.style.display='none';button.hidden=true;status.textContent=inlinePlay?'':loadedText;
+   url=createURL(blob);video.src=url;video.hidden=false;if(!editorStage)thumbnailHost.style.display='none';button.hidden=true;status.textContent=inlinePlay||editorStage?'':loadedText;
    if(stage){stage.hidden=true;if(visiblePlayer())video.play().catch(()=>{});}
   }catch(e){if(current(g)&&controller===attempt&&(timedOut||!signal.aborted)){release();status.textContent=timedOut?'Das Laden des Originalvideos dauert gerade zu lange. Bitte versuche es erneut.':e?.message==='FILE_CHANGED'?'Die Datei wurde geändert. Bitte aktualisiere die Dateiliste.':'Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.';}}
   finally{clearTimeout(deadline);if(current(g)&&controller===attempt){controller=null;button.disabled=false;}}
- });
- video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=false;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});
+ }
+ button.addEventListener('click',load);
+ video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=!!editorStage;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});
  video.addEventListener('loadeddata',()=>{if(url&&!disposed&&!video.hidden)onReadyChange?.(true);});
  function seekTo(seconds){
   if(disposed||!url||video.hidden||video.readyState<2||!Number.isFinite(seconds)||seconds<0||!Number.isFinite(video.duration)||seconds>=video.duration)return false;
@@ -98,5 +100,5 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
   if(disposed||!file||selected?.id!==file.id||selected.revision!==file.revision)return;
   if(poster)video.setAttribute('poster',poster);else video.removeAttribute('poster');
  }
- return {seekTo,playRange,stopRange,setPoster,setContext(next){const nextKey=next?JSON.stringify([next.id,next.revision,next.media_kind,next.mime_type,next.size_bytes,next.duration_ms]):'';if(disposed||nextKey===key)return;reset();file=next?{...next}:null;key=nextKey;box.hidden=!originalVideoSupported(file);showPoster();},invalidateOwner,stop,destroy(){if(disposed)return;reset();disposed=true;file=null;key='';box.hidden=true;showPoster();}};
+ return {load,video,seekTo,playRange,stopRange,setPoster,setContext(next){const nextKey=next?JSON.stringify([next.id,next.revision,next.media_kind,next.mime_type,next.size_bytes,next.duration_ms]):'';if(disposed||nextKey===key)return;reset();file=next?{...next}:null;key=nextKey;box.hidden=!originalVideoSupported(file);showPoster();},invalidateOwner,stop,destroy(){if(disposed)return;reset();disposed=true;file=null;key='';box.hidden=true;showPoster();}};
 }

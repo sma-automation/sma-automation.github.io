@@ -110,6 +110,7 @@ test('gallery receives the global query, resets the portal and opens the first f
  const finder=document.querySelector('#smaFileSearch');
  await gallery.initialRead;
  assert.equal(document.querySelector('.sma-file-row details'),null);
+ assert.equal(document.querySelector('.sma-file-row small'),null);
  assert.equal(document.querySelectorAll('.sma-file-row button').length,10);
  const next=()=>[...document.querySelectorAll('.sma-file-pages button')].find(b=>b.textContent==='Weiter');
  next().click();

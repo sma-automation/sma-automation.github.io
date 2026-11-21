@@ -1,3 +1,4 @@
+import {historyRefreshHeading} from './publication-history-controls.mjs?v=1';
 import {readPublicationTextHistory,textHistoryKey,historyPlatforms,formatHistoryMonth} from './publication-history-model.mjs?v=4';
 
 // Lifecycle and selected month belong to the parent History view. This reader
@@ -6,9 +7,10 @@ export function mountPublicationTextHistory({doc,after,request,getOwnerId,expect
  const create=(tag,text,className)=>{const e=doc.createElement(tag);if(text)e.textContent=text;if(className)e.className=className;return e;};
  const card=create('div',null,'card'),heading=create('div','Gespeicherte Portaltexte','card-title');card.id='historyTextCard';
  const intro=create('p','Deine gespeicherten Textstände je Portal und Entwurf. Der gewählte Monat richtet sich nach der Erfassung. Frühere, nicht gespeicherte Bearbeitungen sind nicht enthalten.');intro.className='muted';
- const slot=create('div',null,'sma-publication-history'),toolbar=create('div',null,'sma-history-toolbar'),refresh=create('button','Textverlauf aktualisieren'),message=create('p'),list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
- refresh.type=previous.type=more.type='button';refresh.disabled=true;nav.hidden=true;previous.setAttribute('aria-label','Vorherige Textstände');more.setAttribute('aria-label','Weitere Textstände');nav.setAttribute('aria-label','Textseiten');nav.append(previous,more);message.setAttribute('role','status');message.setAttribute('aria-live','polite');
- toolbar.append(refresh);slot.append(toolbar,message,list,nav);card.append(heading,intro,slot);after.after(card);
+ const slot=create('div',null,'sma-publication-history'),message=create('p'),list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
+ slot.append(message,list,nav);card.append(heading,intro,slot);after.after(card);
+ const refresh=historyRefreshHeading(doc,heading,'Textverlauf aktualisieren','Refresh text history');
+ previous.type=more.type='button';refresh.disabled=true;nav.hidden=true;previous.setAttribute('aria-label','Vorherige Textstände');more.setAttribute('aria-label','Weitere Textstände');nav.setAttribute('aria-label','Textseiten');nav.append(previous,more);message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const pageSize=5;let pageNumber=0,totalCount=0,entries=[],cursor=null,month,generation=0,busy=false,disposed=false;
  const current=g=>g===generation&&!disposed&&isActive();
  function reset(){generation++;entries=[];cursor=null;pageNumber=0;totalCount=0;busy=false;list.replaceChildren();nav.hidden=true;message.textContent='';refresh.disabled=month===undefined;slot.setAttribute('aria-busy','false');}

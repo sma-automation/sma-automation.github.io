@@ -1,7 +1,8 @@
-import {mountPublicationAnalysisHistory} from './publication-analysis-history-dashboard.mjs?v=1';
-import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=2';
-import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=2';
-import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=3';
+import {historyRefreshHeading,mountHistoryMonths} from './publication-history-controls.mjs?v=1';
+import {mountPublicationAnalysisHistory} from './publication-analysis-history-dashboard.mjs?v=2';
+import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=3';
+import {mountPublicationAssignmentHistory} from './publication-assignment-history-dashboard.mjs?v=3';
+import {mountPublicationTextHistory} from './publication-text-history-dashboard.mjs?v=4';
 import {historyStatuses,historyStatusLabel,historyPlatforms,validHistoryMonth,formatHistoryMonth} from './publication-history-model.mjs?v=5';
 import {readPublicationCoverHistory,historyCoverStatuses} from './publication-cover-history-model.mjs?v=4';
 import {createChapterTabs} from './dashboard-chapters.mjs?v=1';
@@ -12,12 +13,12 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  if(!slot||!expectedOwnerId)return {destroy(){}};
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
  const create=(tag,text,className)=>{const el=doc.createElement(tag);if(text)el.textContent=text;if(className)el.className=className;return el;};
- const title=slot.parentElement.querySelector('.card-title'),intro=slot.parentElement.querySelector('p');
+ const title=slot.parentElement.querySelector('.card-title')||slot.parentElement.insertBefore(create('div',null,'card-title'),slot),intro=slot.parentElement.querySelector('p');
  function translated(el,de,en){if(el){el.textContent=de;el.setAttribute('data-de',de);el.setAttribute('data-en',en);}}
  translated(title,'Veröffentlichungsaufträge','Publication orders');
  translated(intro,'Deine Aufträge mit dem zuletzt gespeicherten Status. Monatszuordnung nach Erstellung; alle Zeiten in Wiener Zeit.','Your orders and their latest recorded status. Grouped by creation month; all times in Vienna time.');
  slot.classList.remove('empty-state');slot.classList.add('sma-publication-history');
- const toolbar=create('div',null,'sma-history-toolbar'),refresh=create('button','Verlauf aktualisieren'),message=create('p');
+ const toolbar=create('div',null,'sma-history-toolbar'),refresh=historyRefreshHeading(doc,title,'Verlauf aktualisieren','Refresh order history'),message=create('p');
  refresh.type='button';message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
  previous.type=more.type='button';previous.setAttribute('aria-label','Vorherige Aufträge');more.setAttribute('aria-label','Weitere Aufträge');nav.setAttribute('aria-label','Auftragsseiten');nav.hidden=true;nav.append(previous,more);
@@ -37,13 +38,13 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   findStatus.setAttribute('role','status');findStatus.setAttribute('aria-live','polite');
   findResults.hidden=true;findStatus.hidden=true;toolbar.append(findInput);
  }
- toolbar.prepend(refresh);
+ toolbar.hidden=!findInput;
  slot.replaceChildren(toolbar,message,...(findInput?[findStatus,findResults]:[]),list,nav);
  const cards=[...page.querySelectorAll('.grid > .card')].slice(0,3);
  const metrics=[['Aufträge','Orders','orders'],['Davon öffentlich bestätigt','Publicly confirmed','public_confirmed'],['Portale in den Aufträgen','Platforms in orders','platforms']];
  cards.forEach((card,i)=>{translated(card.querySelector('.card-title'),metrics[i][0],metrics[i][1]);card.querySelector('.big-value')?.setAttribute('data-history-metric',metrics[i][2]);});
  const monthSlot=page.querySelector('#historyMonthSlot');
- let picker,monthButtons,period,periodDisclosure,periodHeading;
+ let months,period;
  const hash=ownerWindow.location?.hash||'';
  const route=/^#auftrag\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/.exec(hash);
  let orderId=requestOrderPage&&route?route[1]:null;
@@ -51,23 +52,16 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
  const chooseMonth=value=>{
   if(!active())return;
   if(orderId&&ownerWindow.location?.hash==='#auftrag/'+orderId)ownerWindow.history.replaceState(ownerWindow.history.state,'',ownerWindow.location.pathname+ownerWindow.location.search);
-  orderId=null;focusOnReturn=false;selection=value;periodDisclosure?.removeAttribute('open');clear();load();};
+  orderId=null;focusOnReturn=false;selection=value;clear();load();};
  if(monthSlot){
   monthSlot.classList.add('sma-history-months');
   const archiveCard=monthSlot.closest('.card'),activityCard=slot.closest('.card');
   if(archiveCard?.parentElement===page&&activityCard?.parentElement===page)page.insertBefore(archiveCard,activityCard);
   if(archiveCard?.querySelector('p'))archiveCard.querySelector('p').hidden=true;
   if(archiveCard?.querySelector('.card-title'))archiveCard.querySelector('.card-title').hidden=true;
-  periodDisclosure=create('details',null,'sma-history-period-picker');periodHeading=create('summary','Monat auswählen');archiveCard.append(periodDisclosure);periodDisclosure.append(periodHeading,monthSlot);
-  const controls=create('div',null,'sma-history-month-controls'),label=create('label','Monat');
-  picker=create('input');picker.type='month';picker.min='2000-01';picker.max='2099-12';picker.setAttribute('aria-label','Monat auswählen');label.append(picker);
-  const apply=create('button','Monat anzeigen'),all=create('button','Alle Monate'),today=create('button','Aktueller Monat');
-  for(const b of [apply,all,today])b.type='button';
-  apply.addEventListener('click',()=>{if(validHistoryMonth(picker.value))chooseMonth(picker.value);else message.textContent='Bitte wähle einen gültigen Monat.';});
-  all.addEventListener('click',()=>chooseMonth(null));today.addEventListener('click',()=>chooseMonth(undefined));
-  monthButtons=create('div',null,'sma-history-month-links');period=create('p');period.setAttribute('data-history-period','');
-  const archive=create('details'),archiveLabel=create('summary','Monate mit Aufträgen');archive.append(archiveLabel,monthButtons);
-  controls.append(label,apply,today,all);monthSlot.replaceChildren(controls,period,archive);
+  months=mountHistoryMonths(monthSlot,chooseMonth);
+  period=create('p',null,'sma-history-current-month');period.setAttribute('data-history-period','');
+  activityCard.before(period);
  }
  const textHistory=requestTexts?mountPublicationTextHistory({doc,after:slot.closest('.card'),request:requestTexts,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
  const assignmentHistory=requestAssignments?mountPublicationAssignmentHistory({doc,after:page.querySelector('#historyTextCard')||slot.closest('.card'),request:requestAssignments,getOwnerId,expectedOwnerId,isActive:()=>active(),onOwnerLost:()=>invalidateOwner()}):null;
@@ -119,7 +113,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
    {key:'orders',label:'Aufträge',en:'Orders',panel:activityCard},
    ...(editPanel?[{key:'edits',label:'Bearbeiten',en:'Edit',panel:editPanel}]:[]),
    ...(analysisCard?[{key:'analyses',label:'Analyse',en:'Analysis',panel:analysisCard}]:[])
-  ]});page.insertBefore(switcher,activityCard);
+  ]});page.insertBefore(switcher,period||activityCard);
  }
  const analyticsCard=page.querySelector('#historyAnalyticsSlot')?.closest('.card');
  let analyticsDisclosure;
@@ -145,9 +139,9 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   for(const reader of Object.values(chapterReaders))reader?.clear();
   generation++;busy=false;entries=[];cursor=null;summary=null;pagesBeforeBatch=0;pageNumber=0;lastResult=null;list.replaceChildren();message.textContent=text;nav.hidden=true;refresh.disabled=false;slot.setAttribute('aria-busy','false');
   cards.forEach(card=>{const v=card.querySelector('.big-value');if(v)v.textContent='–';translated(card.querySelector('.muted'),'Wird mit dem Verlauf geladen','Loaded with the history');});
-  monthButtons?.replaceChildren();if(period)period.textContent='';if(periodHeading)periodHeading.textContent='Monat auswählen';
+  months?.clear();if(period)period.textContent='';
  }
- function invalidateOwner(){invalidOwner=true;cancelFind();if(findInput)findInput.disabled=true;findResults?.replaceChildren();clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;if(picker)picker.value='';for(const el of monthSlot?.querySelectorAll('button,input')||[])el.disabled=true;}
+ function invalidateOwner(){invalidOwner=true;cancelFind();if(findInput)findInput.disabled=true;findResults?.replaceChildren();clear('Bitte melde dich erneut an, um deinen Verlauf zu sehen.');refresh.disabled=true;months?.disable();}
  const current=g=>g===generation&&active();
  const format=value=>new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(value));
  function render(result=lastResult){
@@ -155,10 +149,8 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   const label=formatHistoryMonth(selection);
   const values=[summary.orders,summary.public_confirmed,summary.platforms.length];
   cards.forEach((card,i)=>{const v=card.querySelector('.big-value');if(v)v.textContent=String(values[i]);const detail=i===2?(summary.platforms.map(p=>historyPlatforms[p]).join(' · ')||'Noch keine Portale'):i===1?'Bestätigter Stand dieser Aufträge':label;translated(card.querySelector('.muted'),detail,detail);});
-  if(picker)picker.value=selection||'';
-  if(period)period.textContent=label+' · nach Erstellungsmonat · Wiener Zeit';
-  if(periodHeading)periodHeading.textContent=label+' · Zeitraum ändern';
-  if(monthButtons){monthButtons.replaceChildren();for(const m of result.months){const b=create('button',formatHistoryMonth(m.month)+' · '+m.orders);b.type='button';b.setAttribute('aria-pressed',String(selection===m.month));b.addEventListener('click',()=>chooseMonth(m.month));monthButtons.append(b);}}
+  months?.update(selection,result.months);
+  if(period)period.textContent=label;
   list.replaceChildren();
   let selectedToggle;
   for(const entry of entries.slice(pageNumber*pageSize,(pageNumber+1)*pageSize)){
@@ -371,5 +363,5 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   refresh.focus();
   return true;
  }
- return {hasSearchView,openSearchView,destroy(){disposed=true;cancelFind();findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();monthSlot?.replaceChildren();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {hasSearchView,openSearchView,destroy(){disposed=true;cancelFind();findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();months?.destroy();period?.remove();const titleRow=refresh.parentElement;titleRow.before(title);titleRow.remove();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

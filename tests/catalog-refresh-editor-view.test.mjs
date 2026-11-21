@@ -42,7 +42,7 @@ function fixture({hold=[],refreshError=null}={}){
   initialAssetId:null,initialAssetPortal:null,expectedOwnerId:owner,
   files:[knownFile],file:knownFile,saved:{revision:3,settings:{...editorDefaults,overlay_text:'Gespeicherter Text'}},
   attempt:null,busy:false,disposed:false,invalidOwner:false,dirty:true,generation:0,metadataController:null,fileStale:false,
-  original:{setContext:value=>invalidations.push(value)},music:{clear(){}},
+  driveLookup:null,original:{setContext:value=>invalidations.push(value)},timeline:{setFile(value){assert.equal(value,null);}},music:{clear(){}},
   exportView:{setContext(){},destroy(){}},releasePreview(){},setDirty:value=>{env.dirty=value;},clearDiscard(){},
   renderOptions:()=>renders.push('options'),fileFields:()=>renders.push('fields'),paint:()=>renders.push('paint'),
   loadPreview:(_g,file)=>{previewReads.push(file.id);return Promise.resolve();},

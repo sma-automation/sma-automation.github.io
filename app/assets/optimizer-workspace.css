@@ -577,6 +577,7 @@ body.wide #magicReadiness[data-state="unavailable"]{color:#9d4f36}
 }
 body.wide #workspaceTabBar{display:flex;align-items:center;flex-wrap:wrap;border-bottom:1px solid #e0e5ef;margin-bottom:16px}
 body.wide #workspaceTabBar #optimizerToolbar{border:0;margin:0!important}
+body.wide #workspaceSchedule{padding:13px 11px 16px;min-height:48px;margin:0 0 -1px;border:0;border-bottom:3px solid transparent;border-radius:0;background:#f2f4f8;color:#627087;font:600 16px/1.4 Inter,Arial,sans-serif}
 body.wide #workspaceExit{margin-left:auto;padding:8px 2px;border:0;background:transparent;color:#50627a;font-size:14px}
 body.wide #workspaceExit:hover{color:#3157cd;text-decoration:underline}
 body.wide #workspaceGalleryActions{gap:6px}

@@ -25,7 +25,7 @@ function fixture({active=true,hash='',requestOrderPage,requestFind,request=()=>r
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 await test('renders saved status with text-only untrusted title and a bound link to the blocked order',async()=>{
  const f=fixture({request:()=>result([entry(1,{title:'<img src=x onerror=alert(1)>',target_name:'<script>bad</script>'})])});await tick();
- assert.match(f.$('ol').textContent,/Blockiert/);assert.match(f.$('ol').textContent,/<img/);assert.equal(f.$('img'),null);assert.equal(f.$('script'),null);assert.equal(f.$('a').getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+entry().id+'&view=review');assert.deepEqual(f.calls,[{}]);assert.equal(f.$('#historyActivitySlot').querySelectorAll('button').length,3);f.view.destroy();
+ assert.match(f.$('ol').textContent,/Blockiert/);assert.match(f.$('ol').textContent,/<img/);assert.equal(f.$('img'),null);assert.equal(f.$('script'),null);assert.equal(f.$('a').getAttribute('href'),'/app/publication-preview.html?wide=1&portal=youtube&order='+entry().id+'&view=review');assert.deepEqual(f.calls,[{}]);assert.equal(f.$('#historyActivitySlot').querySelectorAll('button').length,2);assert.ok(f.$('.sma-history-title-row .sma-history-refresh'));f.view.destroy();
 });
 await test('expanded orders show their own saved caption as plain multiline text, with no further request',async()=>{
  const caption='Historischer Text 🛒\n\n#Video\nhttps://example.test/?produkt=alt\n<img src=x>';
@@ -63,15 +63,15 @@ await test('five-row pages reach the next server batch without growing the list'
  for(let page=2;page<=5;page++){f.$('[aria-label="Weitere Aufträge"]').click();await tick();assert.equal(f.$('ol').children.length,page===5?1:5);assert.match(f.$('[role=status]').textContent,new RegExp('Seite '+page+' von 5'));}
  assert.deepEqual(f.calls,[{},{month:'2026-11',...next}]);assert.equal(f.$('[aria-label="Weitere Aufträge"]').disabled,true);
  f.$('[aria-label="Vorherige Aufträge"]').click();await tick();assert.equal(f.$('ol').children.length,5);assert.match(f.$('[role=status]').textContent,/16–20/);assert.equal(f.calls.length,2);
- f.$('.sma-history-toolbar button').click();await tick();assert.equal(f.$('ol').children.length,5);assert.match(f.$('[role=status]').textContent,/1–5/);assert.deepEqual(f.calls[2],{month:'2026-11'});f.view.destroy();
+ f.$('.sma-history-title-row .sma-history-refresh').click();await tick();assert.equal(f.$('ol').children.length,5);assert.match(f.$('[role=status]').textContent,/1–5/);assert.deepEqual(f.calls[2],{month:'2026-11'});f.view.destroy();
 });
 await test('network or malformed result clears previous data and allows retry',async()=>{
  let response=result();const f=fixture({request:()=>{if(response instanceof Error)throw response;return response;}});await tick();
- for(const invalid of [Error('offline'),{ok:false,code:'ACCESS_INACTIVE'},result([entry(1,{status:'published'})])]){response=invalid;f.focus();await tick();assert.equal(f.page.querySelectorAll('li').length,0);assert.match(f.$('[role=status]').textContent,/nicht geladen/);assert.equal(f.$('.sma-history-toolbar button').disabled,false);}
- response=result([]);f.$('.sma-history-toolbar button').click();await tick();assert.match(f.$('[role=status]').textContent,/Keine Veröffentlichungsaufträge/);f.view.destroy();
+ for(const invalid of [Error('offline'),{ok:false,code:'ACCESS_INACTIVE'},result([entry(1,{status:'published'})])]){response=invalid;f.focus();await tick();assert.equal(f.page.querySelectorAll('li').length,0);assert.match(f.$('[role=status]').textContent,/nicht geladen/);assert.equal(f.$('.sma-history-title-row .sma-history-refresh').disabled,false);}
+ response=result([]);f.$('.sma-history-title-row .sma-history-refresh').click();await tick();assert.match(f.$('[role=status]').textContent,/Keine Veröffentlichungsaufträge/);f.view.destroy();
 });
 await test('owner event immediately clears and ignores late former-owner response',async()=>{
- let response=result();const f=fixture({request:()=>response});await tick();const gate=deferred();response=gate.promise;f.focus();await tick();f.owner('other');assert.equal(f.page.querySelectorAll('li').length,0);gate.resolve(result());await tick();assert.equal(f.page.querySelectorAll('li').length,0);assert.equal(f.$('.sma-history-toolbar button').disabled,true);f.view.destroy();assert.equal(f.unsubscribed,1);
+ let response=result();const f=fixture({request:()=>response});await tick();const gate=deferred();response=gate.promise;f.focus();await tick();f.owner('other');assert.equal(f.page.querySelectorAll('li').length,0);gate.resolve(result());await tick();assert.equal(f.page.querySelectorAll('li').length,0);assert.equal(f.$('.sma-history-title-row .sma-history-refresh').disabled,true);f.view.destroy();assert.equal(f.unsubscribed,1);
 });
 await test('owner is checked before and after reads even without notification',async()=>{
  const f=fixture();await tick();f.owner('other',false);f.focus();await tick();assert.equal(f.calls.length,1);assert.equal(f.page.querySelectorAll('li').length,0);f.view.destroy();
@@ -84,6 +84,14 @@ await test('rapid refreshes coalesce and destruction ignores pending results',as
  const gate=deferred(),f=fixture({request:()=>gate.promise});await tick();f.focus();f.focus();await tick();assert.equal(f.calls.length,1);f.view.destroy();gate.resolve(result());await tick();assert.equal(f.$('#historyActivitySlot').textContent,'');assert.equal(f.doc.querySelector('link'),null);f.focus();await tick();assert.equal(f.calls.length,1);
 });
 const button=(f,text)=>[...f.page.querySelectorAll('button')].find(b=>b.textContent===text);
+function selectMonth(f,value){
+ button(f,'Zeitraum ändern').click();
+ const year=f.$('.sma-history-years select');
+ year.options[Number(value.slice(0,4))-2000].selected=true;
+ year.dispatchEvent(new f.window.Event('change'));
+ const target=[...f.page.querySelectorAll('.sma-history-month-grid button')].find(b=>b.value===value);
+ assert.ok(target);target.click();
+}
 async function openChapter(f,label){button(f,label).click();await tick();}
 async function openEditHistory(f,key){
  if(f.$('#sma-history-tab-edits').getAttribute('aria-selected')!=='true')button(f,'Bearbeiten').click();
@@ -102,30 +110,37 @@ await test('monthly totals describe all selected orders, not only the visible pa
  assert.match(f.$('[role=status]').textContent,/1–5 von 35/);assert.match(f.$('[data-history-period]').textContent,/November 2026/);assert.match(f.$('small').textContent,/13:00/);
  const cards=[...f.page.children];assert.ok(cards.indexOf(f.$('#historyMonthSlot').closest('.card'))<cards.indexOf(f.$('#historyActivitySlot').parentElement));f.view.destroy();
 });
-await test('empty month, all months and current month use explicit bounded read filters',async()=>{
- const f=fixture({request:input=>input.month==='2026-10'?result([],null,{month:'2026-10'}):result([entry()],null,{month:input.month===null?null:'2026-11'})});await tick();
- f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();assert.equal(f.$('[data-history-metric=orders]').textContent,'0');assert.match(f.$('[role=status]').textContent,/Oktober 2026/);assert.equal(f.$('ol').children.length,0);
- button(f,'Alle Monate').click();await tick();assert.match(f.$('[data-history-period]').textContent,/Alle Monate/);assert.equal(f.$('ol').children.length,1);
- button(f,'Aktueller Monat').click();await tick();assert.equal(f.$('input[type=month]').value,'2026-11');
- assert.deepEqual(f.calls,[{},{month:'2026-10'},{month:null},{}]);f.view.destroy();
+await test('one labelled month chooser applies immediately and closes; archiving and year navigation are local',async()=>{
+ const f=fixture({request:input=>input.month==='2026-10'?result([],null,{month:'2026-10'}):result()});await tick();
+ assert.ok(!button(f,'Monat anzeigen')&&!button(f,'Aktueller Monat')&&!button(f,'Alle Monate'));
+ const period=button(f,'Zeitraum ändern'),archive=button(f,'Monate mit Aufträgen');
+ period.click();assert.equal(period.getAttribute('aria-expanded'),'true');
+ assert.equal(f.$('.sma-history-month-grid button[aria-pressed=true]').value,'2026-11');
+ f.$('[aria-label="Vorheriges Jahr"]').click();assert.equal(f.$('.sma-history-years select').value,'2025');
+ archive.click();assert.equal(period.getAttribute('aria-expanded'),'false');assert.equal(archive.getAttribute('aria-expanded'),'true');
+ assert.deepEqual(f.calls,[{}]);
+ selectMonth(f,'2026-10');await tick();assert.equal(f.$('[data-history-metric=orders]').textContent,'0');
+ assert.match(f.$('[role=status]').textContent,/Oktober 2026/);assert.equal(f.$('ol').children.length,0);assert.equal(period.textContent,'Zeitraum ändern');
+ assert.equal(f.$('#sma-history-calendar').hidden,true);assert.equal(f.$('.sma-history-month-links').hidden,true);
+ selectMonth(f,'2026-11');await tick();assert.deepEqual(f.calls,[{},{month:'2026-10'},{month:'2026-11'}]);f.view.destroy();
 });
-await test('older-month input and server-derived shortcuts contain no fixed sample months',async()=>{
+await test('older-month chooser and server-derived shortcuts contain no fixed sample months',async()=>{
  const f=fixture({request:input=>result([],null,{month:input.month||'2026-11',months:[{month:'2026-11',orders:9},{month:'2025-02',orders:2}]})});await tick();
- button(f,'Februar 2025 · 2').click();await tick();assert.equal(f.calls[1].month,'2025-02');assert.equal(f.$('input[type=month]').value,'2025-02');
- f.$('input[type=month]').value='2024-01';button(f,'Monat anzeigen').click();await tick();assert.equal(f.calls[2].month,'2024-01');
- f.$('input[type=month]').value='2026-99';button(f,'Monat anzeigen').click();await tick();assert.equal(f.calls.length,3);assert.match(f.$('[role=status]').textContent,/gültigen Monat/);f.view.destroy();
+ button(f,'Monate mit Aufträgen').click();button(f,'Februar 2025 · 2').click();await tick();
+ assert.equal(f.calls[1].month,'2025-02');assert.match(f.$('[data-history-period]').textContent,/Februar 2025/);
+ selectMonth(f,'2024-01');await tick();assert.equal(f.calls[2].month,'2024-01');assert.equal(f.calls.length,3);f.view.destroy();
 });
 await test('month switches discard late old-month pages and counters',async()=>{
  const gate=deferred();const f=fixture({request:input=>input.month==='2026-10'?result([],null,{month:'2026-10'}):gate.promise});await tick();
- f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();gate.resolve(result());await tick();
+ selectMonth(f,'2026-10');await tick();gate.resolve(result());await tick();
  assert.equal(f.$('[data-history-metric=orders]').textContent,'0');assert.match(f.$('[data-history-period]').textContent,/Oktober/);assert.equal(f.$('ol').children.length,0);f.view.destroy();
 });
 await test('owner loss clears counters and archives together with the list',async()=>{
  const f=fixture();await tick();assert.equal(f.$('[data-history-metric=orders]').textContent,'1');assert.equal(f.$('.sma-history-month-links').children.length,1);
- f.owner('other');assert.equal(f.$('[data-history-metric=orders]').textContent,'–');assert.equal(f.$('[data-history-metric=public_confirmed]').textContent,'–');assert.equal(f.$('.sma-history-month-links').children.length,0);assert.equal(f.$('input').value,'');assert.equal(f.$('input').disabled,true);f.view.destroy();
+ f.owner('other');assert.equal(f.$('[data-history-metric=orders]').textContent,'–');assert.equal(f.$('[data-history-metric=public_confirmed]').textContent,'–');assert.equal(f.$('.sma-history-month-links').children.length,0);assert.equal(f.$('.sma-history-period-button').disabled,true);assert.equal(f.$('.sma-history-archive-button').disabled,true);f.view.destroy();
 });
 await test('wrong-month responses clear both summary and rows',async()=>{
- const f=fixture({request:()=>result()});await tick();f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();
+ const f=fixture({request:()=>result()});await tick();selectMonth(f,'2026-10');await tick();
  assert.equal(f.$('[data-history-metric=orders]').textContent,'–');assert.equal(f.$('ol').children.length,0);assert.match(f.$('[role=status]').textContent,/nicht geladen/);f.view.destroy();
 });
 
@@ -150,10 +165,10 @@ await test('saved texts are expandable text-only values, independent of order to
  const f=fixture({requestTexts:()=>texts([textEntry(1,{body:'<img src=x onerror=alert(1)> A saved body'})])});await openEditHistory(f,'texts');
  assert.match(f.$('#historyTextCard').textContent,/TikTok/);assert.match(f.$('#historyTextCard').textContent,/Version 1/);assert.equal(f.$('#historyTextCard img'),null);assert.equal(f.$('#historyTextCard details').hasAttribute('open'),false);assert.equal(f.$('#historyTextCard a'),null);assert.match(f.$('#historyTextCard .sma-history-saved-text').textContent,/<img/);assert.equal(f.$('[data-history-metric=orders]').textContent,'1');f.view.destroy();assert.equal(f.$('#historyTextCard'),null);
 });
-await test('text month follows the selected order month, including all and empty periods',async()=>{
+await test('text month follows the selected order month, including empty periods',async()=>{
  const calls=[],f=fixture({request:i=>result(i.month==='2026-10'?[]:[entry()],null,{month:i.month===undefined?'2026-11':i.month}),requestTexts:i=>{calls.push(i);return texts(i.month==='2026-10'?[]:[textEntry()],{month:i.month});}});await openEditHistory(f,'texts');
- f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();assert.match(f.$('#historyTextCard [role=status]').textContent,/Keine.*Oktober/);
- button(f,'Alle Monate').click();await tick();assert.match(f.$('#historyTextCard [role=status]').textContent,/Alle Monate/);assert.deepEqual(calls,[{month:'2026-11'},{month:'2026-10'},{month:null}]);f.view.destroy();
+ selectMonth(f,'2026-10');await tick();assert.match(f.$('#historyTextCard [role=status]').textContent,/Keine.*Oktober/);
+ selectMonth(f,'2026-11');await tick();assert.match(f.$('#historyTextCard [role=status]').textContent,/November 2026/);assert.deepEqual(calls,[{month:'2026-11'},{month:'2026-10'},{month:'2026-11'}]);f.view.destroy();
 });
 await test('text pagination keeps five visible rows across composite-key server pages',async()=>{
  const entries=Array.from({length:20},(_,i)=>textEntry(1,{revision:i+1})),last=entries.at(-1),next={before_at:last.recorded_at,before_id:last.preview_id,before_revision:20,before_platform:'tiktok'},calls=[];
@@ -165,7 +180,7 @@ await test('text pagination keeps five visible rows across composite-key server 
 await test('late text results cannot repopulate another month, hidden page or lost owner',async()=>{
  for(const change of ['month','hidden','owner','destroy']){
   const gate=deferred(),f=fixture({request:i=>result([],null,{month:i.month||'2026-11'}),requestTexts:i=>i.month==='2026-10'?texts([],{month:i.month}):gate.promise});await openEditHistory(f,'texts');
-  if(change==='month'){f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();}
+  if(change==='month'){selectMonth(f,'2026-10');}
   if(change==='hidden')f.page.classList.remove('active');if(change==='owner')f.owner('other');if(change==='destroy')f.view.destroy();await tick();gate.resolve(texts());await tick();assert.equal(f.page.querySelectorAll('#historyTextCard li').length,0);if(change==='month')assert.match(f.$('#historyTextCard').textContent,/Oktober/);f.view.destroy();
  }
 });
@@ -178,13 +193,13 @@ await test('text errors clear rows, preserve the chosen month and permit a read-
  response=texts();button(f,'Textverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyTextCard ol').children.length,1);f.view.destroy();
 });
 await test('history switches show one list, retain its page, and reset pages on month changes',async()=>{
- const f=fixture({request:i=>result(Array.from({length:9},(_,n)=>entry(n)),null,{month:i.month===undefined?'2026-11':i.month}),requestTexts:i=>texts(Array.from({length:14},(_,n)=>textEntry(n)),{month:i.month})});await tick();
+ const f=fixture({request:i=>result(Array.from({length:9},(_,n)=>entry(n,{created_at:(i.month||'2026-11')+'-06T12:00:00Z'})),null,{month:i.month===undefined?'2026-11':i.month}),requestTexts:i=>texts(Array.from({length:14},(_,n)=>textEntry(n,{recorded_at:i.month+'-06T12:00:00Z'})),{month:i.month})});await tick();
  assert.ok(f.$('#historyTextCard').closest('[hidden]'));assert.equal(f.$('#historyOrderCard').hidden,false);
  f.$('[aria-label="Weitere Aufträge"]').click();assert.equal(f.$('#historyActivitySlot ol').children.length,4);
  await openEditHistory(f,'texts');assert.equal(f.$('#historyTextCard').hidden,false);assert.equal(f.$('#historyOrderCard').hidden,true);
  f.$('[aria-label="Weitere Textstände"]').click();assert.match(f.$('#historyTextCard [role=status]').textContent,/6–10/);
  button(f,'Aufträge').click();assert.equal(f.$('#historyOrderCard').hidden,false);assert.ok(f.$('#historyTextCard').closest('[hidden]'));assert.match(f.$('#historyActivitySlot [role=status]').textContent,/6–9/);
- button(f,'Alle Monate').click();await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/1–5/);assert.equal(f.$('#historyTextCard ol').children.length,0);await openEditHistory(f,'texts');assert.match(f.$('#historyTextCard [role=status]').textContent,/1–5/);f.view.destroy();
+ selectMonth(f,'2026-10');await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/1–5/);assert.equal(f.$('#historyTextCard ol').children.length,0);await openEditHistory(f,'texts');assert.match(f.$('#historyTextCard [role=status]').textContent,/1–5/);f.view.destroy();
 });
 const assignmentEntry=(n=1,extra={})=>({id:entry(n).id,asset_id:entry(91).id,preview_id:entry(92).id,preview_revision:2,assignment_revision:3,asset_revision:'r1',platform:'youtube',file_name:'Original filename.mp4',title:'Saved title',body:'Saved body',event_kind:'baseline',recorded_at:'2026-11-06T12:00:00Z',source_updated_at:'2026-10-04T09:00:00Z',...extra});
 const assignments=(entries=[assignmentEntry()],extra={})=>({ok:true,version:1,month:'2026-11',timezone:'Europe/Vienna',total:entries.length,entries,has_more:false,next:null,...extra});
@@ -211,14 +226,14 @@ await test('all four portal history rows link to the selected CURRENT file in th
 });
 await test('file pages buffer twenty, display five and preserve their page when switching chapters',async()=>{
  const rows=Array.from({length:20},(_,i)=>assignmentEntry(i)),next={before_at:rows.at(-1).recorded_at,before_id:rows.at(-1).id},calls=[];
- const f=fixture({request:i=>result([] ,null,{month:i.month===undefined?'2026-11':i.month}),requestAssignments:i=>{calls.push(i);return i.month===null?assignments([],{month:null}):i.before_id?assignments([assignmentEntry(21)],{total:21}):assignments(rows,{total:21,has_more:true,next});}});await tick();await openEditHistory(f,'assignments');
+ const f=fixture({request:i=>result([] ,null,{month:i.month===undefined?'2026-11':i.month}),requestAssignments:i=>{calls.push(i);return i.month==='2026-10'?assignments([],{month:i.month}):i.before_id?assignments([assignmentEntry(21)],{total:21}):assignments(rows,{total:21,has_more:true,next});}});await tick();await openEditHistory(f,'assignments');
  for(let page=1;page<=5;page++){assert.equal(f.$('#historyAssignmentCard ol').children.length,page===5?1:5);assert.match(f.$('#historyAssignmentCard [role=status]').textContent,new RegExp('Seite '+page+' von 5'));if(page<5){f.$('[aria-label="Weitere Dateistände"]').click();await tick();}}
  assert.deepEqual(calls,[{month:'2026-11'},{month:'2026-11',...next}]);f.$('[aria-label="Vorherige Dateistände"]').click();button(f,'Aufträge').click();await openEditHistory(f,'assignments');assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/16–20/);
- button(f,'Alle Monate').click();await tick();assert.equal(f.$('#historyAssignmentCard ol').children.length,0);assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/Alle Monate/);f.view.destroy();
+ selectMonth(f,'2026-10');await tick();assert.equal(f.$('#historyAssignmentCard ol').children.length,0);assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/Oktober 2026/);f.view.destroy();
 });
 await test('file history discards old-month responses and clears on leaving, visibility loss and owner loss',async()=>{
  const gate=deferred(),f=fixture({request:i=>result([] ,null,{month:i.month||'2026-11'}),requestAssignments:i=>i.month==='2026-10'?assignments([],{month:'2026-10'}):gate.promise});await openEditHistory(f,'assignments');
- f.$('input[type=month]').value='2026-10';button(f,'Monat anzeigen').click();await tick();gate.resolve(assignments());await tick();assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/Oktober/);assert.equal(f.$('#historyAssignmentCard ol').children.length,0);f.view.destroy();
+ selectMonth(f,'2026-10');await tick();gate.resolve(assignments());await tick();assert.match(f.$('#historyAssignmentCard [role=status]').textContent,/Oktober/);assert.equal(f.$('#historyAssignmentCard ol').children.length,0);f.view.destroy();
  for(const change of ['leave','hidden','owner']){const g=fixture({requestAssignments:()=>assignments()});await openEditHistory(g,'assignments');assert.equal(g.$('#historyAssignmentCard ol').children.length,1);if(change==='leave')g.page.classList.remove('active');if(change==='hidden')g.visibility('hidden');if(change==='owner')g.owner('other');await tick();assert.equal(g.$('#historyAssignmentCard ol').children.length,0);assert.equal(button(g,'Dateiverlauf aktualisieren').disabled,true);g.view.destroy();}
 });
 await test('file history verifies the owner after an async read and rejects a late response after teardown',async()=>{
@@ -271,7 +286,7 @@ await test('analysis chapter renders literal names, separate statuses, five rows
  for(let n=0;n<4;n++){f.$('[aria-label="Weitere Analyseversuche"]').click();await tick();}assert.equal(f.$('#historyAnalysisCard ol').children.length,1);assert.deepEqual(calls,[{month:'2026-11'},{month:'2026-11',...next}]);f.$('[aria-label="Vorherige Analyseversuche"]').click();button(f,'Aufträge').click();await openChapter(f,'Analyse');assert.match(f.$('#historyAnalysisCard [role=status]').textContent,/16–20/);f.view.destroy();assert.equal(f.$('#historyAnalysisCard'),null);
 });
 await test('analysis history drops late replies after owner, month, page or visibility change and teardown',async()=>{
- for(const change of ['owner','leave','hidden','destroy','month']){const gate=deferred(),f=fixture({requestAnalyses:()=>gate.promise});await openChapter(f,'Analyse');if(change==='owner')f.owner('other',false);if(change==='leave')f.page.classList.remove('active');if(change==='hidden')f.visibility('hidden');if(change==='destroy')f.view.destroy();if(change==='month')button(f,'Alle Monate').click();await tick();gate.resolve(analyses());await tick();assert.equal(f.$('#historyAnalysisCard ol')?.children.length||0,0);f.view.destroy();}
+ for(const change of ['owner','leave','hidden','destroy','month']){const gate=deferred(),f=fixture({requestAnalyses:()=>gate.promise});await openChapter(f,'Analyse');if(change==='owner')f.owner('other',false);if(change==='leave')f.page.classList.remove('active');if(change==='hidden')f.visibility('hidden');if(change==='destroy')f.view.destroy();if(change==='month')selectMonth(f,'2026-10');await tick();gate.resolve(analyses());await tick();assert.equal(f.$('#historyAnalysisCard ol')?.children.length||0,0);f.view.destroy();}
 });
 await test('analysis history rejects wrong month, invalid statuses and duplicate cursor pages then permits read-only retry',async()=>{
  let value=analyses();const f=fixture({requestAnalyses:()=>value});await openChapter(f,'Analyse');for(const invalid of [analyses([],{month:'2026-10'}),analyses([analysisEntry(1,{status:'published'})]),analyses([],{can_publish:true})]){value=invalid;button(f,'Analyseverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyAnalysisCard ol').children.length,0);assert.match(f.$('#historyAnalysisCard [role=status]').textContent,/nicht geladen/);}value=analyses();button(f,'Analyseverlauf aktualisieren').click();await tick();assert.equal(f.$('#historyAnalysisCard ol').children.length,1);f.view.destroy();
@@ -300,12 +315,12 @@ await test('opening History reads only orders, then each chosen chapter once per
  await openEditHistory(f,'texts');await openChapter(f,'Analyse');await openChapter(f,'Bearbeiten');
  assert.deepEqual(reads,[['edits','2026-11'],['files','2026-11'],['texts','2026-11'],['analyses','2026-11']]);
  assert.equal(f.calls.length,1);
- button(f,'Alle Monate').click();await tick();
- assert.deepEqual(f.calls,[{},{month:null}]);assert.deepEqual(reads.slice(4),[['texts',null]]);
+ selectMonth(f,'2026-10');await tick();
+ assert.deepEqual(f.calls,[{},{month:'2026-10'}]);assert.deepEqual(reads.slice(4),[['texts','2026-10']]);
  await openEditHistory(f,'assignments');await openEditHistory(f,'texts');
- assert.deepEqual(reads.slice(4),[['texts',null],['files',null]]);
+ assert.deepEqual(reads.slice(4),[['texts','2026-10'],['files','2026-10']]);
  f.visibility('hidden');await tick();f.visibility('visible');await tick();
- assert.deepEqual(reads.slice(6),[['texts',null]]);f.view.destroy();
+ assert.deepEqual(reads.slice(6),[['texts','2026-10']]);f.view.destroy();
 });
 await test('selection while the period loads and repeat visits during an outstanding read do not fan out',async()=>{
  const period=deferred(),pending=deferred(),reads=[];
@@ -342,7 +357,7 @@ await test('return targets the saved row on page six and crosses batches in both
  prev.click();await tick();prev.click();await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/16–20.*Seite 4/);
  more.click();await tick();assert.match(f.$('#historyActivitySlot [role=status]').textContent,/21–25.*Seite 5/);
  assert.deepEqual(calls,[[id,null],[id,4],[id,5]]);
- button(f,'Aktueller Monat').click();await tick();assert.deepEqual(f.calls,[{}]);assert.equal(f.window.location.hash,'');f.view.destroy();
+ selectMonth(f,'2026-11');await tick();assert.deepEqual(f.calls,[{month:'2026-11'}]);assert.equal(f.window.location.hash,'');f.view.destroy();
 });
 await test('unknown, mismatched and late order returns never open a different row',async()=>{
  const id=entry().id;
@@ -480,7 +495,7 @@ await test('selecting a same-title order replaces the previous return address an
   assert.equal(selected.open,true);
   assert.equal(focused.at(-1),selected.querySelector('summary'));
   const savedHash=f.window.location.hash;
-  button(f,'Aktueller Monat').click();await tick();
+  selectMonth(f,'2026-11');await tick();
   assert.equal(f.window.location.hash,'');
   assert.equal(f.window.location.search,'?lang=de');
   const reloaded=fixture({hash:savedHash,requestOrderPage:id=>{

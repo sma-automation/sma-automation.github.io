@@ -61,17 +61,17 @@ test('actual editor buttons reuse one original transfer for preview, export and 
  const f=fixture();try{
   await until(()=>!f.$('#editor').hidden&&!f.$('#asset').disabled,'Editor should be ready');
   assert.equal(f.transfers.length,0,'Opening the editor fetches no original');
-  f.tab('Schnitt & Cover');f.$('#originalVideoPreview button').click();
-  await until(()=>!f.$('#originalVideoPreview video').hidden,'Original should be shown');
-  assert.equal(f.transfers.length,1);const originalURL=f.$('#originalVideoPreview video').src;
+  f.tab('Schnitt & Cover');
+  await until(()=>!f.$('#stage video').hidden,'Original should be shown');
+  assert.equal(f.transfers.length,1);const originalURL=f.$('#stage video').src;
   f.set('cover_ms','0.5');f.save();await until(()=>f.$('#savedInfo').textContent.includes('Version 1'),'Draft save should finish');
   f.tab('Export');assert.ok(f.revoked.includes(originalURL),'Leaving the chapter still releases its player URL');
   f.$('#generateExport').click();await until(()=>!f.$('#exportResult').hidden,'Export preview should finish');
   assert.equal(f.renders.length,1);assert.equal(f.sources.length,2);assert.equal(f.transfers.length,1);
-  f.tab('Schnitt & Cover');f.$('#originalVideoPreview button').click();
-  await until(()=>!f.$('#originalVideoPreview video').hidden,'Returning original should be shown');
+  f.tab('Schnitt & Cover');
+  await until(()=>!f.$('#stage video').hidden,'Returning original should be shown');
   assert.equal(f.sources.length,3);assert.equal(f.transfers.length,1,'Three real consumers need only one original-source POST');
-  assert.notEqual(f.$('#originalVideoPreview video').src,originalURL,'A new player owns a new object URL');
+  assert.notEqual(f.$('#stage video').src,originalURL,'A new player owns a new object URL');
   // Reusing source bytes must never reuse an obsolete render or skip draft reads.
   f.tab('Text');f.set('overlay_text','New saved caption');f.save();
   await until(()=>f.$('#savedInfo').textContent.includes('Version 2'),'Changed draft should save');
@@ -85,8 +85,8 @@ test('actual editor buttons reuse one original transfer for preview, export and 
 test('a fresh authoritative file conflict blocks export even when its old exact bytes are in RAM',async()=>{
  const f=fixture();try{
   await until(()=>!f.$('#editor').hidden&&!f.$('#asset').disabled,'Editor should be ready');
-  f.tab('Schnitt & Cover');f.$('#originalVideoPreview button').click();
-  await until(()=>!f.$('#originalVideoPreview video').hidden,'Original should be shown');
+  f.tab('Schnitt & Cover');
+  await until(()=>!f.$('#stage video').hidden,'Original should be shown');
   f.set('cover_ms','0.5');f.save();await until(()=>f.$('#savedInfo').textContent.includes('Version 1'),'Draft save should finish');
   f.conflict();f.tab('Export');f.$('#generateExport').click();
   await until(()=>f.$('#exportStatus').textContent.includes('geändert'),'Current file conflict should reach the UI');

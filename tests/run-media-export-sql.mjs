@@ -3,6 +3,7 @@ const db=new PGlite();let n=0;const eq=(a,b)=>{assert.deepEqual(a,b);n++;},uid='
 try{
  await db.exec("create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema sma_private;grant usage on schema sma_private,auth to authenticated,service_role;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create table public.sma_kunden(id bigint primary key,user_id uuid,aktiv boolean,demo_delta_aktiv boolean,zahlung_bestaetigt boolean,n8n_kunde_id text,kunde_email text);");
  await db.exec((await src('publication-preview.sql')).split('-- Definer is needed only')[0]);await db.exec((await src('publication-files.sql')).split('-- Metadata precheck')[0]);await db.exec((await src('publication-device-upload.sql')).split('create or replace function')[0]);await db.exec(await src('publication-editor-history.sql'));await db.exec(await src('publication-asset-preview.sql'));await db.exec(await src('publication-editor-exports.sql'));await db.exec(await src('publication-editor-music-cover.sql'));
+ await db.exec(await src('publication-editor-overlay-style.sql'));
  await db.query("insert into public.sma_kunden values(91,$1,true,true,false,'fixture91','fixture91@example.test'),(92,$2,true,true,false,'fixture92','fixture92@example.test')",[uid,other]);
  async function file(k,owner=uid,customer=91,name='Source.mp4',rev=revision,size=2000,mime='video/mp4'){await db.query("insert into sma_private.publication_files_v1(id,user_id,customer_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes,duration_ms,width_px,height_px) values($1,$2,$3,$4,$5,$6,$7,$8,now(),$9,$10,320,240)",[id(k),owner,customer,'fixture-drive-'+k,name,mime.startsWith('video')?'video':'image',mime,rev,size,mime.startsWith('video')?10000:null]);}
  await file(1);await file(2,other,92);await file(3,uid,91,'Source.png',revision,2000,'image/png');
@@ -21,6 +22,19 @@ try{
  await db.exec('begin');await db.query("update sma_private.publication_uploads_v1 set kunde_email='changed@example.test' where id=$1",[id(10)]);eq((await rpc('complete',input)).code,'EXPORT_INCOMPLETE');await db.exec('rollback');
  // Saved trim/cover is bound to its exact draft revision; cover is mandatory when selected.
  const settings={format:'1:1',fit:'cover',position_x:50,position_y:50,start_ms:1000,end_ms:5000,cover_ms:2000,overlay_text:'Fixture',overlay_position:'bottom',audio_volume:0};
+ await db.exec('begin');
+ const editor=(action,input)=>run('select public.sma_publication_editor_v1($1,$2) as r',[action,JSON.stringify(input)]);
+ const style={x:8,y:92,size:160,bold:true,color:'#ffd357'};
+ const draftMusic={name:'Beispiel.wav',sha256:hash,size_bytes:12000,mime_type:'audio/wav',volume:25,start_ms:0};
+ const styled={...settings,music:draftMusic,overlay_style:style};
+ const saveStyle=overlay_style=>editor('save',{...base,revision:0,request_id:id(110),settings:{...styled,overlay_style}});
+ for(const invalid of [null,[],{}, {...style,x:101},{...style,y:'7'},{...style,size:49},{...style,size:261},{...style,bold:'false'},{...style,color:'red'},{...style,unknown:3}]) {
+  eq((await saveStyle(invalid)).code,'INVALID_SETTINGS');
+ }
+ eq((await saveStyle(style)).settings,styled);
+ eq((await editor('get',base)).settings,styled);
+ eq((await run('select public.sma_publication_editor_history_v1($1) as r',[JSON.stringify({month:null})])).entries[0].settings,styled);
+ await db.exec('rollback');
  eq((await run('select public.sma_publication_editor_v1($1,$2) as r',['save',JSON.stringify({...base,revision:0,request_id:id(100),settings})])).revision,1);eq((await prepare()).code,'REVISION_CONFLICT');
  const second={...input,draft_revision:1,export_id:id(20)},withCover={...outputs,cover:{sha256:hash,size_bytes:4000}};eq((await prepare(second)).code,'INVALID_OUTPUT');const coverJob=await prepare(second,withCover);eq(coverJob.ok,true);await uploaded(coverJob.media,21);eq((await rpc('complete',second)).code,'EXPORT_INCOMPLETE');await uploaded(coverJob.cover,22);eq((await rpc('complete',second)).status,'completed');eq((await rpc('list',base)).exports.length,2);
  // Cover ownership and byte binding survive revision indexing but not modified files.
