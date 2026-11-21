@@ -308,6 +308,17 @@ async function checkSearchReturn(page,frame,width){
  const focused=locator=>locator.evaluate(el=>el===el.ownerDocument.activeElement);
  await hit.click();await page.waitForURL(previewURL);
  await portal.getByRole('heading',{name:draft.title}).waitFor();
+ await portal.getByRole('button',{name:'Dateidetails',exact:true}).click();
+ assert.deepEqual(await portal.locator('#workspacePreviewFacts dt').allTextContents(),['Dateiname','Medienart','Dauer','Zielportal']);
+ assert.equal(await portal.locator('#workspacePreviewFacts dd').last().textContent(),'YouTube');
+ await portal.getByRole('button',{name:'Beitragsvorschau',exact:true}).click();
+ await portal.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+ await portal.getByRole('button',{name:'Gesamttext mit Shop-Link ansehen'}).click();
+ assert.match(await portal.locator('#workspaceFullCaption').innerText(),/Testtext/);
+ await portal.getByRole('button',{name:'Prüfdetails und Shop-Link'}).click();
+ assert(await portal.locator('#workspaceResultDetails[open] .checks').isVisible());
+ await portal.locator('#workspacePreviewEdits').click();
+ await portal.getByRole('heading',{name:draft.title}).waitFor();
  await page.reload();await portal.getByRole('heading',{name:draft.title}).waitFor();
  await back.click();await page.waitForURL(dashboard);
  assert.equal(await finder.inputValue(),draft.title);

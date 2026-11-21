@@ -605,8 +605,6 @@ body.wide .original-video-play:focus-visible{outline:3px solid #91adff;outline-o
 body.wide .original-video-play:disabled{opacity:.65}
 body.wide #workspaceDetailView{max-width:640px;margin-inline:auto}
 body.wide #workspacePreviewFacts dd{overflow-wrap:anywhere}
-body.wide #workspaceSource :is(#workspaceRepeat,.draft details>summary,#workspaceResultDetails>summary){
- display:inline-flex;align-items:center;width:auto;max-width:100%;min-height:40px;margin:4px 0;padding:8px 13px;border:1px solid #c8d3e4;border-radius:8px;background:#f2f5fa;color:#304663;font:600 14px/1.4 Inter,Arial,sans-serif;cursor:pointer}
 body.wide #workspaceReviewActions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
 body.wide #workspaceSource #workspaceReviewActions button{
  display:inline-flex;align-items:center;width:auto;max-width:100%;min-height:40px;margin:0;padding:8px 13px;
@@ -617,3 +615,6 @@ body.wide.post-preview-open #workspacePreviewActions:not([hidden]) #deviceBrowse
 body.wide #workspaceSelectedFile[hidden],body.wide #workspaceTabBar[hidden]{display:none}
 body.wide #workspaceFileTools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
 body.wide #workspaceFileTools :is(button,a){border:0;background:transparent;color:#3157cd;font:500 14px/1.5 Inter,Arial,sans-serif;padding:6px 0;text-decoration:underline}
+
+body.wide #workspacePreparationTools #mediaSummary{display:list-item;padding:10px 0;cursor:pointer}
+body.wide #workspacePost #assetPreviewKind{display:none}
