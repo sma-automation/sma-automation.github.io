@@ -1,3 +1,4 @@
+import {historyRefreshHeading} from './publication-history-controls.mjs?v=1';
 import {historyPlatforms,formatHistoryMonth} from './publication-history-model.mjs?v=3';
 import {readPublicationAssignmentHistory,assignmentEvents} from './publication-assignment-history-model.mjs?v=1';
 
@@ -7,9 +8,10 @@ export function mountPublicationAssignmentHistory({doc,after,request,getOwnerId,
  const create=(tag,text,className)=>{const e=doc.createElement(tag);if(text)e.textContent=text;if(className)e.className=className;return e;};
  const card=create('div',null,'card'),heading=create('div','Dateiverlauf','card-title');card.id='historyAssignmentCard';
  const intro=create('p','Dateizuordnungen und frühere Textfassungen. Öffne einen Eintrag, um den gespeicherten Stand anzusehen oder den aktuellen Beitrag im geschützten Editor zu bearbeiten.');intro.className='muted';
- const slot=create('div',null,'sma-publication-history'),toolbar=create('div',null,'sma-history-toolbar'),refresh=create('button','Dateiverlauf aktualisieren'),message=create('p'),list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
- refresh.type=previous.type=more.type='button';refresh.disabled=true;nav.hidden=true;previous.setAttribute('aria-label','Vorherige Dateistände');more.setAttribute('aria-label','Weitere Dateistände');nav.setAttribute('aria-label','Dateiverlaufsseiten');nav.append(previous,more);message.setAttribute('role','status');message.setAttribute('aria-live','polite');
- toolbar.append(refresh);slot.append(toolbar,message,list,nav);card.append(heading,intro,slot);after.after(card);
+ const slot=create('div',null,'sma-publication-history'),message=create('p'),list=create('ol',null,'sma-history-list'),nav=create('nav',null,'sma-history-pagination'),previous=create('button','‹ Zurück'),more=create('button','Weiter ›');
+ slot.append(message,list,nav);card.append(heading,intro,slot);after.after(card);
+ const refresh=historyRefreshHeading(doc,heading,'Dateiverlauf aktualisieren','Refresh file history');
+ previous.type=more.type='button';refresh.disabled=true;nav.hidden=true;previous.setAttribute('aria-label','Vorherige Dateistände');more.setAttribute('aria-label','Weitere Dateistände');nav.setAttribute('aria-label','Dateiverlaufsseiten');nav.append(previous,more);message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const pageSize=5;let pageNumber=0,totalCount=0,entries=[],cursor=null,month,generation=0,busy=false,disposed=false;
  const current=g=>g===generation&&!disposed&&isActive();
  function reset(){generation++;entries=[];cursor=null;pageNumber=0;totalCount=0;busy=false;list.replaceChildren();nav.hidden=true;message.textContent='';refresh.disabled=month===undefined;slot.setAttribute('aria-busy','false');}

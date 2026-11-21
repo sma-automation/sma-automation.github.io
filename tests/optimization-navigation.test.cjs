@@ -1,17 +1,18 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
 const html=fs.readFileSync('app/dashboard.html','utf8');
 const code=html.slice(html.indexOf('let optimizerFrames='),html.indexOf('// Extend the existing portal cards'));
+const messages=html.slice(html.indexOf("window.addEventListener('message',event=>{"),html.indexOf('function leaveDashboard()'));
 function setup(){
  const events={},stack=[null];let index=0;
  const history={state:null,pushState(state){stack.splice(++index);stack.push(state);this.state=state;},replaceState(state){stack[index]=this.state=state;},back(){if(index>0)this.state=stack[--index];events.popstate({state:this.state});},forward(){if(index+1<stack.length)this.state=stack[++index];events.popstate({state:this.state});}};
  const doc={createElement:tag=>new Element(tag),head:{append(){}}};
- class Element{constructor(tag){this.tag=tag;this.ownerDocument=doc;this.children=[];this.dataset={};this.events={};this.hidden=false;this.classes=new Set();this.classList={add:v=>this.classes.add(v),remove:v=>this.classes.delete(v)};}setAttribute(k,v){this[k]=v}append(...e){this.children.push(...e)}replaceChildren(...e){this.children=e}addEventListener(k,f){this.events[k]=f}focus(){this.focused=true}scrollIntoView(){this.scrolled=true}}
+ class Element{constructor(tag){this.tag=tag;this.ownerDocument=doc;this.children=[];this.dataset={};this.events={};this.hidden=false;this.classes=new Set();this.classList={add:v=>this.classes.add(v),remove:v=>this.classes.delete(v),contains:v=>this.classes.has(v)};}setAttribute(k,v){this[k]=v}append(...e){this.children.push(...e)}replaceChildren(...e){this.children=e}addEventListener(k,f){this.events[k]=f}focus(){this.focused=true}scrollIntoView(){this.scrolled=true}}
  const observed=new Set();
  let resize;
  class ResizeObserver{constructor(callback){resize=callback;}observe(el){observed.add(el);}disconnect(){observed.clear();}}
- const context={crypto:require('node:crypto').webcrypto,ResizeObserver,window:{addEventListener:(name,fn)=>events[name]=fn,location:{href:'https://sma-automation.com/app/dashboard.html'}},history,location:{pathname:'/app/dashboard.html',search:''},URL,portalNames:{instagram:'Instagram',youtube:'YouTube'},api:null};
- vm.runInNewContext(code+';api={attachOptimizerPage,openSearchFile,openOptimizer,closeOptimizer,clearOptimizer,optimizerWorkspaceView,select(id){selectedFileId=id},view(){return {optimizerFrames,optimizerPage,optimizerHeader,publishingPage}}};',context);
- const page=new Element('section'),original=new Element('div');page.append(original);context.api.attachOptimizerPage(doc,page);return {...context.api,history,page,original,observed,resize,trigger:new Element('button')};
+ const context={signedOut:false,frame:{hidden:false},crypto:require('node:crypto').webcrypto,ResizeObserver,window:{addEventListener:(name,fn)=>events[name]=fn,location:{href:'https://sma-automation.com/app/dashboard.html',origin:'https://sma-automation.com'}},history,location:{pathname:'/app/dashboard.html',search:''},URL,portalNames:{instagram:'Instagram',youtube:'YouTube'},api:null};
+ vm.runInNewContext(code+messages+';api={setChapters(value){dashboardChapters=value;},attachOptimizerPage,openSearchFile,openOptimizer,closeOptimizer,clearOptimizer,optimizerWorkspaceView,select(id){selectedFileId=id},view(){return {optimizerFrames,optimizerPage,optimizerHeader,publishingPage}}};',context);
+ const page=new Element('section'),original=new Element('div');page.append(original);context.api.attachOptimizerPage(doc,page);return {...context.api,events,history,page,original,observed,resize,trigger:new Element('button')};
 }
 test('Optimieren replaces the publishing content with a full page while retaining the dashboard shell',()=>{
  const p=setup();p.select('own-asset');p.openOptimizer('instagram',p.trigger);const v=p.view();
@@ -96,4 +97,22 @@ test('opening a search result adds one history entry and keeps its query out of 
  assert(!JSON.stringify(p.history.state).includes('privater Suchbegriff'));
  p.history.back();assert.equal(p.history.state.smaSearchResults,key);assert.equal(p.view().optimizerPage.hidden,true);
  p.history.forward();assert.equal(p.history.state.view,'preview');assert.equal(p.view().optimizerFrames.children[0],frame);
+});
+
+test('only the visible same-origin optimizer opens the daily schedule for its own portal',()=>{
+ const p=setup(),visits=[];
+ p.page.classList.add('active');
+ p.setChapters({controllers:new Map([['publishing',{entries:[{key:'schedule'}],select:key=>visits.push(key)}]])});
+ p.openOptimizer('youtube',p.trigger);
+ const first=p.view().optimizerFrames.children[0];first.contentWindow={postMessage(){}};
+ p.openOptimizer('instagram',p.trigger);
+ const active=p.view().optimizerFrames.children[1];active.contentWindow={postMessage(){}};
+ const send=(source,origin='https://sma-automation.com')=>p.events.message({origin,source,data:{type:'sma-publication-open-schedule',portal:'facebook'}});
+ send(first.contentWindow);send(active.contentWindow,'https://elsewhere.invalid');
+ assert.deepEqual(visits,[]);
+ send(active.contentWindow);
+ assert.equal(p.history.state.smaSchedule,'instagram');assert.equal(p.page.dataset.schedulePortal,'instagram');
+ assert.deepEqual(visits,['schedule']);assert.equal(p.view().optimizerPage.hidden,true);
+ p.history.back();assert.equal(p.view().optimizerPage.hidden,false);p.history.forward();
+ assert.deepEqual(visits,['schedule','schedule']);assert.equal(p.view().optimizerPage.hidden,true);
 });

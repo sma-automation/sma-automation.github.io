@@ -1,16 +1,26 @@
 import {dashboardFileDescription} from './dashboard-file-search.mjs?v=2';
 import {readMusicSetting} from './media-music-model.mjs?v=1';
 export const editorDefaults=Object.freeze({format:'original',fit:'contain',position_x:50,position_y:50,start_ms:0,end_ms:null,cover_ms:null,overlay_text:'',overlay_position:'bottom',audio_volume:100});
-export const editorLabels=Object.freeze({format:'Format',fit:'Bildeinpassung',position_x:'Ausschnitt horizontal',position_y:'Ausschnitt vertikal',start_ms:'Schnittbeginn',end_ms:'Schnittende',cover_ms:'Cover-Zeitpunkt',overlay_text:'Texteinblendung',overlay_position:'Textposition',audio_volume:'Originalton',music:'Musikspur'});
+export const editorLabels=Object.freeze({format:'Format',fit:'Bildeinpassung',position_x:'Ausschnitt horizontal',position_y:'Ausschnitt vertikal',start_ms:'Schnittbeginn',end_ms:'Schnittende',cover_ms:'Cover-Zeitpunkt',overlay_text:'Texteinblendung',overlay_position:'Textposition',overlay_style:'Textgestaltung',audio_volume:'Originalton',music:'Musikspur'});
 export const editorUUID=v=>typeof v==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 export const editorTimestamp=v=>typeof v==='string'&&/^20\d{2}-\d\d-\d\dT[\d:.]+(?:Z|[+-]\d\d:\d\d)$/.test(v)&&Number.isFinite(Date.parse(v));
+export const overlayColors = Object.freeze({'#ffffff':'Weiß','#15171f':'Schwarz','#ffd357':'Gelb','#9ccaff':'Hellblau'});
+export const defaultOverlayStyle = Object.freeze({x:50,y:64,size:100,color:'#ffffff',bold:true});
+function readOverlayStyle(style) {
+ if(!object(style)||Object.keys(style).length!==5||Object.keys(defaultOverlayStyle).some(k=>!Object.hasOwn(style,k))
+  ||typeof style.bold!=='boolean'||typeof style.color!=='string'||!Object.hasOwn(overlayColors,style.color))throw Error('INVALID_SETTINGS');
+ for(const [value,min,max] of [[style.x,0,100],[style.y,0,100],[style.size,50,260]]) {
+  if(!Number.isInteger(value)||value<min||value>max)throw Error('INVALID_SETTINGS');
+ }
+ return Object.fromEntries(Object.keys(defaultOverlayStyle).map(key=>[key,style[key]]));
+}
 export function readEditorSettings(s,file){
- if(!object(s)||![10,11].includes(Object.keys(s).length)||Object.keys(s).some(k=>k!=='music'&&!Object.hasOwn(editorDefaults,k))||Object.keys(editorDefaults).some(k=>!Object.hasOwn(s,k))||!['original','9:16','1:1','16:9'].includes(s.format)||!['contain','cover'].includes(s.fit)||!['top','center','bottom'].includes(s.overlay_position)||typeof s.overlay_text!=='string'||Array.from(s.overlay_text).length>160||/[\u0000-\u001f\u007f]/.test(s.overlay_text))throw Error('INVALID_SETTINGS');
+ if(!object(s)||Object.keys(s).some(k=>!Object.hasOwn(editorLabels,k))||Object.keys(editorDefaults).some(k=>!Object.hasOwn(s,k))||!['original','9:16','1:1','16:9'].includes(s.format)||!['contain','cover'].includes(s.fit)||!['top','center','bottom'].includes(s.overlay_position)||typeof s.overlay_text!=='string'||Array.from(s.overlay_text).length>160||/[\u0000-\u001f\u007f]/.test(s.overlay_text))throw Error('INVALID_SETTINGS');
  for(const k of ['position_x','position_y','audio_volume','start_ms','end_ms','cover_ms']){if(['end_ms','cover_ms'].includes(k)&&s[k]===null)continue;if(!Number.isSafeInteger(s[k])||s[k]<0||s[k]>99999999999999||(['position_x','position_y','audio_volume'].includes(k)&&s[k]>100))throw Error('INVALID_SETTINGS');}
  if(file){if(file.media_kind==='image'||!Number.isFinite(file.duration_ms)||file.duration_ms<=0){if(s.start_ms!==0||s.end_ms!==null||s.cover_ms!==null)throw Error('INVALID_SETTINGS');}else{const end=s.end_ms??file.duration_ms;if(s.start_ms>=end||end>file.duration_ms||s.cover_ms!==null&&(s.cover_ms<s.start_ms||s.cover_ms>=end))throw Error('INVALID_SETTINGS');}if(file.media_kind==='image'&&s.audio_volume!==100)throw Error('INVALID_SETTINGS');}
  if(Object.hasOwn(s,'music')&&(file&&file.media_kind!=='video'))throw Error('INVALID_SETTINGS');
- return {...Object.fromEntries(Object.keys(editorDefaults).map(k=>[k,s[k]])),...(Object.hasOwn(s,'music')?{music:readMusicSetting(s.music)}:{})};
+ return {...Object.fromEntries(Object.keys(editorDefaults).map(k=>[k,s[k]])),...(Object.hasOwn(s,'music')?{music:readMusicSetting(s.music)}:{}),...(Object.hasOwn(s,'overlay_style')?{overlay_style:readOverlayStyle(s.overlay_style)}:{})};
 }
 export function readEditorState(r,file){
  if(!object(r)||r.ok!==true)throw Error(r?.code||'UNAVAILABLE');
@@ -37,6 +47,7 @@ export function readEditorFiles(r,linkedId=null,linkedPortal=null){
  });
 }
 export function editorValue(key,v){
+ if(key==='overlay_style')return v?[v.x+' % horizontal',v.y+' % vertikal',v.size+' % Schriftgröße',overlayColors[v.color],v.bold?'Fett':'Normal'].join(' · '):'Standard';
  if(key==='music')return v?v.name+' · '+v.volume+' % · ab '+(v.start_ms/1000).toLocaleString('de-AT')+' s':'Keine';
  if(key.endsWith('_ms'))return v===null?(key==='end_ms'?'Dateiende':'Nicht gewählt'):(v/1000).toLocaleString('de-AT',{maximumFractionDigits:3})+' s';
  if(['position_x','position_y','audio_volume'].includes(key))return v+' %';

@@ -1,4 +1,4 @@
-import {readEditorSettings,editorUUID,editorTimestamp} from './media-editor-model.mjs?v=3';
+import {readEditorSettings,editorUUID,editorTimestamp} from './media-editor-model.mjs?v=5';
 export const EXPORT_MAX_BYTES=24000000;
 export const EXPORT_RENDERER='sma-browser-export-v1';
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);

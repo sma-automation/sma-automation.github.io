@@ -27,9 +27,12 @@ const panel=document.getElementById('exportPanel');document.querySelector('main'
 const api=async(action,input,signal)=>{
  const response=await fetch('/fixture-api',{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({owner,action,input}),signal});
- if(!response.ok)throw Error('Synthetic backend unavailable');return response.json();
+ if(!response.ok)throw Error('Synthetic backend unavailable');
+ const result=await response.json();
+ if(action==='list')fixture.completedLists++;
+ return result;
 };
-const fixture=window.fixture={owner,file,saved,sources:0,renders:0,authLost:0};
+const fixture=window.fixture={owner,file,saved,sources:0,renders:0,authLost:0,completedLists:0};
 fixture.view=mountMediaExport({doc:document,expectedOwnerId:owner,getOwnerId:async()=>fixture.owner,
  onAuthLost:()=>{fixture.authLost++;fixture.view.destroy();},setBusy:value=>document.body.dataset.busy=String(value),
  getDraft:async()=>({ok:true,version:1,can_publish:false,asset_id:file.id,asset_revision:file.revision,
@@ -107,16 +110,17 @@ async function fixture(browser,mobile,options={}){
  });
  const open=async(customer=owner)=>{
   const page=await context.newPage();await page.goto(origin+'/app/media-editor.html?owner='+customer);
-  await page.waitForFunction(()=>window.fixture?.ready&&document.querySelector('#exportHistory').textContent.includes('Noch keine'));
+  await page.waitForFunction(()=>window.fixture?.ready&&fixture.completedLists>0);
   return page;
  };
  const clean=()=>{assert.deepEqual(external,[]);assert.deepEqual(errors,[]);assert.deepEqual(fixtureErrors,[]);};
  return {context,state,open,clean};
 }
 async function generate(page){
+ const previousLists=await page.evaluate(()=>fixture.completedLists);
  await page.locator('#generateExport').click();
- await page.waitForFunction(()=>document.body.dataset.busy==='false'&&!document.getElementById('exportResult').hidden&&
-  document.getElementById('exportHistory').textContent.includes('Noch keine'));
+ await page.waitForFunction(previous=>document.body.dataset.busy==='false'&&!document.getElementById('exportResult').hidden&&
+  fixture.completedLists>previous,previousLists);
  assert.match(await page.locator('#exportStatus').textContent(),/Vorschau fertig/);
 }
 async function waitStored(page){
@@ -145,7 +149,7 @@ test('actual browser export recovery preserves identities across reloads, tabs a
      const first=f.state.calls.find(call=>call.action==='prepare').input,checkpoint=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),prefix+owner);
      assert.equal(checkpoint.length,1);assert.equal(checkpoint[0].export_id,first.export_id);
      const before=f.state.calls.length;
-     await page.reload();await page.waitForFunction(()=>window.fixture?.ready&&document.querySelector('#exportHistory').textContent.includes('Noch keine'));
+     await page.reload();await page.waitForFunction(()=>window.fixture?.ready&&fixture.completedLists>0);
      assert.deepEqual(f.state.calls.slice(before).map(call=>call.action),['list'],'Opening the editor performs no recovery write');
      assert.equal(f.state.uploads.length,2);assert.equal(await page.evaluate(()=>fixture.sources+fixture.renders),0);
      await generate(page);const beforeSave=f.state.calls.length;

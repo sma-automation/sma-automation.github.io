@@ -11,7 +11,7 @@ const assetId='ac900000-0000-4000-8000-000000000001';
 const original=fs.readFileSync('tests/fixtures/original-video.mp4');
 const digest=createHash('sha256').update(original).digest('hex');
 const file={id:assetId,revision:'sha256:'+digest+':1',name:'Synthetic original video',media_kind:'video',mime_type:'video/mp4',
- duration_ms:10000,width_px:320,height_px:240,size_bytes:original.length};
+ duration_ms:3000,width_px:160,height_px:90,size_bytes:original.length};
 const html=fs.readFileSync('app/media-editor.html','utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'')
  .replace('</head>','<link rel="icon" href="data:,"></head>')
  .replace('</body>','<script type="module" src="/fixture.mjs"></script></body>');
@@ -108,7 +108,7 @@ async function fixture(browser,mobile,{holdFirstOriginal=false}={}){
     return {url:location.href,readyState:document.readyState,visibility:document.visibilityState,ready:f?.ready,
      owner:f?.owner,sessionReads:f?.sessionReads,status:$('status')?.textContent,editorHidden:$('editor')?.hidden,
      appHidden:$('app')?.hidden,assetDisabled:$('asset')?.disabled,originalStatus:$('originalVideoPreview')?.querySelector('p')?.textContent,
-     originalHidden:$('originalVideoPreview')?.querySelector('video')?.hidden,originalReadyState:$('originalVideoPreview')?.querySelector('video')?.readyState,
+     originalHidden:$('stage')?.querySelector('video')?.hidden,originalReadyState:$('stage')?.querySelector('video')?.readyState,
      sources:f?.sources,sourceErrors:f?.sourceErrors,realms:f?.realms,calls:f?.calls.map(call=>call.action),
      registry:registry?{owner:registry.owner,epoch:registry.epoch,cacheEntries:registry.cache.size,running:registry.running.size,
       pending:[...registry.pending.values()].map(job=>({asset:job.file.id,consumers:job.consumers.size,aborted:job.scope.signal.aborted}))}:null};
@@ -140,12 +140,12 @@ async function fixture(browser,mobile,{holdFirstOriginal=false}={}){
 }
 async function beginOriginalPreview(page){
  await page.getByRole('tab',{name:'Schnitt & Cover',exact:true}).click();
- await page.getByRole('button',{name:'Originalvideo laden',exact:true}).click();
+
 }
 async function originalPreview(page,f){
  await beginOriginalPreview(page);
- await f.wait(page,'Original preview ready',()=>!document.querySelector('#originalVideoPreview video').hidden&&document.querySelector('#originalVideoPreview p').textContent==='Originalvideo geladen.');
- assert.equal(await page.locator('#originalVideoPreview video').isVisible(),true);
+ await f.wait(page,'Original preview ready',()=>!document.querySelector('#stage video').hidden&&document.querySelector('#stage video').readyState>=2);
+ assert.equal(await page.locator('#stage video').isVisible(),true);
 }
 async function assertNoPersistence(page){
  const storage=await page.evaluate(async()=>({local:localStorage.length,session:sessionStorage.length,databases:typeof indexedDB.databases==='function'?(await indexedDB.databases()).length:0}));
@@ -163,9 +163,20 @@ test('real browser editorSource reuses exact original bytes only inside its auth
    await t.test(device+': real editor journey needs one original POST; reload and another tab each need a new one',async()=>{
     const f=await fixture(browser,mobile);try{
      const page=await f.open();assert.equal(f.transfers.length,0);
+     await page.getByRole('button',{name:'Gewählten Ausschnitt abspielen'}).click();
+     await f.wait(page,'Stage plays the original on first click',()=>{const video=document.querySelector('#stage video');return !video.paused && video.currentTime>0;});
      await originalPreview(page,f);assert.equal(f.transfers.length,1);
-     await page.locator('[name=cover_ms]').fill('0.5');await page.getByRole('button',{name:'Entwurf speichern',exact:true}).click();
+     await f.wait(page,'Eight thumbnails are sampled from the original',()=>{
+      const strip=document.getElementById('frameStrip');
+      return strip.width===768 && strip.getContext('2d').getImageData(767,30,1,1).data[3]===255;
+     });
+     await page.getByRole('slider',{name:'Schnittanfang'}).focus();await page.keyboard.press('ArrowRight');
+     await page.getByRole('slider',{name:'Schnittende'}).focus();await page.keyboard.press('ArrowLeft');
+     await page.locator('#scrub').focus();await page.keyboard.press('Home');await page.keyboard.press('ArrowRight');
+     await page.getByRole('button',{name:'Dieses Bild als Cover'}).click();
+     await page.getByRole('button',{name:'Entwurf speichern',exact:true}).click();
      await page.waitForFunction(()=>document.querySelector('#savedInfo').textContent.includes('Version 1'));
+     assert.deepEqual(await page.evaluate(()=>{const s=fixture.calls.find(c=>c.action==='save').input.settings;return [s.start_ms,s.end_ms,s.cover_ms];}),[40,2960,40]);
      await page.getByRole('tab',{name:'Export',exact:true}).click();await page.locator('#generateExport').click();
      await page.waitForFunction(()=>!document.querySelector('#exportResult').hidden&&!document.querySelector('#generateExport').disabled);
      assert.equal(f.transfers.length,1);assert.equal(await page.evaluate(()=>fixture.renders.length),1);
@@ -200,7 +211,7 @@ test('real browser editorSource reuses exact original bytes only inside its auth
      await f.wait(page,'Parent joined shared transfer',before=>fixture.sources.length===1&&fixture.sessionReads>=before+2,before);
      await page.evaluate(()=>document.querySelector('iframe[name="pending-original"]').remove());
      f.releaseOriginal();
-     await f.wait(page,'Parent received original after iframe removal',()=>!document.querySelector('#originalVideoPreview video').hidden&&fixture.realms.length===1);
+     await f.wait(page,'Parent received original after iframe removal',()=>!document.querySelector('#stage video').hidden&&fixture.realms.length===1);
      assert.equal(f.transfers.length,1);assert.deepEqual(await page.evaluate(()=>fixture.realms),[
       {ownRealm:true,topRealm:true,size:original.length,type:'video/mp4'}]);
      await assertNoPersistence(page);f.clean();

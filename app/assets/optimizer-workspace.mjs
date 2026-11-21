@@ -45,7 +45,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const exit=button('workspaceExit','← Veröffentlichung',options.onExit);
     exit.className='workspace-exit';
     const bar=make('div','workspaceTabBar');
-    main.append(bar);bar.append(toolbar,exit);
+    main.append(bar);bar.append(toolbar);
+    if(options.onSchedule){
+      const schedule=button('workspaceSchedule',doc.documentElement.lang==='en'?'Daily schedule':'Tagesplanung',options.onSchedule);
+      schedule.dataset.de='Tagesplanung';schedule.dataset.en='Daily schedule';
+      schedule.className='workspace-exit';bar.append(schedule);
+    }
+    bar.append(exit);
   }
   toolbar.addEventListener('keydown', event => {
     const keys=Object.keys(buttons),index=keys.findIndex(key=>buttons[key]===event.target);if(index<0)return;

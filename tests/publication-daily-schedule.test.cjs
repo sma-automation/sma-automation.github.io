@@ -68,10 +68,21 @@ test('schedule editor loads on demand and saves all three times independently fo
   const view=mountDailySchedule(document,panel,async args=>{
     calls.push(args);return {ok:true,version:args.p_times?1:0,times:args.p_times||defaultTimes(),files:[]};
   });
-  assert.equal(calls.length,0);view.open();await new Promise(setImmediate);
-  const fields=[...panel.querySelectorAll('input[type=time]')];assert.equal(fields.length,12);
-  const input=panel.querySelector('[aria-label="TikTok · Datei 2"]');input.value='15:30';input.dispatchEvent(new Event('input',{bubbles:true}));
+  assert.equal(calls.length,0);view.open('tiktok');await new Promise(setImmediate);
+  const fields=[...panel.querySelectorAll('input[type=time]')];assert.equal(fields.length,3);
+  assert.equal(panel.querySelector('h2').getAttribute('aria-label'),'TikTok');
+  assert(!panel.textContent.includes('Freie Plätze füllen'));
+  const input=fields[1];input.value='15:30';input.dispatchEvent(new Event('input',{bubbles:true}));
   panel.querySelector('form').dispatchEvent(new Event('submit',{cancelable:true}));await new Promise(setImmediate);
   assert.deepEqual(calls[1].p_times.tiktok,['10:00','15:30','18:00']);assert.deepEqual(calls[1].p_times.youtube,['10:00','14:00','18:00']);
   assert.equal(calls[1].p_version,0);
+  view.open('instagram'); assert.equal(panel.querySelector('h2').getAttribute('aria-label'),'Instagram');
+  assert.equal(fields[1].value,'14:00');
+  view.open('tiktok'); assert.equal(fields[1].value,'15:30');
+  assert.equal(calls.length,2);
+  panel.querySelector('.sma-schedule-date').click();
+  const chosen=panel.querySelector('#sma-daily-calendar button[data-day]:not([disabled]):not([aria-pressed=true])');
+  chosen.click();await new Promise(setImmediate);
+  assert.equal(calls[2].p_action,'get');assert.equal(calls[2].p_day,chosen.dataset.day);
+  view.destroy();
 });

@@ -2,10 +2,13 @@
 export function mountMediaEditorEntry({doc,href}){
  const panel=doc.querySelector('#sma-content-panel-optimizer');if(!panel)return {destroy(){}};
  const card=panel.querySelector('.card');if(!card)return {destroy(){}};
- const original=[...card.childNodes],create=(tag,text)=>{const e=doc.createElement(tag);e.textContent=text;return e;};
- const heading=create('div','Bearbeitungsentwurf');heading.className='card-title';
- const text=create('p','Format, Bildausschnitt, Text und Video-Einstellungen bearbeiten. Gespeicherte Änderungen findest du in der History.');
- const note=create('p','Medienexport ist verfügbar: fertige Datei ansehen, herunterladen und im Kundenordner speichern. Eigene Musik kannst du im Kapitel „Ton“ hinzufügen.');note.className='muted';
- const link=create('a','Bearbeitungsentwurf öffnen →');link.href=href;link.target='_blank';link.rel='noopener';link.className='primary';link.style.cssText='display:inline-block;padding:12px 18px;border-radius:9px;background:#4a60d8;color:white;text-decoration:none;font:inherit';
- card.replaceChildren(heading,text,link,note);return {destroy(){card.replaceChildren(...original);}};
+ const original=[...card.childNodes];
+ function create(tag,de,en){
+  const el=doc.createElement(tag);el.dataset.de=de;el.dataset.en=en;
+  el.textContent=doc.documentElement.lang==='en'?en:de;return el;
+ }
+ const heading=create('div','Bearbeitungsentwurf','Editing draft');heading.className='card-title';
+ const text=create('p','Format, Bildausschnitt, Text und Video-Einstellungen bearbeiten. Änderungen findest du auf History.','Edit the format, crop, text and video settings. You can find your changes in History.');
+ const link=create('a','Bearbeitungsentwurf öffnen →','Open editing draft →');link.href=href;link.target='_blank';link.rel='noopener';link.className='primary';link.style.cssText='display:inline-block;padding:12px 18px;border-radius:9px;background:#4a60d8;color:white;text-decoration:none;font:inherit';
+ card.replaceChildren(heading,text,link);return {destroy(){card.replaceChildren(...original);}};
 }

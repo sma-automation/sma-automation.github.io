@@ -9,12 +9,12 @@ const id=n=>'ab660000-0000-4000-9000-'+String(n).padStart(12,'0'),uid=id(91);
 const files=[{id:id(1),name:'Example.mp4',revision:'r1',media_kind:'video',mime_type:'video/mp4',duration_ms:10000,width_px:1080,height_px:1920},{id:id(2),name:'Image.jpg',revision:'r1',media_kind:'image',mime_type:'image/jpeg',duration_ms:null,width_px:1200,height_px:800}];
 const reply=(input,settings=defaults,revision=0)=>({ok:true,version:1,can_publish:false,asset_id:input.asset_id,asset_revision:input.asset_revision,revision,settings,saved_at:revision?'2026-11-06T12:00:00Z':null,changed:revision>0});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-function fixture({initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,navigate=null,source=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
+function fixture({initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,navigate=null,source=null,lookupDriveFile=null,refreshMetadata=null,request=(a,i)=>reply(i,a==='save'?i.settings:defaults,a==='save'?i.revision+1:0),listFiles=()=>({ok:true,files}),thumbnail=()=>new Blob(['fixture'])}={}){
  const {document:doc,window}=parseHTML(html);Object.defineProperty(doc,'visibilityState',{value:'visible',writable:true});
  // Linkedom lacks native select.value setters; model the selected option through attributes.
  for(const select of doc.querySelectorAll('select'))Object.defineProperty(select,'value',{get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value||'';},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
  let owner=uid,serial=100;const calls=[],urls=[],revoked=[],thumbs=[],navigations=[];
- const view=mountMediaEditor({doc,source,initialAssetId,initialAssetRevision,initialAssetPortal,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
+ const view=mountMediaEditor({doc,source,lookupDriveFile,initialAssetId,initialAssetRevision,initialAssetPortal,navigate:href=>{navigations.push(href);return navigate?.(href);},expectedOwnerId:uid,getOwnerId:async()=>owner,request:(a,i)=>{calls.push({a,i});return request(a,i);},listFiles,refreshMetadata,thumbnail:(f,s)=>{thumbs.push({f,s});return thumbnail(f,s);},uuid:()=>id(serial++),createURL:()=>{const url='blob:fixture-'+urls.length;urls.push(url);return url;},revokeURL:url=>revoked.push(url)});
  const $=s=>doc.querySelector(s),set=(key,value)=>{$('[name="'+key+'"]').value=value;$('[name="'+key+'"]').dispatchEvent(new window.Event('input',{bubbles:true}));};
  return {doc,window,view,$,calls,urls,revoked,thumbs,navigations,set,owner(v,notify=true){owner=v;if(notify)view.invalidateOwner(v);},save(){$('#editorForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));},choose(n){$('#asset').value=files[n].id;$('#asset').dispatchEvent(new window.Event('change'));},tab(name){[...doc.querySelectorAll('[role=tab]')].find(t=>t.textContent===name).click();},visibility(value){doc.visibilityState=value;doc.dispatchEvent(new window.Event('visibilitychange'));}};
 }
@@ -23,10 +23,28 @@ const leave=f=>{const event=new f.window.Event('beforeunload',{cancelable:true})
 const back=(f,extra={})=>{const event=new f.window.Event('click',{cancelable:true,bubbles:true});Object.assign(event,extra);f.$('#backDashboard').dispatchEvent(event);return event;};
 await test('a gallery link opens the exact second file and lets the customer choose a different file',async()=>{
  const f=fixture({initialAssetId:files[1].id,initialAssetRevision:'r1'});await tick();
- assert.equal(f.$('#fileInfo').textContent,files[1].name);
+ assert.equal(f.$('#assetPicker').hidden,true);assert.equal(f.$('#asset').value,files[1].id);
  assert.equal(f.calls[0].i.asset_id,files[1].id);assert.equal(f.thumbs[0].f.revision,'r1');
- f.choose(0);await tick();f.$('#refreshFiles').click();await tick();
- assert.equal(f.$('#fileInfo').textContent,files[0].name);f.view.destroy();
+ f.$('#driveFolder').click();assert.equal(f.$('#assetPicker').hidden,false);f.visibility('hidden');f.visibility('visible');await tick();f.choose(0);await tick();
+ assert.equal(f.$('#asset').value,files[0].id);assert.equal(f.$('#assetPicker').hidden,true);f.view.destroy();
+});
+await test('returning from Drive opens exactly the verified linked asset; dirty drafts, non-Drive links and revoked owners are protected',async()=>{
+ const found='owned_file_identifier',lookups=[];
+ const f=fixture({lookupDriveFile:async id=>{lookups.push(id);return {ok:true,files:[files[1]]};}});
+ await tick();f.$('#driveFolder').click();
+ const pick=async value=>{f.$('#driveFileLink').value=value;f.$('#driveLinkForm').dispatchEvent(new f.window.Event('submit',{cancelable:true}));await tick();};
+ await pick('https://example.invalid/file/d/'+found+'/view');assert.equal(lookups.length,0);
+ f.set('position_x','34');await pick('https://drive.google.com/file/d/'+found+'/view');assert.equal(lookups.length,0);
+ f.$('#reload').click();f.$('#confirmDiscard').click();await tick();
+ await pick('https://drive.google.com/file/d/'+found+'/view?usp=sharing');
+ assert.deepEqual(lookups,[found]);assert.equal(f.$('#asset').value,files[1].id);
+ assert.equal(f.$('#assetPicker').hidden,true);assert.equal(f.$('#driveFileLink').value,'');
+ assert.equal(f.calls.at(-1).i.asset_id,files[1].id);f.view.destroy();
+ const pending=deferred(),g=fixture({lookupDriveFile:()=>pending.promise});
+ await tick();g.$('#driveFolder').click();g.$('#driveFileLink').value='https://drive.google.com/open?id='+found;
+ g.$('#driveLinkForm').dispatchEvent(new g.window.Event('submit',{cancelable:true}));await tick();
+ g.owner('other');pending.resolve({ok:true,files:[files[1]]});await tick();
+ assert.equal(g.$('#app').hidden,true);assert.equal(g.calls.length,1);g.view.destroy();
 });
 await test('catalog captions distinguish the edit from its source and retain the title of the linked portal',async()=>{
  const source={...files[0],name:'SMA_Privattest_02.mp4',duration_ms:3000,display:{}};
@@ -35,57 +53,51 @@ await test('catalog captions distinguish the edit from its source and retain the
  const f=fixture({initialAssetId:edit.id,initialAssetRevision:edit.revision,initialAssetPortal:'tiktok',listFiles:()=>({ok:true,files:[source,edit]})});
  await tick();
  assert.deepEqual([...f.doc.querySelectorAll('#asset option')].map(o=>o.textContent),['SMA Privattest 02 · Video · 3 Sek.','SMA Privattest 02 · Bearbeitetes Video · 3 Sek.']);
- assert.equal(f.$('#asset').value,edit.id);assert.equal(f.$('#fileInfo').textContent,edit.name);assert.equal(f.$('#fileDetails').open,false);
- f.choose(0);await tick();assert.equal(f.$('#fileInfo').textContent,source.name);
+ assert.equal(f.$('#asset').value,edit.id);assert.equal(f.$('#fileDetails'),null);
+ f.choose(0);await tick();assert.equal(f.$('#asset').value,source.id);
  assert.deepEqual(f.calls.map(c=>[c.a,c.i.asset_id]),[['get',edit.id],['get',source.id]]);
  f.view.destroy();
 });
-await test('time preview loads exact original on demand and seeks only inside the proposed cut',async()=>{
- const videoFile={...files[0],size_bytes:12};
- const reads=[],blob=new Blob([new Uint8Array(12)],{type:'video/mp4'});
- const f=fixture({listFiles:()=>({ok:true,files:[videoFile,files[1]]}),source:(file,signal)=>{reads.push({file,signal});return blob;}});
- await tick();
- const player=f.$('#editorOriginal video'),load=f.$('#editorOriginal button'),show=f.$('#showCover');
- let pauses=0;player.pause=()=>pauses++;player.load=()=>{};player.readyState=2;player.duration=10;player.currentTime=0;
- assert.equal(reads.length,0);f.tab('Schnitt & Cover');assert.equal(f.$('#originalVideoPreview').hidden,false);
- assert.equal(reads.length,0);assert.equal(show.hidden,true);load.click();await tick();
+await test('the timeline seeks, selects a cover and redraws trim handles without reading the original twice',async()=>{
+ const videoFile={...files[0],size_bytes:12}, reads=[];
+ const f=fixture({listFiles:()=>({ok:true,files:[videoFile,files[1]]}),source:(file,signal)=>{reads.push({file,signal});return new Blob([new Uint8Array(12)],{type:'video/mp4'});}});
+ await tick();const player=f.$('#stage video');
+ let pauses=0;player.pause=()=>{pauses++;player.paused=true;};player.load=()=>{};player.readyState=2;player.duration=10;player.currentTime=0;
+ assert.equal(f.$('#timeline').hidden,false);assert.equal(reads.length,0);
+ f.tab('Schnitt & Cover');await tick();
  assert.equal(reads.length,1);assert.equal(reads[0].file.id,videoFile.id);assert.equal(reads[0].file.revision,videoFile.revision);
- assert.equal(player.hidden,false);assert.equal(f.$('#stillPreview').style.display,'none');
- player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(show.hidden,false);
- show.click();assert.match(f.$('#timePreviewNote').textContent,/innerhalb/);assert.equal(leave(f).defaultPrevented,false);
- f.set('start_ms','1');f.set('end_ms','3');f.set('cover_ms','3');show.click();assert.equal(player.currentTime,0);
- f.set('cover_ms','1.5');const before=pauses;show.click();assert.equal(player.currentTime,1.5);assert.ok(pauses>before);assert.equal(f.$('#timePreviewNote').textContent,'');
- f.tab('Text');assert.equal(f.$('#originalVideoPreview').hidden,true);assert.equal(player.hasAttribute('src'),false);assert.equal(f.$('#stillPreview').style.display,'');
- assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('[name=cover_ms]').value,'1.5');
- f.view.destroy();
-});
-await test('trim preview plays from the entered start, pauses at the end, and never writes a draft',async()=>{
- const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],size_bytes:12}]}),source:()=>new Blob([new Uint8Array(12)],{type:'video/mp4'})});
- await tick();f.tab('Schnitt & Cover');
- const player=f.$('#editorOriginal video'),play=f.$('#playCut'),status=f.$('#originalVideoPreview p');
- let plays=0;player.pause=()=>{player.paused=true;};player.play=async()=>{plays++;player.paused=false;};
- player.load=()=>{};player.duration=10;player.readyState=4;player.currentTime=0;player.playbackRate=1;
- assert.equal(play.hidden,true);f.$('#editorOriginal button').click();await tick();
- player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(play.hidden,false);
- f.set('start_ms','0.5');f.set('end_ms','2');f.set('cover_ms','9');play.click();
- assert.equal(plays,1);assert.equal(player.currentTime,.5);
- player.currentTime=2.02;player.dispatchEvent(new f.window.Event('timeupdate'));assert.equal(player.paused,true);assert.equal(player.currentTime,2);assert.match(status.textContent,/Ausschnitt beendet/);
- play.click();assert.equal(player.currentTime,.5);assert.equal(plays,2);
- f.set('end_ms','0.25');assert.equal(player.paused,true);play.click();assert.equal(plays,2);assert.match(f.$('#timePreviewNote').textContent,/gültigen Beginn/);
- f.set('end_ms','');play.click();player.currentTime=10;player.dispatchEvent(new f.window.Event('ended'));assert.equal(player.currentTime,10);assert.match(status.textContent,/bis 10 Sekunden/);
- play.click();f.set('cover_ms','1');f.$('#showCover').click();assert.equal(player.paused,true);assert.equal(player.currentTime,1);
- play.click();f.tab('Ton');assert.equal(player.hasAttribute('src'),false);
+ player.dispatchEvent(new f.window.Event('loadeddata'));
+ f.$('#scrub').value='1500';f.$('#scrub').dispatchEvent(new f.window.Event('input'));
+ assert.equal(player.currentTime,1.5);assert.equal(leave(f).defaultPrevented,false);
+ f.$('#useCover').click();assert.equal(f.$('[name=cover_ms]').value,'1.5');assert.equal(f.$('#coverMark').hidden,false);
+ const key=(id,value,shift=false)=>{const ev=new f.window.Event('keydown',{cancelable:true});ev.key=value;ev.shiftKey=shift;f.$(id).dispatchEvent(ev);};
+ key('#trimStart','ArrowRight',true);assert.equal(f.$('[name=start_ms]').value,'1');
+ key('#trimEnd','ArrowLeft',true);assert.equal(f.$('[name=end_ms]').value,'9');
+ assert.equal(f.$('#trimStart').getAttribute('aria-valuenow'),'1');assert.equal(f.$('#trimEnd').getAttribute('aria-valuenow'),'9');
+ key('#trimStart','ArrowRight',true);assert.equal(f.$('[name=cover_ms]').value,'2','Trimming across the cover keeps it inside the cut');
+ f.tab('Text');assert.equal(f.$('#stage video').hidden,false);assert.equal(reads.length,1);assert.ok(pauses>0);
  assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();
 });
-await test('file or account changes discard an in-flight original and images only show the still preview',async()=>{
- for(const action of ['select','owner','tab']){
+await test('clicking the image loads once and plays the actual cut, ending exactly at its chosen endpoint',async()=>{
+ const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],size_bytes:12}]}),source:()=>new Blob([new Uint8Array(12)],{type:'video/mp4'})});
+ await tick();const player=f.$('#stage video'),play=f.$('#stagePlayback'),status=f.$('#originalVideoPreview p');
+ let plays=0;player.pause=()=>{player.paused=true;};player.play=async()=>{plays++;player.paused=false;};
+ player.load=()=>{};player.duration=10;player.readyState=4;player.currentTime=0;player.playbackRate=1;player.paused=true;
+ assert.equal(play.hidden,false);f.set('start_ms','0.5');f.set('end_ms','2');play.click();await tick();
+ player.dispatchEvent(new f.window.Event('loadeddata'));assert.equal(plays,1);assert.equal(player.currentTime,.5);
+ player.currentTime=2.02;player.dispatchEvent(new f.window.Event('timeupdate'));assert.equal(player.paused,true);assert.equal(player.currentTime,2);assert.match(status.textContent,/Ausschnitt beendet/);
+ play.click();assert.equal(player.currentTime,.5);assert.equal(plays,2);play.click();assert.equal(player.paused,true);
+ assert.deepEqual(f.calls.map(c=>c.a),['get']);f.view.destroy();
+});
+await test('a file or account change discards an in-flight original; an image has no playback or video timeline',async()=>{
+ for(const action of ['select','owner']){
   const gate=deferred();let signal;
   const f=fixture({listFiles:()=>({ok:true,files:[{...files[0],size_bytes:12},files[1]]}),source:(_file,s)=>{signal=s;return gate.promise;}});
-  await tick();f.tab('Schnitt & Cover');f.$('#editorOriginal button').click();await tick();
-  if(action==='select')f.choose(1);else if(action==='owner')f.owner('other');else f.tab('Ton');
+  await tick();f.$('#stagePlayback').click();await tick();
+  if(action==='select')f.choose(1);else f.owner('other');
   assert.equal(signal.aborted,true);gate.resolve(new Blob([new Uint8Array(12)],{type:'video/mp4'}));await tick();
-  assert.equal(f.$('#originalVideoPreview').hidden,true);assert.equal(f.$('#editorOriginal video').hasAttribute('src'),false);
-  assert.equal(f.$('#showCover').hidden,true);assert.equal(f.calls.some(c=>c.a==='save'),false);f.view.destroy();
+  assert.equal(f.$('#originalVideoPreview').hidden,true);assert.equal(f.$('#stage video').hasAttribute('src'),false);
+  assert.equal(f.$('#stagePlayback').hidden,true);assert.equal(f.$('#timeline').hidden,true);assert.equal(f.calls.some(c=>c.a==='save'),false);f.view.destroy();
  }
 });
 await test('missing and revised targets open no substitute draft or thumbnail until a file is chosen',async()=>{
@@ -188,7 +200,7 @@ await test('standbild uses the exported title layout at every format and positio
 });
 await test('opening is read-only and exact chapter switching retains unsaved settings and safe preview text',async()=>{
  const f=fixture();await tick();assert.deepEqual(f.calls.map(c=>c.a),['get']);assert.equal(f.$('#editor').hidden,false);assert.equal(f.$('#image').hidden,false);
- f.set('format','9:16');f.set('fit','cover');f.set('position_x','75');f.tab('Text');f.set('overlay_text','<img src=x onerror=bad()>');f.tab('Format & Ausschnitt');
+ f.set('format','9:16');f.set('fit','cover');f.set('position_x','75');f.tab('Text');f.set('overlay_text','<img src=x onerror=bad()>');f.tab('Format');
  assert.equal(f.$('[name=format]').value,'9:16');assert.equal(f.$('#image').style.objectFit,'cover');assert.equal(f.$('#image').style.objectPosition,'75% 50%');assert.equal(f.$('#overlay img'),null);assert.match(f.$('#overlay').textContent,/<img/);assert.equal(f.calls.length,1);
  f.save();await tick();assert.equal(f.calls.at(-1).a,'save');assert.equal(f.calls.at(-1).i.revision,0);assert.equal(f.calls.at(-1).i.settings.position_x,75);assert.match(f.$('#status').textContent,/Entwurf gespeichert/);f.view.destroy();assert.deepEqual(f.revoked,f.urls);
 });
@@ -222,7 +234,7 @@ await test('visibility and teardown preserve unsaved text for the owner and abor
 });
 await test('dashboard replaces only the inactive optimizer and restores exact original nodes on teardown',()=>{
  const {document:doc}=parseHTML('<section id="sma-content-panel-optimizer"><div class="card"><p>Original</p><button disabled>Content optimieren</button></div></section><p id="sibling">Unchanged</p>');const old=doc.querySelector('button');
- const view=mountMediaEditorEntry({doc,href:'https://example.test/app/media-editor.html'});assert.equal(doc.querySelector('a').href,'https://example.test/app/media-editor.html');assert.match(doc.querySelector('.card').textContent,/Medienexport/);assert.equal(doc.querySelector('#sibling').textContent,'Unchanged');view.destroy();assert.equal(doc.querySelector('button'),old);
+ const view=mountMediaEditorEntry({doc,href:'https://example.test/app/media-editor.html'});assert.equal(doc.querySelector('a').href,'https://example.test/app/media-editor.html');assert.match(doc.querySelector('.card').textContent,/Änderungen findest du auf History/);assert.equal(doc.querySelector('#sibling').textContent,'Unchanged');view.destroy();assert.equal(doc.querySelector('button'),old);
 });
 await test('metadata refresh preserves unsaved recipe, enables timing and does not reload or save the draft',async()=>{
  const pending={...files[0],duration_ms:null,width_px:null,height_px:null};let count=0;

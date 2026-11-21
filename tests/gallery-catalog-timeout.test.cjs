@@ -29,7 +29,7 @@ function setup({hold=null,withCatalog=true,syncState='complete'}={}){
   customerMediaEndpoint:kind=>{assert.equal(kind,'catalog');return 'https://fixture.invalid/catalog';},
   dashboardSession:read=> (read||((fn)=>fn()))(()=>stage(++sessionCount===1?'session-first':'session-final',{user:{id:account},access_token:'fixture'})),
   leaveDashboard(){env.signedOut=true;env.disposeCatalog();redirects.push('index.html');},
-  cancelReload(){},soundtrack:{destroy(){}},doc:{removeEventListener(){}},thumbnails:{clear(){}},thumbnailClient:{dispose(){}},
+  cancelReload(){},soundtrack:{destroy(){}},doc:{removeEventListener(){}},thumbnails:{clear(){}},dailyThumbnails:{clear(){}},thumbnailClient:{dispose(){}},
   setTimeout:(fn,delay)=>{const id=++next;timers.set(id,{fn,at:clock+delay});return id;},clearTimeout:id=>timers.delete(id),
   supabase:{rpc:(name,args)=>{
    assert.equal(name,'sma_publication_files_v1');

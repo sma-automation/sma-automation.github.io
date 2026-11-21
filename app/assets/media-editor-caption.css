@@ -1,0 +1,13 @@
+#overlayCanvas,#overlay{z-index:2}
+#stage .editor-caption-selection{position:absolute;z-index:4;min-width:1px;min-height:1px;border:1px dashed #fff;box-shadow:0 0 0 1px #375ccc}
+#stage .editor-caption-target{position:absolute;inset:0;width:100%;height:100%;min-height:0;border:0;padding:0;background:transparent;cursor:move;touch-action:none}
+#stage .editor-caption-resize{position:absolute;right:0;bottom:0;transform:translate(35%,35%);width:24px;height:24px;min-height:0;padding:0;border:0;border-radius:50%;background:radial-gradient(circle,#fff 0 4px,#4264d2 5px 6px,transparent 7px);cursor:nwse-resize;touch-action:none}
+#stage .editor-caption-input{display:block;position:absolute;inset:0;width:100%;height:100%;min-height:26px;padding:0 2px;border:0;background:#161b2de6;color:white;resize:none;font-family:Arial,sans-serif;text-align:center;line-height:1.15}
+.editor-caption-tools{display:grid;gap:.6rem;justify-items:start}
+.editor-caption-tools .muted{margin:0}
+.editor-caption-sizes,.editor-caption-colors{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.editor-caption-sizes output{min-width:5ch;text-align:center}
+.editor-caption-tools button[aria-pressed=true]{border-color:#3c5fc4;box-shadow:0 0 0 1px #3c5fc4}
+.editor-caption-colors button{background:var(--sample);height:34px;width:34px;min-height:0;border-radius:50%;padding:0;border:2px solid #9ba6b7}
+.editor-caption-colors button[aria-pressed=true]{outline:2px solid #365bc5;outline-offset:2px}
+@media(pointer:coarse){.editor-caption-colors button{height:42px;width:42px} #stage .editor-caption-resize{width:36px;height:36px}}

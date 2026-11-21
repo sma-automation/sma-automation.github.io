@@ -37,3 +37,49 @@ test('editor SQL source matches the migration and contains no publishing or rend
  assert.doesNotMatch(sql,/\b(http_post|http_get|publication_preview_request_v1)\b/);
  assert.doesNotMatch(fs.readFileSync('app/assets/publication-editor-history-dashboard.mjs','utf8'),/innerHTML|upload\(|request\('save'/);
 });
+test('visual caption settings survive a history round trip alongside a legacy draft', async()=>{
+ const {editorDefaults,readEditorSettings,editorValue}=await model;
+ const {readPublicationEditorHistory}=await history;
+ const overlay_style={x:22,y:74,size:130,color:'#ffd357',bold:true};
+ const settings={...editorDefaults,overlay_text:'Hochformat',overlay_style};
+ const entry={id:id(2),asset_id:file.id,asset_revision:'r1',file_name:'Example.mp4',media_kind:'video',revision:2,
+  previous_settings:{...editorDefaults,overlay_text:'Hochformat'},settings,changed_fields:['overlay_style'],recorded_at:'2026-11-06T12:00:00Z'};
+ const result=readPublicationEditorHistory({ok:true,version:1,month:'2026-11',timezone:'Europe/Vienna',total:1,entries:[entry],has_more:false,next:null});
+ assert.deepEqual(result.entries,[entry]);assert.match(editorValue('overlay_style',overlay_style),/22 % horizontal.*Gelb/);
+ for(const variant of [null,{}, {...overlay_style,color:'red'}, {...overlay_style,x:101}, {...overlay_style,y:-1}, {...overlay_style,size:49}, {...overlay_style,bold:1}, {...overlay_style,unexpected:true}]) {
+  assert.throws(()=>readEditorSettings({...settings,overlay_style:variant},file),/INVALID_SETTINGS/);
+ }
+});
+test('moving and styling text in the image uses the same geometry and paint as the export', async()=>{
+ const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
+ const {mountEditorCaption}=await import('../app/assets/media-editor-caption.mjs');
+ const {overlayPNG}=await import('../app/assets/media-export-render.mjs');
+ const doc=parseHTML('<html><body><fieldset id="fields"><section id="overlayPanel"><input name="overlay_text"><input name="overlay_position" value="bottom"></section></fieldset><div id="stage"><canvas id="overlayCanvas"></canvas><span id="overlay"></span></div></body></html>').document;
+ const stroke=()=>({calls:[],clearRect(){this.calls=[];},measureText(v){return {width:v.length*15};},fillRect(){},fillText(v,x,y){this.calls.push([v,x,y,this.fillStyle,this.font]);}});
+ const act=(el,type,data)=>{const ev=new doc.defaultView.Event(type,{bubbles:true,cancelable:true});Object.assign(ev,data);el.dispatchEvent(ev);};
+ const stage=doc.getElementById('stage'), preview=stroke(), control=k=>doc.querySelector('[name="'+k+'"]');
+ stage.getBoundingClientRect=()=>({left:0,top:0,width:720,height:1280});
+ doc.getElementById('overlayCanvas').getContext=()=>preview;
+ let edits=0;
+ const ui=mountEditorCaption({doc,stage,control,changed:()=>{edits++;}});
+ ui.setActive(true);ui.paint(720,1280);
+ doc.querySelector('[aria-label="Text hinzufügen"]').click();
+ const input=doc.querySelector('textarea');
+ input.value='Hallo SMA';act(input,'input',{});act(input,'keydown',{key:'Enter'});
+ doc.querySelector('[aria-label="Gelb"]').click();doc.querySelector('[aria-label="Schrift vergrößern"]').click();
+ const target=doc.querySelector('.editor-caption-target');
+ act(target,'pointerdown',{clientX:360,clientY:819,button:0,pointerId:1});
+ act(target,'pointermove',{clientX:216,clientY:691,pointerId:1});
+ act(target,'pointerup',{pointerId:1});
+ assert.equal(ui.getSetting().overlay_style.x,30);
+ assert.equal(ui.getSetting().overlay_style.y,54);
+ act(target,'keydown',{key:'ArrowRight'});
+ assert.deepEqual(ui.getSetting(),{overlay_style:{x:31,y:54,size:110,bold:true,color:'#ffd357'}});
+ const rendered=stroke(), exportDoc={createElement:()=>({getContext:()=>rendered,toBlob:cb=>cb(new Blob(['pixels']))})};
+ await overlayPNG(exportDoc,{width:720,height:1280,settings:{overlay_position:'bottom',overlay_text:'Hallo SMA',...ui.getSetting()}});
+ assert.deepEqual(preview.calls,rendered.calls);
+ ui.fill({overlay_style:ui.getSetting().overlay_style});ui.paint(720,1280);
+ assert.deepEqual(preview.calls,rendered.calls);
+ assert.ok(edits>=5);doc.querySelector('[aria-label="Text entfernen"]').click();assert.deepEqual(ui.getSetting(),{});
+ ui.destroy();assert.equal(doc.querySelector('.editor-caption-selection'),null);
+});

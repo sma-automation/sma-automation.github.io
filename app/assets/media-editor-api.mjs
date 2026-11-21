@@ -18,6 +18,15 @@ async function rpc(name,body,owner,signal){signal?.throwIfAborted();const s=awai
 export const galleryMusicRequest=(action,input,owner,signal)=>rpc('sma_gallery_music_v1',{p_action:action,p_input:input},owner,signal);
 export const editorRequest=(action,input,owner,signal)=>rpc('sma_publication_editor_v1',{p_action:action,p_input:input},owner,signal);
 export const editorFiles=(owner,signal)=>rpc('sma_publication_files_v1',{p_action:'list',p_input:{dashboard_labels:true}},owner,signal);
+export const editorFileByDriveId=(driveId,owner,signal)=>rpc('sma_editor_drive_file_v1',{p_drive_file_id:driveId},owner,signal);
+export async function editorDriveFolder(owner){
+ const current=await session(owner);
+ const response=await fetch(origin+'/functions/v1/sma-editor-drive-folder',{method:'POST',cache:'no-store',credentials:'omit',redirect:'error',
+  headers:{apikey:key,Authorization:'Bearer '+current.access_token},signal:AbortSignal.timeout(45000)});
+ const result=await response.json();await session(owner);
+ if(!response.ok||typeof result?.folder_id!=='string'||!/^[a-zA-Z0-9_-]{10,200}$/.test(result.folder_id))throw Error(response.status===429?'RATE_LIMITED':'FOLDER_UNAVAILABLE');
+ return 'https://drive.google.com/drive/folders/'+result.folder_id;
+}
 export const editorPilotAccess=owner=>rpc('sma_customer_media_pilot_v1',{p_route:'eligible'},owner);
 function editorRefreshScope(parent){
  // A finished folder sync does not reset the deadline for its saved-list and
