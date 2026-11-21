@@ -26,7 +26,8 @@ export function previewReloadSnapshot(route,origin){
  const view={kind:'preview',view:route.view,key:route.searchKey,id:origin.id,portal:route.portal,
   origin:origin.global?{global:true,query:origin.query,page:origin.page,chapter:origin.chapter??null,
    launcherId:origin.launcher?.id||null,mobile:origin.launcher?.dataset?.smaMobileTarget==='search'}:
-   {global:false,query:origin.query,page:origin.page,portal:origin.portal}};
+   {global:false,query:origin.query,page:origin.page,portal:origin.portal,
+    ...(Number.isFinite(origin.scroll)?{scroll:origin.scroll}:{}),...(Number.isFinite(origin.windowScroll)?{windowScroll:origin.windowScroll}:{})}};
  return previewMatchesHistory(view,route)&&validPreview(view)?view:null;
 }
 

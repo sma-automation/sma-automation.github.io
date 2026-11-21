@@ -19,9 +19,9 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
  let disposed=false,running=null,again=false,timer=null,transientStatus=false,persistentStatus=false,pendingGalleryRefresh=false;
  const controller=new AbortController(),signal=controller.signal;
  // Queue notices expire when the server reports idle; saved results and review warnings do not.
- function report(text,transient=false){
+ function report(text,transient=false,reason){
   if(disposed)return;
-  transientStatus=transient;persistentStatus=Boolean(text)&&!transient;onStatus(text);
+  transientStatus=transient;persistentStatus=Boolean(text)&&!transient;onStatus(text,reason);
  }
  async function call(action,input={}){
   signal.throwIfAborted();const r=await rpc(action,input,signal);signal.throwIfAborted();
@@ -69,7 +69,7 @@ export function createGalleryMusicWorker({rpc,source,loadTrack,render,upload,onC
    if(job.state==='deferred')continue;
    if(job.state==='idle'||job.state==='busy'||job.state==='no_track'){
     later(job.state==='no_track'?900000:job.state==='busy'?60000:120000);
-    if(job.state==='no_track')report('Für die automatische Vertonung ist noch kein SMA-Track verfügbar.',true);
+    if(job.state==='no_track')report('Für die automatische Vertonung ist noch kein SMA-Track verfügbar.',true,job.state);
     else if(job.state==='busy')report('Die automatische Vertonung wartet auf einen laufenden Auftrag. Der Status wird erneut geprüft.',true);
     else if(transientStatus)report('');
     return;

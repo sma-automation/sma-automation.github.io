@@ -41,6 +41,12 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     panels[key].setAttribute('role','tabpanel');panels[key].setAttribute('aria-labelledby',buttons[key].id);
     toolbar.append(buttons[key]);
   }
+  if(options.onExit){
+    const exit=button('workspaceExit','← Veröffentlichung',options.onExit);
+    exit.className='workspace-exit';
+    const bar=make('div','workspaceTabBar');
+    main.append(bar);bar.append(toolbar,exit);
+  }
   toolbar.addEventListener('keydown', event => {
     const keys=Object.keys(buttons),index=keys.findIndex(key=>buttons[key]===event.target);if(index<0)return;
     let next;if(event.key==='ArrowRight')next=(index+1)%keys.length;else if(event.key==='ArrowLeft')next=(index+keys.length-1)%keys.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=keys.length-1;else return;
@@ -53,7 +59,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   // The gallery shows only existing files and refresh. Adding a new file
   // belongs to the expanded preview, not under every thumbnail.
   galleryActions.append($('refreshFiles'));
-  galleryHeader.append(make('h2', null, 'Deine Dateien'), galleryActions);
+  galleryHeader.append(galleryActions);
   const pickerBody = $('filePicker').querySelector('.file-picker-body');
   files.append(galleryHeader, pickerBody);
   $('filePicker').hidden = true;
@@ -61,9 +67,12 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('pickerRefresh').parentElement.hidden = true;
   $('chooseGeneralTemplate').parentElement.hidden = true;
   // Retain search and the legacy picker entry point without another toolbar tab.
-  const search = make('details', 'workspaceSearch');
-  search.append(make('summary', null, 'Datei suchen'), doc.querySelector('label[for="fileSearch"]'), $('fileSearch'));
-  pickerBody.prepend(search, $('fileSwitchNotice'));
+  const search = $('fileSearch');
+  search.placeholder='Dateien suchen';search.setAttribute('aria-label','Dateien suchen');
+  doc.querySelector('label[for="fileSearch"]').hidden=true;
+  galleryActions.prepend(search);
+  $('refreshFiles').classList.add('sma-refresh');
+  pickerBody.prepend($('fileSwitchNotice'));
   // Clicking a gallery tile opens the post preview directly; no extra action button.
 
   function firstUploadEntry() {
@@ -74,7 +83,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     (selected || firstUploadEntry() || buttons.files).focus();
   }
   let fromSearch = Boolean(options.fromSearch);
-  const backText = () => fromSearch ? '← Zurück zu den Suchergebnissen' : '← Zu den Dateien';
+  const backText = () => fromSearch||selectedFile ? '← Zurück zu den Suchergebnissen' : '← Zu den Dateien';
   const previewBack = button('workspacePreviewBack', backText(), () => {
     if (fromSearch) { options.onSearchReturn(); return; }
     show('files');
@@ -86,7 +95,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const dashboardBack = $('back');
   const pageHeader = dashboardBack?.parentElement;
   const previewHeading = make('h1', 'workspacePreviewHeading', 'Vorschau für ' + portalName);
-  const previewName = make('p', 'workspacePreviewName');
   const previewTabs = make('nav', 'workspacePreviewTabs');
   previewTabs.setAttribute('aria-label', 'Dateivorschau');
   const postView = make('div', 'workspacePostView');
@@ -95,18 +103,10 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const detailTab = button('workspaceDetailTab', 'Dateidetails', () => previewTab('details'));
   postTab.setAttribute('aria-controls', postView.id); detailTab.setAttribute('aria-controls', detailView.id);
   previewTabs.append(postTab, detailTab);
-  const headingRow = make('div', 'workspacePreviewHeader');
-  const headingText = make('div');
-  headingText.append(previewHeading, previewName);
-  // Keep file replacement accessible, but not as another primary button.
-  const previewActions = make('details', 'workspacePreviewActions');
-  const fileActionTitle = make('summary', null, 'Dateiaktionen');
-  fileActionTitle.setAttribute('aria-label', 'Datei hinzufügen oder wechseln');
-  previewActions.append(fileActionTitle, $('deviceBrowse'));
+  const previewActions = make('div', 'workspacePreviewActions');
+  previewActions.append($('deviceBrowse'));
   const previewPrimary = make('div', 'workspacePreviewPrimary');
-  previewPrimary.setAttribute('aria-label', 'Nächster Schritt');
-  previewNav.append(previewActions);
-  headingRow.append(headingText, previewPrimary);
+  previewNav.append(previewPrimary, previewActions);
   const uploadIntro = make('p', 'workspaceUploadIntro', 'Noch keine Datei ausgewählt. Über „Datei hinzufügen“ kannst du ein passendes Bild oder Video auswählen. Es wird dadurch nichts veröffentlicht.');
   uploadIntro.hidden = true;
   const draftState = make('div', 'workspaceDraftState');
@@ -127,36 +127,32 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   draftState.append(draftNotice, draftTools);
   // Keep the existing device-upload handler, progress and retry controls
   // together in the expanded preview. No new endpoint or upload behavior.
-  preview.append(previewNav, headingRow, $('uploadPanel'), uploadIntro, draftState, previewTabs, postView, detailView);
+  preview.append(previewNav, previewHeading, $('uploadPanel'), uploadIntro, draftState, previewTabs, postView, detailView);
   const post = make('article', 'workspacePost');
   post.setAttribute('aria-label', 'Darstellung des Beitrags');
   post.dataset.portal = portalName.toLowerCase();
-  const profile = make('div', 'workspacePostProfile');
-  profile.append(make('span', 'workspacePostAvatar', '◎'), make('strong', null, portalName === 'YouTube' ? 'Dein Kanal' : 'Dein Profil'), make('span', null, portalName));
   const postBody = make('div', 'workspacePostBody');
   const postTitle = make('h2', 'workspacePostTitle');
   const postCaption = make('p', 'workspacePostCaption');
   const postTags = make('p', 'workspacePostTags');
   const postShop = make('a', 'workspacePostShop');
   postShop.target = '_blank'; postShop.rel = 'noopener noreferrer';
-  const editPost = button('workspaceEditPost', 'Beitragstext bearbeiten', () => {
+  const editPost = button('workspaceEditPost', 'Bearbeiten', () => {
     const field = $(portalName.toLowerCase() + '-body');
     if (!selectedFile || !field || field.disabled) return;
     show('text'); field.focus();
   });
   editPost.className = 'secondary'; editPost.hidden = true;
   postBody.append(postTitle, postCaption, postTags, postShop, editPost);
-  post.append(profile, $('assetPreview'), postBody);
+  post.append($('assetPreview'), postBody);
   const linkIssue=make('div','workspaceLinkIssue');
   const linkMessage=make('p','workspaceLinkMessage');linkMessage.className='notice';linkMessage.setAttribute('role','status');
   const editLink=make('button','workspaceEditLink','Linkziel bearbeiten');editLink.type='button';editLink.className='secondary';
   editLink.addEventListener('click',()=>options.onEditLink?.());
   linkIssue.hidden=true;linkIssue.append(linkMessage,editLink);
-  postView.append(linkIssue,post, make('p', 'workspacePreviewNotice', 'Gestaltungsvorschau · Die endgültige Darstellung kann je nach Portal und Gerät abweichen.'));
+  postView.append(linkIssue,post);
   const facts = make('dl', 'workspacePreviewFacts');
-  const sourceDescription = make('p', 'workspacePreviewSource');
-  const reviewNotes = make('ul', 'workspacePreviewNotes');
-  detailView.append($('fileDetails'), facts, make('h2', null, 'Inhalt der Datei'), sourceDescription, reviewNotes, $('mediaPanel'));
+  detailView.append(facts);
 
   function previewTab(key) {
     postView.hidden = key !== 'post'; detailView.hidden = key !== 'details';
@@ -174,8 +170,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     post.dataset.orientation = width > 0 && height > width ? 'portrait' : '';
     if (width > 0 && height > 0) post.style.setProperty('--media-aspect', width + ' / ' + height);
     else post.style.removeProperty('--media-aspect');
-    const description = selectedFile ? describe(file) : null;
-    previewName.textContent = description ? [description.title, description.version].join(' · ') : '';
     const step = data.draftStep, prepare = $('preparePublicationOrder');
     if (prepare) prepare.hidden = !!step;
     draftNotice.textContent = feedback || step?.note || data.draftStatus || '';
@@ -196,23 +190,15 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     const issue=target&&draft.product_id?data.linkNotice:'';
     linkMessage.textContent=issue||'';linkIssue.hidden=!issue;
     if (target&&!issue) postShop.href = shop; else postShop.removeAttribute('href');
-    sourceDescription.textContent = data.source || 'Noch keine Inhaltsbeschreibung vorhanden.';
     facts.replaceChildren();
-    const number = value => Number.isFinite(value) && value >= 0;
-    const values = [
-      ['Dateiart', info.mime_type || file.mime_type || (file.media_kind === 'video' ? 'Video' : 'Bild')],
-      ['Dateigröße', number(info.size_bytes) ? (info.size_bytes / 1000000).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' MB' : 'Noch nicht ermittelt'],
-      ['Abmessungen', info.width_px && info.height_px ? info.width_px + ' × ' + info.height_px + ' Pixel' : 'Noch nicht ermittelt'],
-      ['Dauer', file.media_kind !== 'video' ? 'Nicht zutreffend' : number(info.duration_ms) ? (info.duration_ms / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' Sekunden' : 'Noch nicht ermittelt'],
-      ['Portal', portalName], ['Sprache', data.language === 'en' ? 'Englisch' : 'Deutsch'],
-      ['Entwurf', data.draftStatus || 'Noch kein Beitragstext vorbereitet'],
-      [draft.product_id ? 'Produktlink' : 'Shop-Link', shop || 'Noch kein Shop-Link zugeordnet'],
-    ];
-    for (const [label, value] of values) facts.append(make('dt', null, label), make('dd', null, value));
-    reviewNotes.replaceChildren();
-    for (const note of draft.review_notes || []) reviewNotes.append(make('li', null, note));
-    reviewNotes.hidden = !reviewNotes.children.length;
-    $('fileDetails').open = true;
+    const values = [['Dateiname',file.name],['Medienart',file.media_kind==='video'?'Video':'Bild']];
+    if(file.media_kind==='video'){
+      const duration=info.duration_ms??file.duration_ms;
+      values.push(['Dauer',Number.isFinite(duration)?(duration/1000).toLocaleString('de-AT')+' Sek.':'Noch nicht ermittelt']);
+    }
+    values.push(['Zielportal',portalName]);
+    for (const [label,value] of values) facts.append(make('dt',null,label),make('dd',null,value));
+
   }
 
   const selectedRow = make('div', 'workspaceSelectedFile');
@@ -222,37 +208,37 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   selectedLabel.append(selectedName, selectedKind);
   selectedRow.append(selectedLabel);
   const editor = make('div', 'workspaceEditor');
-  source.append(selectedRow);
-  if($('videoMetadataPanel'))source.append($('videoMetadataPanel'));
-  if($('exportCoverPanel'))source.append($('exportCoverPanel'));
+  selectedRow.hidden=true;source.append(selectedRow);
   source.append(editor);
   $('magicActionsSource').hidden = true;
   $('magicActionsText').hidden = false;
-  $('sourceSummary').textContent = 'Inhalt ansehen oder eigene Angaben ergänzen';
-  $('sourcePanel').open = false;
+  $('sourceSummary').hidden=true;
+  $('sourcePanel').open = true;
   $('generate').textContent = 'Text aus eigenen Angaben erstellen';
   $('generate').classList.add('secondary');
   $('loadLatest').textContent = 'Gespeicherten Entwurf laden';
   const evidence = make('details', 'workspaceMagicEvidence');
   evidence.append(make('summary', null, 'Erkennung ansehen'), $('magicPanel'));
-  $('sourcePanel').append(evidence);
+
 
   const textHeader = make('div', 'workspaceTextHeader');
   const language = $('language').parentElement;
   // The original language control remains form-associated after moving outside it.
   $('language').setAttribute('form', 'previewForm');
   textHeader.append($('resultHeading'), language);
+  textHeader.hidden=true;
   const empty = make('div', 'workspaceTextEmpty');
   for (const [tag, id, label, placeholder] of [
     ['input', 'workspaceEmptyTitle', 'Titel / Einstieg', 'Dein Titel wird hier vorbereitet.'],
     ['textarea', 'workspaceEmptyBody', 'Beitragstext', 'Dein Text mit passenden Hashtags und Shop-Link erscheint hier.'],
+    ['input', 'workspaceEmptyHashtags', 'Hashtags', ''],
   ]) {
     const field = make('div'); field.className = 'field';
     const fieldLabel = make('label', null, label); fieldLabel.htmlFor = id;
     const control = make(tag, id); control.placeholder = placeholder; control.disabled = true;
     field.append(fieldLabel, control); empty.append(field);
   }
-  empty.append(make('p', null, 'Noch kein Text vorbereitet.'));
+
   const resultDetails = make('details', 'workspaceResultDetails');
   resultDetails.append(make('summary', null, 'Prüfdetails und Shop-Link'));
   // Keep pending checks accessible; collapsing them never changes publish approval.
@@ -262,7 +248,23 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('save').textContent = 'Entwurf speichern';
   const repeat = button('workspaceRepeat', 'Neue Textvariante erstellen', () => options.onNewVariant?.());
   repeat.className = 'secondary'; repeat.hidden = true;
-  $('save').parentElement.append(repeat);
+  const reviewActions=make('div','workspaceReviewActions');
+  const detailsButton=(id,label,target)=> {
+    const control=button(id,label,()=>{target.open=!target.open;control.setAttribute('aria-expanded',String(target.open));});
+    control.setAttribute('aria-controls',target.id);control.setAttribute('aria-expanded','false');
+    return control;
+  };
+  const captionPanel=make('div','workspaceFullCaption');
+  captionPanel.hidden=true;
+  const fullCaption=button('workspaceShowCaption','Gesamttext mit Shop-Link ansehen',()=>{
+    captionPanel.hidden=!captionPanel.hidden;fullCaption.setAttribute('aria-expanded',String(!captionPanel.hidden));
+  });
+  fullCaption.setAttribute('aria-controls',captionPanel.id);fullCaption.setAttribute('aria-expanded','false');
+  const checks=detailsButton('workspaceShowChecks','Prüfdetails und Shop-Link',resultDetails);
+  reviewActions.append(repeat,fullCaption,checks);
+  resultDetails.classList.add('workspace-controlled');
+  const saveRow=$('save').parentElement;
+  $('result').append(reviewActions,captionPanel,resultDetails,saveRow);
   const variantPanel = make('section', 'workspaceVariantPanel');
   variantPanel.setAttribute('aria-label', 'Neue Textvariante zur Auswahl');
   variantPanel.setAttribute('role', 'region');
@@ -293,19 +295,32 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   previewEdits.className = 'secondary'; previewEdits.hidden = true;
   $('save').parentElement.append(previewEdits);
   text.append(textHeader, variantPanel, empty, $('result'));
-  editor.append($('magicActionsText'), $('catalogLookup'), $('sourcePanel'), text);
+  const tools=make('div','workspacePreparationTools');
+  const fileTools=make('div','workspaceFileTools');
+  const addFile=button('workspaceAddFile','Datei hinzufügen',()=>{if(!$('deviceBrowse').disabled)$('deviceBrowse').click();});
+  const editorLink=make('a','workspaceMediaEditor','Im Medieneditor öffnen');editorLink.hidden=true;
+  editorLink.target='_blank';editorLink.rel='noopener';
+  fileTools.append(addFile,editorLink);
+  tools.append($('catalogLookup'),evidence,$('mediaPanel'),fileTools);
+  if($('videoMetadataPanel'))tools.append($('videoMetadataPanel'));
+  if($('exportCoverPanel'))tools.append($('exportCoverPanel'));
+  const createActions=$('generate').parentElement;
+  if(createActions?.classList.contains('actions')){
+    $('generate').setAttribute('form','previewForm');tools.prepend(createActions);
+  }
+  editor.append($('magicActionsText'), $('sourcePanel'), text,tools);
   $('assetPanel').hidden = true;
   $('resultFileActions').hidden = true;
   $('exampleFiles').hidden = true;
   const statusRow = make('div', 'workspaceStatus');
   statusRow.append($('portalStatus'));
-  main.append(toolbar, statusRow, $('magicReplaceNotice'), files, source, preview);
+  main.append($('workspaceTabBar')||toolbar, statusRow, $('magicReplaceNotice'), files, source, preview);
 
   function show(key, requestedView, {userInitiated=false,focus=true}={}) {
     const firstUpload = key === 'upload';
     if (firstUpload) key = 'preview';
     if (key === 'text') key = 'source';
-    if (key === 'folder') { key = 'files'; search.open = true; }
+    if (key === 'folder') key = 'files';
     if (!Object.hasOwn(panels, key)) return;
     if (key === 'preview' && !selectedFile && !firstUpload) return;
     const changed = active !== key;
@@ -319,19 +334,21 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     for (const [name, tab] of Object.entries(buttons)) {tab.setAttribute('aria-pressed', String(name === key));tab.setAttribute('aria-selected',String(name===key));tab.tabIndex=name===key?0:-1;}
     for (const video of main.querySelectorAll('video')) video.pause();
     toolbar.hidden = key === 'preview';
+    if($('workspaceTabBar'))$('workspaceTabBar').hidden=toolbar.hidden;
     statusRow.hidden = key === 'preview';
     empty.hidden = !$('result').hidden;
     if (key === 'preview') {
       const uploadOnly = !selectedFile;
       lastPreviewWasEmpty = uploadOnly;
-      previewActions.open = uploadOnly;
+      previewActions.hidden = !uploadOnly;
+      previewHeading.hidden = !uploadOnly;
       previewPrimary.hidden = uploadOnly;
       uploadIntro.hidden = !uploadOnly;
       draftState.hidden = uploadOnly;
       previewTabs.hidden = uploadOnly;
       postView.hidden = uploadOnly;
       detailView.hidden = true;
-      previewHeading.textContent = uploadOnly ? 'Datei für ' + portalName + ' vorbereiten' : 'Vorschau für ' + portalName;
+      previewHeading.textContent = uploadOnly ? 'Datei für ' + portalName + ' vorbereiten' : '';
       if (!uploadOnly) { refreshPreview(); previewTab('post'); }
       if(focus&&(!deferInitialFocus||userInitiated))previewBack.focus();
     }
@@ -355,9 +372,13 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     galleryVisible: () => active === 'files',
     openEmptyPreview() { if (!selectedFile) show('upload'); },
     refreshPreview(feedback) { if (active === 'preview') refreshPreview(feedback); },
+    setCaptionNode(node) {
+      captionPanel.replaceChildren(node);captionPanel.hidden=true;fullCaption.setAttribute('aria-expanded','false');
+      resultDetails.open=false;checks.setAttribute('aria-expanded','false');
+    },
     textAvailable(value) {
       empty.hidden = value; repeat.hidden = !value;
-      if (!value) { variantPanel.hidden = true; clearPreview(); }
+      if (!value) { captionPanel.replaceChildren();captionPanel.hidden=true;variantPanel.hidden = true; clearPreview(); }
       else if (active === 'preview') refreshPreview();
     },
     setVariant(candidate) {
@@ -383,12 +404,16 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       variantStatus.dataset.error = String(error);
     },
     lockVariant(value) {
-      for (const node of [repeat, previewRepeat, adopt, next, discard]) node.disabled = value;
+      for (const node of [repeat, previewRepeat, adopt, next, discard, addFile]) node.disabled = value;
     },
     selection(file) {
-      selectedFile = file; variantPanel.hidden = true; clearPreview();
+      editorLink.hidden=!(file?.id&&file.revision&&options.editorUrl);
+      if(editorLink.hidden)editorLink.removeAttribute('href');
+      else editorLink.href=options.editorUrl+'#asset='+encodeURIComponent(file.id)+'&revision='+encodeURIComponent(file.revision)+'&portal='+encodeURIComponent(portalName.toLowerCase());
+      selectedFile = file; previewBack.textContent=backText(); variantPanel.hidden = true; clearPreview();
       const description = file ? describe(file) : null;
-      selectedName.textContent = description?.title || 'Noch keine Datei ausgewählt';
+      selectedRow.hidden=!file;
+      selectedName.textContent = description?.title || '';
       selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
       previewEdits.hidden = !file;
       if (active === 'preview') {
@@ -401,10 +426,10 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   };
 
   function clearPreview() {
-    for (const node of [postTitle, postCaption, postTags, postShop, sourceDescription, previewName]) node.textContent = '';
+    for (const node of [postTitle, postCaption, postTags, postShop]) node.textContent = '';
     draftNotice.textContent = ''; draftAction.hidden = true;
     const prepare = $('preparePublicationOrder'); if (prepare) prepare.hidden = true;
     editPost.hidden = true;
-    postShop.removeAttribute('href');linkIssue.hidden=true;linkMessage.textContent=''; facts.replaceChildren(); reviewNotes.replaceChildren();
+    postShop.removeAttribute('href');linkIssue.hidden=true;linkMessage.textContent=''; facts.replaceChildren();
   }
 }
