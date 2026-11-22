@@ -83,6 +83,32 @@ h1 {
   font-size: 34px;
 }
 
+.login-brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.login-brand .hex {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 46px;
+  background: #fff;
+  color: #3768ed;
+  font-size: 22px;
+  clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+}
+
+.login-brand .logoeq {
+  opacity: .65;
+}
+
 .intro {
   color: var(--muted);
   line-height: 1.6;
@@ -283,11 +309,16 @@ button.link-button:hover {
 <main>
   <div class="login-card">
 
-    <h1 id="viewTitle" tabindex="-1">Kundenbereich</h1>
+    <h1 id="viewTitle" tabindex="-1">
+      <span id="loginBrand" class="login-brand" role="img" aria-label="SMA – Anmeldung">
+        <span class="hex">S</span><span class="logoeq">=</span>
+        <span class="hex">M</span><span class="logoeq">=</span>
+        <span class="hex">A</span>
+      </span>
+      <span id="viewTitleText" hidden></span>
+    </h1>
 
-    <div id="viewIntro" class="intro">
-      Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.
-    </div>
+    <div id="viewIntro" class="intro" hidden></div>
 
     <!-- LOGIN UND REGISTRIERUNG -->
 
@@ -637,10 +668,6 @@ function showView(view) {
   }
 
   const titles = {
-    login: [
-      'Kundenbereich',
-      'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.'
-    ],
     register: [
       'SMA-Konto erstellen',
       'Registriere dich mit deiner E-Mail-Adresse und einem neuen Passwort.'
@@ -659,11 +686,15 @@ function showView(view) {
     ]
   };
 
-  document.getElementById('viewTitle').textContent =
-    titles[view][0];
-
-  document.getElementById('viewIntro').textContent =
-    titles[view][1];
+  const login = view === 'login';
+  const title = document.getElementById('viewTitleText');
+  const intro = document.getElementById('viewIntro');
+  document.getElementById('loginBrand').hidden = !login;
+  title.hidden = login;
+  intro.hidden = login;
+  if (!login) {
+    [title.textContent, intro.textContent] = titles[view];
+  }
 
   setStatus('');
 }

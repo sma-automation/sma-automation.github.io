@@ -95,7 +95,18 @@ try {
       const entry = page.locator('#login').getByRole('link', {name: registering ? 'Registrieren' : 'Login', exact: true});
       if (mobile) await entry.tap();
       else await entry.press('Enter');
-      await page.getByRole('heading', {name: registering ? 'SMA-Konto erstellen' : 'Kundenbereich', exact: true}).waitFor();
+      await page.getByRole('heading', {name: registering ? 'SMA-Konto erstellen' : 'SMA – Anmeldung', exact: true}).waitFor();
+      const logo = page.getByRole('img', {name:'SMA – Anmeldung'});
+      assert.equal(await logo.isVisible(), !registering);
+      assert.equal(await page.locator('#viewIntro').isVisible(), registering);
+      if (!registering) {
+        const first = await logo.locator('.hex').first().boundingBox();
+        const last = await logo.locator('.hex').last().boundingBox();
+        const field = await page.getByLabel('E-Mail-Adresse', {exact:true}).boundingBox();
+        const logoCenter = (first.x + last.x + last.width) / 2;
+        assert.ok(Math.abs(logoCenter - (field.x + field.width / 2)) < 1);
+        assert.ok(first.y + first.height < field.y);
+      }
       assert.deepEqual(await page.evaluate(() => window.authCalls), []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       const password = page.getByLabel('Passwort', {exact: true});
@@ -231,7 +242,7 @@ try {
     assert.equal(await page.locator('#loginView').isVisible(), false);
     await page.evaluate(() => {window.signOutResult='ok';});
     await activate(retrySignOut);
-    await page.getByRole('heading', {name:'Kundenbereich', exact:true}).waitFor();
+    await page.getByRole('heading', {name:'SMA – Anmeldung', exact:true}).waitFor();
     assert.deepEqual(await page.evaluate(() => window.recoveryCalls), {
       session:4,update:2,signOut:2,passwordMatches:true
     });
@@ -300,7 +311,7 @@ try {
     assert.equal(await savePassword.isEnabled(), true);
     assert.equal(new URL(page.url()).hash, '#type=recovery');
     await activate(savePassword);
-    await page.getByRole('heading', {name:'Kundenbereich', exact:true}).waitFor();
+    await page.getByRole('heading', {name:'SMA – Anmeldung', exact:true}).waitFor();
     assert.deepEqual(await page.evaluate(() => window.recoveryCalls), {
       session:2,update:1,signOut:1,passwordMatches:true
     });
