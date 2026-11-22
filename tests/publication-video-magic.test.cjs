@@ -39,3 +39,40 @@ test('production graph responds before analysis, routes errors to bounded cleanu
  for(const name of ['Video privat übertragen','Einzelbilder laden','Beschreibung mit Belegen abgleichen','Videoerkennung speichern'])assert.equal(w.connections[name].main[1][0].node,'Videoanalysefehler zuordnen');
  assert.ok(!JSON.stringify(w).includes('graph.facebook.com'));assert.ok(!JSON.stringify(w).includes('synthetic_file'));
 });
+
+test('consolidated video analysis reads the MP4, contact sheet, separate frames and audio from n8n', async () => {
+ const fs = require('node:fs'), crypto = require('node:crypto');
+ const workflow = require('../n8n/publishing/video-magic-workflow.json');
+ const source = fs.readFileSync('tests/fixtures/original-video.mp4');
+ const image = Buffer.from('ffd8ffe000104a4649460001', 'hex');
+ const audio = Buffer.from('RIFF0000WAVEfmt ');
+ const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+ const description = bytes => ({sha256:digest(bytes), size_bytes:bytes.length});
+ const frame = {name:'frame-001.jpg', position_ms:500, ...description(image)};
+ const manifest = {'frames.jpg':description(image), 'audio.wav':description(audio), frames:[frame]};
+ const file = {mime_type:'video/mp4', media_kind:'video', size_bytes:source.length, revision:'sha256:'+digest(source)+':11'};
+ async function read(name, bytes) {
+  const code = workflow.nodes.find(n => n.name === name).parameters.jsCode;
+  const env = {require, Buffer, $input:{all:() => [{}]},
+   $:node => ({first:() => ({json:node === 'Dateistand prüfen' ? file : manifest})}),
+   helpers:{
+    async getBinaryDataBuffer(index, key) {
+     assert.equal(index, 0); assert.equal(key, 'data'); return bytes;
+    },
+    async prepareBinaryData(buffer, fileName, mimeType) {return {data:buffer, fileName, mimeType};}
+   }
+  };
+  const [item] = await vm.runInNewContext('(async function(){"use strict";return await (async()=>{\n'+code+'\n})();})()',env);
+  return item;
+ }
+ const zipped = await read('Videobytes binden', source);
+ assert.equal(zipped.json.sha256, digest(source));
+ assert.ok(zipped.binary.data.data.includes(source));
+ assert.equal((await read('Bildfolge prüfen', image)).json.frames_base64, image.toString('base64'));
+ const images = (await read('Einzelbilder prüfen', image)).json.frames;
+ assert.equal(images[0].position_ms, 500);
+ assert.equal(images[0].base64, image.toString('base64'));
+ assert.deepEqual((await read('Tonspur prüfen', audio)).binary.data.data, audio);
+ await assert.rejects(read('Videobytes binden', image), /FILE_CHANGED/);
+ await assert.rejects(read('Einzelbilder prüfen', audio), /VIDEO_EVIDENCE_INVALID/);
+});
