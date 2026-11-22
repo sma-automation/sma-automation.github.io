@@ -49,15 +49,17 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .logo {
-  font-size: 22px;
+  font-size: clamp(16px, 4vw, 22px);
   font-weight: 900;
   letter-spacing: .4px;
 }
 
 .back {
+  white-space: nowrap;
   color: #9eb7ff;
   text-decoration: none;
 }
@@ -299,7 +301,7 @@ button.link-button:hover {
 
 <header>
   <div class="header-inner">
-    <div class="logo">SMA</div>
+    <div class="logo">Social Media Automation</div>
     <a class="back" href="../index.html">
       Zur Startseite
     </a>
