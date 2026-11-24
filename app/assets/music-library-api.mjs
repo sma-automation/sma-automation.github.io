@@ -1,4 +1,4 @@
-import {createCatalogAPI} from './music-catalog.mjs?v=2';
+import {createCatalogAPI} from './music-catalog.mjs?v=4';
 import {inspectMusic,readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
 const origin='https://bnvnmdxosbnuzedokqgh.supabase.co',key='sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW';
 export function readMusicTrack(t,owner){
@@ -14,11 +14,26 @@ export function createMusicLibraryAPI({owner,getSession,request=fetch,includeCat
  async function privateSource(setting,signal){const m=readMusicSetting(setting),r=await call('get',{sha256:m.sha256},signal),t=readMusicTrack(r.track,owner);if(t.status!=='ready'||t.size_bytes!==m.size_bytes||t.mime_type!==m.mime_type)throw Error('MUSIC_REQUIRED');const s=await auth(signal),response=await request(origin+'/storage/v1/object/authenticated/sma-musik/'+t.object_name,{credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(60000)]),headers:{apikey:key,Authorization:'Bearer '+s.access_token}});if(!response.ok)throw Error('MUSIC_REQUIRED');const blob=await response.blob();await verifyMusicBytes(blob,m);await auth(signal);return blob;}
  return {catalog,async list(signal){const r=await call('list',{},signal);if(!Array.isArray(r.tracks)||r.tracks.length>100)throw Error('MUSIC_UNAVAILABLE');const own=r.tracks.map(t=>readMusicTrack(t,owner));
   if(!includeCatalog)return own;
-  const shared=(await catalog.overview(signal)).tracks.filter(t=>t.available&&!own.some(row=>row.sha256===t.sha256));
-  return own.concat(shared.map(t=>({...t,catalog:true,favourite:false,status:'ready'})));
+  let overview;
+  try { overview=await catalog.overview(signal); }
+  catch(error){if(error.message==='ACCESS_INACTIVE')return own;throw error;}
+  const favourites=new Set(r.catalog_favourites||[]);
+  const owned=new Map(own.map(t=>[t.sha256,t]));
+  const combined=[];
+  for(const track of overview.tracks){
+   const local=owned.get(track.sha256);
+   if(local){
+    Object.assign(local,{favourite:local.favourite||(track.available&&favourites.has(track.sha256)),source_title:track.source_title,topics:track.topics,mood:track.mood,usage:track.usage,duration_ms:track.duration_ms});
+   }else{
+    combined.push({...track,catalog:true,favourite:track.available&&favourites.has(track.sha256),status:'ready'});
+   }
+  }
+  return own.concat(combined);
  },async source(setting,signal){
   try{return await privateSource(setting,signal);}catch(e){if(!includeCatalog||e.message!=='MUSIC_NOT_FOUND')throw e;return catalog.source(setting,signal);}
  },
  async upload(file,signal){const m=await inspectMusic(file),input=Object.fromEntries(['name','sha256','size_bytes','mime_type'].map(k=>[k,m[k]]));let t=readMusicTrack((await call('prepare',input,signal)).track,owner);if(t.status==='ready')return t;const s=await auth(signal),body=new Blob([file],{type:m.mime_type});const r=await request(origin+'/storage/v1/object/sma-musik/'+t.object_name,{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(90000)]),headers:{apikey:key,Authorization:'Bearer '+s.access_token,'x-upsert':'false','Content-Type':m.mime_type,'Cache-Control':'no-cache'},body});await auth(signal);if(!r.ok){const error=await r.json().catch(()=>({}));if(r.status!==409&&error.statusCode!=='409'&&error.error!=='Duplicate')throw Error('MUSIC_UNAVAILABLE');}t=readMusicTrack((await call('complete',{sha256:m.sha256},signal)).track,owner);return t;},
- async favourite(t,value,signal){return readMusicTrack((await call('favourite',{sha256:t.sha256,favourite:value},signal)).track,owner);}};
+ async favourite(t,value,signal){
+  if(t.catalog)return call('catalog_favourite',{sha256:t.sha256,favourite:value},signal);
+  return readMusicTrack((await call('favourite',{sha256:t.sha256,favourite:value},signal)).track,owner);}};
 }

@@ -1,4 +1,5 @@
-import {createMusicClipFilters,musicClipDescription} from './music-clip-filters.mjs?v=1';
+import {createMusicPreview,musicFileLabel} from './music-file-preview.mjs?v=1';
+import {createMusicClipFilters} from './music-clip-filters.mjs?v=1';
 import {readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
 
 const origin='https://bnvnmdxosbnuzedokqgh.supabase.co';
@@ -59,15 +60,16 @@ export function mountCatalog({doc,host,api,goToCheckout}){
  for(const b of [refresh,buy,prev,next])b.type='button';
  status.setAttribute('role','status');audio.controls=true;audio.hidden=true;
  actions.append(refresh,buy);pageBar.append(prev,counter,next);buy.hidden=pageBar.hidden=true;
- const filters=createMusicClipFilters(doc,()=>{page=0;stop();draw();});
+ const filters=createMusicClipFilters(doc,()=>{page=0;preview.stop();draw();});
  filters.update([]);
  root.append(intro,actions,filters.root,list,pageBar,audio,status);host.append(root);
  const balance=doc.getElementById('creditsBalanceSlot'),card=balance?.parentElement,oldBuy=card?.querySelector('button[disabled]');
  const oldLabel=oldBuy?.textContent,oldBalance=balance?.textContent;
  const paymentStatus=el('p');paymentStatus.hidden=true;paymentStatus.setAttribute('role','status');
  if(oldBuy)card.append(paymentStatus);
- let data,paymentsEnabled=false,page=0,controller,url,disposed=false;
- function stop(){if(url){audio.pause();audio.removeAttribute('src');audio.load();URL.revokeObjectURL(url);url=null;}audio.hidden=true;}
+ let data,paymentsEnabled=false,page=0,controller,disposed=false;
+ const preview=createMusicPreview({doc,audio,status,createURL:b=>URL.createObjectURL(b),revokeURL:u=>URL.revokeObjectURL(u),
+  source:(t,signal)=>api.source({name:t.name,sha256:t.sha256,size_bytes:t.size_bytes,mime_type:t.mime_type,volume:25,start_ms:0},signal)});
  function draw(){
   list.replaceChildren();
   if(!data)return;
@@ -80,32 +82,35 @@ export function mountCatalog({doc,host,api,goToCheckout}){
   if(!visible.length)list.append(el('p',data.tracks.length?'Keine Clips für diese Auswahl.':'Aktuell sind keine Musiktitel zur Nutzung freigegeben.'));
   const total=Math.max(1,Math.ceil(visible.length/5));page=Math.min(page,total-1);
   for(const t of visible.slice(page*5,page*5+5)){
-   const row=el('div'),info=el('div'),btn=el('button',t.available?'Anhören':'Für 1 Credit freischalten');
-   row.className='sma-music-row';info.append(el('strong',t.name),el('small',t.available?(delta?'In Delta enthalten':'Freigeschaltet'):'SMA-Musik'));
-   const description=musicClipDescription(t);if(description)info.append(el('small',description));
-   btn.type='button';btn.disabled=!!controller||(!t.available&&data.credits<1);
-   btn.addEventListener('click',()=>run(async signal=>{
-    if(t.available){
-     stop();const setting={name:t.name,sha256:t.sha256,size_bytes:t.size_bytes,mime_type:t.mime_type,volume:25,start_ms:0};
-     const blob=await api.source(setting,signal);signal.throwIfAborted();url=URL.createObjectURL(blob);audio.src=url;audio.hidden=false;
-     status.textContent='Hörprobe bereit · '+t.name;
-    }else{
-     await api.unlock(t.sha256,signal);signal.throwIfAborted();doc.dispatchEvent(new doc.defaultView.Event('sma-music-unlocked'));await reload(signal);status.textContent='Freigeschaltet · '+t.name;
-    }
-   }));row.append(info,btn);list.append(row);
+   const row=el('div');row.className='sma-music-row';
+   const detail=t.available?(delta?'In Delta enthalten':'Freigeschaltet'):'SMA-Musik';
+   const info=musicFileLabel(doc,t,detail,t.available?()=>preview.play(t):null);
+   if(t.available)info.disabled=!!controller;
+   row.append(info);
+   if(!t.available){
+    const unlock=el('button','Für 1 Credit freischalten');
+    unlock.type='button';unlock.disabled=!!controller||data.credits<1;
+    unlock.addEventListener('click',()=>run(async signal=>{
+     await api.unlock(t.sha256,signal);signal.throwIfAborted();
+     doc.dispatchEvent(new doc.defaultView.Event('sma-music-unlocked'));
+     await reload(signal);status.textContent='Freigeschaltet · '+t.name;
+    }));
+    row.append(unlock);
+   }
+   list.append(row);
   }
   pageBar.hidden=total<=1;counter.textContent=(page+1)+' / '+total;prev.disabled=!!controller||page===0;next.disabled=!!controller||page+1>=total;
  }
  async function reload(signal){
   const fresh=await api.overview(signal);
   const enabled=fresh.plan!=='delta'&&fresh.tracks.length>0&&await api.checkoutEnabled(signal).catch(()=>false);
-  signal.throwIfAborted();stop();data=fresh;filters.update(fresh.tracks);paymentsEnabled=enabled;draw();
+  signal.throwIfAborted();preview.stop();data=fresh;filters.update(fresh.tracks);paymentsEnabled=enabled;draw();
  }
  async function run(fn){
   if(disposed||controller)return;
   controller=new AbortController();const signal=controller.signal;refresh.disabled=buy.disabled=true;status.textContent='';draw();
   try{await fn(signal);}
-  catch(e){if(!signal.aborted){if(e.message==='AUTH_REQUIRED'||e.message==='ACCESS_INACTIVE'){data=null;stop();filters.update([]);list.replaceChildren();buy.hidden=pageBar.hidden=true;intro.textContent='';if(balance)balance.textContent='–';if(oldBuy)oldBuy.disabled=true;}
+  catch(e){if(!signal.aborted){if(e.message==='AUTH_REQUIRED'||e.message==='ACCESS_INACTIVE'){data=null;preview.stop();filters.update([]);list.replaceChildren();buy.hidden=pageBar.hidden=true;intro.textContent='';if(balance)balance.textContent='–';if(oldBuy)oldBuy.disabled=true;}
    status.textContent=({INSUFFICIENT_CREDITS:'Dein Guthaben reicht für diesen Track nicht aus.',CHECKOUT_UNAVAILABLE:'Die Zahlung für Musik-Credits ist noch nicht verfügbar.',AUTH_REQUIRED:'Bitte melde dich erneut an.',ACCESS_INACTIVE:'Der SMA-Musikkatalog ist für diesen Zugang nicht verfügbar.'})[e.message]||'Der Musikkatalog konnte die Anfrage nicht abschließen. Bitte aktualisiere die Ansicht.';}}
   finally{controller=null;if(!disposed){refresh.disabled=buy.disabled=false;draw();}}
  }
@@ -122,6 +127,6 @@ export function mountCatalog({doc,host,api,goToCheckout}){
  prev.addEventListener('click',()=>{if(!controller&&page>0){page--;draw();}});
  next.addEventListener('click',()=>{if(!controller&&data&&page+1<Math.ceil(data.tracks.filter(filters.matches).length/5)){page++;draw();}});
  void run(reload);
- return {destroy(){disposed=true;controller?.abort();stop();root.remove();paymentStatus.remove();if(balance)balance.textContent=oldBalance;
+ return {destroy(){disposed=true;controller?.abort();preview.stop();root.remove();paymentStatus.remove();if(balance)balance.textContent=oldBalance;
   if(oldBuy){oldBuy.disabled=true;oldBuy.textContent=oldLabel;oldBuy.removeEventListener('click',pay);}}};
 }
