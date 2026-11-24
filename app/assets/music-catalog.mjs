@@ -109,11 +109,11 @@ export function mountCatalog({doc,host,api,goToCheckout}){
  }
  async function run(fn){
   if(disposed||controller)return;
-  controller=new AbortController();const signal=controller.signal;refresh.disabled=buy.disabled=true;status.textContent='';draw();
+  controller=new AbortController();root.setAttribute('aria-busy','true');const signal=controller.signal;refresh.disabled=buy.disabled=true;status.textContent='';draw();
   try{await fn(signal);}
   catch(e){if(!signal.aborted){if(e.message==='AUTH_REQUIRED'||e.message==='ACCESS_INACTIVE'){data=null;preview.stop();filters.update([]);list.replaceChildren();buy.hidden=pageBar.hidden=true;intro.textContent='';if(balance)balance.textContent='–';if(oldBuy)oldBuy.disabled=true;}
    status.textContent=({INSUFFICIENT_CREDITS:'Dein Guthaben reicht für diesen Track nicht aus.',CHECKOUT_UNAVAILABLE:'Die Zahlung für Musik-Credits ist noch nicht verfügbar.',AUTH_REQUIRED:'Bitte melde dich erneut an.',ACCESS_INACTIVE:'Der SMA-Musikkatalog ist für diesen Zugang nicht verfügbar.'})[e.message]||'Der Musikkatalog konnte die Anfrage nicht abschließen. Bitte aktualisiere die Ansicht.';}}
-  finally{controller=null;if(!disposed){refresh.disabled=buy.disabled=false;draw();}}
+  finally{controller=null;root.setAttribute('aria-busy','false');if(!disposed){refresh.disabled=buy.disabled=false;draw();}}
  }
  const pay=async event=>{
   const settings=event?.currentTarget===oldBuy;paymentStatus.hidden=true;

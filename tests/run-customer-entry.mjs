@@ -1,3 +1,4 @@
+import dashboardFeedbackAsset from './dom-runtime/dashboard-feedback-assets.cjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {chromium} from './dom-runtime/node_modules/playwright-core/index.mjs';
@@ -80,6 +81,8 @@ try {
     await page.route('**/*', async route => {
       const request = route.request();
       const url = new URL(request.url());
+      const asset = dashboardFeedbackAsset(request, url, site);
+      if (asset) return route.fulfill(asset);
       if (request.method() === 'GET') {
         const body = pages.get(url.origin + url.pathname);
         if (body) return route.fulfill({contentType: 'text/html; charset=utf-8', body});

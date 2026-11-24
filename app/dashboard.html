@@ -828,7 +828,7 @@ function attachFileList(doc,page){
  function retryAction(){return retryStep||(scanRunning?'status':folderNotice?'folder':null);}
  function retryFiles(){
   const action=retryAction();
-  if(action)void load(action==='folder');
+  if(action)return load(action==='folder');
  }
  function navigateWithCatalog(nav){
   // The search result already belongs to the loaded catalogue. Keep the sidebar's

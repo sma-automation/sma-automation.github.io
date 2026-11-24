@@ -1,8 +1,7 @@
 // A document may be mounted by the dashboard shell or by its own page module.
 const controllerKey = Symbol.for('sma.dashboard.action-feedback');
 const wrappers = new WeakMap();
-const controls = 'button,a[href],summary,input[type=button],input[type=submit],input[type=reset],[role=button],[role=tab],[role=menuitem],[role=option],[onclick]';
-const stylesheet = new URL('./dashboard-feedback.css?v=1', import.meta.url).href;
+const controls = 'button,a[href],summary,input[type=button],input[type=submit],input[type=reset],input[type=file],[role=button],[role=tab],[role=menuitem],[role=option],[onclick]';
 
 function sourceOf(event) {
   if (!event?.target) return null;
@@ -33,7 +32,7 @@ export function mountDashboardFeedback(doc) {
   const win = doc.defaultView;
   const sheet = doc.createElement('link');
   sheet.rel = 'stylesheet';
-  sheet.href = stylesheet;
+  sheet.href = new URL('./dashboard-feedback.css?v=1', import.meta.url).href;
   doc.head.append(sheet);
   const notice = doc.createElement('div');
   notice.className = 'sma-action-feedback';
