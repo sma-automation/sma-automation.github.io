@@ -22,7 +22,7 @@ export function mountCatalogLookup(doc,lookup){
   let context=null,choices=[],serial=0,pending=false;
   const selected=()=>choices.find(item=>item.product_id===select.value);
   function reset(){
-    serial++;pending=false;choices=[];select.replaceChildren();select.value='';
+    serial++;pending=false;panel.ariaBusy='false';choices=[];select.replaceChildren();select.value='';
     el('catalogResults').hidden=true;more.hidden=true;status.textContent='';button.disabled=false;
   }
   async function search(append=false){
@@ -32,7 +32,7 @@ export function mountCatalogLookup(doc,lookup){
     if(append)params.after=previous[previous.length-1].product_id;
     if(!append)reset();
     const ticket=++serial;
-    pending=true;button.disabled=more.disabled=true;status.textContent='Artikel werden geladen …';
+    pending=true;panel.ariaBusy='true';button.disabled=more.disabled=true;status.textContent='Artikel werden geladen …';
     try{
       const result=await lookup(context,params);
       if(ticket!==serial)return;
@@ -43,7 +43,7 @@ export function mountCatalogLookup(doc,lookup){
     }catch(error){
       if(ticket===serial)status.textContent=error.message;
     }finally{
-      if(ticket===serial){pending=false;button.disabled=more.disabled=false;}
+      if(ticket===serial){pending=false;panel.ariaBusy='false';button.disabled=more.disabled=false;}
     }
   }
   button.addEventListener('click',()=>search());

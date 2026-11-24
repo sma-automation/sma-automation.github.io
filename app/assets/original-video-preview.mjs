@@ -46,13 +46,13 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  }
  for(const event of ['playing','timeupdate','seeked','ratechange','pause','ended'])video.addEventListener(event,checkRange);
  function release(){onReadyChange?.(false);stop();video.removeAttribute('src');try{video.load();}catch{}video.hidden=true;if(stage)stage.hidden=false;if(url)revokeURL(url);url=null;thumbnailHost.style.display='';}
- function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.disabled=false;showPoster();status.textContent='';}
+ function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.removeAttribute('aria-busy');button.disabled=false;showPoster();status.textContent='';}
  const current=g=>!disposed&&g===generation;
  async function owner(g,read){if(!current(g))return false;if(await read(()=>getOwnerId())!==expectedOwnerId){if(current(g)){reset();file=null;key='';box.hidden=true;showPoster();}return false;}return current(g);}
  async function load(){
   if(disposed||controller||url||!originalVideoSupported(file))return;
   const g=generation,selected=file,attempt=new AbortController(),signal=attempt.signal;
-  controller=attempt;button.disabled=true;status.textContent='Originalvideo wird geprüft und geladen …';
+  controller=attempt;button.setAttribute('aria-busy','true');button.disabled=true;status.textContent='Originalvideo wird geprüft und geladen …';
   let timedOut=false;
   // Preserve the existing source allowance, shared by both owner checks and bytes.
   const deadline=setTimeout(()=>{timedOut=true;attempt.abort();},180000);
@@ -73,7 +73,7 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
    url=createURL(blob);video.src=url;video.hidden=false;if(!editorStage)thumbnailHost.style.display='none';button.hidden=true;status.textContent=inlinePlay||editorStage?'':loadedText;
    if(stage){stage.hidden=true;if(visiblePlayer())video.play().catch(()=>{});}
   }catch(e){if(current(g)&&controller===attempt&&(timedOut||!signal.aborted)){release();status.textContent=timedOut?'Das Laden des Originalvideos dauert gerade zu lange. Bitte versuche es erneut.':e?.message==='FILE_CHANGED'?'Die Datei wurde geändert. Bitte aktualisiere die Dateiliste.':'Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.';}}
-  finally{clearTimeout(deadline);if(current(g)&&controller===attempt){controller=null;button.disabled=false;}}
+  finally{clearTimeout(deadline);if(current(g)&&controller===attempt){controller=null;button.removeAttribute('aria-busy');button.disabled=false;}}
  }
  button.addEventListener('click',load);
  video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=!!editorStage;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});

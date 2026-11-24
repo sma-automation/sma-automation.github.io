@@ -25,7 +25,7 @@ let customer=null, userId=null, busy=false;
 const rows=[];
 function status(message,tone=''){$('status').textContent=message;$('status').className='status '+tone;}
 function items(){return rows.filter(r=>r.check.checked).map(r=>({produkt_id:r.id,menge:Number(r.qty.value)}));}
-function setBusy(value){busy=value;for(const r of rows){r.check.disabled=busy||r.unavailable;r.qty.disabled=busy||r.unavailable;}$('reload').disabled=busy;update();}
+function setBusy(value){busy=value;$('check').setAttribute?.('aria-busy',String(value));for(const r of rows){r.check.disabled=busy||r.unavailable;r.qty.disabled=busy||r.unavailable;}$('reload').disabled=busy;update();}
 function update(){const list=items();$('check').disabled=busy||!list.length;$('check').textContent=busy?'Wird geprüft …':'Checkout testen';}
 function edited(){$('result').hidden=true;status('Warenkorb geändert. Bitte erneut testen.');update();}
 async function load(){
@@ -76,4 +76,5 @@ try{
   else{customer=data;$('publicShop').href='shop.html?shop='+encodeURIComponent(customer.shop_slug);await load();}
  }
 }catch{status('Anmeldung konnte nicht geprüft werden. Bitte das Dashboard erneut öffnen.','error');}
-</script></main></body></html>
+</script></main><script type="module" src="./assets/dashboard-feedback-page.mjs?v=1"></script>
+</body></html>

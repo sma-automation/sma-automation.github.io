@@ -69,6 +69,7 @@ client.auth.onAuthStateChange((event, session) => {
 function syncSubmit() {
   const selection = form.elements.plan.value;
   const locked = offer && offer.state !== 'offered';
+  form.setAttribute?.('aria-busy',String(busy || signingOut));
   fields.disabled = busy || signingOut || leaving || !!locked;
   submit.disabled = fields.disabled || !selection || selection === saved;
   booking.hidden = leaving || !offer || selection !== saved || offer.plan !== saved;

@@ -28,8 +28,10 @@ async function fixture(t,mobile,embedded){
   const urls=[];const moduleURL=source=>{const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(url);return url;};
   try{
    const description=moduleURL(sources.description);
+   const feedback=moduleURL(sources.feedback);
    const search=moduleURL(sources.search.replace("'./file-description.mjs'",JSON.stringify(description)));
-   const quick=moduleURL(sources.quick.replace("'./dashboard-file-search.mjs?v=2'",JSON.stringify(search)));
+   const quick=moduleURL(sources.quick.replace("'./dashboard-file-search.mjs?v=2'",JSON.stringify(search))
+    .replace("'./dashboard-feedback.mjs?v=1'",JSON.stringify(feedback)));
    const {mountDashboardQuickFind,sectionCatalog}=await import(quick);
    window.areas=[...sectionCatalog];window.files=[];window.fileStatus='ready';window.retryAction=null;window.actions=[];window.dismissed=0;
    window.finder=mountDashboardQuickFind({doc:document,getAreas:()=>areas,getFiles:()=>files,getFileStatus:()=>fileStatus,getFileRetry:()=>retryAction,
@@ -38,7 +40,7 @@ async function fixture(t,mobile,embedded){
    document.getElementById('background').onclick=()=>actions.push('background');
    document.getElementById('mobile-search').onclick=()=>finder.show(document.getElementById('mobile-search'));
   }finally{urls.forEach(url=>URL.revokeObjectURL(url));}
- },{description:fs.readFileSync('app/assets/file-description.mjs','utf8'),search:fs.readFileSync('app/assets/dashboard-file-search.mjs','utf8'),quick:fs.readFileSync('app/assets/dashboard-quick-find.mjs','utf8')});
+ },{feedback:fs.readFileSync('app/assets/dashboard-feedback.mjs','utf8'),description:fs.readFileSync('app/assets/file-description.mjs','utf8'),search:fs.readFileSync('app/assets/dashboard-file-search.mjs','utf8'),quick:fs.readFileSync('app/assets/dashboard-quick-find.mjs','utf8')});
  const launcher=mobile?'#mobile-search':'#smaGlobalQuickFind';
  await frame.locator(launcher).click();
  return {page,frame,launcher,active:()=>frame.evaluate(()=>document.activeElement?.id||document.activeElement?.textContent)};

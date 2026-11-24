@@ -557,7 +557,7 @@ function makeStockEditor(product){
     if(!input.value.trim()||!Number.isSafeInteger(quantity)||quantity<0||quantity>1000000){
       stockSaveErrors.set(id,'Bitte eine ganze Zahl von 0 bis 1.000.000 eingeben.');update();return;
     }
-    stockSaving.add(id);stockRevision++;clearTimeout(stockRefreshTimer);update();
+    form.setAttribute('aria-busy','true');stockSaving.add(id);stockRevision++;clearTimeout(stockRefreshTimer);update();
     try{
       let result;
       if(request?.status==='queued'){
@@ -581,7 +581,7 @@ function makeStockEditor(product){
         'Ein Bestandsauftrag ist bereits offen. Sein Status wird automatisch geladen.':
         'Speichern konnte nicht bestätigt werden. Bestand wird automatisch erneut geprüft.');
     }finally{
-      stockSaving.delete(id);stockRevision++;stockFastUntil=Date.now()+120000;
+      form.setAttribute('aria-busy','false');stockSaving.delete(id);stockRevision++;stockFastUntil=Date.now()+120000;
       updateStockViews();scheduleStockRefresh(0);
     }
   });
@@ -692,6 +692,7 @@ function statusGallery(message='',kind=''){
   galleryStatus.textContent=message;
 }
 function setGalleryBusy(busy){
+  galleryBackdrop.setAttribute('aria-busy',String(busy));
   gallery.busy=busy;
   const paths=gallery.product?imagePaths(gallery.product):[];
   galleryAdd.disabled=busy||paths.length>=MAX_IMAGES;
@@ -959,7 +960,11 @@ function renderPagination(elementId,state,word,loadPage,pageSize=PAGE_SIZE){
     const el=document.createElement('button');el.type='button';el.className='pagination-button';
     el.textContent=label;el.disabled=disabled;
     if(current)el.setAttribute('aria-current','page');
-    el.addEventListener('click',()=>{if(!el.disabled)loadPage(page);});
+    el.addEventListener('click',async()=>{
+      if(el.disabled)return;
+      el.disabled=true;
+      try{await loadPage(page);}finally{if(el.isConnected)el.disabled=false;}
+    });
     controls.append(el);
   }
   button('‹ Zurück',state.page-1,state.page===1);
@@ -979,6 +984,7 @@ async function loadProductsPage(requestedPage=1){
   const request=++state.request;
   const page=Math.max(1,Math.floor(requestedPage));
   const from=(page-1)*PAGE_SIZE;
+  document.getElementById('produktListe').setAttribute('aria-busy','true');
   clearTimeout(stockRefreshTimer);stockPageLoading=true;
   productsState=[];stockEditors.clear();stockViews.clear();
   showLoading('produktListe','Produkte werden geladen …');
@@ -1004,7 +1010,7 @@ async function loadProductsPage(requestedPage=1){
   }catch(error){
     if(request===state.request)showLoading('produktListe','Produkte konnten nicht geladen werden: '+error.message);
   }finally{
-    if(request===state.request){stockPageLoading=false;scheduleStockRefresh();}
+    if(request===state.request){document.getElementById('produktListe').setAttribute('aria-busy','false');stockPageLoading=false;scheduleStockRefresh();}
   }
 }
 function orderRefreshDelay(){return Math.min(60000,15000*2**Math.min(orderRefreshFailures,2));}
@@ -1062,6 +1068,7 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
   orderPageLoading=true;orderRefreshEnabled=true;orderRequestedPage=page;
   const appliedFilters=orderFilters;
   if(!background){
+    document.getElementById('bestellListe').setAttribute('aria-busy','true');
     orderSignature=null;
     showLoading('bestellListe','Bestellungen werden geladen …');
     setOrderStatus('Bestellungen werden geladen …');
@@ -1093,6 +1100,7 @@ async function loadOrdersPage(requestedPage=1,{background=false}={}){
   }finally{
     clearTimeout(timeout);
     if(isCurrent()){
+      document.getElementById('bestellListe').setAttribute('aria-busy','false');
       orderPageLoading=false;orderRefreshController=null;scheduleOrderRefresh();
     }
   }
@@ -1174,6 +1182,7 @@ if(sessionError||!session){
   }
 }
 </script>
+<script type="module" src="./assets/dashboard-feedback-page.mjs?v=1"></script>
 </body>
 </html>
 

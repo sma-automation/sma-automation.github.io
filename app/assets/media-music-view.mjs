@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {mountMusicLibrary,musicLibraryMessages} from './music-library-view.mjs?v=4';
 import {inspectMusic,readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
 export function mountMediaMusic({doc,onChange,setBusy,createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL,library=null}){
@@ -76,14 +77,14 @@ export function mountMediaMusic({doc,onChange,setBusy,createURL=URL.createObject
  }
  const openFile=()=>$('musicFile').click();
  $('chooseMusic').addEventListener('click',openFile);
- $('musicLibraryPanel').addEventListener('click',toggleLibrary);
- if(library)$('musicSaveLibrary').addEventListener('click',saveLibrary);
+ $('musicLibraryPanel').addEventListener('click',dashboardAction(toggleLibrary));
+ if(library)$('musicSaveLibrary').addEventListener('click',dashboardAction(saveLibrary));
  async function choose(){const file=$('musicFile').files?.[0];if(!file||!video||disposed)return;const e=++epoch;setBusy(true);$('musicStatus').textContent='Musikdatei wird geprüft …';
   try{const found=await inspectMusic(file);if(disposed||e!==epoch)return;const same=setting&&found.sha256===setting.sha256&&found.size_bytes===setting.size_bytes&&found.mime_type===setting.mime_type;clearBlob();blob=file;setting=same?setting:found;url=createURL(file);$('musicPlayer').src=url;$('musicPlayer').hidden=false;paint();if(!same)onChange();}
   catch{if(!disposed&&e===epoch){$('musicFile').value='';$('musicStatus').textContent='Bitte eine MP3- oder WAV-Datei bis 8 MB wählen. Beim Export sind höchstens 10 Minuten und zwei Tonkanäle möglich.';}}
   finally{if(!disposed&&e===epoch)setBusy(false);}
  }
  function edit(){if(!setting||disposed)return;const volume=Number($('musicVolume').value);setting={...setting,volume};$('musicVolumeValue').textContent=volume+' %';onChange();}
- $('musicFile').addEventListener('change',choose);$('musicVolume').addEventListener('input',edit);
- return {syncPreview,stopPreview,setContext(file,m){const next=file?file.id+':'+file.revision:'';if(next!==key||m?.sha256!==setting?.sha256||m?.size_bytes!==setting?.size_bytes){epoch++;clearBlob();}key=next;video=file?.media_kind==='video';setting=m?readMusicSetting(m):null;paint();if(setting&&!blob&&library&&!restoring)restoring=restore(setting);},getSetting(){return setting?readMusicSetting(setting):null;},getSource,clear(){epoch++;clearBlob();setting=null;video=false;key='';paint();},destroy(){disposed=true;epoch++;libraryView?.destroy();$('musicSaveLibrary')?.removeEventListener('click',saveLibrary);clearBlob();$('musicFile').removeEventListener('change',choose);$('musicVolume').removeEventListener('input',edit);$('chooseMusic').removeEventListener('click',openFile);$('musicLibraryPanel').removeEventListener('click',toggleLibrary);}};
+ $('musicFile').addEventListener('change',dashboardAction(choose));$('musicVolume').addEventListener('input',edit);
+ return {syncPreview,stopPreview,setContext(file,m){const next=file?file.id+':'+file.revision:'';if(next!==key||m?.sha256!==setting?.sha256||m?.size_bytes!==setting?.size_bytes){epoch++;clearBlob();}key=next;video=file?.media_kind==='video';setting=m?readMusicSetting(m):null;paint();if(setting&&!blob&&library&&!restoring)restoring=restore(setting);},getSetting(){return setting?readMusicSetting(setting):null;},getSource,clear(){epoch++;clearBlob();setting=null;video=false;key='';paint();},destroy(){disposed=true;epoch++;libraryView?.destroy();$('musicSaveLibrary')?.removeEventListener('click',dashboardAction(saveLibrary));clearBlob();$('musicFile').removeEventListener('change',dashboardAction(choose));$('musicVolume').removeEventListener('input',edit);$('chooseMusic').removeEventListener('click',openFile);$('musicLibraryPanel').removeEventListener('click',dashboardAction(toggleLibrary));}};
 }

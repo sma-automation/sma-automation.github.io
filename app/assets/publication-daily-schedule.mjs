@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 const portals = {youtube:'YouTube', tiktok:'TikTok', instagram:'Instagram', facebook:'Facebook'};
 const errors = {
   VERSION_CONFLICT:['Die Zeiten wurden inzwischen geändert. Lade den aktuellen Stand.','The times have changed. Load the current schedule.'],
@@ -121,11 +122,11 @@ export function mountDailySchedule(doc,panel,request,media) {
   for(const [control,step] of [[prev,-1],[next,1]])control.addEventListener('click',()=>{
     monthShown.setUTCMonth(monthShown.getUTCMonth()+step);renderCalendar();
   });
-  days.addEventListener('click',event=>{
+  days.addEventListener('click',dashboardAction(event=>{
     const pick=event.target.closest('button[data-day]');
     if(!pick||pick.disabled||busy)return;
     closeCalendar(true);if(pick.dataset.day!==day){day=pick.dataset.day;void run('get');}
-  });
+  }));
   calendar.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeCalendar(true);}});
   async function run(action){
     if(busy||destroyed)return;
@@ -156,8 +157,8 @@ export function mountDailySchedule(doc,panel,request,media) {
     if(values.every((value,i)=>value===record.times[portal][i]))edits.delete(portal);else edits.set(portal,values);
     translate(status,'','');controls();
   });
-  form.addEventListener('submit',event=>{event.preventDefault();if(!save.disabled)void run('save');});
-  retry.addEventListener('click',()=>{void run('get');});
+  form.addEventListener('submit',dashboardAction(event=>{event.preventDefault();if(!save.disabled)return run('save');}));
+  retry.addEventListener('click',dashboardAction(()=>run('get')));
   const Observer=doc.defaultView?.MutationObserver;
   const languageObserver=Observer?new Observer(()=>{if(!destroyed){renderHeader();if(!calendar.hidden)renderCalendar();}}):null;
   languageObserver?.observe(doc.documentElement,{attributes:true,attributeFilter:['lang']});

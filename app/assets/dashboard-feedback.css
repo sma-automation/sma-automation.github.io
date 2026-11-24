@@ -1,0 +1,53 @@
+.sma-action-feedback {
+  pointer-events: none;
+  position: fixed;
+  z-index: 2147483646;
+  top: 0;
+  inset-inline: 0;
+  height: 0;
+  overflow: visible;
+  color: transparent;
+  font: 600 14px/1.4 system-ui, sans-serif;
+  text-align: end;
+}
+.sma-action-feedback::before {
+  content: '';
+  display: block;
+  height: 4px;
+  opacity: 0;
+  background: #385cd4;
+}
+.sma-action-feedback[data-acknowledged]::before { opacity: 1; }
+.sma-action-feedback[data-working]::before {
+  opacity: 1;
+  background: repeating-linear-gradient(110deg,#3458bf 0 22px,#8bbaff 22px 42px);
+  background-size: 90px 100%;
+  animation: sma-action-loading 1.1s linear infinite;
+}
+.sma-action-feedback[data-working] {
+  height: auto;
+  padding-bottom: 4px;
+  padding-inline-end: 12px;
+  color: #193469;
+  background: #edf3ff;
+}
+[data-sma-acknowledged]:not(form),[data-sma-working]:not(form) {
+  outline: 2px solid #527bd4 !important;
+  outline-offset: -2px;
+}
+[data-sma-working]:not(form) { cursor: progress !important; }
+:where(button,a,[role=button],[role=tab],summary):active {
+  outline: 2px solid #527bd4;
+  outline-offset: -2px;
+}
+:where(button,[role=button],[role=status],section,form,main,fieldset)[aria-busy=true] {
+  box-shadow: inset 0 3px #537bd1;
+}
+@keyframes sma-action-loading { to { background-position: 90px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .sma-action-feedback[data-working]::before { animation: none; background: #375bc9; }
+}
+@media (forced-colors: active) {
+  .sma-action-feedback[data-working] { background: Canvas; color: CanvasText; }
+  .sma-action-feedback::before { border-top: 3px solid Highlight; }
+}

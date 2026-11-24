@@ -1,3 +1,4 @@
+import dashboardFeedbackAsset from './dom-runtime/dashboard-feedback-assets.cjs';
 // Regular dashboard shell and real package form, with all service responses supplied here.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -69,6 +70,8 @@ try {
     page.on('pageerror',err=>errors.push(err.message));
     await page.route('**/*',async route=>{
       const req=route.request(), url=new URL(req.url());
+      const asset = dashboardFeedbackAsset(req, url, site);
+      if (asset) return route.fulfill(asset);
       if(req.method()==='GET' && url.href===site+'/app/dashboard.html' && captureOwnerRedirect)
         return route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><h1>Aktuelle Anmeldung erneut prüfen</h1>'});
       if (req.method()==='GET' && url.origin===site && /^\/app\/(dashboard\.html|index\.html|paketwahl\.html|assets\/[\w.-]+\.m?js)$/.test(url.pathname))

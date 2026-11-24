@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {historyRefreshHeading} from './publication-history-controls.mjs?v=1';
 import {readPublicationTextHistory,textHistoryKey,historyPlatforms,formatHistoryMonth} from './publication-history-model.mjs?v=4';
 
@@ -44,7 +45,7 @@ export function mountPublicationTextHistory({doc,after,request,getOwnerId,expect
   }catch{if(current(g)){reset();message.textContent='Der Textverlauf konnte nicht geladen werden. Bitte erneut aktualisieren.';}}
   finally{if(current(g)){busy=false;refresh.disabled=false;previous.disabled=pageNumber===0;more.disabled=(pageNumber+1)*pageSize>=entries.length&&!cursor;slot.setAttribute('aria-busy','false');}}
  }
- refresh.addEventListener('click',()=>{if(!busy)load();});more.addEventListener('click',()=>{if(!isActive()||busy)return;if((pageNumber+1)*pageSize<entries.length){pageNumber++;render();}else if(cursor)load(month,true);});
+ refresh.addEventListener('click',dashboardAction(()=>{if(!busy)return load();}));more.addEventListener('click',dashboardAction(()=>{if(!isActive()||busy)return;if((pageNumber+1)*pageSize<entries.length){pageNumber++;render();}else if(cursor)return load(month,true);}));
  previous.addEventListener('click',()=>{if(isActive()&&!busy&&pageNumber>0){pageNumber--;render();}});
  return {load,clear(){month=undefined;reset();},destroy(){disposed=true;month=undefined;reset();card.remove();}};
 }

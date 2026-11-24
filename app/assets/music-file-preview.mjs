@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {musicClipDescription} from './music-clip-filters.mjs?v=1';
 
 const activePreviews = new WeakMap();
@@ -7,9 +8,10 @@ export function musicFileLabel(doc, track, detail, onClick) {
   label.className = 'sma-music-file';
   if (onClick) {
     label.type = 'button';
+    label.dataset.smaActionKey = 'music-preview/' + track.sha256;
     label.title = 'Hörprobe abspielen oder pausieren';
     label.setAttribute('aria-label', track.name + ' – Hörprobe abspielen oder pausieren');
-    label.addEventListener('click', onClick);
+    label.addEventListener('click', dashboardAction(onClick));
   }
   const title = doc.createElement('strong');
   title.textContent = track.name;

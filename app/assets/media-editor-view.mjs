@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {mountEditorCaption} from './media-editor-caption.mjs?v=1';
 import {mountEditorTimeline} from './media-editor-timeline.mjs?v=1';
 import {exportFrameSize} from './media-export-model.mjs?v=4';
@@ -63,7 +64,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  function releasePreview(clearOverlay=true){$('timeTrack').style.backgroundImage='';previewController?.abort();previewController=null;if(previewURL)revokeURL(previewURL);previewURL=null;$('image').removeAttribute('src');$('image').hidden=true;
   if(clearOverlay){caption.clear();$('overlay').textContent='';$('overlayCanvas').hidden=true;$('overlayCanvas').width=0;$('overlayCanvas').removeAttribute('aria-label');}
  }
- function lock(value){busy=value;$('fields').disabled=value;for(const id of ['asset','refreshMetadata','save','reload','confirmDiscard'])$(id).disabled=value;}
+ function lock(value){busy=value;$('fields').ariaBusy=String(value);$('fields').disabled=value;for(const id of ['asset','refreshMetadata','save','reload','confirmDiscard'])$(id).disabled=value;}
  function unavailable(message){driveLookup?.abort();$('driveFileLink').value='';timeline.setFile(null);original?.setContext(null);$('draftActions').hidden=true;metadataController?.abort();metadataController=null;$('metadataPanel').hidden=true;music.clear();exportView?.destroy();invalidOwner=true;generation++;releasePreview();files=[];file=null;saved=null;attempt=null;setDirty(false);clearDiscard();$('asset').replaceChildren();for(const key of Object.keys(editorDefaults))control(key).value='';$('savedInfo').textContent='';$('editor').hidden=true;$('app').hidden=true;$('login').hidden=false;lock(true);say(message,true);}
  async function owner(g){const id=await getOwnerId();if(!current(g))return false;if(id!==expectedOwnerId){unavailable(errors.AUTH_REQUIRED);return false;}return true;}
  function fail(error){const code=error?.message||'UNAVAILABLE';if(['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE'].includes(code)){unavailable(errors[code]);return;}say(errors[code]||errors.UNAVAILABLE,true);}
@@ -185,7 +186,7 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   }}
   finally{clearTimeout(deadline);if(metadataController===controller)metadataController=null;if(current(g))lock(false);}
  }
- $('refreshMetadata').addEventListener('click',refreshFileMetadata);
+ $('refreshMetadata').addEventListener('click',dashboardAction(refreshFileMetadata));
  async function save(event){
   event?.preventDefault();if(busy||!saved||!file||invalidOwner||disposed)return;
   if(fileStale){fail(Error('FILE_CHANGED'));return;}
@@ -195,11 +196,11 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   try{if(!await owner(g))return;const response=await request('save',input);if(!current(g)||!await owner(g))return;const result=readEditorState(response,file);fill(result);say(result.changed?'Entwurf gespeichert. Die Änderung steht jetzt in der History.':result.revision?'Gespeicherter Stand bestätigt. Es wurde kein doppelter Verlaufseintrag angelegt.':'Keine geänderten Einstellungen vorhanden.');}
   catch(e){if(current(g))fail(e);}finally{if(current(g))lock(false);}
  }
- const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;if(['start_ms','end_ms'].includes(event.target.name))original?.stopRange();markEdited();};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',save);
- const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}useLinkedFile=false;$('assetPicker').hidden=true;void loadFile($('asset').value);};$('asset').addEventListener('change',choose);
- const reload=()=>{if(busy||!file)return;if(dirty){showDiscard('reload');return;}void loadFile(file.id);};$('reload').addEventListener('click',reload);
+ const change=event=>{if(!saved||busy||!Object.hasOwn(editorDefaults,event.target.name))return;if(['start_ms','end_ms'].includes(event.target.name))original?.stopRange();markEdited();};$('editorForm').addEventListener('input',change);$('editorForm').addEventListener('change',change);$('editorForm').addEventListener('submit',dashboardAction(save));
+ const choose=()=>{if(dirty){$('asset').value=file.id;say('Speichere deine Änderungen oder lade zuerst den gespeicherten Stand.',true);return;}useLinkedFile=false;$('assetPicker').hidden=true;return loadFile($('asset').value);};$('asset').addEventListener('change',dashboardAction(choose));
+ const reload=()=>{if(busy||!file)return;if(dirty){showDiscard('reload');return;}return loadFile(file.id);};$('reload').addEventListener('click',dashboardAction(reload));
  const leave=event=>{if(event.defaultPrevented||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||disposed||invalidOwner||!dirty)return;event.preventDefault();if(busy){say('Bitte warte, bis der laufende Vorgang abgeschlossen ist.',true);return;}showDiscard('leave');};$('backDashboard').addEventListener('click',leave);
- const discard=()=>{if(busy||disposed||invalidOwner||!discardAction)return;if(discardAction==='leave'){clearDiscard();setDirty(false);try{navigate($('backDashboard').href);}catch{setDirty(true);showDiscard('leave');say('Das Dashboard konnte nicht geöffnet werden. Deine Eingaben sind noch vorhanden.',true);}return;}if(file)void loadFile(file.id);},keep=()=>clearDiscard();$('confirmDiscard').addEventListener('click',discard);$('keepEditing').addEventListener('click',keep);
+ const discard=()=>{if(busy||disposed||invalidOwner||!discardAction)return;if(discardAction==='leave'){clearDiscard();setDirty(false);try{navigate($('backDashboard').href);}catch{setDirty(true);showDiscard('leave');say('Das Dashboard konnte nicht geöffnet werden. Deine Eingaben sind noch vorhanden.',true);}return;}if(file)return loadFile(file.id);},keep=()=>clearDiscard();$('confirmDiscard').addEventListener('click',dashboardAction(discard));$('keepEditing').addEventListener('click',keep);
  $('driveLinkForm').hidden=!lookupDriveFile;
  async function chooseDriveLink(event){
   event.preventDefault();
@@ -225,9 +226,9 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
   }catch(error){if(current(g)&&!controller.signal.aborted)fail(error);}
   finally{if(driveLookup===controller)driveLookup=null;if(current(g))lock(false);}
  }
- $('driveLinkForm').addEventListener('submit',chooseDriveLink);
+ $('driveLinkForm').addEventListener('submit',dashboardAction(chooseDriveLink));
  const openFolder=()=>{folderVisit=true;$('assetPicker').hidden=false;};
- $('driveFolder').addEventListener('click',openFolder);$('retry').addEventListener('click',loadFiles);
+ $('driveFolder').addEventListener('click',openFolder);$('retry').addEventListener('click',dashboardAction(loadFiles));
  const visibility=async()=>{if(doc.visibilityState==='hidden'){timeline.pause();$('app').hidden=true;return;}const g=generation;try{if(await owner(g)&&current(g)){
   $('app').hidden=false;
   if(folderVisit&&!busy){folderVisit=false;if(!dirty)void loadFiles({fromDrive:true});}
@@ -235,5 +236,5 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  doc.addEventListener('visibilitychange',visibility);ownerWindow.addEventListener('focus',visibility);
  if(exportDependencies)exportView=mountMediaExport({doc,...exportDependencies,getOwnerId,expectedOwnerId,uuid,createURL,revokeURL,setBusy:lock,onAuthLost:()=>unavailable(errors.AUTH_REQUIRED),musicSource:(m,signal)=>music.getSource(m,signal),getDraft:(f,signal)=>request('get',{asset_id:f.id,asset_revision:f.revision},signal)});
  void loadFiles();
- return {invalidateOwner(id){if(id!==expectedOwnerId&&!disposed)unavailable(errors.AUTH_REQUIRED);},destroy(){if(disposed)return;clearDiscard();$('backDashboard').removeEventListener('click',leave);setDirty(false);disposed=true;generation++;metadataController?.abort();$('refreshMetadata').removeEventListener('click',refreshFileMetadata);exportView?.destroy();original?.destroy();timeline.destroy();caption.destroy();$('draftActions').hidden=true;music.destroy();releasePreview();tabs.destroy();$('editorForm').removeEventListener('input',change);$('editorForm').removeEventListener('change',change);$('editorForm').removeEventListener('submit',save);$('asset').removeEventListener('change',choose);$('reload').removeEventListener('click',reload);$('confirmDiscard').removeEventListener('click',discard);$('keepEditing').removeEventListener('click',keep);driveLookup?.abort();$('driveLinkForm').removeEventListener('submit',chooseDriveLink);$('driveFolder').removeEventListener('click',openFolder);$('retry').removeEventListener('click',loadFiles);doc.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('focus',visibility);$('app').hidden=true;}};
+ return {invalidateOwner(id){if(id!==expectedOwnerId&&!disposed)unavailable(errors.AUTH_REQUIRED);},destroy(){if(disposed)return;clearDiscard();$('backDashboard').removeEventListener('click',leave);setDirty(false);disposed=true;generation++;metadataController?.abort();$('refreshMetadata').removeEventListener('click',dashboardAction(refreshFileMetadata));exportView?.destroy();original?.destroy();timeline.destroy();caption.destroy();$('draftActions').hidden=true;music.destroy();releasePreview();tabs.destroy();$('editorForm').removeEventListener('input',change);$('editorForm').removeEventListener('change',change);$('editorForm').removeEventListener('submit',dashboardAction(save));$('asset').removeEventListener('change',dashboardAction(choose));$('reload').removeEventListener('click',dashboardAction(reload));$('confirmDiscard').removeEventListener('click',dashboardAction(discard));$('keepEditing').removeEventListener('click',keep);driveLookup?.abort();$('driveLinkForm').removeEventListener('submit',dashboardAction(chooseDriveLink));$('driveFolder').removeEventListener('click',openFolder);$('retry').removeEventListener('click',dashboardAction(loadFiles));doc.removeEventListener('visibilitychange',visibility);ownerWindow.removeEventListener('focus',visibility);$('app').hidden=true;}};
 }

@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 // One small dashboard-wide finder over already loaded, owner-bound data.
 // No network, credentials, new search endpoint, persistence or publishing.
 import {filterDashboardFiles,dashboardFileDescription} from './dashboard-file-search.mjs?v=2';
@@ -84,9 +85,9 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  input.setAttribute('aria-label','Dashboard durchsuchen');input.autocomplete='off';
  const status=create('p');status.className='sma-qf-status';status.setAttribute('role','status');
  const retry=create('button');retry.type='button';retry.hidden=true;
- retry.addEventListener('click',()=>{
-  if(!disposed&&!overlay.hidden&&getFileStatus()!=='loading'&&getFileRetry())onRetryFiles?.();
- });
+ retry.addEventListener('click',dashboardAction(()=>{
+  if(!disposed&&!overlay.hidden&&getFileStatus()!=='loading'&&getFileRetry())return onRetryFiles?.();
+ }));
  const results=create('div');results.id='smaQuickFindResults';
  panel.append(head,input,status,retry,results);overlay.append(panel);doc.body.append(overlay);
  let disposed=false,launcher=button,retainedFileId=null;
@@ -113,11 +114,11 @@ export function mountDashboardQuickFind({doc,getAreas,getFiles,getFileStatus=()=
  function item(title,subtitle,handler,restoreFocus=true,key=null){
   const el=create('button');el.type='button';el.className='sma-qf-item';
   if(key)el.dataset.quickAction=key;
-  el.append(create('strong',title),create('small',subtitle));el.addEventListener('click',async()=>{
+  el.append(create('strong',title),create('small',subtitle));el.addEventListener('click',dashboardAction(async()=>{
    if(disposed)return;
    try{if(await handler()===true)hide(restoreFocus);else status.textContent='Bereich derzeit nicht verfügbar.';}
    catch{status.textContent='Der Bereich konnte nicht geöffnet werden.';}
-  });results.append(el);return el;
+  }));results.append(el);return el;
  }
  function render(restoredFileId){
   if(disposed||overlay.hidden)return;

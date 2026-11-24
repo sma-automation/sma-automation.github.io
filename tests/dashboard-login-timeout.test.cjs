@@ -1,3 +1,4 @@
+const dashboardFeedbackAsset = require('./dom-runtime/dashboard-feedback-assets.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -230,6 +231,8 @@ test('desktop and mobile login retry remains usable after stalled auth, HTTP, bo
     },{hold,shell,order});
     await page.route('**/*',async route=>{
      const req=route.request(),url=new URL(req.url());
+     const asset = dashboardFeedbackAsset(req, url, site);
+     if (asset) return route.fulfill(asset);
      if(req.method()==='GET'&&url.origin===site&&/^\/app\/(dashboard\.html|assets\/[\w.-]+\.m?js)$/.test(url.pathname))
       return route.fulfill({contentType:url.pathname.endsWith('.html')?'text/html; charset=utf-8':'text/javascript',body:fs.readFileSync('.'+url.pathname,'utf8')});
      if(req.method()==='GET'&&url.origin==='https://esm.sh'&&/^\/@supabase\/supabase-js@2(?:\.57\.4)?$/.test(url.pathname))

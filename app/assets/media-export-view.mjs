@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {missingVideoMetadata} from './media-metadata.mjs?v=1';
 import {exportPlan,readExportReceipt,readExportList,sha256} from './media-export-model.mjs?v=4';
 import {readEditorState} from './media-editor-model.mjs?v=5';
@@ -20,11 +21,11 @@ export function mountMediaExport({doc,getOwnerId,expectedOwnerId,onAuthLost,setB
  }
  async function verify(g,signal){await owner(g);const file=context.file;const state=readEditorState(await getDraft(file,signal),file);await owner(g);if(state.revision!==context.saved.revision||JSON.stringify(state.settings)!==JSON.stringify(context.saved.settings))throw Error('REVISION_CONFLICT');return state;}
  function fail(e,g){if(!active(g))return;if(e?.message==='AUTH_REQUIRED'||e?.code==='AUTH_REQUIRED'){onAuthLost();return;}if(controller?.signal.aborted||e?.name==='AbortError'||e?.message==='AbortError'){say(result?'Speichern abgebrochen. Du kannst dasselbe Ergebnis erneut speichern.':'Verarbeitung abgebrochen.');return;}say(messages[e?.code]||messages[e?.message]||(result?'Speichern noch nicht abgeschlossen. Bitte erneut auf „Im Kundenordner speichern“ klicken. Dasselbe Ergebnis wird fortgesetzt.':'Die Verarbeitung konnte nicht abgeschlossen werden. Bitte erneut versuchen.'),true);}
- function listen(id,fn){$(id).addEventListener('click',fn);cleanups.push(()=>$(id).removeEventListener('click',fn));}
+ function listen(id,fn){$(id).addEventListener('click',dashboardAction(fn));cleanups.push(()=>$(id).removeEventListener('click',dashboardAction(fn)));}
  async function history(g){
   try{const f=context.file,rows=readExportList(await request('list',{asset_id:f.id,asset_revision:f.revision}));await owner(g);$('exportHistory').replaceChildren();if(!rows.length)return;
    for(const row of rows){const div=doc.createElement('div'),label=doc.createElement('p'),actions=doc.createElement('div');actions.className='actions';label.textContent='Entwurf '+row.draft_revision+' · '+new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short'}).format(new Date(row.completed_at));div.append(label,actions);
-    for(const kind of ['media','cover'])if(row[kind]){const button=doc.createElement('button');button.type='button';button.textContent=kind==='media'?'Datei herunterladen':'Cover herunterladen';button.disabled=Boolean(operation);button.addEventListener('click',()=>download(row[kind]));actions.append(button);} const select=doc.createElement('select'),link=doc.createElement('a');select.setAttribute('aria-label','Portal für diese exportierte Datei');
+    for(const kind of ['media','cover'])if(row[kind]){const button=doc.createElement('button');button.type='button';button.textContent=kind==='media'?'Datei herunterladen':'Cover herunterladen';button.disabled=Boolean(operation);button.addEventListener('click',dashboardAction(()=>download(row[kind])));actions.append(button);} const select=doc.createElement('select'),link=doc.createElement('a');select.setAttribute('aria-label','Portal für diese exportierte Datei');
     for(const [value,label] of [['youtube','YouTube'],['tiktok','TikTok'],['instagram','Instagram'],['facebook','Facebook']]){if(context.file.media_kind==='image'&&['youtube','tiktok'].includes(value))continue;const o=doc.createElement('option');o.value=value;o.textContent=label;select.append(o);}
     const target=()=>{link.href='publication-preview.html?portal='+select.value+'&asset='+row.media.asset_id+'&wide=1&v=31';};select.addEventListener('change',target);link.textContent='Für Portal vorbereiten →';target();actions.append(select,link);$('exportHistory').append(div);
    }

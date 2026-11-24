@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {createMusicPreview,musicFileLabel} from './music-file-preview.mjs?v=1';
 import {createMusicClipFilters} from './music-clip-filters.mjs?v=1';
 export const musicLibraryMessages={AUTH_REQUIRED:'Bitte melde dich erneut an.',ACCESS_INACTIVE:'Dein SMA-Zugang ist derzeit nicht aktiv.',ACCOUNT_UNAVAILABLE:'Dein Kundenkonto ist nicht eindeutig verfügbar.',MUSIC_INVALID:'Bitte MP3 oder WAV bis 8 MB wählen.',MUSIC_LIMIT:'Die Musikbibliothek ist voll (100 MB oder 100 Tracks).',MUSIC_NOT_FOUND:'Diese Musik ist noch nicht in deiner Bibliothek gespeichert.',MUSIC_REQUIRED:'Die gespeicherte Musik konnte nicht vollständig geladen werden. Bitte erneut versuchen.',MUSIC_INCOMPLETE:'Der Upload ist noch nicht vollständig. Wähle dieselbe Datei erneut.',MUSIC_CONFLICT:'Die Datei passt nicht zum gespeicherten Track.',MUSIC_UNAVAILABLE:'Die Musikbibliothek ist gerade nicht erreichbar. Bitte erneut versuchen.'};
@@ -13,7 +14,7 @@ export function mountMusicLibrary({doc,host,api,playlist=false,onSelect=null,sel
  if(playlist)add.hidden=true;
  const say=text=>status.textContent=text;const live=e=>!disposed&&e===epoch;
  const preview=createMusicPreview({doc,audio:player,status,source:(t,signal)=>api.source(recipe(t),signal),createURL,revokeURL});
- function lock(v){busy=v;for(const b of root.querySelectorAll('button,input'))b.disabled=v;draw();}
+ function lock(v){busy=v;root.setAttribute('aria-busy',String(v));for(const b of root.querySelectorAll('button,input'))b.disabled=v;draw();}
  async function operation(fn){if(busy||disposed)return;const e=++epoch;controller=new AbortController();lock(true);try{await fn(controller.signal,e);}catch(error){if(live(e)&&!controller.signal.aborted){if(['AUTH_REQUIRED','ACCESS_INACTIVE','ACCOUNT_UNAVAILABLE'].includes(error.message)){tracks=[];preview.stop();draw();}say(musicLibraryMessages[error.message]||musicLibraryMessages.MUSIC_UNAVAILABLE);}}finally{if(live(e)){controller=null;lock(false);}}}
  async function load(signal,e){const rows=await api.list(signal);if(!live(e))return;tracks=rows;if(filters){const options=playlist?rows.filter(t=>t.favourite):rows;filters.update(options);filters.root.hidden=!options.some(t=>t.mood);}draw();}
  const refreshList=()=>operation(async(s,e)=>{say('Musik wird geladen …');await load(s,e);if(live(e))say('');});
@@ -23,7 +24,7 @@ export function mountMusicLibrary({doc,host,api,playlist=false,onSelect=null,sel
    const detail=available?(t.size_bytes/1000000).toLocaleString('de-AT',{maximumFractionDigits:2})+' MB · '+(t.mime_type==='audio/wav'?'WAV':'MP3'):'Unter „SMA-Musik“ freischaltbar';
    const info=musicFileLabel(doc,t,detail,available?()=>preview.play(t):null);
    if(available)info.disabled=busy;
-   const action=(label,fn)=>{const b=el('button',label);b.type='button';b.disabled=busy;b.addEventListener('click',fn);actions.append(b);return b;};
+   const action=(label,fn)=>{const b=el('button',label);b.type='button';b.disabled=busy;b.addEventListener('click',dashboardAction(fn));actions.append(b);return b;};
    if(available)action(t.favourite?'Aus Playlist entfernen':'Zur Playlist',()=>operation(async(s,e)=>{await api.favourite(t,!t.favourite,s);await load(s,e);if(live(e)){say(t.favourite?'Aus deiner Playlist entfernt.':'Zur Playlist hinzugefügt.');onChange();}}));
    if(onSelect&&available)action('Verwenden',()=>operation(async(s,e)=>{const key=selectionKey();if(!key)return;say('Musik wird geladen …');const blob=await api.source(recipe(t),s);if(!live(e)||key!==selectionKey())return;await onSelect(t,blob);if(live(e))say('Musik für den Entwurf ausgewählt.');}));row.append(info,actions);list.append(row);
   }

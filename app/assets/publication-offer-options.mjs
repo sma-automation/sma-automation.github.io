@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 // Customer-visible, read-only provider choices for an owned video revision.
 // The backend alone decides whether an offer belongs to this product and customer.
 // Displaying a link NEVER selects a caption, opens a checkout or publishes.
@@ -77,7 +78,7 @@ export function mountProviderOfferOptions({doc,note,file,request,isCurrent,onSel
     if(typeof onSelect==='function'){
      const choose=doc.createElement('button');choose.type='button';choose.className='btn';
      choose.textContent='Für diesen Portalentwurf übernehmen';
-     choose.addEventListener('click',async()=>{
+     choose.addEventListener('click',dashboardAction(async()=>{
       if(pending||!isCurrent()||choose.disabled)return;
       choose.disabled=true;
       try{
@@ -86,7 +87,7 @@ export function mountProviderOfferOptions({doc,note,file,request,isCurrent,onSel
       }catch(error){
        if(ticket===serial&&isCurrent())details.textContent=typeof error?.message==='string'?error.message:'Die Linkauswahl konnte nicht gespeichert werden.';
       }finally{if(ticket===serial)choose.disabled=false;}
-     });
+     }));
      details.append(choose);
     }
    }
@@ -96,7 +97,7 @@ export function mountProviderOfferOptions({doc,note,file,request,isCurrent,onSel
    if(ticket===serial){pending=false;button.disabled=false;}
   }
  }
- button.addEventListener('click',()=>{void check();});
+ button.addEventListener('click',dashboardAction(()=>{void check();}));
  note.append(button,details);
  return {button,details,destroy(){serial++;pending=false;button.disabled=true;}};
 }

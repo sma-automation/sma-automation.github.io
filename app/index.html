@@ -625,6 +625,9 @@ function setStatus(message, type = '') {
 // BUTTONS SPERREN
 
 function setBusy(busy) {
+  authSubmit.form?.setAttribute('aria-busy',String(busy));
+  sendResetButton.form?.setAttribute('aria-busy',String(busy));
+  savePasswordButton.form?.setAttribute('aria-busy',String(busy));
   authSubmit.disabled = busy;
   sendResetButton.disabled = busy;
   savePasswordButton.disabled = busy;
@@ -1066,5 +1069,6 @@ void checkExistingSession();
 
 </script>
 
+<script type="module" src="./assets/dashboard-feedback-page.mjs?v=1"></script>
 </body>
 </html>

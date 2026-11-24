@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 const vienna = new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Europe/Vienna', year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -103,9 +104,9 @@ export function mountJointPlan(doc, request, portal='youtube') {
   }
 
   panel.addEventListener('toggle', () => { if (panel.open && !record) void run('get'); });
-  refresh.addEventListener('click', () => run('get'));
-  save.addEventListener('click', () => run('save'));
-  clear.addEventListener('click', () => run('clear'));
+  refresh.addEventListener('click', dashboardAction(() => run('get')));
+  save.addEventListener('click', dashboardAction(() => run('save')));
+  clear.addEventListener('click', dashboardAction(() => run('clear')));
   field.addEventListener('input', () => { fold.value = ''; controls(); });
   return {select(file, owner) {
     const next = owner && file?.media_kind === 'video' ? {p_owner: owner, p_asset: file.id, p_revision: file.revision} : null;

@@ -1,3 +1,4 @@
+const dashboardFeedbackAsset = require('./dom-runtime/dashboard-feedback-assets.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
@@ -185,6 +186,8 @@ test('desktop and mobile browsers recover from stalled session/status/final-sess
     page.on('pageerror',error=>errors.push(error.message));
     await page.route('**/*',async route=>{
      const req=route.request(),target=new URL(req.url());
+     const asset = dashboardFeedbackAsset(req, target, site);
+     if (asset) return route.fulfill(asset);
      if(req.method()==='GET'&&target.origin===site&&['/app/paketwahl.html','/app/assets/onboarding-payment-return.mjs'].includes(target.pathname))
       return route.fulfill({contentType:target.pathname.endsWith('.html')?'text/html; charset=utf-8':'text/javascript',body:readFileSync('.'+target.pathname,'utf8')});
      if(req.method()==='GET'&&req.url()==='https://esm.sh/@supabase/supabase-js@2.57.4')

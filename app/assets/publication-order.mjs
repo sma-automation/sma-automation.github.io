@@ -331,6 +331,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   function reviewValues(){return {...Object.fromEntries([...reviewFields,...humanFields].map(([k,e])=>[k,e.checked])),human_review_enabled:humanEnabled.checked};}
   function reviewReady(){try{reviewConfirmation(order,reviewValues());return !order.check_error;}catch{return false;}}
   function setWorking(value){
+    dialog.setAttribute('aria-busy',String(value));
     working=value;
     const ended=preparationEnded(order),locked=ended||recovery!==null;
     controls.querySelectorAll('select,button,input').forEach(e=>e.disabled=value||!!order||e.dataset.forced==='true');

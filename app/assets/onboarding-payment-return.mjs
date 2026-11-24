@@ -75,6 +75,7 @@ async function check() {
   if (busy || !available()) return;
   clearTimeout(timer);
   busy = true;
+  status.setAttribute?.('aria-busy','true');
   retry.disabled = true;
   const controller = new AbortController();
   activeRead = controller;
@@ -141,6 +142,7 @@ async function check() {
     clearTimeout(deadline);
     if (activeRead === controller) activeRead = null;
     busy = false;
+    status.setAttribute?.('aria-busy','false');
     retry.disabled = false;
     const resume = resumeAfterRead && available() && pending;
     resumeAfterRead = false;

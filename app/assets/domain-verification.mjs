@@ -29,7 +29,7 @@ export function mountDomainVerification({root,request,getOwnerId,onAccessError,a
  const $=s=>section.querySelector(s);let draft=null,owner=null,generation=0,busy=false,destroyed=false;
  const notice=text=>{$('[data-domain-status]').textContent=text;};
  function clear(){for(const el of section.querySelectorAll('input,textarea'))el.value='';$('[data-domain-record]').hidden=true;$('[data-domain-prepare]').disabled=true;$('[data-domain-intro]').textContent='Mit einem TXT-Prüfeintrag zeigst du, dass du die gespeicherte Domain verwalten kannst.';$('[data-domain-connection-note]').textContent='Ein Nachweis kauft keine Domain und ändert weder DNS noch Hosting.';}
- function invalidate(text='Speichere zuerst eine Webadresse oder die Domain für deine neue SMA-Webseite.') {generation++;draft=null;owner=null;busy=false;clear();notice(text);}
+ function invalidate(text='Speichere zuerst eine Webadresse oder die Domain für deine neue SMA-Webseite.') {generation++;draft=null;owner=null;busy=false;section.removeAttribute('aria-busy');clear();notice(text);}
  function show(state){
   clear();describe();$('[data-domain-prepare]').hidden=state.state!=='unprepared';$('[data-domain-prepare]').disabled=false;
   if(state.state==='unprepared'){notice('Für '+state.hostname+' ist noch kein Domainnachweis erstellt.');return;}
@@ -41,7 +41,7 @@ export function mountDomainVerification({root,request,getOwnerId,onAccessError,a
  }
  function describe(){const own=draft?.draft?.mode==='new';$('[data-domain-intro]').textContent=own?'Für deine neue SMA-Webseite kannst du eine Domain nachweisen, die dir bereits gehört. Trage dazu den TXT-Prüfeintrag bei deinem Domainanbieter ein.':'Mit einem TXT-Prüfeintrag zeigst du, dass du die gespeicherte Domain verwalten kannst. Der Shop-Button ist unabhängig davon nutzbar.';$('[data-domain-connection-note]').textContent=own?'Deine SMA-Webseite bleibt unter ihrer bisherigen Adresse. Die Verknüpfung der eigenen Domain ist noch nicht eingerichtet.':'Der Nachweis verbindet oder verändert deine bestehende Webseite nicht.';}
  async function run(action){
-  if(destroyed||busy||!draft)return;const ticket=generation,saved=draft;busy=true;
+  if(destroyed||busy||!draft)return;const ticket=generation,saved=draft;busy=true;section.setAttribute('aria-busy','true');
   for(const b of section.querySelectorAll('button'))b.disabled=true;
   notice(action==='verify'?'DNS-Eintrag wird geprüft …':action==='prepare'?'Prüfeintrag wird erstellt …':'Domainnachweis wird geladen …');
   try{
@@ -55,7 +55,7 @@ export function mountDomainVerification({root,request,getOwnerId,onAccessError,a
    if(destroyed||generation!==ticket)return;
    if(['AUTH_REQUIRED','ACCOUNT_CHANGED','ACCOUNT_UNAVAILABLE','ACCESS_INACTIVE','DELTA_REQUIRED'].includes(e.code)){invalidate(messages[e.code]);onAccessError?.(e);}
    else notice(messages[e.code]||'Der Domainnachweis ist gerade nicht erreichbar. Bitte versuche es erneut.');
-  }finally{if(!destroyed&&generation===ticket){busy=false;for(const b of section.querySelectorAll('button'))b.disabled=false;}}
+  }finally{if(!destroyed&&generation===ticket){busy=false;section.removeAttribute('aria-busy');for(const b of section.querySelectorAll('button'))b.disabled=false;}}
  }
  $('[data-domain-prepare]').addEventListener('click',()=>run('prepare'));
  $('[data-domain-verify]').addEventListener('click',()=>run('verify'));
