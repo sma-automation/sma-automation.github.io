@@ -28,6 +28,7 @@ jobs:
           node tests/run-music-clip-rights.mjs
           node tests/run-music-library-dom.mjs
           node tests/run-music-file-playback.mjs
+          node tests/run-dashboard-feedback.mjs
           node tests/run-optimizer-layout.mjs
           node tests/run-website-preparation-chromium.mjs
           node tests/run-shop-catalog-mobile.mjs

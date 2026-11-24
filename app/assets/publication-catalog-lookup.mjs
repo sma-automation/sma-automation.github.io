@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 // The two pickers show the same names and only select an explicitly supplied ID.
 export function fillProductChoices(doc, select, choices, wanted) {
   const placeholder=doc.createElement('option');
@@ -46,8 +47,8 @@ export function mountCatalogLookup(doc,lookup){
       if(ticket===serial){pending=false;button.disabled=more.disabled=false;}
     }
   }
-  button.addEventListener('click',()=>search());
-  more.addEventListener('click',()=>search(true));
+  button.addEventListener('click',dashboardAction(()=>search()));
+  more.addEventListener('click',dashboardAction(()=>search(true)));
   query.addEventListener('keydown',event=>{
     if(event.key==='Enter'){event.preventDefault();void search();}
   });

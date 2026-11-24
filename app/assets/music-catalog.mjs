@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {createMusicPreview,musicFileLabel} from './music-file-preview.mjs?v=1';
 import {createMusicClipFilters} from './music-clip-filters.mjs?v=1';
 import {readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
@@ -90,11 +91,11 @@ export function mountCatalog({doc,host,api,goToCheckout}){
    if(!t.available){
     const unlock=el('button','Für 1 Credit freischalten');
     unlock.type='button';unlock.disabled=!!controller||data.credits<1;
-    unlock.addEventListener('click',()=>run(async signal=>{
+    unlock.addEventListener('click',dashboardAction(()=>run(async signal=>{
      await api.unlock(t.sha256,signal);signal.throwIfAborted();
      doc.dispatchEvent(new doc.defaultView.Event('sma-music-unlocked'));
      await reload(signal);status.textContent='Freigeschaltet · '+t.name;
-    }));
+    })));
     row.append(unlock);
    }
    list.append(row);
@@ -123,10 +124,10 @@ export function mountCatalog({doc,host,api,goToCheckout}){
   });
   if(settings&&!disposed&&status.textContent){paymentStatus.textContent=status.textContent;paymentStatus.hidden=false;}
  };
- refresh.addEventListener('click',()=>run(reload));buy.addEventListener('click',pay);oldBuy?.addEventListener('click',pay);
+ refresh.addEventListener('click',dashboardAction(()=>run(reload)));buy.addEventListener('click',dashboardAction(pay));oldBuy?.addEventListener('click',dashboardAction(pay));
  prev.addEventListener('click',()=>{if(!controller&&page>0){page--;draw();}});
  next.addEventListener('click',()=>{if(!controller&&data&&page+1<Math.ceil(data.tracks.filter(filters.matches).length/5)){page++;draw();}});
  void run(reload);
  return {destroy(){disposed=true;controller?.abort();preview.stop();root.remove();paymentStatus.remove();if(balance)balance.textContent=oldBalance;
-  if(oldBuy){oldBuy.disabled=true;oldBuy.textContent=oldLabel;oldBuy.removeEventListener('click',pay);}}};
+  if(oldBuy){oldBuy.disabled=true;oldBuy.textContent=oldLabel;oldBuy.removeEventListener('click',dashboardAction(pay));}}};
 }

@@ -6,9 +6,9 @@ export function mountWebsiteSetup({root,request,getOwnerId}){
  const button=root.querySelector('[data-setup-start]'),status=root.querySelector('[data-setup-status]'),address=root.querySelector('[data-setup-address]'),win=root.ownerDocument.defaultView;
  let owner=null,generation=0,destroyed=false,busy=false,job=null,timer=null;
  function clear(){if(timer)win.clearTimeout(timer);timer=null;}
- function invalidate(){generation++;clear();owner=null;job=null;root.dataset.setupHasJob='false';busy=false;button.disabled=true;address.textContent='';address.hidden=true;status.textContent='';}
+ function invalidate(){generation++;clear();owner=null;job=null;root.dataset.setupHasJob='false';busy=false;root.removeAttribute('aria-busy');button.disabled=true;address.textContent='';address.hidden=true;status.textContent='';}
  async function load(action='get'){
-  if(destroyed||busy)return;clear();const seq=++generation;busy=true;button.disabled=true;
+  if(destroyed||busy)return;clear();const seq=++generation;busy=true;root.setAttribute('aria-busy','true');button.disabled=true;
   try{
    const uid=await getOwnerId();if(destroyed||seq!==generation)return;
    if(!uid||owner&&owner!==uid)throw Object.assign(Error(),{code:uid?'ACCOUNT_CHANGED':'AUTH_REQUIRED'});owner=uid;
@@ -30,7 +30,7 @@ export function mountWebsiteSetup({root,request,getOwnerId}){
    if(destroyed||seq!==generation)return;
    address.textContent='';address.hidden=true;status.textContent=errors[error.code]||'Der Status konnte nicht geladen werden. Die Einrichtung läuft serverseitig weiter.';
    button.textContent='Status erneut laden';button.disabled=!!errors[error.code]&&error.code!=='SETUP_UNAVAILABLE';job=null;
-  }finally{if(seq===generation)busy=false;}
+  }finally{if(seq===generation){busy=false;root.removeAttribute('aria-busy');}}
  }
  button.addEventListener('click',()=>load(button.textContent==='Status erneut laden'?'get':job?.blocked?'retry':'start'));
  const focus=()=>load();win.addEventListener('focus',focus);

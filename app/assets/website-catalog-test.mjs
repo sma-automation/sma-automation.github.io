@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {catalogFromSearch} from './shop-catalog-model.mjs?v=1';
 
 const catalog=catalogFromSearch(location.search),$=id=>document.getElementById(id);
@@ -8,8 +9,8 @@ if(catalog){
  $('catalogPreview').append(frame);$('shopOpen').href=catalog.url;
  $('embedCode').value=catalog.html;$('buttonPreview').href='./website-connection-test.html?shop='+catalog.slug;
  $('catalogSetup').hidden=false;$('missing').hidden=true;
- $('copyCode').addEventListener('click',async()=>{
+ $('copyCode').addEventListener('click',dashboardAction(async()=>{
   try{await navigator.clipboard.writeText(catalog.html);$('copyStatus').textContent='Einbaucode kopiert.';}
   catch{$('embedCode').focus();$('embedCode').select();$('copyStatus').textContent='Markierten Einbaucode mit Strg+C oder ⌘C kopieren.';}
- });
+ }));
 }

@@ -1,3 +1,4 @@
+import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {historyRefreshHeading,mountHistoryMonths} from './publication-history-controls.mjs?v=1';
 import {mountPublicationAnalysisHistory} from './publication-analysis-history-dashboard.mjs?v=2';
 import {mountPublicationEditorHistory} from './publication-editor-history-dashboard.mjs?v=3';
@@ -89,7 +90,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
     const option=create('option');option.value=view.key;translated(option,view.label,view.en);editPicker.append(option);
    }
    label.append(name,editPicker);editPanel.append(label);
-   editPicker.addEventListener('change',changeEditView);
+   editPicker.addEventListener('change',dashboardAction(changeEditView));
   }
   for(const view of editViews){editPanel.append(view.card);view.card.hidden=view.key!==editKey;}
  }
@@ -128,7 +129,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   const reader=chapterReaders[key];
   if(!reader||!active()||requestedChapters.has(key))return;
   // The orders response supplies the shared period, including the server's current month.
-  if(!lastResult){if(!busy)load();return;}
+  if(!lastResult){if(!busy)return load();return;}
   requestedChapters.add(key);
   reader.load(lastResult.month);
  }
@@ -263,7 +264,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
     button.type='button';button.className='sma-history-find-open';button.append(heading,caption);
     button.setAttribute('aria-describedby',caption.id);
     button.setAttribute('aria-label','Auftrag in History öffnen: '+(entry.title||'Gespeicherter Beitrag'));
-    button.addEventListener('click',()=>{
+    button.addEventListener('click',dashboardAction(()=>{
      if(!active()||!requestOrderPage)return;
      cancelFind();
      findInput.value='';findResults.replaceChildren();findStatus.textContent='';
@@ -271,7 +272,7 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
      const history=ownerWindow.history;
      history.replaceState(history.state?.smaOptimization?null:history.state,'','#auftrag/'+orderId);
      clear();load();
-    });
+    }));
     row.append(button);findResults.append(row);
    }
    findStatus.textContent=found.entries.length
@@ -340,16 +341,16 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   if(!active()||busy)return;
   if((pageNumber+1)*pageSize<entries.length){pageNumber++;render();return;}
   if(!cursor)return;
-  if(orderId)load(false,pagesBeforeBatch+pageNumber+2);else load(true);
+  return orderId ? load(false,pagesBeforeBatch+pageNumber+2) : load(true);
  };
  const onPrevious=()=>{
   if(!active()||busy||firstPage())return;
-  if(pageNumber>0){pageNumber--;render();}else load(false,pagesBeforeBatch);
+  if(pageNumber>0){pageNumber--;render();}else return load(false,pagesBeforeBatch);
  };
- previous.addEventListener('click',onPrevious);
+ previous.addEventListener('click',dashboardAction(onPrevious));
  const onVisibility=()=>{if(active())load();else clear();};
  const onFocus=()=>{if(active())load();};
- refresh.addEventListener('click',onRefresh);more.addEventListener('click',onMore);
+ refresh.addEventListener('click',dashboardAction(onRefresh));more.addEventListener('click',dashboardAction(onMore));
  const observer=new doc.defaultView.MutationObserver(onVisibility);observer.observe(page,{attributes:true,attributeFilter:['class']});
  ownerWindow.addEventListener('focus',onFocus);ownerWindow.document.addEventListener('visibilitychange',onVisibility);
  const subscription=watchOwner?.(id=>{if(id!==expectedOwnerId)invalidateOwner();});
@@ -373,5 +374,5 @@ export function mountPublicationHistory({doc,request,requestOrderPage,requestFin
   refresh.focus();
   return true;
  }
- return {hasSearchView,openSearchView,destroy(){disposed=true;cancelFind();findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',onRefresh);more.removeEventListener('click',onMore);ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();months?.destroy();period?.remove();const titleRow=refresh.parentElement;titleRow.before(title);titleRow.remove();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',changeEditView);editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',onPrevious);if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
+ return {hasSearchView,openSearchView,destroy(){disposed=true;cancelFind();findInput?.removeEventListener('input',onFindInput);clear();observer.disconnect();subscription?.unsubscribe();refresh.removeEventListener('click',dashboardAction(onRefresh));more.removeEventListener('click',dashboardAction(onMore));ownerWindow.removeEventListener('focus',onFocus);ownerWindow.document.removeEventListener('visibilitychange',onVisibility);slot.replaceChildren();months?.destroy();period?.remove();const titleRow=refresh.parentElement;titleRow.before(title);titleRow.remove();chapterTabs?.destroy();textHistory?.destroy();assignmentHistory?.destroy();editorHistory?.destroy();analysisHistory?.destroy();editPicker?.removeEventListener('change',dashboardAction(changeEditView));editPanel?.remove();switcher.remove();activityCard.hidden=false;previous.removeEventListener('click',dashboardAction(onPrevious));if(analyticsDisclosure){analyticsDisclosure.before(analyticsCard);analyticsDisclosure.remove();}css.remove();}};
 }

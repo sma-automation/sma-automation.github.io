@@ -781,7 +781,7 @@ function attachFileList(doc,page){
   const checkingStatus=!sync&&scanRunning;
   let attemptNotice='';
   let step=sync?'folder':'catalog';
-  loading=true;catalogState='loading';refresh.disabled=true;dashboardQuickFind?.refresh();
+  loading=true;catalogState='loading';refresh.setAttribute('aria-busy','true');refresh.disabled=true;dashboardQuickFind?.refresh();
   const controller=new AbortController();catalogController=controller;
   let timedOut=false;
   // Keep the folder's existing 90-second allowance; saved-list reads get 15 seconds.
@@ -820,7 +820,7 @@ function attachFileList(doc,page){
    loading=false;
    if(!disposed){
     refresh.textContent=retryStep==='catalog'?'Dateiliste erneut laden':scanRunning?'Abgleichstatus prüfen':'Dateien aktualisieren';
-    refresh.title=refresh.textContent;refresh.disabled=false;dashboardQuickFind?.refresh();
+    refresh.title=refresh.textContent;refresh.setAttribute('aria-busy','false');refresh.disabled=false;dashboardQuickFind?.refresh();
    }
   }
  }
@@ -1071,4 +1071,5 @@ supabase.auth.onAuthStateChange((event,s)=>{
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
 });
 await load();
-</script></body></html>
+</script><script type="module" src="./assets/dashboard-feedback-page.mjs?v=1"></script>
+</body></html>
