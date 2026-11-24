@@ -17,6 +17,9 @@ try {
   await db.exec('grant usage on schema sma_private to service_role; alter table public.sma_kunden add column paket text;');
   await db.exec(await readFile('supabase/sql/music-credits.sql','utf8'));
   await db.exec(await readFile('supabase/sql/music-clip-rights-catalog.sql','utf8'));
+  await db.exec(await readFile('supabase/sql/music-library.sql','utf8'));
+  await db.exec(await readFile('supabase/sql/music-track-lists-and-playlist.sql','utf8'));
+  const library = async (action,input={}) => (await db.query('select public.sma_music_library_v1($1,$2) as r',[action,input])).rows[0].r;
   for (const [n,plan] of [[1,'alpha'],[2,'delta']]) {
     await db.query('insert into public.sma_kunden values ($1,$2,true,false,true,$3)',[n,uid(n),plan]);
   }
@@ -37,6 +40,16 @@ try {
   assert.equal(visible.tracks.length,2);assert.equal(visible.tracks[0].source_title,'Aufnahme 10');
   assert.deepEqual(visible.tracks[0].topics,['Sport']);assert.equal(visible.tracks[0].duration_ms,2500);
   assert.equal(await customer(2,countObjects),2);assert.equal(await customer(1,countObjects),0);
+  const mark = (n,flag) => customer(n,()=>library('catalog_favourite',{sha256:sha(1),favourite:flag}));
+  assert.equal((await mark(1,true)).code,'MUSIC_NOT_FOUND');
+  assert.equal((await mark(2,true)).ok,true);assert.equal((await mark(2,true)).ok,true);
+  assert.deepEqual((await customer(2,()=>library('list'))).catalog_favourites,[sha(1)]);
+  assert.deepEqual((await customer(1,()=>library('list'))).catalog_favourites,[]);
+  assert.equal((await mark(2,false)).ok,true);
+  assert.deepEqual((await customer(2,()=>library('list'))).catalog_favourites,[]);
+  await db.query("insert into sma_private.music_library_v1(user_id,customer_id,name,sha256,size_bytes,mime_type,object_name,status,hidden_from_lists) values ($1,2,'Test.wav',$2,1200,'audio/wav',$3,'ready',true)",[uid(2),sha(8),uid(2)+'/'+sha(8)+'.wav']);
+  assert.equal((await customer(2,()=>library('list'))).tracks.length,0);
+  assert.equal((await customer(2,()=>library('get',{sha256:sha(8)}))).ok,true);
   await db.query("insert into sma_private.music_credit_packs_v1(customer_id,user_id,state) values(1,$1,'paid')",[uid(1)]);
   for(const i of [1,2]) assert.equal((await customer(1,()=>request('unlock',{sha256:sha(i)}))).ok,true);
   assert.equal((await customer(1,()=>request('overview'))).credits,9);

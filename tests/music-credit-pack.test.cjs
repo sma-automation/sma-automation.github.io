@@ -13,7 +13,7 @@ test('checkout only follows a known Mollie HTTPS host',async()=>{
  for(const url of ['http://www.mollie.com/checkout/test','https://notmollie.com/','https://www.mollie.com:444/','https://attacker@www.mollie.com/','javascript:alert(1)'])assert.throws(()=>checkoutLink(url));
  assert.equal(checkoutLink('https://www.mollie.com/checkout/test'),'https://www.mollie.com/checkout/test');
 });
-test('editor lists unlocked catalogue tracks, deduplicates owned files and restores verified bytes',async()=>{
+test('editor lists catalogue tracks with their entitlement, deduplicates owned files and restores verified bytes',async()=>{
  const {createMusicLibraryAPI}=await import('../app/assets/music-library-api.mjs');
  const {inspectMusic}=await import('../app/assets/media-music-model.mjs');
  const blob=new File([Buffer.from('RIFFabcdWAVE1234')],'SMA track.wav'),recipe=await inspectMusic(blob);
@@ -24,10 +24,10 @@ test('editor lists unlocked catalogue tracks, deduplicates owned files and resto
   if(url.includes('/storage/')){assert.ok(url.endsWith('/sma-katalog/'+recipe.sha256+'.wav'));return {ok:true,blob:async()=>corrupt?new Blob(['wrong']):blob};}
   return {ok:true,json:async()=>url.endsWith('credits_v1')?{ok:true,plan:'alpha',credits:9,tracks:rows}:JSON.parse(opts.body).p_action==='list'?{ok:true,version:1,tracks:stored}:{ok:false,code:'MUSIC_NOT_FOUND'}};
  }});
- assert.deepEqual((await api.list()).map(t=>t.catalog),[true]);
+ assert.deepEqual((await api.list()).map(t=>[t.catalog,t.available]),[[true,true],[true,false]]);
  assert.equal(await api.source(recipe),blob);
  stored=[{...recipe,id:owner,status:'ready',favourite:false,object_name:owner+'/'+recipe.sha256+'.wav'}];
- assert.equal((await api.list()).length,1);corrupt=true;await assert.rejects(()=>api.source(recipe),/MUSIC_REQUIRED/);
+ assert.equal((await api.list()).filter(t=>t.sha256===recipe.sha256).length,1);corrupt=true;await assert.rejects(()=>api.source(recipe),/MUSIC_REQUIRED/);
 });
 test('dashboard offers ten credits only with an available checkout and renders current entitlements',async()=>{
  const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
@@ -41,7 +41,7 @@ test('dashboard offers ten credits only with an available checkout and renders c
  await tick();const btn=label=>[...host.querySelectorAll('button')].find(b=>b.textContent===label);
  assert.equal(settings.textContent,'10 Musik-Credits');assert.equal(settings.parentNode.querySelector('button').disabled,false);
  btn('Für 1 Credit freischalten').click();await tick();
- assert.equal(settings.textContent,'9 Musik-Credits');assert.ok(btn('Anhören'));assert.equal(paid,0);
+ assert.equal(settings.textContent,'9 Musik-Credits');assert.ok(host.querySelector('button.sma-music-file'));assert.equal(btn('Anhören'),undefined);assert.equal(paid,0);
  view.destroy();assert.equal(settings.textContent,'–');assert.equal(settings.parentNode.querySelector('button').disabled,true);
  const empty=mountCatalog({doc,host,api:{overview:async()=>({plan:'delta',credits:0,tracks:[]})}});
  await tick();assert.match(host.textContent,/in deinem Delta-Paket enthalten/);

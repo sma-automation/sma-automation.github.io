@@ -92,10 +92,10 @@ export const guides = [
     id: "musik-playlist", title: "Musik & Playlist", en: "Music & playlist", duration: "0:35",
     steps: [
       "Öffne „Musikbibliothek“ und „Tracks“. Über „Musik hinzufügen“ wählst du deine eigene MP3- oder WAV-Datei aus, bis zu 8 MB.",
-      "Klicke beim Titel auf „Anhören“. Starte die Hörprobe im eingeblendeten Player, um den passenden Track zu finden.",
+      "Klicke auf den Dateinamen, um die Musik zu hören. Ein weiterer Klick pausiert die Wiedergabe.",
       "Klicke beim gewünschten Titel auf „Zur Playlist“. Im Beispiel merken wir „Abendlicht.mp3“ vor.",
       "Öffne „Meine Playlist“. Hier erscheint deine Auswahl. Mit „Aus Playlist entfernen“ nimmst du einen Titel aus der Liste.",
-      "Unter „SMA-Musik“ siehst du die für dein Konto verfügbaren Katalogtitel. Eigene Uploads findest du weiterhin unter „Tracks“.",
+      "Unter „SMA-Musik“ siehst du die für dein Konto verfügbaren Katalogtitel. Unter „Tracks“ findest du SMA-Clips und eigene Uploads gemeinsam.",
     ]
   },
   {

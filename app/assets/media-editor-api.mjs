@@ -1,4 +1,4 @@
-import {createMusicLibraryAPI} from './music-library-api.mjs?v=3';
+import {createMusicLibraryAPI} from './music-library-api.mjs?v=4';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
 import {syncSharedCatalogRefreshOwner} from './catalog-refresh.mjs?v=1';
 import {createSharedThumbnailClient} from './thumbnail-batch.mjs?v=1';

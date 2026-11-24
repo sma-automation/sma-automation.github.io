@@ -1,5 +1,5 @@
-import {mountMusicLibrary} from './music-library-view.mjs?v=3';
-import {mountCatalog} from './music-catalog.mjs?v=3';
+import {mountMusicLibrary} from './music-library-view.mjs?v=4';
+import {mountCatalog} from './music-catalog.mjs?v=4';
 export function mountMusicLibraryDashboard({doc,api,stylesheetUrl,watchOwner,expectedOwnerId}){
  const entries=[],views=[],addedHosts=[];let destroyed=false;const style=doc.createElement('link');style.rel='stylesheet';style.href=stylesheetUrl;doc.head.append(style);
  // The shared chapter navigator creates chapter sections, not fixed music slot IDs.
@@ -15,7 +15,9 @@ export function mountMusicLibraryDashboard({doc,api,stylesheetUrl,watchOwner,exp
  for(const [key,playlist] of [['tracks',false],['playlist',true]]){const host=chapterHost(key);if(!host)continue;const old=[...host.childNodes];host.replaceChildren();entries.push({host,old});const view=mountMusicLibrary({doc,host,api,playlist,onChange:()=>views.forEach(v=>{if(v!==view)void v.refresh();})});views.push(view);}
  const catalogHost=chapterHost('catalog');
  const catalog=catalogHost&&api.catalog?mountCatalog({doc,host:catalogHost,api:api.catalog,goToCheckout:url=>window.location.assign(url)}):null;
+ const refreshTracks=()=>views.forEach(v=>v.refresh());
+ doc.addEventListener('sma-music-unlocked',refreshTracks);
  let sub;sub=watchOwner?.(id=>{if(id!==expectedOwnerId)destroy();});
- function destroy(){if(destroyed)return;destroyed=true;sub?.unsubscribe();catalog?.destroy();views.forEach(v=>v.destroy());entries.forEach(({host,old})=>host.replaceChildren(...old));addedHosts.forEach(host=>host.remove());style.remove();}
+ function destroy(){if(destroyed)return;destroyed=true;doc.removeEventListener('sma-music-unlocked',refreshTracks);sub?.unsubscribe();catalog?.destroy();views.forEach(v=>v.destroy());entries.forEach(({host,old})=>host.replaceChildren(...old));addedHosts.forEach(host=>host.remove());style.remove();}
  return {destroy};
 }
