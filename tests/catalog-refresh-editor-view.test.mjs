@@ -13,7 +13,7 @@ const sourceLine=prefix=>{
  const line=source.split('\n').find(row=>row.startsWith(prefix));assert.ok(line,'Missing production helper: '+prefix);return line;
 };
 const begin=source.indexOf(' async function refreshFileMetadata(){');
-const end=source.indexOf(" $('refreshMetadata').addEventListener('click',refreshFileMetadata);",begin);
+const end=source.indexOf(" $('refreshMetadata').addEventListener(",begin);
 assert.ok(begin>=0&&end>begin);
 const body=[sourceLine('const errors='),sourceLine(' const say='),sourceLine(' const current='),
  sourceLine(' function lock('),sourceLine(' function unavailable('),sourceLine(' function fail('),
