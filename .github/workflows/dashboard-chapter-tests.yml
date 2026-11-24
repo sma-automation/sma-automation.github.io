@@ -2,10 +2,10 @@ name: Dashboard chapter navigation checks
 on:
   push:
     branches: [dashboard-chapter-navigation, website-v1]
-    paths: ['index.html', 'app/**', 'tests/**', 'n8n/consolidation/dashboard-oauth-refresh.cjs', 'n8n/consolidation/patch-dashboard-oauth-refresh.cjs', '.github/workflows/dashboard-chapter-tests.yml']
+    paths: ['index.html', 'app/**', 'tests/**', 'supabase/sql/music-clip-rights-catalog.sql', 'supabase/migrations/*music_clip_rights_catalog.sql', 'n8n/consolidation/dashboard-oauth-refresh.cjs', 'n8n/consolidation/patch-dashboard-oauth-refresh.cjs', '.github/workflows/dashboard-chapter-tests.yml']
   pull_request:
     branches: [website-v1]
-    paths: ['index.html', 'app/**', 'tests/**', 'n8n/consolidation/dashboard-oauth-refresh.cjs', 'n8n/consolidation/patch-dashboard-oauth-refresh.cjs', '.github/workflows/dashboard-chapter-tests.yml']
+    paths: ['index.html', 'app/**', 'tests/**', 'supabase/sql/music-clip-rights-catalog.sql', 'supabase/migrations/*music_clip_rights_catalog.sql', 'n8n/consolidation/dashboard-oauth-refresh.cjs', 'n8n/consolidation/patch-dashboard-oauth-refresh.cjs', '.github/workflows/dashboard-chapter-tests.yml']
 permissions: {}
 jobs:
   test:
@@ -24,6 +24,8 @@ jobs:
         run: |
           node --test tests/original-media-cache*.test.mjs tests/catalog-refresh*.test.mjs tests/oauth-return-refresh.test.mjs
           node --test tests/*.test.cjs
+          npm ci --prefix tests/sql-runtime --ignore-scripts
+          node tests/run-music-clip-rights.mjs
           node tests/run-optimizer-layout.mjs
           node tests/run-website-preparation-chromium.mjs
           node tests/run-shop-catalog-mobile.mjs

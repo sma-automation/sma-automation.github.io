@@ -22,7 +22,7 @@ import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './as
 import {mountGalleryMusic} from './assets/gallery-music-worker.mjs?v=10';
 import {createMusicViewGate} from './assets/gallery-music-view-gate.mjs?v=1';
 import {createMusicLibraryAPI} from './assets/music-library-api.mjs?v=3';
-import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=3';
+import {mountMusicLibraryDashboard} from './assets/music-library-dashboard.mjs?v=4';
 import {mountWebsitePreparation} from './assets/website-domain.mjs?v=19';
 import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.mjs?v=1';
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
@@ -523,7 +523,7 @@ frame.addEventListener('load',async()=>{
       dashboardQuickFind.show(launcher);return true;
     }
   }):null;
-  if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=1',location.href).href});
+  if(ownerId)musicLibraryDashboard=mountMusicLibraryDashboard({doc,expectedOwnerId:ownerId,api:createMusicLibraryAPI({owner:ownerId,getSession:async()=>{const {data,error}=await supabase.auth.getSession();return error?null:data?.session;}}),watchOwner:callback=>supabase.auth.onAuthStateChange((_event,s)=>callback(s?.user?.id||null)).data.subscription,stylesheetUrl:new URL('./assets/music-library.css?v=2',location.href).href});
   mediaEditorEntry=mountMediaEditorEntry({doc,href:editorUrl.href});
   const saved=startupView;
   if(saved?.kind==='preview'&&fileView){

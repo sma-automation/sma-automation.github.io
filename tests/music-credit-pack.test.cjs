@@ -47,3 +47,20 @@ test('dashboard offers ten credits only with an available checkout and renders c
  await tick();assert.match(host.textContent,/in deinem Delta-Paket enthalten/);
  assert.equal(btn('10 Musik-Credits für 10 € kaufen').hidden,true);empty.destroy();
 });
+
+test('catalog filters combine video topic, mood and use before pagination', async()=>{
+ const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
+ const {mountCatalog}=await import('../app/assets/music-catalog.mjs');
+ const {document:doc,window}=parseHTML('<div id="c"></div>'), host=doc.getElementById('c');
+ const tracks=Array.from({length:7},(_,i)=>({name:'Clip '+i,topics:i===6?['Sport','Events']:['Sport'],mood:i===6?'Episch':'Ruhig',usage:'Intro',duration_ms:1500,source_title:'Band',available:true}));
+ const view=mountCatalog({doc,host,api:{overview:async()=>({plan:'delta',credits:0,tracks})}});
+ await new Promise(r=>setImmediate(r));
+ const selects=[...host.querySelectorAll('select')];assert.equal(selects.length,3);
+ function choose(index,value){const s=selects[index];[...s.querySelectorAll('option')].find(o=>o.value===value).selected=true;s.dispatchEvent(new window.Event('change'));}
+ choose(0,'Events');choose(1,'Episch');choose(2,'Intro');
+ assert.equal(host.querySelectorAll('.sma-music-row').length,1);
+ assert.equal(host.querySelector('.sma-music-row strong').textContent,'Clip 6');
+ assert.match(host.querySelector('.sma-music-row').textContent,/Band · Intro · Episch · 1,5 s/);
+ choose(1,'Ruhig');assert.equal(host.querySelectorAll('.sma-music-row').length,0);assert.match(host.textContent,/Keine Clips/);
+ view.destroy();
+});

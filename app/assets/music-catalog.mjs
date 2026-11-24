@@ -1,3 +1,4 @@
+import {createMusicClipFilters,musicClipDescription} from './music-clip-filters.mjs?v=1';
 import {readMusicSetting,verifyMusicBytes} from './media-music-model.mjs?v=1';
 
 const origin='https://bnvnmdxosbnuzedokqgh.supabase.co';
@@ -58,7 +59,9 @@ export function mountCatalog({doc,host,api,goToCheckout}){
  for(const b of [refresh,buy,prev,next])b.type='button';
  status.setAttribute('role','status');audio.controls=true;audio.hidden=true;
  actions.append(refresh,buy);pageBar.append(prev,counter,next);buy.hidden=pageBar.hidden=true;
- root.append(intro,actions,list,pageBar,audio,status);host.append(root);
+ const filters=createMusicClipFilters(doc,()=>{page=0;stop();draw();});
+ filters.update([]);
+ root.append(intro,actions,filters.root,list,pageBar,audio,status);host.append(root);
  const balance=doc.getElementById('creditsBalanceSlot'),card=balance?.parentElement,oldBuy=card?.querySelector('button[disabled]');
  const oldLabel=oldBuy?.textContent,oldBalance=balance?.textContent;
  const paymentStatus=el('p');paymentStatus.hidden=true;paymentStatus.setAttribute('role','status');
@@ -69,15 +72,17 @@ export function mountCatalog({doc,host,api,goToCheckout}){
   list.replaceChildren();
   if(!data)return;
   const delta=data.plan==='delta',canBuy=!delta&&data.tracks.length>0&&paymentsEnabled;
-  intro.textContent=delta?'SMA-Musik ist in deinem Delta-Paket enthalten.':data.credits+' Musik-Credits · 1 Credit pro Track.';
+  intro.textContent=delta?'SMA-Musik ist in deinem Delta-Paket enthalten.':data.credits+' Musik-Credits · 1 Credit schaltet alle Clips einer Aufnahme frei.';
   buy.hidden=!canBuy;
   if(balance)balance.textContent=data.credits+' Musik-Credits';
   if(oldBuy){oldBuy.textContent=delta?'SMA-Musik in Delta enthalten':canBuy?'10 Musik-Credits für 10 € kaufen':'Musik-Credits noch nicht buchbar';oldBuy.disabled=!canBuy||!!controller;}
-  if(!data.tracks.length)list.append(el('p','Hier erscheinen die von SMA produzierten Tracks.'));
-  const total=Math.max(1,Math.ceil(data.tracks.length/5));page=Math.min(page,total-1);
-  for(const t of data.tracks.slice(page*5,page*5+5)){
+  const visible=data.tracks.filter(filters.matches);
+  if(!visible.length)list.append(el('p',data.tracks.length?'Keine Clips für diese Auswahl.':'Aktuell sind keine Musiktitel zur Nutzung freigegeben.'));
+  const total=Math.max(1,Math.ceil(visible.length/5));page=Math.min(page,total-1);
+  for(const t of visible.slice(page*5,page*5+5)){
    const row=el('div'),info=el('div'),btn=el('button',t.available?'Anhören':'Für 1 Credit freischalten');
    row.className='sma-music-row';info.append(el('strong',t.name),el('small',t.available?(delta?'In Delta enthalten':'Freigeschaltet'):'SMA-Musik'));
+   const description=musicClipDescription(t);if(description)info.append(el('small',description));
    btn.type='button';btn.disabled=!!controller||(!t.available&&data.credits<1);
    btn.addEventListener('click',()=>run(async signal=>{
     if(t.available){
@@ -94,13 +99,13 @@ export function mountCatalog({doc,host,api,goToCheckout}){
  async function reload(signal){
   const fresh=await api.overview(signal);
   const enabled=fresh.plan!=='delta'&&fresh.tracks.length>0&&await api.checkoutEnabled(signal).catch(()=>false);
-  signal.throwIfAborted();data=fresh;paymentsEnabled=enabled;draw();
+  signal.throwIfAborted();stop();data=fresh;filters.update(fresh.tracks);paymentsEnabled=enabled;draw();
  }
  async function run(fn){
   if(disposed||controller)return;
   controller=new AbortController();const signal=controller.signal;refresh.disabled=buy.disabled=true;status.textContent='';draw();
   try{await fn(signal);}
-  catch(e){if(!signal.aborted){if(e.message==='AUTH_REQUIRED'||e.message==='ACCESS_INACTIVE'){data=null;stop();list.replaceChildren();buy.hidden=pageBar.hidden=true;intro.textContent='';if(balance)balance.textContent='–';if(oldBuy)oldBuy.disabled=true;}
+  catch(e){if(!signal.aborted){if(e.message==='AUTH_REQUIRED'||e.message==='ACCESS_INACTIVE'){data=null;stop();filters.update([]);list.replaceChildren();buy.hidden=pageBar.hidden=true;intro.textContent='';if(balance)balance.textContent='–';if(oldBuy)oldBuy.disabled=true;}
    status.textContent=({INSUFFICIENT_CREDITS:'Dein Guthaben reicht für diesen Track nicht aus.',CHECKOUT_UNAVAILABLE:'Die Zahlung für Musik-Credits ist noch nicht verfügbar.',AUTH_REQUIRED:'Bitte melde dich erneut an.',ACCESS_INACTIVE:'Der SMA-Musikkatalog ist für diesen Zugang nicht verfügbar.'})[e.message]||'Der Musikkatalog konnte die Anfrage nicht abschließen. Bitte aktualisiere die Ansicht.';}}
   finally{controller=null;if(!disposed){refresh.disabled=buy.disabled=false;draw();}}
  }
@@ -115,7 +120,7 @@ export function mountCatalog({doc,host,api,goToCheckout}){
  };
  refresh.addEventListener('click',()=>run(reload));buy.addEventListener('click',pay);oldBuy?.addEventListener('click',pay);
  prev.addEventListener('click',()=>{if(!controller&&page>0){page--;draw();}});
- next.addEventListener('click',()=>{if(!controller&&data&&page+1<Math.ceil(data.tracks.length/5)){page++;draw();}});
+ next.addEventListener('click',()=>{if(!controller&&data&&page+1<Math.ceil(data.tracks.filter(filters.matches).length/5)){page++;draw();}});
  void run(reload);
  return {destroy(){disposed=true;controller?.abort();stop();root.remove();paymentStatus.remove();if(balance)balance.textContent=oldBalance;
   if(oldBuy){oldBuy.disabled=true;oldBuy.textContent=oldLabel;oldBuy.removeEventListener('click',pay);}}};

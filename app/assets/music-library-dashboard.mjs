@@ -1,5 +1,5 @@
-import {mountMusicLibrary} from './music-library-view.mjs?v=2';
-import {mountCatalog} from './music-catalog.mjs?v=2';
+import {mountMusicLibrary} from './music-library-view.mjs?v=3';
+import {mountCatalog} from './music-catalog.mjs?v=3';
 export function mountMusicLibraryDashboard({doc,api,stylesheetUrl,watchOwner,expectedOwnerId}){
  const entries=[],views=[],addedHosts=[];let destroyed=false;const style=doc.createElement('link');style.rel='stylesheet';style.href=stylesheetUrl;doc.head.append(style);
  // The shared chapter navigator creates chapter sections, not fixed music slot IDs.
