@@ -552,3 +552,11 @@ bezeichnet nur den **damaligen Stand vor dieser tatsächlichen Nutzerprüfung**.
 Der Galerie-Vertonungspfad kann für die SMA-Kernversion jetzt als
 **technisch end-to-end inkl. Hörtest geprüft** gelten; das endgültige
 Musiksortiment und weitere Kundenakzeptanztests bleiben separat offen.
+
+## Kundenkatalog für Musikclips
+
+Die private Schnittvorschau und der Kundenkatalog haben getrennte Freigaben. Der Betreiber erfasst die Originalaufnahme mit ihrem SHA-256 in `sma_private.music_sources_v1`. Jeder Schnitt ist über seinen eigenen SHA-256 in `music_clips_v1` genau einer Aufnahme zugeordnet. Videothemen, Musikcharakter, Einsatz und Dauer werden mit dem Schnitt gepflegt.
+
+Neue Aufnahmen haben den Status `pending`. Technische Testmusik erhält `test_only`. Vor der Kundenfreigabe prüft der Betreiber die Rechte an Komposition, Aufnahme und verwendetem Ausgangsmaterial. Die Freigabe umfasst Bearbeitung, Bereitstellung einzelner Clips über den bezahlten Katalog und Nutzung in kommerziellen Kundenvideos auf den vorgesehenen Portalen. Etwaige Namensnennung, Gebiets-, Plattform- und Laufzeitbeschränkungen müssen im konkreten Angebot eingehalten werden können. Andernfalls bleibt die Aufnahme privat.
+
+Eine Freigabe benötigt einen privaten Belegverweis, eine bestätigte Nutzungsreichweite, ein Freigabedatum und gegebenenfalls ein Ablaufdatum. Der Kundenkatalog liefert einen Clip erst bei gültiger Quellenfreigabe, gelistetem Katalogeintrag und passendem privaten Speicherobjekt. Ein Widerruf oder Fristablauf wirkt auch auf spätere direkte Dateiabrufe. Bereits ausgelieferte Kopien lassen sich dadurch nicht zurückrufen. Ein Musik-Credit umfasst alle freigegebenen Schnitte derselben Aufnahme. Persönliche Kundenuploads verwenden weiterhin ihre eigene Bibliothek.
