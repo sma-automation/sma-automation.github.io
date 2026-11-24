@@ -1,4 +1,3 @@
-import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 // The two pickers show the same names and only select an explicitly supplied ID.
 export function fillProductChoices(doc, select, choices, wanted) {
   const placeholder=doc.createElement('option');
@@ -23,7 +22,7 @@ export function mountCatalogLookup(doc,lookup){
   let context=null,choices=[],serial=0,pending=false;
   const selected=()=>choices.find(item=>item.product_id===select.value);
   function reset(){
-    serial++;pending=false;choices=[];select.replaceChildren();select.value='';
+    serial++;pending=false;panel.ariaBusy='false';choices=[];select.replaceChildren();select.value='';
     el('catalogResults').hidden=true;more.hidden=true;status.textContent='';button.disabled=false;
   }
   async function search(append=false){
@@ -33,7 +32,7 @@ export function mountCatalogLookup(doc,lookup){
     if(append)params.after=previous[previous.length-1].product_id;
     if(!append)reset();
     const ticket=++serial;
-    pending=true;button.disabled=more.disabled=true;status.textContent='Artikel werden geladen …';
+    pending=true;panel.ariaBusy='true';button.disabled=more.disabled=true;status.textContent='Artikel werden geladen …';
     try{
       const result=await lookup(context,params);
       if(ticket!==serial)return;
@@ -44,11 +43,11 @@ export function mountCatalogLookup(doc,lookup){
     }catch(error){
       if(ticket===serial)status.textContent=error.message;
     }finally{
-      if(ticket===serial){pending=false;button.disabled=more.disabled=false;}
+      if(ticket===serial){pending=false;panel.ariaBusy='false';button.disabled=more.disabled=false;}
     }
   }
-  button.addEventListener('click',dashboardAction(()=>search()));
-  more.addEventListener('click',dashboardAction(()=>search(true)));
+  button.addEventListener('click',()=>search());
+  more.addEventListener('click',()=>search(true));
   query.addEventListener('keydown',event=>{
     if(event.key==='Enter'){event.preventDefault();void search();}
   });
