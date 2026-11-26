@@ -121,6 +121,7 @@ test('each customer gets three separate files, all portal times, an idempotent d
   assert.deepEqual(await due(),[],'a changed plan needs a new approval');
   await db.exec(sql('publication-device-upload'));
   await db.exec(sql('publication-portal-folders'));
+  await db.exec(sql('publication-portal-gallery'));
   const folders={};
   for(const [i,platform] of platforms.entries()){
     const folder='portal-folder-'+platform;
@@ -137,7 +138,19 @@ test('each customer gets three separate files, all portal times, an idempotent d
   const scan=async(op,ticket=null,rows=null)=>(await db.query('select public.sma_publication_portal_scan_v1($1,$2,$3,$4) r',[sourceId,op,ticket,rows])).rows[0].r;
   const snapshot=await scan('start');
   await assert.rejects(scan('finish',snapshot.ticket,{}),/INCOMPLETE_PORTAL_SCAN/);
+  const gallery=async(owner,platform)=>{
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);
+    return (await db.query("select public.sma_publication_files_v1('list',$1) r",[JSON.stringify(platform?{platform}:{})])).rows[0].r.files;
+  };
+  assert.equal((await gallery(b,'tiktok')).length,0);
   assert.equal((await scan('finish',snapshot.ticket,folders)).videos,12);
+  for(const [i,platform] of platforms.entries()){
+    const expected=[0,1,2].map(k=>id(100+3*i+k));
+    assert.deepEqual((await gallery(b,platform)).map(f=>f.id).sort(),expected);
+  }
+  assert.equal((await gallery(a,'youtube')).length,0);
+  assert((await gallery(a)).length>0);
+  assert((await gallery(b)).length>12);
   await assert.rejects(scan('finish',snapshot.ticket,folders),/STALE_PORTAL_SCAN/);
   for(let i=0;i<2;i++)await db.query("select sma_private.publication_daily_fill_v1(2,$1,'2097-06-01')",[b]);
   const scheduled=(await db.query("select jsonb_object_keys(portal_times) p,asset_revision from sma_private.publication_joint_plans_v1 where plan_day='2097-06-01'")).rows;
