@@ -113,4 +113,17 @@ edge('Ausführungsprüfung?','SMA Auftrag prüfen',0);edge('Ausführungsprüfung
 edge('SMA Auftrag prüfen','Auftrag einzeln');edge('SMA Versand fortsetzen','Auftrag einzeln');
 edge('Weitere Rückmeldung','Providerstatus abwarten');edge('Providerstatus abwarten','Fällige Aufträge');
 for(const c of Object.values(connections))c.main=Array.from(c.main,v=>v??[]);
-process.stdout.write(JSON.stringify({name:'SMA – Drive-Galerie abgleichen',nodes,connections,settings:{timezone:'Europe/Vienna',executionOrder:'v1',saveDataSuccessExecution:'none',saveManualExecutions:false}},null,2));
+// Deploy the importer and dispatcher independently so the verified live import need not be replaced.
+const dispatchOnly=process.argv.includes('--dispatch-only');
+const chosen=new Set();
+function include(name){
+ if(chosen.has(name))return;
+ chosen.add(name);
+ for(const port of connections[name]?.main||[])for(const link of port)include(link.node);
+}
+if(dispatchOnly)include('Versandtermine Wien');
+else{include('Jetzt abgleichen');include('Täglich vor der Planung');}
+const name=dispatchOnly?'SMA – Tagesversand PHP und Geld':'SMA – Drive-Galerie abgleichen';
+process.stdout.write(JSON.stringify({name,nodes:nodes.filter(n=>chosen.has(n.name)),
+ connections:Object.fromEntries(Object.entries(connections).filter(([n])=>chosen.has(n))),
+ settings:{timezone:'Europe/Vienna',executionOrder:'v1'}},null,2));
