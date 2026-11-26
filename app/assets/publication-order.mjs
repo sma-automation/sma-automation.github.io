@@ -855,7 +855,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   close.addEventListener('click',()=>{if(!close.disabled)closeDialog();});
   dialog.addEventListener('close',()=>{if(!dialog.open){leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
   dialog.addEventListener('cancel',e=>{if(working){e.preventDefault();if(opening)closeDialog();}});
-  return {rememberVideoChoices,resumePrepared,bindHistoryReview,viewport:height=>{if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.maxHeight=height+'px';},lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  function viewport(height){
+    if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.setProperty('--order-host-height',height+'px');
+  }
+  return {rememberVideoChoices,resumePrepared,bindHistoryReview,viewport,lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {

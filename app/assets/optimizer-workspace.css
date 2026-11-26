@@ -358,7 +358,7 @@ body.wide #workspacePost #assetPreviewMedia { max-height: var(--stage-height); }
 /* Portal settings use one row per choice where labels and controls fit. */
 #publicationOrderDialog {
   width: min(650px, calc(100vw - 24px));
-  max-height: min(720px, calc(100dvh - 24px));
+  max-height: min(720px, var(--order-host-height, 720px), calc(100dvh - 24px));
   top: 12px;
   bottom: auto;
   margin: 0 auto;

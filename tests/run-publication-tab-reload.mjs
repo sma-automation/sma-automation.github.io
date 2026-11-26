@@ -260,6 +260,20 @@ try{
    newCommand:attempts.length===2&&attempts[0].command_id!==attempts[1].command_id,
    unapproved:!approve.hidden&&approve.disabled&&!$('order-final-consent').checked&&window.fixtureTargetOrder.approved_at===null};
   if(sessionStorage.fixtureOrderActions!=='account,account,order_prepare,order_prepare')throw Error('Target recovery started an unexpected order action');
+  // The dashboard can be taller than its embedded preview. Keep the bottom controls inside both.
+  orderReview.viewport(660);
+  const originalHeight=frame.style.height;
+  for(const height of [300,490,810]){
+   frame.style.height=height+'px';
+   const bounds=review.getBoundingClientRect();
+   if(bounds.bottom>Math.min(innerHeight-12,672)+1)throw Error('Approval dialog clipped at '+height+'px');
+   for(const control of [$('order-final-consent'),approve]){
+    control.scrollIntoView({block:'center'});
+    const rect=control.getBoundingClientRect();
+    if(!control.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)))throw Error('Approval control unreachable at '+height+'px');
+   }
+  }
+  frame.style.height=originalHeight;
   report.fileJobs={starts:Number(sessionStorage.fixtureJobStarts),commands:Number(sessionStorage.fixtureJobCommands),reads:Number(sessionStorage.fixtureJobReads)};
   const historyId='a7700000-0000-4000-8000-000000000033';
   for(const [stored,expected,canContinue] of [['checked','noch kein Übertragungsversuch',true],['private_complete','Privat abgeschlossen',true],['uncertain_blocked','Ergebnis unklar',false],['uncertain','Ergebnis unklar',false],['uncertain_resumable','Ergebnis unklar',false]]){
