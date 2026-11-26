@@ -13,7 +13,8 @@ function providerSession(platform,raw){
  const allowed=youtube?['part','uploadType','upload_id','alt']:['upload_id','upload_token'];
  const endpoints=youtube?['https://www.googleapis.com/upload/youtube/v3/videos']:
   ['https://open-upload.tiktokapis.com/video/','https://open-upload.tiktokapis.com/upload/',
-   'https://upload.us.tiktokapis.com/video/','https://upload.us.tiktokapis.com/upload/'];
+   'https://upload.us.tiktokapis.com/video/','https://upload.us.tiktokapis.com/upload/',
+   'https://open-upload-i18n.tiktokapis.com/upload'];
  if(!['youtube','tiktok'].includes(platform)||!endpoints.includes(endpoint))throw Error('PROVIDER_SESSION_INVALID');
  const params=new Map();
  for(const field of raw.slice(split+1).split('&')){
