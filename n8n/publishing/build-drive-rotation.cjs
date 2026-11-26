@@ -88,5 +88,29 @@ for(const [first,...rest] of [['Jetzt abgleichen','Quelle','Konfiguration','Kund
  let prev=first;for(const n of rest){edge(prev,n);prev=n;}
 }
 edge('Weitere Ordner?','Drive-Seite',0);edge('Weitere Ordner?','Neue Videos',1);edge('Video für Video','Drive-ID reservieren',1);
+// These are the saved PHP/Geld slots in Vienna. Recheck ten minutes later if a worker was busy.
+add('Versandtermine Wien','scheduleTrigger',{rule:{interval:[{field:'cronExpression',expression:'0 0,10 10,14,18 * * *'}]}},[0,680],1.2);
+code('Versandquelle',key?'return [{json:{id:'+JSON.stringify(key)+'}}];':"if(!$vars.SMA_DRIVE_ROTATION_SOURCE)throw Error('SOURCE_NOT_CONFIGURED');return [{json:{id:$vars.SMA_DRIVE_ROTATION_SOURCE}}];",220,680);
+const dueURL=service.parameters.url.replace(/[^/]+$/,'sma_rotation_due_v1');
+add('Fällige Aufträge','httpRequest',{method:'POST',url:dueURL,authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',
+ sendBody:true,specifyBody:'json',jsonBody:"={{ ({p_source:$('Versandquelle').first().json.id}) }}",options},[440,680],4.5,{credentials:service.credentials});
+code('Aufträge verteilen',`const jobs=$input.first().json.jobs;
+if(!Array.isArray(jobs))throw Error('INVALID_DUE_RESPONSE');
+return jobs.map(json=>({json}));`,660,680);
+add('Auftrag einzeln','splitInBatches',{batchSize:1,options:{reset:"={{ $prevNode.name === 'Aufträge verteilen' }}"}},[880,680],3);
+condition('Ausführungsprüfung?', "={{ $json.operation === 'publication.execution_check' }}",1100,760);
+function worker(name,id,x,y){
+ add(name,'executeWorkflow',{source:'database',workflowId:{__rl:true,value:id,mode:'id'},mode:'once',
+  options:{waitForSubWorkflow:true}},[x,y],1.3);
+}
+worker('SMA Auftrag prüfen','RdtCqCWRi7P4W7B0',1320,690);
+worker('SMA Versand fortsetzen','JaidX5YeKl6ZTqjQ',1320,860);
+code('Weitere Rückmeldung',`if($runIndex>=8)return [];return [{json:{}}];`,1100,520);
+add('Providerstatus abwarten','wait',{resume:'timeInterval',amount:20,unit:'seconds'},[1320,520],1.1);
+edge('Versandtermine Wien','Versandquelle');edge('Versandquelle','Fällige Aufträge');edge('Fällige Aufträge','Aufträge verteilen');
+edge('Aufträge verteilen','Auftrag einzeln');edge('Auftrag einzeln','Ausführungsprüfung?',1);edge('Auftrag einzeln','Weitere Rückmeldung',0);
+edge('Ausführungsprüfung?','SMA Auftrag prüfen',0);edge('Ausführungsprüfung?','SMA Versand fortsetzen',1);
+edge('SMA Auftrag prüfen','Auftrag einzeln');edge('SMA Versand fortsetzen','Auftrag einzeln');
+edge('Weitere Rückmeldung','Providerstatus abwarten');edge('Providerstatus abwarten','Fällige Aufträge');
 for(const c of Object.values(connections))c.main=Array.from(c.main,v=>v??[]);
 process.stdout.write(JSON.stringify({name:'SMA – Drive-Galerie abgleichen',nodes,connections,settings:{timezone:'Europe/Vienna',executionOrder:'v1',saveDataSuccessExecution:'none',saveManualExecutions:false}},null,2));
