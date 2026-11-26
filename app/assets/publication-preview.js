@@ -1,4 +1,4 @@
-import {mountJointPlan} from './publication-joint-plan.mjs?v=2';
+import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
@@ -44,7 +44,7 @@ let loadingVideoDraft=false,magicPreparationError=null;
 let pendingProductFocus=null,offerOptionsSerial=0;
 let filePickerPage=0,pickerTrigger=null,pendingAssetId=null,sourceBaseline=null,signedOut=false;
 let fileSelectionTicket=0,fileSelectionController=null;
-Object.assign(messages,{VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
+Object.assign(messages,{UPLOAD_PORTAL_UNAVAILABLE:'Die Portalzuordnung konnte nicht gespeichert werden. Bitte versuche den Upload erneut.',VIDEO_PLAN_REQUIRED:'Die Videoanalyse ist im derzeitigen Sightengine-Tarif nicht freigeschaltet. Die Videoprüfung bleibt offen.',REVIEW_RUNNING:'Eine Datei wird bereits geprüft. Bitte warte kurz.',REVIEW_RATE_LIMITED:'Bitte warte kurz. Maximal sechs Prüfversuche pro Stunde mit mindestens 30 Sekunden Abstand.',CHECKSUM_REQUIRED:'Für diese Datei fehlt noch eine verlässliche Inhaltskennung. Bitte aktualisiere die Dateiliste.',MEDIA_UNSUPPORTED:'Diese Prüfung unterstützt statische JPEG-, PNG- und WebP-Bilder bis 12 MB sowie MP4-, MOV- und WebM-Videos unter 50 MB und unter 60 Sekunden. Animationen benötigen einen anderen Prüfweg.',REVIEW_INCOMPLETE:'Der Prüfdienst hat kein vollständiges Ergebnis geliefert. Die Prüfung bleibt offen.',PROVIDER_FAILED:'Der Prüfdienst konnte die Datei nicht prüfen.',REVIEW_TIMEOUT:'Die Prüfung hat zu lange gedauert. Du kannst sie erneut starten.',REVIEW_UNAVAILABLE:'Die Inhaltsprüfung ist gerade nicht erreichbar.'});
 messages.INVALID_HASHTAGS=hashtagMessage;
 
 Object.assign(messages,{FILE_UNAVAILABLE:'Diese Datei ist nicht mehr im zugeordneten Kundenordner verfügbar.',FILE_CHANGED:'Die Datei wurde geändert. Aktualisiere die Dateiliste und erstelle einen neuen passenden Text.',FILE_REFRESH_REQUIRED:'Bitte aktualisiere zuerst die Dateiliste.',ASSIGNMENT_CHANGED:'Der zugeordnete Text wurde außerhalb dieser Datei geändert. Bitte erstelle einen neuen Text für die Datei.',ASSIGNMENT_CONFLICT:'Die Zuordnung wurde inzwischen geändert. Lade den gespeicherten Text erneut.',FOLDER_UNAVAILABLE:'Dein Kundenordner ist nicht erreichbar oder nicht eindeutig zugeordnet. Die Ordnerverbindung muss geprüft werden.',FILE_SYNC_UNAVAILABLE:'Die Dateiliste konnte nicht aktualisiert werden. Bitte versuche es erneut.',FILE_SYNC_RUNNING:'Die Dateiliste wird bereits aktualisiert. Bitte versuche es gleich erneut.',FILE_SYNC_RATE_LIMITED:'Bitte warte kurz, bevor du die Dateien erneut aktualisierst.',FILE_CATALOG_TOO_LARGE:'Der Kundenordner enthält mehr Dateien als diese Ansicht vollständig laden kann.',FILE_METADATA_INVALID:'Die Dateiinformationen sind unvollständig. Bitte prüfe die Dateien im Kundenordner.',PORTAL_REQUIRES_VIDEO:'Für dieses Portal wird derzeit eine Videodatei benötigt.',TEXT_ALREADY_ASSIGNED:'Dieser Text gehört bereits zu einer anderen Datei. Bitte erstelle einen eigenen Text.',FILE_FORMAT_MISMATCH:'Die Textvorbereitung passt nicht zur ausgewählten Dateiart.'});
@@ -741,6 +741,10 @@ async function runDeviceUpload(){
  let completed=null;
  try{
   let data=await uploadCall({action:'start',upload_id:job.id,...job.meta},controller.signal,job);
+  if(selectedPortal&&job.meta.mime_type.startsWith('video/')){
+   const route=await supabase.rpc('sma_publication_upload_portal_v1',{p_upload:job.id,p_platform:selectedPortal});
+   if(route.error||route.data!==true)throw Error('UPLOAD_PORTAL_UNAVAILABLE');
+  }
   if(data.status!=='completed'){
    if(data.status!=='ready')throw Error('UPLOAD_UNAVAILABLE');
    await transferDeviceFile({file:job.file,url:data.upload_url,mime:job.meta.mime_type,signal:controller.signal,onProgress:(bytes,total)=>{if(signedOut||controller.signal.aborted)return;const percent=Math.floor(bytes/total*100);$('uploadProgress').value=percent;$('uploadStatus').textContent=percent+' % hochgeladen';}});
