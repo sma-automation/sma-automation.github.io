@@ -16,6 +16,8 @@ test('each customer gets three separate files, all portal times, an idempotent d
   for(const name of ['publication-preview','publication-files','publication-accounts','publication-orders','publication-joint-plan'])await db.exec(sql(name));
   await db.exec('create table sma_private.publication_editor_exports_v1(customer_id bigint,user_id uuid,asset_id uuid,media_asset_id uuid);create table sma_private.gallery_music_v1(customer_id bigint,user_id uuid,source_id uuid,result_id uuid);');
   await db.exec(sql('publication-daily-schedule'));
+  await db.exec(sql('publication-gallery-rotation'));
+  await db.exec(sql('publication-drive-rotation-import'));
   const id=n=>'e3600000-0000-4000-9000-'+String(n).padStart(12,'0');
   const [a,b]=[id(1),id(2)];
   await db.query("insert into public.sma_kunden(id,user_id,aktiv,demo_delta_aktiv) values(1,$1,true,true),(2,$2,true,true)",[a,b]);
@@ -56,6 +58,37 @@ test('each customer gets three separate files, all portal times, an idempotent d
   await db.query('select sma_private.publication_daily_fill_v1(1,$1,$2::date+1)',[a,tomorrow]);
   assert.equal((await db.query('select count(distinct asset_id)::int c from sma_private.publication_joint_plans_v1')).rows[0].c,6);
   assert.equal((await db.query('select count(*)::int c from sma_private.publication_orders_v1')).rows[0].c,0);
+  // Reuse yesterday's original only after unused content. Preserve the old day and
+  // keep an exact-content duplicate, a cleared choice and a future manual plan out.
+  await db.query("insert into sma_private.publication_rotation_sources_v1(customer_id,owner_id,source_folder,processing_folder) values(2,$1,'source','processing')",[b]);
+  await db.query("insert into sma_private.publication_daily_settings_v1 values(2,$1,$2,1)",[b,JSON.stringify(defaultTimes())]);
+  const sha=n=>'sha256:'+String(n).padStart(64,'0')+':1';
+  for(const n of [21,22,23,24,25,26,27])await db.query("insert into sma_private.publication_files_v1(id,customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes) values($1,2,$2,$3,$3,'video','video/mp4',$4,now(),10)",[id(n),b,'original'+n,sha(n===24?23:n)]);
+  const past=(await db.query("select ((now() at time zone 'Europe/Vienna')::date-1)::text d")).rows[0].d;
+  const plan=(n,day,slot)=>db.query("insert into sma_private.publication_joint_plans_v1(customer_id,owner_id,asset_id,asset_revision,desired_at,version) values(2,$1,$2,$3,($4::date+($5::int*interval '1 hour')) at time zone 'Europe/Vienna',4)",[b,id(n),sha(n),day,slot]);
+  await plan(21,past,9);await plan(22,past,10);await plan(25,null,15);await plan(26,'2099-01-01',15);
+  await db.query("insert into sma_private.publication_rotation_exclusions_v1 select id,$1 from sma_private.publication_rotation_sources_v1 where customer_id=2",[id(27)]);
+  const sourceId=(await db.query('select id from sma_private.publication_rotation_sources_v1 where customer_id=2')).rows[0].id;
+  const action=async(op,input)=>(await db.query('select public.sma_rotation_import_v1($1,$2,$3) r',[sourceId,op,JSON.stringify(input)])).rows[0].r;
+  const digest='a'.repeat(64),reserve={digest,original_id:'originalDriveId',copy_id:'reservedDriveId'};
+  assert.equal((await action('reserve',reserve)).id,'reservedDriveId');
+  assert.equal((await action('reserve',{...reserve,copy_id:'secondDriveId'})).id,'reservedDriveId');
+  const metadata={id:'reservedDriveId',sha256Checksum:digest,appProperties:{sma_rotation_source:sourceId},
+    mimeType:'video/mp4',name:'import.mp4',size:'10',version:'1',parents:['processing'],trashed:false,modifiedTime:new Date().toISOString()};
+  await assert.rejects(action('verify',{digest,file:{...metadata,parents:['foreign']}}),/IMPORT_COPY_CHANGED/);
+  await db.exec('set role authenticated');
+  await assert.rejects(action('context',{}),/permission denied/);
+  await db.exec('reset role');
+  const rotated=await run('fill',b,b);assert.deepEqual(rotated.files.map(x=>x.name),['original23','original21','original22']);
+  assert.deepEqual((await run('fill',b,b)).files,rotated.files);
+  assert.equal((await db.query("select count(*)::int c from sma_private.publication_rotation_history_v1 where customer_id=2")).rows[0].c,2);
+  const historic=(await db.query("select public.sma_publication_daily_schedule_v1('get',$1,$2) r",[b,past])).rows[0].r;
+  assert.deepEqual(historic.files.map(x=>x.name),['original21','original22']);
+  assert.equal((await db.query("select version from sma_private.publication_joint_plans_v1 where asset_id=$1",[id(21)])).rows[0].version,5);
+  assert.equal((await action('verify',{digest,file:metadata})).verified,true);
+  assert.equal((await action('verify',{digest,file:metadata})).verified,true);
+  assert.deepEqual((await action('context',{})).completed,[digest]);
+  assert.equal((await db.query("select count(*)::int c from sma_private.publication_files_v1 where drive_file_id='reservedDriveId' and customer_id=2")).rows[0].c,1);
   await db.exec('set role anon');await assert.rejects(db.exec("select public.sma_publication_daily_schedule_v1('get',null,current_date)"),/permission denied/);
 });
 
