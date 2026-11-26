@@ -25,7 +25,7 @@ function drive(name,params,x,y=0){add(name,'httpRequest',{...authDrive,options,.
 function rpc(name,action,input,x,y=0){
  const url=service.parameters.url.replace(/[^/]+$/,'sma_rotation_import_v1');
  add(name,'httpRequest',{method:'POST',url,authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',
-  sendBody:true,specifyBody:'json',jsonBody:"={{ {p_source:$('Quelle').first().json.id,p_action:'"+action+"',p_input:"+input+"} }}",options},[x,y],4.5,{credentials:service.credentials});
+  sendBody:true,specifyBody:'json',jsonBody:"={{ ({p_source:$('Quelle').first().json.id,p_action:'"+action+"',p_input:("+input+")} ) }}",options},[x,y],4.5,{credentials:service.credentials});
 }
 function condition(name,expr,x,y=0){
  const p=structuredClone(find('Konto freigegeben?').parameters);
@@ -77,7 +77,7 @@ add('Video für Video','splitInBatches',{batchSize:1,options:{}},[2640,120],3);
 drive('Drive-ID reservieren',{url:api+'/generateIds?count=1&space=drive&type=files'},2860,230);
 rpc('Kopie zuordnen','reserve',"{...$('Video für Video').item.json,copy_id:$json.ids[0]}",3080,230);
 drive('Video kopieren',{method:'POST',url:"={{ '"+api+"/'+$('Video für Video').item.json.original_id+'/copy?supportsAllDrives=true&fields=id' }}",
- sendBody:true,specifyBody:'json',jsonBody:"={{ {id:$json.id,name:$('Video für Video').item.json.name,parents:[$('Konfiguration').first().json.destination],appProperties:{sma_rotation_source:$('Quelle').first().json.id}} }}",
+ sendBody:true,specifyBody:'json',jsonBody:"={{ ({id:$json.id,name:$('Video für Video').item.json.name,parents:[$('Konfiguration').first().json.destination],appProperties:{sma_rotation_source:$('Quelle').first().json.id} }) }}",
  options:{...options,response:{response:{fullResponse:true,neverError:true}}}},3300,230);
 code('Kopierergebnis',`const result=$input.first().json,id=$('Kopie zuordnen').item.json.id;
 if(![200,201,409].includes(result.statusCode) || (result.statusCode!==409 && result.body?.id!==id))throw Error('DRIVE_COPY_FAILED_'+result.statusCode);
