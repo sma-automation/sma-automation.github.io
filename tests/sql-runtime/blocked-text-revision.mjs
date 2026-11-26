@@ -12,7 +12,7 @@ export async function verifyBlockedTextRevision({db,src,id,uid,rev,target,choice
     await db.exec(await src(name));
   }
   const migration=await src('publication-blocked-text-revision');
-  assert.equal(migration,await readFile(new URL('../../supabase/migrations/20261126231822_publication_blocked_text_revision_v1.sql',import.meta.url),'utf8'));
+  assert.equal(migration,await readFile(new URL('../../supabase/migrations/20261126232349_publication_blocked_text_revision_v1.sql',import.meta.url),'utf8'));
   await db.exec(migration);
   const original=id(10), candidate=id(71), asset=id(1), preview=id(2), source=id(73);
   await db.exec("update public.sma_kunden set shop_oeffentlich=true,shop_slug='fixture' where id=91");
