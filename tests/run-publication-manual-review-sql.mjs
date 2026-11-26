@@ -1,6 +1,7 @@
 // Real order, account, worker and provider-journal functions. Synthetic media
 // evidence and comparison projection only; no network or hosted database writes.
 import assert from 'node:assert/strict';
+import {verifyBlockedTextRevision} from './sql-runtime/blocked-text-revision.mjs';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from './sql-runtime/node_modules/@electric-sql/pglite/dist/index.js';
 const db=new PGlite();let n=0;const eq=(a,b)=>{assert.deepEqual(a,b);n++;};
@@ -312,6 +313,7 @@ try{
  const tLease=await worker('claim');
  const ttBlocked=await worker('finish_check',{...data,target:ttTarget,account_check:ttEvidence},tLease.lease_id);
  eq(ttBlocked.state,'blocked');
+ await verifyBlockedTextRevision({db,src,id,uid,rev,target:ttTarget,choices:ttChoices,evidence:ttEvidence,review:ttRights,human,request,other});
  const expiredEvidence={...ttEvidence,checked_at:new Date(Date.now()-360000).toISOString(),expires_at:new Date(Date.now()-60000).toISOString()};
  await db.query('update sma_private.publication_orders_v1 set account_check=$1',[expiredEvidence]);
  const staleTikTok=await view();eq(staleTikTok.supplemental_review_option,tt.human_review_option);
