@@ -19,6 +19,11 @@ do $$begin
  assert sma_private.publication_provider_session_valid_v1('youtube','https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=synthetic');
  assert sma_private.publication_provider_session_valid_v1('tiktok','https://open-upload.tiktokapis.com/video/?upload_id=1&upload_token=synthetic');
  assert sma_private.publication_provider_session_valid_v1('tiktok','https://upload.us.tiktokapis.com/video/?upload_id=1&upload_token=synthetic');
+ assert sma_private.publication_provider_session_valid_v1('tiktok','https://open-upload-i18n.tiktokapis.com/upload?upload_id=123456789&upload_token=private-fixture');
+ assert sma_private.publication_provider_session_valid_v1('tiktok','https://open-upload-i18n.tiktokapis.com/upload?upload_token=private-fixture&upload_id=123456789');
+ assert not sma_private.publication_provider_session_valid_v1('tiktok','https://open-upload-i18n.tiktokapis.com.invalid/upload?upload_id=1&upload_token=private-fixture');
+ assert not sma_private.publication_provider_session_valid_v1('tiktok','https://open-upload-i18n.tiktokapis.com/other?upload_id=1&upload_token=private-fixture');
+ assert not sma_private.publication_provider_session_valid_v1('tiktok','https://open-upload-i18n.tiktokapis.com/upload?upload_id=1&upload_id=2');
  assert not sma_private.publication_provider_session_valid_v1('youtube','https://www.googleapis.com.attacker.invalid/upload/youtube/v3/videos?uploadType=resumable&upload_id=synthetic');
 end $$;
 set local role service_role;

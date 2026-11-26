@@ -11,6 +11,20 @@ test('upload session rejects host/path injection, redirects, credentials, duplic
  for(const url of [yt.replace('googleapis.com','googleapis.com.attacker.invalid'),yt.replace('https:','http:'),yt.replace('www.','secret@www.'),yt+'&upload_id=2',yt+'&next=https://attacker.invalid',yt+'#secret',yt.replace('/upload/','/upload/%2e%2e/'),yt+'\n'])assert.throws(()=>providerSession('youtube',url));
  assert.throws(()=>providerRequest({...i,operation:'upload',session_expires_at:new Date(now).toISOString()},'synthetic-token',now),/EXPIRED/);
 });
+test('international TikTok session survives init and supplies the exact private upload destination',()=>{
+ const session='https://open-upload-i18n.tiktokapis.com/upload?upload_id=123456789&upload_token=private-fixture';
+ const response={statusCode:200,body:{error:{code:'ok'},data:{publish_id:tk.provider_id,upload_url:session}}};
+ const init=providerObservation(response,{...tk,operation:'init'},now);
+ assert.equal(init.state,'session_ready');
+ assert.equal(init.provider_id,tk.provider_id);
+ const put=providerRequest({...tk,...init,operation:'upload'},'synthetic-token',now);
+ assert.equal(put.url,session);
+ assert.equal(put.method,'PUT');
+ assert.equal(put.headers.Authorization,undefined);
+ for(const invalid of [session.replace('.com/','.com.invalid/'),session.replace('/upload?','/other?'),session.replace('upload_token=','other='),session+'&upload_id=2']){
+  assert.throws(()=>providerSession('tiktok',invalid));
+ }
+});
 test('init request preserves exact stored texts and choices and requires a journal intent',()=>{
  const y=providerRequest(i,'synthetic-token',now),t=providerRequest(tk,'synthetic-token',now);
  assert.equal(y.body.snippet.title,i.draft.title);assert.equal(y.body.snippet.description,i.draft.caption);assert.equal(t.body.post_info.title,tk.draft.caption);assert.equal(t.body.post_info.is_aigc,true);assert.equal(providerRequest({...tk,choices:{...tk.choices,is_aigc:false}},'synthetic-token',now).body.post_info.is_aigc,false);
