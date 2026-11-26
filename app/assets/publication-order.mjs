@@ -208,10 +208,10 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,onOpen=()=>{}}) {
+export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
-  button.setAttribute('aria-haspopup','dialog');host.append(button);
+  button.setAttribute('aria-controls','publicationOrderDialog');button.setAttribute('aria-expanded','false');host.append(button);
   const dialog=make('dialog');dialog.id='publicationOrderDialog';dialog.setAttribute('aria-labelledby','publicationOrderHeading');
   const title=make('h2','Veröffentlichungsauftrag · '+portalName);title.id='publicationOrderHeading';
   const intro=make('p','Deine Freigabe gilt für die angezeigte Datei, den Beitrag und das gewählte Konto.');
@@ -250,7 +250,15 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   const cancel=make('button','Vorbereitung abbrechen');cancel.type='button';cancel.className='secondary';cancel.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,supplement,checkTarget,retryAccount,restart,statusButton,cancel,close);
-  dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);doc.body.append(dialog);
+  dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);(doc.querySelector?.('main') || doc.body).append(dialog);
+  title.tabIndex=-1;
+  function openReview(){
+    if(dialog.open)return;
+    dialog.open=true;
+    button.setAttribute('aria-expanded','true');
+    title.focus?.({preventScroll:true});
+    title.scrollIntoView?.({block:'nearest'});
+  }
   const client=createOrderClient({session,...(command?{command:(action,input,options)=>command(action,input,context?.binding,options)}:{})});let order=null,context=null,working=false,epoch=0,account=null;
   let recovery=null,preparationToResume=null,opening=false;
   const pendingAccounts=new Map();
@@ -480,8 +488,8 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     showOrder(previous);
     if(pendingTarget(previous))preparationToResume={id:previous.id,choices:previous.choices,persisted:true};
     setWorking(false);
-    dialog.showModal();
-    onOpen();
+    openReview();
+
     return true;
   }
   function unchanged(){const next=getContext();if(JSON.stringify(next.binding)!==JSON.stringify(context.binding)||!matchesPost(next.post))throw Error(orderError('ORDER_CHANGED'));}
@@ -687,8 +695,8 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   }
   async function openHistoryReview(){
     const previous=historyReview;
-    if(!dialog.open)dialog.showModal();
-    onOpen();notice.textContent='Auftrag wird geladen …';
+    openReview();
+    notice.textContent='Auftrag wird geladen …';
     const generation=++epoch;
     controls.hidden=true;details.replaceChildren();humanControls.hidden=true;
     reviewControls.hidden=true;consentLabel.hidden=true;approve.hidden=true;
@@ -718,13 +726,13 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
       let next;
       try{next=getContext();}catch(e){
         controls.hidden=true;details.replaceChildren();
-        if(!dialog.open)dialog.showModal();
+        openReview();
         notice.textContent=e.message;return;
       }
       if(JSON.stringify(recovery.binding||context.binding)===JSON.stringify(next.binding)){
         context=next;
-        if(!dialog.open)dialog.showModal();
-        onOpen();
+        openReview();
+
         return run();
       }
       recovery=null;
@@ -733,7 +741,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
   }
   async function startPreparation(savedBeforeRestart=null){
     opening=true;retryAccount.hidden=true;preparationToResume=savedBeforeRestart;clearExpiryTimer();restart.hidden=true;
-    const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;humanControls.hidden=true;humanEnabled.checked=false;for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Gespeicherter Beitrag wird geprüft …';if(!dialog.open)dialog.showModal();onOpen();setWorking(true);
+    const generation=++epoch;order=null;account=null;commercial=null;client.reset();controls.hidden=true;reviewControls.hidden=true;humanControls.hidden=true;humanEnabled.checked=false;for(const input of [...reviewFields.values(),...humanFields.values()])input.checked=false;details.replaceChildren();options.replaceChildren();consent.checked=false;consentLabel.hidden=true;approve.hidden=true;statusButton.hidden=true;notice.textContent='Gespeicherter Beitrag wird geprüft …';openReview();setWorking(true);
     try{
       context=getContext();const platform=context.binding.platform;
       const accountKey=JSON.stringify(context.binding);
@@ -851,14 +859,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
     }
     return run(()=>client.get(order.id));
   });
-  function closeDialog(){leaveOpening();retryAccount.hidden=true;dialog.close();}
+  function closeDialog(){leaveOpening();retryAccount.hidden=true;dialog.close();button.focus?.();}
   close.addEventListener('click',()=>{if(!close.disabled)closeDialog();});
-  dialog.addEventListener('close',()=>{if(!dialog.open){leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
+  dialog.addEventListener('close',()=>{if(!dialog.open){button.setAttribute('aria-expanded','false');leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
   dialog.addEventListener('cancel',e=>{if(working){e.preventDefault();if(opening)closeDialog();}});
-  function viewport(height){
-    if(Number.isFinite(height)&&height>=240&&height<=1200)dialog.style.setProperty('--order-host-height',height+'px');
-  }
-  return {rememberVideoChoices,resumePrepared,bindHistoryReview,viewport,lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {rememberVideoChoices,resumePrepared,bindHistoryReview,lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
