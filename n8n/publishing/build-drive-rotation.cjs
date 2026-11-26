@@ -112,6 +112,27 @@ edge('Aufträge verteilen','Auftrag einzeln');edge('Auftrag einzeln','Ausführun
 edge('Ausführungsprüfung?','SMA Auftrag prüfen',0);edge('Ausführungsprüfung?','SMA Versand fortsetzen',1);
 edge('SMA Auftrag prüfen','Auftrag einzeln');edge('SMA Versand fortsetzen','Auftrag einzeln');
 edge('Weitere Rückmeldung','Providerstatus abwarten');edge('Providerstatus abwarten','Fällige Aufträge');
+// Portal membership has its own schedule and commits only complete scans.
+const {beginScan,collectPage}=require('./drive-portal-folders.cjs');
+add('Portalordner jetzt prüfen','manualTrigger',{},[0,1240],1);
+add('Portalordner täglich prüfen','scheduleTrigger',{rule:{interval:[{field:'cronExpression',expression:'0 35 8,15 * * *'}]}},[0,1440],1.2);
+code('Portalquelle',nodes.find(n=>n.name==='Quelle').parameters.jsCode,220,1240);
+function portalRpc(name,body,x){
+ add(name,'httpRequest',{method:'POST',url:service.parameters.url.replace(/[^/]+$/,'sma_publication_portal_scan_v1'),
+  authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',sendBody:true,specifyBody:'json',jsonBody:body,options},
+  [x,1240],4.5,{credentials:service.credentials});
+}
+portalRpc('Portalprüfung beginnen',"={{ ({p_source:$json.id,p_action:'start'}) }}",440);
+code('Portalordner vormerken',beginScan.toString()+"\nreturn [{json:beginScan($input.first().json)}];",660,1240);
+const pageQuery=nodes.find(n=>n.name==='Drive-Seite').parameters.jsCode.replace('folder=s.queue[0]','folder=s.queue[0].id');
+code('Portalseite vorbereiten',pageQuery,880,1240);
+drive('Portalseite lesen',{url:api,sendQuery:true,specifyQuery:'json',jsonQuery:'={{ JSON.stringify($json.query) }}'},1100,1240);
+code('Portalinhalte sammeln',collectPage.toString()+"\nreturn [{json:collectPage($('Portalseite vorbereiten').first(0,$runIndex).json,$input.first().json)}];",1320,1240);
+condition('Weitere Portalseiten?','={{ $json.queue.length > 0 }}',1540,1240);
+portalRpc('Portalbestand speichern',"={{ ({p_source:$('Portalquelle').first().json.id,p_action:'finish',p_ticket:$('Portalprüfung beginnen').first().json.ticket,p_rows:$json.rows}) }}",1760);
+edge('Portalordner jetzt prüfen','Portalquelle');edge('Portalordner täglich prüfen','Portalquelle');
+for(const [a,b] of [['Portalquelle','Portalprüfung beginnen'],['Portalprüfung beginnen','Portalordner vormerken'],['Portalordner vormerken','Portalseite vorbereiten'],['Portalseite vorbereiten','Portalseite lesen'],['Portalseite lesen','Portalinhalte sammeln'],['Portalinhalte sammeln','Weitere Portalseiten?']])edge(a,b);
+edge('Weitere Portalseiten?','Portalseite vorbereiten',0);edge('Weitere Portalseiten?','Portalbestand speichern',1);
 for(const c of Object.values(connections))c.main=Array.from(c.main,v=>v??[]);
 // Deploy the importer and dispatcher independently so the verified live import need not be replaced.
 const dispatchOnly=process.argv.includes('--dispatch-only');
@@ -121,9 +142,11 @@ function include(name){
  chosen.add(name);
  for(const port of connections[name]?.main||[])for(const link of port)include(link.node);
 }
-if(dispatchOnly)include('Versandtermine Wien');
+const portalsOnly=process.argv.includes('--portal-folders-only');
+if(portalsOnly){include('Portalordner jetzt prüfen');include('Portalordner täglich prüfen');}
+else if(dispatchOnly)include('Versandtermine Wien');
 else{include('Jetzt abgleichen');include('Täglich vor der Planung');}
-const name=dispatchOnly?'SMA – Tagesversand PHP und Geld':'SMA – Drive-Galerie abgleichen';
+const name=portalsOnly?'SMA – Portalordner abgleichen':dispatchOnly?'SMA – Tagesversand PHP und Geld':'SMA – Drive-Galerie abgleichen';
 process.stdout.write(JSON.stringify({name,nodes:nodes.filter(n=>chosen.has(n.name)),
  connections:Object.fromEntries(Object.entries(connections).filter(([n])=>chosen.has(n))),
  settings:{timezone:'Europe/Vienna',executionOrder:'v1'}},null,2));

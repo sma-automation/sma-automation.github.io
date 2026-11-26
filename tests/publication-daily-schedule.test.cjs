@@ -119,6 +119,33 @@ test('each customer gets three separate files, all portal times, an idempotent d
   await db.query("update sma_private.publication_rotation_deliveries_v1 set next_check=now() where order_id=$1",[oid]);
   await db.query("update sma_private.publication_joint_plans_v1 set version=version+1 where asset_id=$1",[present.id]);
   assert.deepEqual(await due(),[],'a changed plan needs a new approval');
+  await db.exec(sql('publication-device-upload'));
+  await db.exec(sql('publication-portal-folders'));
+  const folders={};
+  for(const [i,platform] of platforms.entries()){
+    const folder='portal-folder-'+platform;
+    await db.query('insert into sma_private.publication_portal_folders_v1 values($1,$2,$3)',[sourceId,platform,folder]);
+    folders[folder]=[];
+    for(let k=0;k<3;k++){
+      const number=100+3*i+k,revision=sha(number);
+      folders[folder].push(revision.split(':')[1]);
+      await db.query("insert into sma_private.publication_files_v1(id,customer_id,user_id,drive_file_id,name,media_kind,mime_type,revision,modified_at,size_bytes) values($1,2,$2,$3,$3,'video','video/mp4',$4,now(),10)",[id(number),b,'portal'+number,revision]);
+    }
+  }
+  // A copy with a different name still collides on its media content.
+  for(const clips of Object.values(folders))clips.push(digest);
+  const scan=async(op,ticket=null,rows=null)=>(await db.query('select public.sma_publication_portal_scan_v1($1,$2,$3,$4) r',[sourceId,op,ticket,rows])).rows[0].r;
+  const snapshot=await scan('start');
+  await assert.rejects(scan('finish',snapshot.ticket,{}),/INCOMPLETE_PORTAL_SCAN/);
+  assert.equal((await scan('finish',snapshot.ticket,folders)).videos,12);
+  await assert.rejects(scan('finish',snapshot.ticket,folders),/STALE_PORTAL_SCAN/);
+  for(let i=0;i<2;i++)await db.query("select sma_private.publication_daily_fill_v1(2,$1,'2097-06-01')",[b]);
+  const scheduled=(await db.query("select jsonb_object_keys(portal_times) p,asset_revision from sma_private.publication_joint_plans_v1 where plan_day='2097-06-01'")).rows;
+  assert.equal(scheduled.length,12);
+  assert.equal(new Set(scheduled.map(x=>x.asset_revision)).size,12);
+  for(const {p,asset_revision} of scheduled)assert(folders['portal-folder-'+p].includes(asset_revision.split(':')[1]));
+  assert.equal((await db.query("select sma_private.publication_portal_allowed_v1($1,'facebook',$2) ok",[sourceId,sha(100)])).rows[0].ok,false);
+  assert.equal((await due()).length,0);
   await db.exec('set role anon');await assert.rejects(db.exec("select public.sma_publication_daily_schedule_v1('get',null,current_date)"),/permission denied/);
 });
 
@@ -148,4 +175,26 @@ test('schedule editor loads on demand and saves all three times independently fo
   chosen.click();await new Promise(setImmediate);
   assert.equal(calls[2].p_action,'get');assert.equal(calls[2].p_day,chosen.dataset.day);
   view.destroy();
+});
+
+test('portal scans follow only real assigned folders and keep page and content boundaries',()=>{
+  const {beginScan,collectPage}=require('../n8n/publishing/drive-portal-folders.cjs');
+  const root='parentFolderID', child='subFolderInside', type='application/vnd.google-apps.folder';
+  const folders=Object.fromEntries(platforms.map(p=>['portalFolder_'+p,p]));
+  const row=(id,parent,mimeType)=>({id,parents:[parent],mimeType,trashed:false});
+  let state=beginScan({root,ticket:'scan',folders});
+  state=collectPage(state,{files:[row('unassignedFolder',root,type)],nextPageToken:'next'});
+  assert.deepEqual(state.queue,[{id:root,pool:null}]);
+  assert.throws(()=>collectPage(structuredClone(state),{files:[],nextPageToken:'next'}),/REPEATED_PAGE/);
+  state=collectPage(state,{files:Object.keys(folders).map(id=>row(id,root,type))});
+  const first=state.queue[0].id,hash='a'.repeat(64);
+  const video=(parent)=>({...row('driveVideoID1',parent,'video/mp4'),size:'111',sha256Checksum:hash});
+  state=collectPage(state,{files:[row(child,first,type),video(first)]});
+  while(state.queue.length>1)state=collectPage(state,{files:[]});
+  assert.deepEqual(state.queue,[{id:child,pool:first}]);
+  assert.throws(()=>collectPage(structuredClone(state),{incompleteSearch:true,files:[]}),/INCOMPLETE_LISTING/);
+  state=collectPage(state,{files:[video(child)]});
+  assert.deepEqual(state.rows[first],[hash]);
+  assert.equal(Object.values(state.rows).flat().length,1);
+  assert.throws(()=>collectPage(beginScan({root,ticket:'scan',folders}),{files:[]}),/PORTAL_FOLDER_MISSING/);
 });

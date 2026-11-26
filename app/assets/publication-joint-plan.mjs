@@ -49,7 +49,7 @@ export function mountJointPlan(doc, request, portal='youtube') {
     field.disabled = !record || busy;
     fold.disabled = !record || busy;
     save.disabled = !record || busy || !field.value;
-    clear.hidden = !record?.desired_at || (!sharedPortal && !record?.daily_slot);
+    clear.hidden = !record?.desired_at || (record.daily_slot && !record.portal_times?.[portal]) || (!sharedPortal && !record?.daily_slot);
     clear.disabled = busy;
     refresh.disabled = busy;
   }
@@ -59,7 +59,7 @@ export function mountJointPlan(doc, request, portal='youtube') {
     displayMode(!!data.daily_slot);
     const at = data.portal_times?.[portal];
     el('jointPlanDaily').textContent = at ? 'Datei '+data.daily_slot+' · '+viennaMinute(at).replace('T',' · ')+' Uhr (Wien)' : '';
-    const labels = (sharedPortal ? data.channels : []).map(channel => {
+    const labels = (sharedPortal ? data.channels : []).filter(channel => !data.daily_slot || data.portal_times?.[channel.platform]).map(channel => {
       const name = channel.platform === 'youtube' ? 'YouTube' : 'TikTok';
       return name + ' · ' + (channel.target || 'Zielkonto offen') + ' · ' +
         (orderLabels[channel.order_state] || 'Freigabe offen');
@@ -67,7 +67,7 @@ export function mountJointPlan(doc, request, portal='youtube') {
     el('jointPlanChannels').textContent = labels.join('\n');
     field.value = data.desired_at ? viennaMinute(data.desired_at) : '';
     fold.value = data.desired_at ? String(viennaInstants(field.value).indexOf(new Date(data.desired_at).toISOString())) : '';
-    status.textContent = data.daily_slot ? 'Privater Tagesentwurf. Eine Veröffentlichung erfordert eine eigene Freigabe.' :
+    status.textContent = data.daily_slot && !at ? 'Die Datei ist für ein anderes Portal eingeplant.' : data.daily_slot ? 'Privater Tagesentwurf. Eine Veröffentlichung erfordert eine eigene Freigabe.' :
       !sharedPortal ? 'Für dieses Portal ist kein Tagesentwurf gespeichert.' :
       data.desired_at ? 'Gemeinsamer Terminentwurf gespeichert.' : 'Noch kein Terminentwurf gespeichert.';
   }
