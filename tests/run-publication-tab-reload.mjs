@@ -260,13 +260,12 @@ try{
    newCommand:attempts.length===2&&attempts[0].command_id!==attempts[1].command_id,
    unapproved:!approve.hidden&&approve.disabled&&!$('order-final-consent').checked&&window.fixtureTargetOrder.approved_at===null};
   if(sessionStorage.fixtureOrderActions!=='account,account,order_prepare,order_prepare')throw Error('Target recovery started an unexpected order action');
-  // The dashboard can be taller than its embedded preview. Keep the bottom controls inside both.
-  orderReview.viewport(660);
+  if(review.matches(':modal') || review.parentElement!==document.querySelector('main') ||
+     getComputedStyle(review).position!=='static' || review.scrollHeight>review.clientHeight+1)
+    throw Error('Approval is not inline in the post preview');
   const originalHeight=frame.style.height;
   for(const height of [300,490,810]){
    frame.style.height=height+'px';
-   const bounds=review.getBoundingClientRect();
-   if(bounds.bottom>Math.min(innerHeight-12,672)+1)throw Error('Approval dialog clipped at '+height+'px');
    for(const control of [$('order-final-consent'),approve]){
     control.scrollIntoView({block:'center'});
     const rect=control.getBoundingClientRect();

@@ -357,19 +357,19 @@ body.wide #workspacePost #assetPreviewMedia { max-height: var(--stage-height); }
 
 /* Portal settings use one row per choice where labels and controls fit. */
 #publicationOrderDialog {
-  width: min(650px, calc(100vw - 24px));
-  max-height: min(720px, var(--order-host-height, 720px), calc(100dvh - 24px));
-  top: 12px;
-  bottom: auto;
-  margin: 0 auto;
-  overflow: auto;
+  position: static;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  max-height: none;
+  margin: 16px 0;
+  overflow: visible;
   overflow-wrap: anywhere;
   border: 1px solid #dfe5ef;
   border-radius: 14px;
   padding: clamp(14px, 2vw, 22px);
   color: #17233b;
 }
-#publicationOrderDialog::backdrop { background: #17233b66; }
 #publicationOrderDialog :is(h2,h3,p,ul,fieldset) { margin-block: 6px 10px; }
 #publicationOrderDialog p:empty { display: none; }
 #publicationOrderDialog label { margin: 8px 0; }

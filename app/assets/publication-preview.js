@@ -18,7 +18,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=28';
-import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=31';
+import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=32';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -1881,7 +1881,6 @@ async function saveDraft(){
  }}finally{lock(false);syncMedia();}
 }
 $('save').addEventListener('click',saveDraft);
-window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.top&&event.data?.type==='sma-publication-order-viewport')orderReview?.viewport(event.data.height);});
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,
  saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
  readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
@@ -1903,7 +1902,6 @@ if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrd
  },
  verifySavedDraft,onUnavailableLink:openDraftLinkEditor,onOutdatedDraft:openOutdatedDraft,
  refresh:()=>ensureFreshFile(fileContext()),
- onOpen:()=>{if(window.parent!==window)window.top.postMessage({type:'sma-publication-order-open'},location.origin);},
 });
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&($('draftConflictDialog').open||$('draftReloadDialog').open))return;if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 // Build the shared portal workspace before waiting for the external account client.
