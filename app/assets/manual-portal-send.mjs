@@ -109,7 +109,11 @@ async function list(){
  const data=await rpc('sma_publication_files_v1',{p_action:'list',p_input:{platform}});
  files=data.files.filter(f=>f.media_kind==='video'&&f.mime_type==='video/mp4');
  const entries=files.filter(f=>f.profile_media?.state!=='hidden_in_picker'||f.id===chosen)
-  .map(file=>({file,...describeFile(file)})).sort((a,b)=>a.title.localeCompare(b.title,'de',{numeric:true}));
+  .map(file=>{
+   const filename=file.profile_media?.source_name;
+   const title=filename?filename.replace(/\.mp4$/i,'').replace(/_/g,' '):describeFile(file).title;
+   return {file,title};
+  }).sort((a,b)=>a.title.localeCompare(b.title,'de',{numeric:true}));
  const items=entries.map(({file,title})=>{
   const button=document.createElement('button');button.type='button';button.value=file.id;
   button.textContent=title;button.setAttribute('aria-pressed',String(file.id===chosen));
