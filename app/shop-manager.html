@@ -154,6 +154,7 @@ body.gallery-open{overflow:hidden}
 .product-actions input[type="url"]{max-width:100%;min-width:0;width:13rem;font:inherit}
 #smaShopDemoPaymentNote{margin:8px 0 2px;font:400 12px/1.5 Inter,Arial,sans-serif;color:var(--muted);overflow-wrap:anywhere}
 #smaShopDemoPaymentNote[hidden]{display:none!important}
+#marketCatalog{margin:12px 0 20px}#marketCatalog details{margin:9px 0}#marketCatalog summary{color:var(--blue);cursor:pointer;font-weight:650}#marketCatalog form{max-width:40rem;display:grid;gap:10px;margin:12px 0}#marketCatalog label{display:grid;gap:4px}#marketCatalog input,#marketCatalog select,#marketCatalog textarea,#marketCatalog button{font:inherit;padding:8px;border:1px solid #a6b5ce;border-radius:6px}#marketCatalog button{justify-self:start;cursor:pointer}#marketCatalog [hidden]{display:none!important}
 </style>
 <style>.main{margin-left:0;width:100%}.content{padding:0}.section{margin-top:16px}.app{display:block}.card{box-shadow:none}body{background:#f4f6f9}</style></head>
 <body>
@@ -181,6 +182,7 @@ body.gallery-open{overflow:hidden}
       <p id="smaShopDemoPaymentNote" role="note" hidden></p>
       <section id="shop" class="section card">
         <h2>Shop &amp; Produkte</h2>
+        <div id="marketCatalog" hidden></div>
         <p id="checkoutTestLink" class="hidden" style="margin:0 0 16px"><a class="btn" href="checkout-test.html" target="_top">Checkout V2 testen</a></p>
         <div id="produktListe" class="list"></div>
         <nav id="produktPagination" class="pagination" aria-label="Produktseiten"></nav>
@@ -288,6 +290,7 @@ function makePlaceholder(container){
 }
 const signedCache = new Map();
 let productsState=[];
+let refreshMarketCards;
 let currentUserId='';
 let currentCustomerId='';
 let publicShopSlug=null;
@@ -596,6 +599,7 @@ function renderProductList(){
     empty.textContent='Noch keine Produkte vorhanden.';productList.append(empty);return;
   }
   for(const product of productsState) productList.append(makeProductCard(product,currentUserId));
+  if(typeof refreshMarketCards==='function')void refreshMarketCards().catch(()=>{});
 }
 function makeProductCard(product,userId){
   const row=document.createElement('article');
@@ -644,12 +648,13 @@ function makeProductCard(product,userId){
   const desc=productDescription(product);
   description.textContent=desc.text;
   if(desc.generated)description.classList.add('fallback');
+  const markets=document.createElement('div');markets.className='item-meta';markets.dataset.marketProduct=product.sma_produkt_id||'';
   const badges=document.createElement('div');badges.className='badges';
   badges.append(makeBadge(product.aktiv?'Aktiv':'Inaktiv',!!product.aktiv));
   if(product.shopify_aktiv)badges.append(makeBadge('Shopify aktiv',true));
   if(product.digistore24_aktiv)badges.append(makeBadge('Digistore24 aktiv',true));
   stockViews.set(product.sma_produkt_id,{meta,description});
-  details.append(name,meta,description,badges);
+  details.append(name,meta,description,badges,markets);
   if(product.shopify_aktiv&&product.sma_produkt_id){
     details.append(makeStockEditor(product));
   }
@@ -936,7 +941,7 @@ function renderOrders(orders){
 }
 
 // Daten werden seitenweise aus Supabase geladen, damit auch große Shops vollständig erreichbar bleiben.
-const PRODUKT_FELDER='kunde_id,sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at';
+const PRODUKT_FELDER='kunde_id,sma_produkt_id,produkt_name,beschreibung,sku,produkt_typ,preis,waehrung,bestand,aktiv,shopify_aktiv,digistore24_aktiv,kauf_url,bild_pfad,bild_pfade,created_at,updated_at';
 const BESTELL_FELDER='id,markt,bestellnummer,erstellt_am,zahlungsstatus,lieferstatus,gesamtbetrag,waehrung,ist_testbestellung';
 
 function showLoading(elementId,message){
@@ -1171,6 +1176,9 @@ if(sessionError||!session){
       currentUserId=session.user.id;
       currentCustomerId=kunde.kunde_id;
       publicShopSlug=kunde.shop_oeffentlich===true?kunde.shop_slug:null;
+      import('./assets/market-catalog.mjs?v=1').then(m=>m.mountMarketCatalog(document.getElementById('marketCatalog'),supabase,()=>loadProductsPage(1),()=>productsState,()=>shopPollingAllowed('shop'))).then(refresh=>{refreshMarketCards=refresh;}).catch(()=>{
+        const box=document.getElementById('marketCatalog');box.hidden=false;box.textContent='Marktverwaltung derzeit nicht erreichbar.';
+      });
       const demoNote=demoPaymentModeNotice(kunde);
       if(demoNote){const note=document.getElementById('smaShopDemoPaymentNote');note.textContent=demoNote;note.hidden=false;}
       if(kunde.shop_slug==='sma-testkunde')document.getElementById('checkoutTestLink').classList.remove('hidden');
