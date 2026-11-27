@@ -1,4 +1,4 @@
-import {createDeliveryMonitor} from './portal-delivery-monitor.mjs?v=1';
+import {createDeliveryMonitor} from './portal-delivery-monitor.mjs?v=2';
 import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=2';
 import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
@@ -23,7 +23,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=33';
-import {createOrderClient,installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=36';
+import {createOrderClient,installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=37';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -739,7 +739,13 @@ async function requestFileSelection(id,discard=false,view='preview'){
   // not start a job; the next requested action still joins through the server.
   if(file){
    const anchor=fileJobAnchor(file);
-   reopened=await fileJobs.beginNewWork(anchor,{signal:controller.signal});
+   const switching=selectedAsset&&selectedAsset.id!==file.id;
+   const [didReopen,catalog]=await Promise.all([
+    fileJobs.beginNewWork(anchor,{signal:controller.signal}),
+    switching?optimizerCatalog(controller.signal):null
+   ]);
+   reopened=didReopen;
+   if(catalog&&ticket===fileSelectionTicket&&!controller.signal.aborted)assets=catalog.files;
    if(controller.signal.aborted||ticket!==fileSelectionTicket||signedOut)return;
    file=assets.find(f=>f.id===id);
    if(!file||file.revision!==anchor.asset_revision||!fileFitsPortal(file))throw fileError('FILE_CHANGED');
@@ -754,6 +760,7 @@ async function requestFileSelection(id,discard=false,view='preview'){
   if(workspace&&id)workspace.show(view);else if(!workspace)$('filePicker').close();return;
  }
  if(monitored&&(file?.id!==monitored.file.id||file?.revision!==monitored.file.revision)){clearTimeout(deliveryTimer);monitored=null;sendFeedback('');}
+ orderReview?.clear();
  pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;updateSendControl();assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
  // Show the file preview immediately, but keep Magic disabled until the
@@ -2029,11 +2036,11 @@ function followSend(result,binding){
 }
 async function finishInstantApproval(order,context){
  if(!instantRequest||JSON.stringify(context.binding)!==instantRequest.key)return;
- const request=instantRequest;instantRequest=null;
+ const request=instantRequest,owner=previewOwnerId,file=selectedAsset;instantRequest=null;
  try{
   const result=await editorRpc('send',{...context.binding,order:order.id,request_id:request.id});
   followSend(result,context.binding);
- }catch(e){sendFeedback(e.message,true);return e.message;}
+ }catch(e){if(!signedOut&&owner===previewOwnerId&&photoStillSelected(file))sendFeedback(e.message,true);return e.message;}
 }
 async function postNow(){
  if(posting||busy||signedOut||(deliveryActive()&&monitored.locked))return;
@@ -2054,7 +2061,7 @@ async function postNow(){
    sendFeedback('Prüfe Zielkonto und Sichtbarkeit und bestätige den aktuellen Beitrag.');
    await orderReview.openInstant();
   }else{instantRequest=null;followSend(result,binding);}
- }catch(e){if(!signedOut)sendFeedback(e.message,true);}
+ }catch(e){if(!signedOut&&owner===previewOwnerId&&photoStillSelected(file))sendFeedback(e.message,true);}
  finally{posting=false;}
 }
 
@@ -2101,7 +2108,7 @@ if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrd
    p_asset_id:binding.asset_id,p_asset_revision:binding.asset_revision,p_channel_id:channel});
   return error?null:data;
  },
- sendApproved:finishInstantApproval,saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
+ startPost:workspace&&selectedPortal==='tiktok'?postNow:null,sendApproved:finishInstantApproval,saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
  readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
  command:async(action,input,binding,options)=>{
   if(action==='get')return new Response(JSON.stringify(await readStoredOrder(input.id)),{status:200,headers:{'Content-Type':'application/json'}});

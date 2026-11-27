@@ -1,5 +1,5 @@
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {installOrderReview} from './publication-order.mjs?v=36';
+import {installOrderReview} from './publication-order.mjs?v=37';
 import {parseHashtags} from './publication-hashtags.mjs?v=2';
 import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=1';
 
@@ -147,6 +147,7 @@ export function mountManualComposer({doc,platform,owner,portalName,session,rpc,c
    throw Error('Der Versanddienst hat den Auftrag nicht angenommen. Prüfe den aktuellen Freigabe- und Versandstand.');
   }
   if(!result.order)throw Error('SMA hat keinen Versandauftrag für diesen Beitrag bestätigt.');
+  if(result.accepted===true)sendAttempt=null;
   message('');await onReceipt(result,file);return true;
  }
  const orderRpc=(action,id,extra={})=>rpc('sma_publication_order_v1',{p_action:action,p_input:{id,...extra}});

@@ -25,6 +25,7 @@ const errors = {
 };
 export function orderError(code) { return errors[code] || 'Die Auftragsprüfung konnte nicht abgeschlossen werden. Du kannst denselben Auftrag erneut prüfen.'; }
 export const approvalPolicy='media-consent-2026-11-03.1';
+export const tiktokDirectPolicy='sma-tiktok-direct-v1';
 export const humanReviewPolicy='human-video-2026-11-06.1';
 function preparationWindow(order){
   if(order?.state==='preparing')return order.preparation_window;
@@ -85,6 +86,11 @@ function confirmHumanReview(option,values) {
 }
 export function reviewConfirmation(order,values) {
   const tiktok=order?.binding?.platform==='tiktok',branded=tiktok&&order?.choices?.brand_content_toggle===true;
+  if(values?.intent==='direct_post'){
+    if(!tiktok||order.direct_post_policy!==tiktokDirectPolicy||typeof order.choices?.brand_content_toggle!=='boolean')
+      throw Error('Die TikTok-Einstellungen müssen neu geladen werden. Schließe den Dialog und öffne ihn erneut.');
+    return {policy_version:tiktokDirectPolicy,tiktok_music_terms:true,tiktok_branded_terms:branded};
+  }
   if(order?.approval_policy!==approvalPolicy||!['youtube','tiktok','instagram','facebook'].includes(order?.binding?.platform)||
     !['content_checked','media_rights','music_rights'].every(k=>values?.[k]===true)||
     (tiktok&&values?.tiktok_music_terms!==true)||(branded&&values?.tiktok_branded_terms!==true))throw Error(orderError('MEDIA_CONFIRMATION_REQUIRED'));
@@ -208,9 +214,10 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDefaults,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,sendApproved}) {
+export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDefaults,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,sendApproved,startPost}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
-  const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
+  const entryLabel=startPost?'Auf TikTok posten':'Freigabe vorbereiten';
+  const button=make('button',entryLabel);button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-controls','publicationOrderDialog');button.setAttribute('aria-expanded','false');host.append(button);
   const dialog=make('dialog');dialog.id='publicationOrderDialog';dialog.setAttribute('aria-labelledby','publicationOrderHeading');
   const title=make('h2','Veröffentlichungsauftrag · '+portalName);title.id='publicationOrderHeading';
@@ -250,7 +257,16 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   const cancel=make('button','Vorbereitung abbrechen');cancel.type='button';cancel.className='secondary';cancel.hidden=true;
   const close=make('button','Schließen');close.type='button';close.className='secondary';
   const actions=make('div');actions.className='actions';actions.append(approve,supplement,checkTarget,retryAccount,restart,statusButton,cancel,close);
-  dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,actions);(doc.querySelector?.('main') || doc.body).append(dialog);
+  const terms=make('p');terms.hidden=true;
+  const musicLink=make('a','Music Usage Confirmation');musicLink.href='https://www.tiktok.com/legal/page/global/music-usage-confirmation/en';
+  const brandLink=make('a','Branded Content Policy');brandLink.href='https://www.tiktok.com/legal/page/global/bc-policy/en';
+  for(const link of [musicLink,brandLink]){link.target='_blank';link.rel='noopener noreferrer';}
+  function displayTerms(branded){
+    terms.replaceChildren(doc.createTextNode('Mit dem Posten stimmst du TikToks '),musicLink);
+    if(branded)terms.append(doc.createTextNode(' und der '),brandLink);
+    terms.append(doc.createTextNode(' zu.'));
+  }
+  dialog.append(title,intro,details,controls,humanControls,reviewControls,consentLabel,notice,terms,actions);(doc.querySelector?.('main') || doc.body).append(dialog);
   title.tabIndex=-1;
   function openReview(){
     if(dialog.open)return;
@@ -312,6 +328,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
     if(!commercial)return;
     const third=fields.get('brand_content_toggle'),own=fields.get('brand_organic_toggle'),visibility=fields.get('visibility');
     for(const input of [third,own]){input.parentElement.hidden=!commercial.checked;input.disabled=working||!!order||!commercial.checked;}
+    if(directMode)displayTerms(third.checked);
     if(visibility.value==='SELF_ONLY')third.disabled=true;
     for(const option of visibility.children)if(option.value==='SELF_ONLY')option.disabled=third.checked;
     commercialNotice.textContent=!commercial.checked?'':third.checked?'Dein Video wird als „Bezahlte Partnerschaft“ gekennzeichnet.':own.checked?'Dein Video wird als „Werbeinhalt“ gekennzeichnet.':'Wähle eigene Marke, Werbung für Dritte oder beides.';
@@ -339,7 +356,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   function reviewValues(){return {...Object.fromEntries([...reviewFields,...humanFields].map(([k,e])=>[k,e.checked])),human_review_enabled:humanEnabled.checked};}
   function reviewReady(){try{reviewConfirmation(order,reviewValues());return !order.check_error;}catch{return false;}}
   function setWorking(value){
-    approve.textContent=instant?'Auf '+portalName+' posten':'Veröffentlichung freigeben';
+    approve.textContent=(directMode||instant)?'Auf '+portalName+' posten':'Veröffentlichung freigeben';
     dialog.setAttribute('aria-busy',String(value));
     working=value;
     const ended=preparationEnded(order),locked=ended||recovery!==null;
@@ -367,6 +384,17 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
       if(!value&&!recovery)notice.textContent=preparationWindow(order)?.status==='recheck'
         ? 'Das Zielkonto muss erneut geprüft werden. Starte die Vorbereitung neu.'
         : 'Die Vorbereitung ist abgelaufen. Starte sie neu, um das Zielkonto und die Einstellungen erneut zu prüfen.';
+    }
+    prepareActions.hidden=directMode;
+    terms.hidden=!directMode;
+    if(directMode){
+      humanControls.hidden=reviewControls.hidden=consentLabel.hidden=true;
+      supplement.hidden=checkTarget.hidden=retryAccount.hidden=statusButton.hidden=restart.hidden=cancel.hidden=true;
+      if(order)displayTerms(order.choices?.brand_content_toggle===true);
+      approve.hidden=false;
+      approve.disabled=value||!!recovery||!!order&&(order.state!=='prepared'||locked||!!order.check_error)||
+        !order&&(controls.hidden||!account);
+      if(ended&&!value)notice.textContent='Die Vorbereitung ist abgelaufen. Schließe den Dialog und öffne ihn erneut.';
     }
   }
   function checkBinding(r){
@@ -442,9 +470,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
       details.append(make('p','Vorbereitung gültig bis '+new Intl.DateTimeFormat('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Europe/Vienna'}).format(until)+' Uhr (Wien).'));
       expiryTimer=setTimeout(()=>{if(order===r)setWorking(working);},Math.max(0,until-Date.now()+1));
     }
-    consent.checked=false;consentLabel.hidden=r.state!=='prepared';controls.hidden=true;
-    humanControls.hidden=!(humanReviewAvailable(r)||(saveSupplementalReview&&supplementalReviewAvailable(r)));humanEnabled.checked=false;for(const input of humanFields.values())input.checked=false;
-    reviewControls.hidden=r.state!=='prepared';for(const [key,input] of reviewFields){input.checked=false;input.parentElement.hidden=key==='tiktok_music_terms'?context.binding.platform!=='tiktok':key==='tiktok_branded_terms'?context.binding.platform!=='tiktok'||r.choices?.brand_content_toggle!==true:false;}
+    consent.checked=false;consentLabel.hidden=directMode||r.state!=='prepared';controls.hidden=true;
+    humanControls.hidden=directMode||!(humanReviewAvailable(r)||(saveSupplementalReview&&supplementalReviewAvailable(r)));humanEnabled.checked=false;for(const input of humanFields.values())input.checked=false;
+    reviewControls.hidden=directMode||r.state!=='prepared';for(const [key,input] of reviewFields){input.checked=false;input.parentElement.hidden=key==='tiktok_music_terms'?context.binding.platform!=='tiktok':key==='tiktok_branded_terms'?context.binding.platform!=='tiktok'||r.choices?.brand_content_toggle!==true:false;}
     details.append(make('p','Datei: '+context.name),make('p','Zielkonto: '+(r.account_check?.display_name||r.target?.name||'Noch nicht zugeordnet')+(r.target?.id?' · '+r.target.id:'')));
     const decisionLabels={visibility:'Sichtbarkeit',made_for_kids:'Speziell für Kinder',contains_synthetic_media:'Synthetische Inhalte',disable_comment:'Kommentare deaktiviert',disable_duet:'Duette deaktiviert',disable_stitch:'Stitch deaktiviert',brand_content_toggle:'Werbung für Dritte',brand_organic_toggle:'Eigene Marke',is_aigc:'KI-generierter Inhalt'};
     const visibilityLabels={private:'Privat',public:'Öffentlich',unlisted:'Nicht gelistet',SELF_ONLY:'Nur ich',PUBLIC_TO_EVERYONE:'Öffentlich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
@@ -461,13 +489,15 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
     const media=r.media_check;
     if(media?.human_review?.method==='customer_attestation')details.append(make('p','Persönliche Inhaltsprüfung für diesen Stand dokumentiert. Die automatische Video-Sicherheitsprüfung wurde dadurch nicht durchgeführt.'));
     if(media?.asset_id===context.binding.asset_id&&media?.asset_revision===context.binding.asset_revision&&Array.isArray(media.checks)){
-      const open=media.checks.filter(x=>x.status!=='pass'&&x.code!=='PUBLICATION_APPROVAL_PENDING');
+      const open=media.checks.filter(x=>x.status!=='pass'&&x.code!=='PUBLICATION_APPROVAL_PENDING'&&
+        !(directMode&&x.status==='pending'&&['CONTENT_REVIEW_PENDING','SEMANTIC_REVIEW_PENDING'].includes(x.code)));
       if(open.length){details.append(make('h3','Offene Medienprüfungen'));const list=make('ul');for(const check of open)list.append(make('li',check.message));details.append(list);}
     }
     if(r.check_error)details.append(make('p',orderError(r.check_error)));
     if(context.binding.platform==='tiktok')details.append(make('p','Nach einer späteren Veröffentlichung kann TikTok einige Minuten benötigen, bis der Beitrag im Profil sichtbar ist.'));
-    statusButton.hidden=r.state==='cancelled'||(r.state==='checked'&&recordedApproval(r));
+    statusButton.hidden=directMode||r.state==='cancelled'||(r.state==='checked'&&recordedApproval(r));
     if(r.state==='cancelled')notice.textContent='Dieser Auftrag wurde storniert und kann nicht mehr freigegeben werden. Schließe dieses Fenster und bereite bei Bedarf einen neuen Auftrag vor.';
+    else if(r.state==='prepared'&&directMode)notice.textContent='';
     else if(r.state==='prepared')notice.textContent='Zielkonto und gespeicherter Text sind zugeordnet. Erst deine ausdrückliche Bestätigung speichert die Freigabe.';
     else if(r.state==='checked')notice.textContent=(r.approved_at?'Deine Freigabe ist gespeichert. ':'')+'Die Auftragsprüfung ist abgeschlossen.';
     else if(r.approved_at)notice.textContent=r.state==='blocked'?'Deine Freigabe ist gespeichert. Eine offene Prüfung blockiert den Auftrag.':'Deine Freigabe ist gespeichert.';
@@ -491,7 +521,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
       if(!pendingTarget(previous)&&(previous.state!=='prepared'||previous.approval_window?.status!=='active'||
          !previous.approval_token||!previous.target?.id||previous.target.platform!==previous.binding?.platform))return false;
     }
-    context=getContext();
+    instant=false;directMode=false;context=getContext();
     if(!matchesPost(previous.draft))return false;
     showOrder(previous);
     if(pendingTarget(previous))preparationToResume={id:previous.id,choices:previous.choices,persisted:true};
@@ -504,7 +534,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   function offerPreparationRetry(message){
     // Keep the form and the client's original request ID for an explicit retry.
     recovery=null;order=null;controls.hidden=false;statusButton.hidden=true;
-    notice.textContent=message+' Klicke auf „Auftrag prüfen“, um es mit denselben Einstellungen erneut zu versuchen.';
+    notice.textContent=message+(directMode?' Versuche es mit „Auf TikTok posten“ erneut.':' Klicke auf „Auftrag prüfen“, um es mit denselben Einstellungen erneut zu versuchen.');
   }
   function checkPreparation(stored,pending){
     checkBinding(stored);
@@ -622,7 +652,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
         : unresolvedMessage;
     }
   }
-  async function run(action,{approval=false,choices=null}={}) {
+  async function run(action,{approval=false,choices=null,postAfterPrepare=false}={}) {
     if(working)return;setWorking(true);notice.textContent='Auftrag wird geprüft …';const generation=epoch;
     let sentApproval=false,preparationId;
     try{
@@ -630,7 +660,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
       if(recovery){await readRecovery(generation);return;}
       const request=action();
       sentApproval=approval;
-      const result=await request;
+      let result=await request;
       if(generation!==epoch)return;
       if(choices){
         preparationId=result.id;
@@ -641,6 +671,17 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
         }else checkStoredState(result);
       }
       unchanged();
+      if(postAfterPrepare&&result.state==='prepared'){
+        checkBinding(result);
+        if(!result.check_error&&!preparationEnded(result)){
+          order=result;
+          const approval=client.approve(order,true,{intent:'direct_post'});
+          sentApproval=true;
+          result=await approval;
+          if(generation!==epoch)return;
+          unchanged();checkPreparation(result,{choices,targetId:account.target.id});
+        }
+      }
       if(sentApproval&&!recordedApproval(result))throw Error();
       showOrder(result);
       if(sentApproval&&instant&&sendApproved){
@@ -727,7 +768,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   async function openPreparation(){
     if(opening&&!dialog.open)leaveOpening();
     if(working)return;
-    if(historyReview)return openHistoryReview();
+    if(historyReview&&!directMode)return openHistoryReview();
+    if(directMode&&order&&!order.approved_at&&(preparationEnded(order)||pendingTarget(order))&&!recovery)
+      return startPreparation(savedPreparation());
     retryAccount.hidden=true;
     if(!recovery){
       if(order?.state==='prepared'||pendingTarget(order))recovery=savedPreparation();
@@ -800,8 +843,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
     }catch(e){if(generation===epoch&&!offerDraftRepair(e))notice.textContent=e.message||orderError();}
     finally{if(generation===epoch){opening=false;setWorking(false);}}
   }
-  let instant=false;
-  button.addEventListener('click',()=>{instant=false;return openPreparation();});
+  let instant=false,directMode=false;
+  button.addEventListener('click',()=>{
+    if(startPost&&!historyReview)return startPost();
+    instant=false;directMode=false;return openPreparation();
+  });
   retryAccount.addEventListener('click',()=>{
     if(working||!dialog.open||retryAccount.hidden||order||recovery)return;
     try{unchanged();}catch(error){retryAccount.hidden=true;notice.textContent=error.message;return;}
@@ -830,7 +876,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
     if(prior&&(prior.persisted||!sameOptions(choices,prior.choices)))preparationToResume=null;
     return client.prepare(context.binding,choices,undefined,account?.target.id);
   }
-  controls.addEventListener('submit',event=>{event.preventDefault();if(working||!dialog.open||controls.hidden||order||recovery||!controls.reportValidity())return;
+  function submitChoices(){if(working||!dialog.open||controls.hidden||order||recovery||!controls.reportValidity())return;
     if(commercial?.checked&&!fields.get('brand_content_toggle').checked&&!fields.get('brand_organic_toggle').checked){notice.textContent='Wähle eigene Marke, Werbung für Dritte oder beides.';return;}
     if(context.binding.platform==='tiktok'&&fields.get('brand_content_toggle').checked&&fields.get('visibility').value==='SELF_ONLY'){notice.textContent='Werbung für Dritte kann bei TikTok nicht mit „Nur ich“ veröffentlicht werden. Bitte wähle eine andere Sichtbarkeit.';return;}
     const choices=Object.fromEntries([...fields].map(([k,e])=>[k,k==='visibility'?e.value:e.type==='checkbox'?(e.dataset.invert==='true'?!e.checked:e.checked):e.value==='true']));
@@ -838,8 +884,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
     return run(async()=>{
       await checkSavedDraft(generation,true);
       return prepareSelection(choices,generation);
-    },{choices});
-  });
+    },{choices,postAfterPrepare:directMode});
+  }
+  controls.addEventListener('submit',event=>{event.preventDefault();return submitChoices();});
   cancel.addEventListener('click',async()=>{
     if(working||cancel.hidden||!dialog.open)return;
     try{unchanged();}catch(error){notice.textContent=error.message;return;}
@@ -873,7 +920,11 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
       return result;
     });
   });
-  approve.addEventListener('click',()=>{if(!approve.disabled)return run(()=>client.approve(order,consent.checked,reviewValues()),{approval:true});});
+  approve.addEventListener('click',()=>{
+    if(approve.disabled||!dialog.open)return;
+    if(directMode&&!order)return submitChoices();
+    return run(()=>client.approve(order,directMode||consent.checked,directMode?{intent:'direct_post'}:reviewValues()),{approval:true});
+  });
   checkTarget.addEventListener('click',()=>{if(!checkTarget.disabled)return continuePending(true);});
   statusButton.addEventListener('click',()=>{
     if(working||statusButton.hidden)return;
@@ -889,7 +940,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   close.addEventListener('click',()=>{if(!close.disabled)closeDialog();});
   dialog.addEventListener('close',()=>{if(!dialog.open){instant=false;button.setAttribute('aria-expanded','false');leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
   dialog.addEventListener('cancel',e=>{if(working){e.preventDefault();if(opening)closeDialog();}});
-  return {openInstant(){instant=true;return openPreparation();},rememberVideoChoices,resumePrepared,bindHistoryReview,lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {openInstant(){instant=true;directMode=portalName==='TikTok';if(directMode)displayTerms(false);return openPreparation();},rememberVideoChoices,resumePrepared,bindHistoryReview,lock:value=>{button.disabled=value;},clear(){historyReview=null;instant=false;directMode=false;button.textContent=entryLabel;clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {
