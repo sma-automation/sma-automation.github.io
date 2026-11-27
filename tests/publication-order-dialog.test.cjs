@@ -30,7 +30,10 @@ test('status refresh replaces a consented preview with a terminal cancellation a
  }};
  const source=fs.readFileSync('app/assets/publication-order.mjs','utf8').replaceAll('export function','function').replaceAll('export const','const');
  vm.runInNewContext(source+';this.install=installOrderReview;',context);
- context.install(doc,{host:doc.body,portalName:'YouTube',readStoredOrder:async id=>{reads.push(id);return {...saved,state:'cancelled',approval_token:null};},session:async()=>({access_token:'synthetic-session'}),getContext:()=>({binding,name:'Synthetic.mp4',post:{title:'Test',caption:'Synthetic text'}}),verifySavedDraft:async()=>{},refresh:async()=>{}});
+ context.install(doc,{host:doc.body,portalName:'YouTube',readYoutubeDefaults:async(b,target)=>{
+  assert.strictEqual(b,binding);assert.equal(target,'synthetic-channel');
+  return {made_for_kids:false,contains_synthetic_media:true};
+ },readStoredOrder:async id=>{reads.push(id);return {...saved,state:'cancelled',approval_token:null};},session:async()=>({access_token:'synthetic-session'}),getContext:()=>({binding,name:'Synthetic.mp4',post:{title:'Test',caption:'Synthetic text'}}),verifySavedDraft:async()=>{},refresh:async()=>{}});
  const dialog=byId.get('publicationOrderDialog'),form=dialog.children.find(e=>e.tag==='form');
  const open=byId.get('preparePublicationOrder'),buttons=dialog.querySelectorAll('button');
  const approve=buttons.find(e=>e.textContent==='Veröffentlichung freigeben'),status=buttons.find(e=>e.textContent==='Status erneut laden');
@@ -39,7 +42,12 @@ test('status refresh replaces a consented preview with a terminal cancellation a
   byId.get('order-visibility').value='private';byId.get('order-made_for_kids').value='false';byId.get('order-contains_synthetic_media').value='false';
   await form.events.submit({preventDefault(){}});
  };
- await open.events.click();await prepare();
+ await open.events.click();
+ assert.equal(byId.get('order-made_for_kids').value,'false');
+ assert.equal(byId.get('order-contains_synthetic_media').value,'true');
+ assert.equal(byId.get('order-visibility').value,'');
+ await prepare();
+ assert.equal(saved.choices.contains_synthetic_media,false);
  const firstId=preparedId;
  assert.ok(dialog.querySelectorAll('h3').some(e=>e.textContent==='Privater YouTube-Test · noch kein Upload'));
  assert.ok(dialog.querySelectorAll('li').some(e=>e.textContent?.includes('separate SMA-Betreiberfreigabe')));

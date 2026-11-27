@@ -18,7 +18,7 @@ import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
 import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=28';
-import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=32';
+import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=33';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -1886,6 +1886,11 @@ async function saveDraft(){
 }
 $('save').addEventListener('click',saveDraft);
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,
+ readYoutubeDefaults:async(binding,channel)=>{
+  const {data,error}=await supabase.rpc('sma_youtube_file_defaults_v1',{
+   p_asset_id:binding.asset_id,p_asset_revision:binding.asset_revision,p_channel_id:channel});
+  return error?null:data;
+ },
  saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
  readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
  command:async(action,input,binding,options)=>{
