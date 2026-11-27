@@ -208,7 +208,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft}) {
+export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDefaults,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-controls','publicationOrderDialog');button.setAttribute('aria-expanded','false');host.append(button);
@@ -765,7 +765,20 @@ export function installOrderReview(doc,{session,getContext,refresh,readStoredOrd
           }
         }
       }
-      if(generation!==epoch)return;account=verified;unchanged();renderChoices(platform,account);controls.hidden=false;
+      if(generation!==epoch)return;
+      let folderDefaults=null;
+      if(platform==='youtube'&&verified&&readYoutubeDefaults){
+        // A missing preference leaves both normal per-video selectors available.
+        try{folderDefaults=await readYoutubeDefaults(context.binding,verified.target.id);}catch{}
+      }
+      if(generation!==epoch)return;account=verified;unchanged();renderChoices(platform,account);
+      if(folderDefaults&&videoFields.every(key=>typeof folderDefaults[key]==='boolean')){
+        for(const key of videoFields){
+          fields.get(key).value=String(sameVideo()?savedVideo[key]:folderDefaults[key]);
+        }
+        updateReuse();
+      }
+      controls.hidden=false;
       if(account){
         const name=account.account_check.display_name||account.target.name;
         details.append(make('p','Verbundenes Zielkonto: '+(name?name+' · ':'')+account.target.id));
