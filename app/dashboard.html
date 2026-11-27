@@ -39,7 +39,7 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=4';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=33';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=16';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=17';
 import {mountDashboardManualDrop} from './assets/manual-file-input.mjs?v=1';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=4';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
@@ -386,7 +386,7 @@ frame.addEventListener('load',async()=>{
     #page-publishing .sma-optimize:focus-visible{outline:3px solid #9bb3fc;outline-offset:3px}
     @media(max-width:520px){#page-publishing .platform-card{grid-template-columns:40px minmax(0,1fr)}}
   `;doc.head.append(style);
-  const editorUrl=new URL('./media-editor.html?v=17',location.href);
+  const editorUrl=new URL('./media-editor.html?v=18',location.href);
   if(document.documentElement.dataset.smaCustomerMedia==='pilot')editorUrl.searchParams.set('kundenmedien','pilot');
   fileView?.clear();fileView=attachFileList(doc,page);attachOptimizerPage(doc,page);
   for(const card of page.querySelectorAll('.platform-card')){
@@ -416,8 +416,8 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=13',location.href).href,
-    scheduleMedia:fileView?.scheduleMedia,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=14',location.href).href,
+    scheduleMedia:fileView?.scheduleMedia,scheduleEditorUrl:editorUrl.href,
     dailyScheduleRequest:ownerId?async args=>{
       const {data:{session}}=await supabase.auth.getSession();
       if(signedOut||ownerId!==dashboardOwnerId||ownerId!==session?.user?.id)throw Object.assign(new Error(),{code:'AUTH_REQUIRED'});
@@ -878,12 +878,12 @@ function attachFileList(doc,page){
   selectedFileId=id;openSearchFile(portal,trigger,origin);return true;
  }
  const initialRead=load(false);return {initialRead,load,snapshot,reopenGallery,retryCatalog,retryAction,retryFiles,navigateWithCatalog,catalogWarning,
-    scheduleMedia:{ready:initialRead,reset(){dailyThumbnails.reset();},show(host,name,portal){
+    scheduleMedia:{ready:initialRead,reset(){dailyThumbnails.reset();},show(host,entry,portal){
      if(disposed||signedOut||owner!==dashboardOwnerId||catalogState!=='ready')return null;
-     const matches=files.filter(file=>file.name===name);
-     if(matches.length!==1)return null;
-     dailyThumbnails.observe(host,matches[0]);
-     return dashboardFileDescription(matches[0],'',portal).title;
+     const file=files.find(item=>item.id===entry.asset_id&&item.revision===entry.asset_revision);
+     if(!file)return null;
+     dailyThumbnails.observe(host,file);
+     return dashboardFileDescription(file,'',portal).title;
     }},
     getFiles(){return disposed||signedOut||owner!==dashboardOwnerId?[]:files.slice();},
     getCatalogState(){return disposed||signedOut||owner!==dashboardOwnerId?'error':catalogState;},
