@@ -1,5 +1,6 @@
 // Called inside the isolated manual-review fixture after the original TikTok consent.
 import assert from 'node:assert/strict';
+import {verifyTikTokSlotRevision} from './tiktok-slot-revision.mjs';
 import {readFile} from 'node:fs/promises';
 
 export async function verifyBlockedTextRevision({db,src,id,uid,rev,target,choices,evidence,review,human,request,other}) {
@@ -85,5 +86,6 @@ export async function verifyBlockedTextRevision({db,src,id,uid,rev,target,choice
   for(const table of ['publication_provider_permissions_v1','publication_provider_attempts_v1']) {
     assert.equal((await queryRow('select count(*)::int as n from sma_private.'+table)).n,0);
   }
+  await verifyTikTokSlotRevision({db,src,id,input,prior:candidate,request,target,evidence,review,human,slot});
   await db.exec('rollback to text_revision_fixture');
 }
