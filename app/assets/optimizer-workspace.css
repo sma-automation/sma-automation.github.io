@@ -632,3 +632,5 @@ body.wide #workspaceSendNow{display:inline-block;background:#3157cd;color:white;
 body.wide #workspaceFileTools #workspaceDrive[hidden]{display:none}
 body.wide #workspaceTextEmpty :is(input,textarea){background:#fff;color:#182335}
 body.wide #workspaceFileTools #uploadPanel{flex-basis:100%}
+body.wide #workspaceFileTools #workspaceDrive:not([hidden]){display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;border:1px solid #a4b4d1;border-radius:8px;background:#fff;color:#27499c;text-decoration:none;font-weight:600}
+body.wide #workspaceFileTools #workspaceDrive:focus-visible{outline:3px solid #91adff;outline-offset:2px}
