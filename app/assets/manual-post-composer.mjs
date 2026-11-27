@@ -1,19 +1,51 @@
+import {draftDestination} from './publication-destination.mjs?v=1';
 import {installOrderReview} from './publication-order.mjs?v=34';
 import {parseHashtags} from './publication-hashtags.mjs?v=2';
 import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=1';
 
-export function mountManualComposer({doc,platform,portalName,session,rpc,current,refreshFile,canSchedule,beforeSend,onReceipt,onChange}){
+export function mountManualComposer({doc,platform,owner,portalName,session,rpc,current,refreshFile,canSchedule,beforeSend,onReceipt,onChange}){
  const element=id=>doc.getElementById(id);
  const body=element('postBody'),tags=element('postTags'),send=element('send'),notice=element('sendNotice');
+ const saveButton=element('saveDraft'),draftNotice=element('draftNotice'),preview=element('previewCaption');
+ const fields={body,hashtags:tags},buffers=new Map();
+ const looseKey='sma/manual-text/'+owner+'/'+platform;
+ let edits={},pendingRead=null,saving=false,disposed=false,looseDirty=false,transferred=null;
  const jobs=createFileJobClient({session});
  let file=null,record=null,draft=null,loaded=false,working=false,epoch=0,saveAttempt=null,sendAttempt=null,delivery=false,awaiting=false;
  const read=f=>rpc('sma_publication_files_v1',{p_action:'get',p_input:{asset_id:f.id,platform}});
  function message(text,error=false){notice.textContent=text;notice.dataset.error=String(error);}
- function unchanged(){return loaded&&body.value===(draft?.body||'')&&tags.value===(draft?.hashtags||[]).map(t=>'#'+t).join(' ');}
+ function storedBody(){return record?.input?.editor_body??draft?.body??'';}
+ function storedTags(){return (draft?.hashtags||[]).map(t=>'#'+t).join(' ');}
+ function unchanged(){return loaded&&body.value===storedBody()&&tags.value===storedTags();}
+ function draftMessage(text,error=false){draftNotice.textContent=text;draftNotice.dataset.error=String(error);}
+ function renderText(){
+  const hashtags=tags.value.trim().split(/\s+/u).filter(Boolean).map(t=>t.startsWith('#')?t:'#'+t).join(' ');
+  const language=record?.preview?.language,shop=draftDestination(record?.preview?.shop_url,draft,language);
+  const text=body.value.trim(),caption=[text];
+  if(text&&shop){
+   const invitation=language==='en'?'Feel free to visit my shop!':'Schau doch mal in meinem Shop vorbei!';
+   if(!text.endsWith('\n\n'+invitation))caption.push(invitation);
+  }
+  caption.push(hashtags);
+  if(text&&shop)caption.push('🛒 '+shop.label+': '+shop.url);
+  preview.textContent=draft&&unchanged()?draft.caption:caption.filter(Boolean).join('\n\n');
+  element('textPreview').hidden=!preview.textContent;
+ }
+ function fill(){
+  const values={body:edits.body??storedBody(),hashtags:edits.hashtags??storedTags()};
+  for(const [key,field] of Object.entries(fields))if(field.value!==values[key])field.value=values[key];
+  renderText();
+ }
+ function fileKey(f){return f.id+'/'+f.revision;}
+ // Before a file is selected, an explicitly saved text belongs to this browser, customer and portal.
+ function readLoose(){
+  try{const value=JSON.parse(localStorage.getItem(looseKey));return Object.fromEntries(Object.entries(value||{}).filter(([k,v])=>Object.hasOwn(fields,k)&&typeof v==='string'));}catch{return {};}
+ }
  function available(){return file&&file.profile_media?.state!=='private_preview_only';}
  function controls(){
-  send.disabled=!available()||!loaded||working||delivery;
-  body.disabled=tags.disabled=!available()||!loaded||working||delivery;
+  send.disabled=disposed||!available()||!loaded||working||saving||delivery;
+  saveButton.disabled=disposed||working||saving;
+  saveButton.setAttribute('aria-busy',String(saving));
   send.setAttribute('aria-busy',String(working||awaiting));onChange();
  }
  function check(g){
@@ -23,16 +55,26 @@ export function mountManualComposer({doc,platform,portalName,session,rpc,current
  function adopt(result){
   const d=result.preview?.drafts?.find(row=>row.platform===platform);
   if(result.status!=='empty'&&(!d||result.status!=='completed'||!Number.isInteger(result.revision)||!Number.isInteger(result.assignment_revision)))throw Error('Der gespeicherte Beitrag konnte nicht geladen werden.');
-  record=result;draft=d||null;body.value=d?.body||'';tags.value=(d?.hashtags||[]).map(t=>'#'+t).join(' ');
+  record=result;draft=d||null;
  }
- async function select(next,force=false){
-  if(!force&&file?.id===next?.id&&file?.revision===next?.revision){file=next;controls();return;}
-  const g=++epoch;review.clear();file=next;record=draft=null;loaded=working=delivery=awaiting=false;saveAttempt=sendAttempt=null;
-  body.value=tags.value='';message('');controls();
-  if(!next)return;
-  try{const data=await read(next);check(g);adopt(data);loaded=true;}
-  catch(e){if(g===epoch)message(e.message,true);}
-  finally{if(g===epoch)controls();}
+ function loadFile(g){
+  const pending=read(file).then(data=>{check(g);adopt(data);loaded=true;fill();});
+  pendingRead=pending;
+  return pending.finally(()=>{if(pendingRead===pending)pendingRead=null;if(g===epoch)controls();});
+ }
+ async function select(next,fromPicker=false){
+  if(disposed)return;
+  if(file?.id===next?.id&&file?.revision===next?.revision){file=next;controls();return;}
+  const previous=file;
+  if(previous)buffers.set(fileKey(previous),edits);
+  const g=++epoch;review.clear();file=next;record=draft=null;pendingRead=null;loaded=working=saving=delivery=awaiting=false;saveAttempt=sendAttempt=null;
+  if(next){
+   if(!previous&&(fromPicker||looseDirty)){
+    transferred={key:fileKey(next),snapshot:JSON.stringify(readLoose())};looseDirty=false;
+   }else edits=buffers.get(fileKey(next))||{};
+  }else edits=readLoose();
+  fill();message('');draftMessage('');controls();
+  if(next)try{await loadFile(g);}catch(e){if(g===epoch)draftMessage(e.message,true);}
  }
  function binding(){return {asset_id:file.id,asset_revision:file.revision,platform,assignment_revision:record.assignment_revision??0,
   preview_id:record.id??null,preview_revision:record.revision??null};}
@@ -54,15 +96,44 @@ export function mountManualComposer({doc,platform,portalName,session,rpc,current
   return previous?.signature===signature?previous:{signature,id:crypto.randomUUID()};
  }
  async function save(g){
-  if(draft&&unchanged())return;
+  if(draft&&unchanged()){clearTransferred();return;}
   const text=body.value.trim(),hashtags=parseHashtags(tags.value);
   if(text.length<10){body.focus();throw Error('Gib einen Beitragstext mit mindestens 10 Zeichen ein.');}
   const input={...binding(),title:draft?.title||text.split(/\r?\n/)[0].slice(0,80),body:text,hashtags,
    source_text:record.input?.editor_source_text??record.input?.source_text??'',language:record.preview?.language||'de'};
   saveAttempt=attempt(saveAttempt,input);
-  const saved=await editor('save',{...input,request_id:saveAttempt.id});check(g);adopt(saved);
-  if(draft?.body!==text||JSON.stringify(draft.hashtags)!==JSON.stringify(hashtags))throw Error('Text oder Hashtags wurden nicht wie eingegeben bestätigt.');
-  saveAttempt=null;
+  const entered={body:body.value,hashtags:tags.value};
+  const saved=await editor('save',{...input,request_id:saveAttempt.id});check(g);
+  const confirmed=saved.preview?.drafts?.find(d=>d.platform===platform);
+  if(saved.status!=='completed'||(saved.input?.editor_body??confirmed?.body)!==text||JSON.stringify(confirmed?.hashtags)!==JSON.stringify(hashtags))throw Error('Text oder Hashtags wurden nicht wie eingegeben bestätigt.');
+  adopt(saved);
+  for(const [key,field] of Object.entries(fields))if(field.value===entered[key])delete edits[key];
+  fill();saveAttempt=null;clearTransferred();
+ }
+ function clearTransferred(){
+  if(transferred?.key===fileKey(file)){
+   // A saved, file-bound draft supersedes its unassigned copy on this device.
+   try{if(JSON.stringify(readLoose())===transferred.snapshot)localStorage.removeItem(looseKey);}catch{}transferred=null;
+  }
+ }
+ async function saveDraft(){
+  if(saveButton.disabled)return;
+  const g=epoch;saving=true;controls();
+  try{
+   if(!file){
+    localStorage.setItem(looseKey,JSON.stringify(edits));
+    draftMessage('Text auf diesem Gerät gespeichert. Wähle eine Datei, um ihn dem Beitrag zuzuordnen.');return;
+   }
+   draftMessage('Entwurf wird gespeichert …');
+   if(!loaded)await (pendingRead||loadFile(g));
+   check(g);await save(g);check(g);
+   draftMessage(unchanged()?'Entwurf gespeichert.':'Fassung gespeichert. Weitere Änderungen sind noch offen.');
+  }catch(e){
+   if(g===epoch){
+    if(['ASSIGNMENT_CONFLICT','REVISION_CONFLICT'].includes(e.code))loaded=false;
+    draftMessage(e.message,true);
+   }
+  }finally{if(g===epoch){saving=false;controls();}}
  }
  async function submit(ctx,order){
   const g=epoch;
@@ -105,9 +176,18 @@ export function mountManualComposer({doc,platform,portalName,session,rpc,current
   }catch(e){if(g===epoch)message(e.message,true);}
   finally{if(g===epoch){working=false;controls();}}
  }
- for(const field of [body,tags])field.addEventListener('input',()=>{message('');onChange();});
+ edits=readLoose();
+ for(const [key,field] of Object.entries(fields)){
+  if(field.value){edits[key]=field.value;looseDirty=true;}
+  field.addEventListener('input',()=>{
+   if(disposed)return;
+   edits[key]=field.value;if(!file)looseDirty=true;message('');draftMessage('');renderText();onChange();
+  });
+ }
+ fill();controls();
+ saveButton.addEventListener('click',saveDraft);
  send.addEventListener('click',post);
- return {select,allowsSchedule:()=>available()&&unchanged()&&!working&&!delivery&&canSchedule(),isWorking:()=>working,
-  setDelivery(active,progress=active){delivery=active;awaiting=progress;controls();},retrySelection(){if(!loaded&&file)return select(file,true);},
-  dispose(){epoch++;jobs.clear();review.clear();}};
+ return {select,allowsSchedule:()=>available()&&unchanged()&&!saving&&!working&&!delivery&&canSchedule(),isWorking:()=>working||saving,
+  setDelivery(active,progress=active){delivery=active;awaiting=progress;controls();},retrySelection(){if(!loaded&&file&&!pendingRead)return loadFile(epoch).catch(e=>draftMessage(e.message,true));},
+  dispose(){disposed=true;epoch++;file=record=draft=null;loaded=false;edits={};buffers.clear();fill();message('');draftMessage('');controls();jobs.clear();review.clear();}};
 }

@@ -98,3 +98,92 @@ test('manual picker refresh, real video frames, exact posts, approval and provid
   }
  }finally{await browser.close();}
 });
+
+test('manual text and hashtags stay editable, preview and save independently of delivery on every portal',async()=>{
+ const {chromium}=await import('./dom-runtime/node_modules/playwright-core/index.mjs');
+ const {site,serve,file,original,uuid,catalogSyncStatus}=await import('./run-dashboard-mobile.mjs');
+ const browser=await chromium.launch({executablePath:process.env.CHROME_BIN,channel:process.env.CHROME_BIN?undefined:'chrome'});
+ try{
+  for(const portal of ['youtube','tiktok','instagram','facebook']){
+   const context=await browser.newContext({permissions:['clipboard-read','clipboard-write']}),page=await context.newPage();
+   const shop='https://sma-automation.com/app/shop.html?shop=muster',intro='Ein rotes Blatt auf einem blauen Tisch.',updated='Die Rückseite zeigt eine Zeichnung.\nZwei kleine Sterne stehen daneben.';
+   const list=[{...file,profile_media:{state:'private_preview_only',source_name:'Stern.mp4'}},{...file,id:uuid(17),profile_media:{source_name:'Mond.mp4'}}];
+   const requests=[],errors=[];let holdRead,holdSave,fail=false;
+   const legacy='In der Nacht ist der Mond am Himmel zu sehen.';
+   const saved=new Map([[list[1].id,{ok:true,status:'completed',revision:3,assignment_revision:4,id:uuid(25),input:{},
+    preview:{language:'de',shop_url:shop,drafts:[{platform:portal,body:legacy,title:'Der Mond',hashtags:['Mond'],caption:legacy+'\n\n#Mond'}]}}]]);
+   const url=site+'/app/sofort-posten.html?portal='+portal;
+   page.on('pageerror',e=>errors.push(e.message));
+   await context.route('**/*',async route=>{
+    const req=route.request(),path=new URL(req.url()).pathname;
+    if(path==='/app/sofort-posten.html')return route.fulfill({contentType:'text/html',body:await fs.readFile('app/sofort-posten.html')});
+    if(req.method()==='GET')return serve(route);
+    const a=req.postDataJSON()||{},b=a.p_input||{},reply=json=>route.fulfill({json});
+    if(path.endsWith('/sma_publication_files_v1')){
+     if(a.p_action==='list')return reply({ok:true,files:list});
+     if(a.p_action==='sync_status')return reply(catalogSyncStatus());
+     if(a.p_action==='get'){
+      if(holdRead&&b.asset_id===file.id){const wait=holdRead;holdRead=null;await wait;}
+      return reply(saved.get(b.asset_id)||{ok:true,status:'empty'});
+     }
+    }
+    if(path.endsWith('/sma_manual_portal_v1'))return reply({ok:true,state:'uncertain',folder:'folder_0123456789'});
+    if(path.endsWith('/sma_portal_hover_intro_v1'))return reply(original.toString('base64'));
+    if(path.endsWith('/sma_content_editor_v1')){
+     requests.push(a.p_action);
+     assert.equal(a.p_action,'save');assert.equal(b.platform,portal);
+     const old=saved.get(b.asset_id);
+     assert.equal(b.assignment_revision,old?.assignment_revision||0);
+     if(holdSave){const wait=holdSave;holdSave=null;await wait;}
+     if(fail){fail=false;return reply({ok:false,code:'REVISION_CONFLICT'});}
+     const rev=(old?.assignment_revision||0)+1,body=b.body+'\n\nSchau doch mal in meinem Shop vorbei!';
+     const caption=[body,b.hashtags.map(t=>'#'+t).join(' '),'🛒 Zum Shop: '+shop].filter(Boolean).join('\n\n');
+     const data={ok:true,status:'completed',id:uuid(24),revision:rev,assignment_revision:rev,input:{editor_body:b.body},preview:{language:'de',shop_url:shop,drafts:[{platform:portal,title:b.title,body,hashtags:b.hashtags,caption}]}};
+     saved.set(b.asset_id,data);return reply(data);
+    }
+    return reply({ok:true});
+   });
+   const body=page.getByRole('textbox',{name:'Beitragstext',exact:true}),tags=page.getByRole('textbox',{name:'Hashtags',exact:true});
+   const save=page.getByRole('button',{name:'Entwurf speichern'}),preview=page.locator('#previewCaption');
+   const waitText=(sel,re)=>page.locator(sel).filter({hasText:re}).waitFor();
+   const paste=async(field,value)=>{await field.click();await field.press('Control+a');await page.evaluate(t=>navigator.clipboard.writeText(t),value);await field.press('Control+v');assert.equal(await field.inputValue(),value);};
+   await page.goto(url);
+   assert.equal(await page.getByRole('button',{name:'Datei auswählen',exact:true}).count(),1);
+   assert.equal(await page.getByRole('button',{name:'MP4 auswählen',exact:true}).count(),0);
+   await body.click();await body.pressSequentially('Ein erster Text');await paste(body,intro);await paste(tags,'#Karte #Wien');
+   assert.match(await preview.innerText(),/#Karte #Wien/);
+   await save.click();await waitText('#draftNotice','auf diesem Gerät gespeichert');
+   await page.reload();await page.waitForFunction(t=>document.querySelector('#postBody').value===t,intro);
+   assert.equal(await tags.inputValue(),'#Karte #Wien');
+   const other=await context.newPage();await other.goto(site+'/app/sofort-posten.html?portal='+(portal==='youtube'?'tiktok':'youtube'));
+   await other.waitForFunction(()=>!document.querySelector('#saveDraft').disabled);
+   assert.equal(await other.locator('#postBody').inputValue(),'');await other.close();
+   let releaseRead;holdRead=new Promise(r=>{releaseRead=r;});
+   await page.getByRole('button',{name:'Stern',exact:true}).click();
+   await paste(body,updated);releaseRead();
+   assert.equal(await body.inputValue(),updated);
+   const send=page.getByRole('button',{name:'Jetzt posten',exact:true});
+   assert.equal(await send.isDisabled(),true);
+   let releaseSave;holdSave=new Promise(r=>{releaseSave=r;});
+   await save.click();await page.waitForFunction(()=>document.querySelector('#saveDraft').getAttribute('aria-busy')==='true');
+   while(!requests.length)await new Promise(r=>setTimeout(r,5));
+   await paste(tags,'#Sterne');releaseSave();await waitText('#draftNotice','Weitere Änderungen');
+   assert.equal(await tags.inputValue(),'#Sterne');
+   fail=true;await save.click();await waitText('#draftNotice','inzwischen geändert');
+   assert.equal(await tags.inputValue(),'#Sterne');assert.equal(await body.inputValue(),updated);
+   await save.click();await waitText('#draftNotice','Entwurf gespeichert.');
+   assert.equal(await preview.innerText(),saved.get(file.id).preview.drafts[0].caption);
+   await page.reload();await page.waitForFunction(t=>document.querySelector('#postBody').value===t,updated);
+   assert.equal(await tags.inputValue(),'#Sterne');
+   assert.equal(await preview.innerText(),saved.get(file.id).preview.drafts[0].caption);
+   await tags.fill('');await save.click();await waitText('#draftNotice','Entwurf gespeichert.');
+   assert.deepEqual(saved.get(file.id).preview.drafts[0].hashtags,[]);
+   await page.locator('#chooser summary').click();await page.getByRole('button',{name:'Mond',exact:true}).click();
+   await page.waitForFunction(t=>document.querySelector('#postBody').value===t,legacy);
+   assert.equal(await tags.inputValue(),'#Mond');assert.equal(await send.isDisabled(),true);
+   await paste(body,'Der volle Mond leuchtet durch die Wolken.');await save.click();await waitText('#draftNotice','Entwurf gespeichert.');
+   assert.equal(saved.get(list[1].id).input.editor_body,await body.inputValue());assert.deepEqual(errors,[]);
+   assert.equal(requests.length,5);await context.close();
+  }
+ }finally{await browser.close();}
+});

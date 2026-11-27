@@ -28,20 +28,23 @@ h1{font-size:1.85rem;margin:.45rem 0}h2{font-size:1.25rem;margin:.3rem 0}a{color
 #send[aria-busy=true]::before{content:'';width:1em;height:1em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:turn .8s linear infinite}
 @keyframes turn{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#reload[aria-busy=true] svg,#send[aria-busy=true]::before{animation:none}}
 #postFields{display:grid;gap:.6rem;margin:.8rem 0}#postFields label{display:grid;gap:.2rem;font-weight:600}#postFields textarea,#postFields input{box-sizing:border-box;width:100%;padding:.55rem;border:1px solid #9caec4;border-radius:7px;font:inherit}#postFields textarea{resize:vertical}
-#sendNotice[data-error=true]{color:#952624}#sendNotice:empty{display:none}
+#textPreview{padding:.6rem .8rem;margin:.6rem 0;border-left:3px solid #9caec4;background:#f8faff}#textPreview p{white-space:pre-wrap;overflow-wrap:anywhere;margin:.3rem 0}#draftNotice:empty{display:none}#draftNotice[data-error=true],#sendNotice[data-error=true]{color:#952624}#sendNotice:empty{display:none}
 #publicationOrderDialog{max-width:min(42rem,94vw);max-height:85vh;border:1px solid #b7c4d7;border-radius:12px;padding:1.2rem;color:inherit}#publicationOrderDialog::backdrop{background:#1e294983}
 #publicationOrderDialog label{display:block;margin:.55rem 0}#publicationOrderDialog .actions{display:flex;flex-wrap:wrap;gap:.5rem}
 [hidden]{display:none!important}
 </style></head><body>
 <header><a href="./dashboard.html#publishing">← Veröffentlichung</a><h1 id="title">Manuell posten</h1></header>
 <section><a id="drive" class="action" target="_blank" rel="noopener noreferrer" hidden>Ordner in Google Drive öffnen ↗</a>
-<div id="dropZone">MP4 oder Drive-Dateilink hierher ziehen · <button type="button" id="browse">MP4 auswählen</button><input id="device" type="file" accept="video/mp4,.mp4,.m4v" hidden></div><small id="dropStatus" role="status"></small>
+<div id="dropZone">MP4 oder Drive-Dateilink hierher ziehen · <button type="button" id="browse">Datei auswählen</button><input id="device" type="file" accept="video/mp4,.mp4,.m4v" hidden></div><small id="dropStatus" role="status"></small>
 <details id="chooser" open><summary>Video aus dem Portalordner auswählen</summary>
 <input id="videoSearch" type="search" placeholder="Videotitel suchen" aria-label="Videotitel suchen"><ul id="driveVideos"></ul><small id="noMatches" hidden>Kein passender Videotitel gefunden.</small>
 <button id="reload" type="button" aria-label="Ordner aktualisieren" title="Ordner aktualisieren"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4v6h-6"/><path d="M19.4 9a8 8 0 1 0 .2 5.8"/></svg></button><small id="folderStatus" role="status"></small></details></section>
 <section id="post" aria-label="Manueller Beitrag"><div id="fileDetails" hidden><div><strong>Ausgewählte Datei</strong> <span id="portalLabel"></span></div><p id="selectedName"></p>
 <div id="mediaPreview"></div><small id="mediaNotice" role="status"></small><a id="driveVideo" target="_blank" rel="noopener noreferrer" hidden>Video in Drive ansehen ↗</a>
-<h2 id="headline" hidden></h2><div id="postFields"><label>Beitragstext<textarea id="postBody" rows="3" maxlength="1200" disabled></textarea></label><label>Hashtags<input id="postTags" type="text" maxlength="200" disabled></label></div><p id="account"></p></div><p id="status" role="status">Wähle ein Video aus dem Portalordner.</p>
+<h2 id="headline" hidden></h2><p id="account"></p></div>
+<div id="postFields"><label>Beitragstext<textarea id="postBody" rows="3" maxlength="1200"></textarea></label><label>Hashtags<input id="postTags" type="text" maxlength="200"></label></div>
+<div id="textPreview" hidden><h2>Beitragsvorschau</h2><p id="previewCaption"></p></div>
+<button type="button" id="saveDraft" disabled>Entwurf speichern</button><p id="draftNotice" role="status"></p><p id="status" role="status">Wähle ein Video aus dem Portalordner.</p>
 <div id="actions"><button class="primary" id="send" type="button" disabled>Jetzt posten</button>
 <label>Heute um <input type="time" id="when" aria-label="Uhrzeit in Wien"> Uhr</label><button id="schedule" type="button" disabled>Automatisch posten starten</button></div>
-<p id="sendNotice" role="status"></p><span id="approvalControls" hidden></span><a id="review" hidden>Beitrag ansehen und freigeben</a></section><script type="module" src="./assets/manual-portal-send.mjs?v=8"></script></body></html>
+<p id="sendNotice" role="status"></p><span id="approvalControls" hidden></span><a id="review" hidden>Beitrag ansehen und freigeben</a></section><script type="module" src="./assets/manual-portal-send.mjs?v=9"></script></body></html>
