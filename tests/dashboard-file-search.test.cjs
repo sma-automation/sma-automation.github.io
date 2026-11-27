@@ -100,7 +100,8 @@ test('gallery receives the global query, resets the portal and opens the first f
  const calls=[];
  const env={document,AbortController,setTimeout,clearTimeout,dashboardOwnerId:'owner',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
   portalNames:{youtube:'YouTube',tiktok:'TikTok'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
-  createSharedThumbnailClient:()=>({dispose(){}}),createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
+  createSharedThumbnailClient:()=>({dispose(){}}),createPortalVideoSource:()=>({clear(){}}),createHoverPlayback:()=>({attach(){},stop(){},destroy(){}}),
+  createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
    createMusicViewGate:()=>({isVisible:()=>true,subscribeVisibility:()=>()=>{}}),
   dashboardSession:read=>(read||((fn)=>fn()))(async()=>({user:{id:'owner'}})),
   supabase:{rpc:(name,args)=>({abortSignal:async signal=>{assert.equal(signal.aborted,false);calls.push([name,args.p_action]);return {data:{ok:true,files}};}})}};

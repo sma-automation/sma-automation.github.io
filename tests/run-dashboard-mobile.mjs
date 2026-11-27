@@ -206,6 +206,8 @@ async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
    if(url.pathname==='/webhook/sma-publication-files-v1')return reply({ok:true});
   }
   const args=request.postDataJSON();
+  if(url.origin===site&&url.pathname==='/fixture/sma_portal_playback_v1')return reply(null);
+  if(url.origin===site&&url.pathname==='/fixture/sma_manual_portal_v1'&&args.p_action==='folder')return reply({ok:true});
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='sync_status'){
    assert.deepEqual(args.p_input,{});return reply(catalogSyncStatus());
   }
@@ -221,6 +223,8 @@ async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
  if(url.origin==='https://johnmusic.app.n8n.cloud'&&url.pathname==='/webhook/sma-publication-asset-preview-v1')return serve(route);
  throw Error('Unexpected first-post request '+request.method()+' '+url.pathname);
 }
+
+export {site,dashboard,platformNames,newCustomerShell,serve,file,original,checksum,uuid,catalogSyncStatus,png};
 
 async function firstPost(browser,width,height,{failFirstRead=false}={}){
  const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true,locale:'de-AT',serviceWorkers:'block'});
@@ -387,11 +391,11 @@ async function checkDashboardPreview(browser,width,height){
   const panel=frame.getByRole('tabpanel',{name:'Portale'});
   for(const name of platformNames){
    const group=panel.locator('.platform-card').filter({hasText:name});
-   const optimize=group.getByRole('button',{name:'Optimieren'});
+   const optimize=group.getByRole('button',{name:name+' optimieren',exact:true});
    const connect=group.locator('.platform-action :is(a,button):not(.sma-optimize)');
    await fits(optimize,width);await fits(connect,width);
    const first=await optimize.boundingBox(),next=await connect.boundingBox();
-   assert(first&&next&&first.x+first.width<=next.x+1&&Math.abs(first.y+first.height/2-next.y-next.height/2)<2);
+   assert(first&&next&&(first.y+first.height<=next.y+1||first.x+first.width<=next.x+1));
    assert(first.height>=44&&next.height>=44);
    if(name==='YouTube'||name==='TikTok')assert.equal(await connect.getAttribute('href'),'/connect/'+name);
    else assert(await connect.isDisabled());
@@ -405,7 +409,7 @@ async function checkDashboardPreview(browser,width,height){
    const doc=el.ownerDocument;
    const native=doc.querySelector('#page-social .platform-list'),publishing=doc.querySelector('#page-publishing .platform-list');
    const fresh=native.cloneNode(true);
-   for(const button of fresh.querySelectorAll('.sma-optimize'))button.remove();
+   for(const button of fresh.querySelectorAll('.sma-optimize'))button.replaceWith(button.querySelector('.platform-icon'));
    fresh.querySelector('a[href="/connect/TikTok"]').textContent='Neu verbinden';
    native.replaceChildren(...fresh.children);
    publishing.innerHTML=publishing.innerHTML;
@@ -413,14 +417,13 @@ async function checkDashboardPreview(browser,width,height){
   const refreshed=panel.locator('a[href="/connect/TikTok"]');
   assert.equal(await refreshed.textContent(),'Neu verbinden');
   assert(await refreshed.evaluate(el=>el.ownerDocument.activeElement===el),'status refresh should preserve the connection focus');
-  assert.equal(await panel.getByRole('button',{name:'Optimieren'}).count(),4);
+  assert.equal(await panel.getByRole('button',{name:/ optimieren$/i}).count(),4);
   await panel.locator('.sma-optimize[data-portal=youtube]').click();
   const editor=frame.frameLocator('iframe[data-portal="youtube"]');
   await editor.getByRole('button',{name:/Beitragsvorschau öffnen/}).click();
   const heading=editor.getByRole('heading',{name:draft.title});
   await heading.waitFor();
   if(!mobile){
-   await editor.getByRole('button',{name:'Originalvideo abspielen'}).click();
    const video=editor.locator('#originalVideoPreview video');
    const playerFrame=page.frames().find(f=>f.url().startsWith(site+'/app/publication-preview.html'));
    const state=expression=>playerFrame.waitForFunction(expression);

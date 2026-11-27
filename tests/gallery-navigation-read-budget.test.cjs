@@ -26,6 +26,7 @@ async function mount(state){
   dashboardOwnerId:'own-customer',signedOut:false,selectedFileId:null,dashboardQuickFind:null,
   portalNames:{youtube:'YouTube'},filterDashboardFiles,dashboardFileDescription,searchFilePage,
   createSharedThumbnailClient:()=>({dispose(){}}),
+  createPortalVideoSource:()=>({clear(){}}),createHoverPlayback:()=>({attach(){},stop(){},destroy(){}}),
   createMediaThumbnailLoader:()=>({reset(){},observe(){},clear(){}}),mountGalleryMusic:()=>null,
    createMusicViewGate:()=>({isVisible:()=>true,subscribeVisibility:()=>()=>{}}),
   dashboardSession:read=>(read||((fn)=>fn()))(async()=>({user:{id:'own-customer'},access_token:'synthetic-session'})),

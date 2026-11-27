@@ -104,6 +104,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   const previewTabs = make('nav', 'workspacePreviewTabs');
   previewTabs.setAttribute('aria-label', 'Dateivorschau');
   const postView = make('div', 'workspacePostView');
+  const mediaLabel = make('p', 'workspaceMediaLabel');
+  postView.append(mediaLabel);
   const detailView = make('div', 'workspaceDetailView');
   const postTab = button('workspacePostTab', 'Beitragsvorschau', () => previewTab('post'));
   const detailTab = button('workspaceDetailTab', 'Dateidetails', () => previewTab('details'));
@@ -416,6 +418,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       editorLink.hidden=!(file?.id&&file.revision&&options.editorUrl);
       if(editorLink.hidden)editorLink.removeAttribute('href');
       else editorLink.href=options.editorUrl+'#asset='+encodeURIComponent(file.id)+'&revision='+encodeURIComponent(file.revision)+'&portal='+encodeURIComponent(portalName.toLowerCase());
+      mediaLabel.textContent = file ? portalName + ' · ' + file.name : '';
+      mediaLabel.hidden = !file;
       selectedFile = file; previewBack.textContent=backText(); variantPanel.hidden = true; clearPreview();
       const description = file ? describe(file) : null;
       selectedRow.hidden=!file;

@@ -36,7 +36,7 @@ function gallery(wide, overrideAssets){
   assets,galleryConfirmed:true,signedOut:false,catalogRetry:null,currentHistoryAsset:null,selectedAsset:{id:'synthetic-video'},selectedPortal:'youtube',filePickerPage:0,busy:false,
   describeFile:file=>({title:file.name.replace(/\.mp4$/,'').replaceAll('_',' '),version:file.media_kind==='video'?'Video · 10 Sek.':'Bild'}),
   fileFitsPortal:file=>file.media_kind==='video',
-  pickerThumbnails:{reset(){},observe(){observed++;}},
+  hoverPlayback:{stop(){},attach(){}},pickerThumbnails:{reset(){},observe(){observed++;}},
   requestFileSelection(){throw Error('Unexpected click in static gallery test');},
   names:{youtube:'YouTube'}
  };
