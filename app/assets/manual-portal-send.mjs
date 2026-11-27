@@ -50,10 +50,12 @@ async function show(){
    $('status').textContent=states[result.state]||('Versand angefordert für '+clock.format(new Date(result.due))+' Uhr.');
   }
   if(result.pending){
-    $('status').textContent=Date.parse(result.due)>Date.now()?'Für heute um '+clock.format(new Date(result.due))+' Uhr vorgemerkt.': 'Versand angefordert. Die Portalbestätigung steht aus.';
+    if(Date.parse(result.due)>Date.now())$('status').textContent='Für heute um '+clock.format(new Date(result.due))+' Uhr vorgemerkt.';
+    else if(['uploading','session_ready','processing'].includes(result.state))$('status').textContent=states[result.state]+(result.bytes>0?' Bestätigt: '+result.bytes.toLocaleString('de-AT')+' Byte.':'');
+    else $('status').textContent='Versand angefordert. Die Portalbestätigung steht aus.';
     await continueApproved(result);
     if(v!==selection)return;
-    if(attempted.get(result.order)?.failed)$('status').textContent='Der SMA-Versanddienst hat den Start noch nicht bestätigt.';
+    if(attempted.get(result.order)?.failed&&!['uploading','session_ready','processing'].includes(result.state))$('status').textContent='Der SMA-Versanddienst hat den Start noch nicht bestätigt.';
     else if(!result.background)$('status').textContent+=' Lass diese SMA-Seite bis zur Portalbestätigung geöffnet.';
     statusTimer=setTimeout(show,6500);
   }else if(result.due&&['processing','session_ready','uploading'].includes(result.state))statusTimer=setTimeout(show,7000);
