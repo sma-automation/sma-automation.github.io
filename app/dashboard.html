@@ -1113,7 +1113,7 @@ supabase.auth.onAuthStateChange((event,s)=>{
  syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
 });
-window.dispatchEvent(new Event('sma-dashboard-started'));
+window.dispatchEvent?.(new Event('sma-dashboard-started'));
 await load();
 </script><script type="module" src="./assets/dashboard-feedback-page.mjs?v=1"></script>
 </body></html>
