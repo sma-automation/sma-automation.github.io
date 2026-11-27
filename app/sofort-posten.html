@@ -14,6 +14,10 @@ h1{font-size:1.85rem;margin:.45rem 0}h2{font-size:1.25rem;margin:.3rem 0}a{color
 #mediaPreview{background:#111722;max-width:100%;border-radius:7px;overflow:hidden}#mediaPreview:empty{display:none}#mediaPreview img,#mediaPreview video,#mediaPreview iframe{display:block;width:100%;height:clamp(10rem,32vh,22rem);object-fit:contain;border:0}
 #mediaNotice,#folderStatus,#dropStatus{display:block;font-size:.86rem;color:#4f607a}#folderStatus:empty,#dropStatus:empty,#mediaNotice:empty,#caption:empty,#account:empty{display:none}
 #actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}#status{font-weight:600;margin:.55rem 0}#review,#driveVideo{margin-right:1rem}#reload{margin-top:.5rem}
+#mediaPreview:has([data-portrait]){width:min(100%,38vh,25rem);margin-inline:auto;background:transparent}
+#mediaPreview video[data-portrait]{width:100%;height:auto}
+#mediaPreview iframe[data-portrait]{height:auto;aspect-ratio:9/16}
+@media(max-width:600px){#mediaPreview:has([data-portrait]){width:100%}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><a href="./dashboard.html#publishing">← Veröffentlichung</a><h1 id="title">Manuell posten</h1></header>
@@ -27,4 +31,4 @@ h1{font-size:1.85rem;margin:.45rem 0}h2{font-size:1.25rem;margin:.3rem 0}a{color
 <h2 id="headline" hidden></h2><p id="caption"></p><p id="account"></p><p id="status" role="status"></p>
 <div id="actions"><button class="primary" id="send" type="button" disabled>Direkt posten</button>
 <label>Heute um <input type="time" id="when" aria-label="Uhrzeit in Wien"> Uhr</label><button id="schedule" type="button" disabled>Automatisch posten starten</button></div>
-<a id="review">Beitrag ansehen und freigeben</a></section><script type="module" src="./assets/manual-portal-send.mjs?v=6"></script></body></html>
+<a id="review">Beitrag ansehen und freigeben</a></section><script type="module" src="./assets/manual-portal-send.mjs?v=7"></script></body></html>
