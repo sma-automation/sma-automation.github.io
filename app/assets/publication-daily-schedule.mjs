@@ -47,7 +47,8 @@ export function mountDailySchedule(doc,panel,request,media) {
     return input;
   });
   const save=node(form,'button','Zeiten speichern','Save times');save.type='submit';
-  node(panel,'p','Die Veröffentlichung braucht eine eigene Freigabe. Durch dich.','Publishing requires separate approval. From you.');
+  const release=node(panel,'a','Gemeinsame Tagesfreigabe öffnen','Open daily approval');
+  release.target='_top';
   const dateTrigger=button(panel,'Private Tagesentwürfe','Private daily drafts');
   dateTrigger.className='sma-schedule-date';dateTrigger.setAttribute('aria-controls','sma-daily-calendar');dateTrigger.setAttribute('aria-expanded','false');
   const calendar=node(panel,'div');calendar.id='sma-daily-calendar';calendar.hidden=true;
@@ -65,6 +66,9 @@ export function mountDailySchedule(doc,panel,request,media) {
   }
   function renderHeader(){
     const name=portals[portal];
+    const today=offsetViennaDay(0,new Date()),last=offsetViennaDay(2,new Date());
+    release.hidden=day<today||day>last||!['youtube','tiktok'].includes(portal);
+    release.href=new URL('../tagesplan.html?tag='+encodeURIComponent(day),import.meta.url).href;
     const card=[...doc.querySelectorAll('#page-publishing .platform-card')].find(el=>el.querySelector('.platform-info strong')?.textContent.trim()===name);
     const icon=card?.querySelector('.platform-icon');
     logo.replaceChildren();
