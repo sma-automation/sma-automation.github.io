@@ -1,3 +1,4 @@
+import {createStudioPost,isStudioPost} from './tiktok-studio-post.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import {createOrderClient} from './publication-order.mjs?v=34';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
@@ -7,7 +8,7 @@ import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient} from './thumbnail-batch.mjs?v=1';
 import {historyStatuses} from './publication-history-model.mjs';
 import {mountManualComposer} from './manual-post-composer.mjs?v=2';
-import {describeFile} from './file-description.mjs?v=2';
+import {describeFile} from './file-description.mjs?v=3';
 
 import {createManualIntake,mountManualDrop,manualURL,driveOpenId,driveIdFromLink} from './manual-file-input.mjs?v=1';
 import {manualVideoPreview} from './manual-video-preview.mjs?v=2';
@@ -24,6 +25,8 @@ const tiktokReasons={TIKTOK_PUBLIC_AUDIT_REQUIRED:'TikTok verlangt die App-Freig
 const visibility={PUBLIC_TO_EVERYONE:'Öffentlich',public:'Öffentlich',unlisted:'Nicht gelistet',private:'Privat',SELF_ONLY:'Nur ich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
 let owner,driveAccount=null,files=[],entry=null,selection=0,loading=false,busy=false,statusTimer,folderTimer,folderRound=0;
 let chosen=params.get('asset')||'',localMedia=null;
+const studioPost=createStudioPost(document,{owner:()=>owner,caption:()=>$('postBody').value.trim()?$('previewCaption').textContent:''});
+$('actions').before(studioPost.panel);
 const preview=manualVideoPreview($('mediaPreview'),$('mediaNotice'));
 const transport=createOrderClient({session});
 const attempted=new Map(),startedOrders=new Set();
@@ -88,6 +91,7 @@ function selectFile(id){
 }
 async function show(fromPicker=false){
  const f=current(),v=++selection;clearTimeout(statusTimer);entry=null;syncActions();$('fileDetails').hidden=$('review').hidden=!f;
+ studioPost.select(platform,f);$('send').hidden=isStudioPost(platform,f);
  void composer?.select(f,fromPicker);if(!f){preview.clear();$('status').textContent='Wähle ein Video aus dem Portalordner.';return;}
  const title=describeFile(f).title,media=f.profile_media,driveVideo=$('driveVideo'),href=driveVideoUrl(f);
  driveVideo.removeAttribute('href');driveVideo.hidden=!href;if(href)driveVideo.href=href;
@@ -97,8 +101,8 @@ async function show(fromPicker=false){
  $('headline').hidden=true;$('headline').textContent=title;$('account').textContent='';
  $('review').href='./publication-preview.html?wide=1&portal='+platform+'&asset='+encodeURIComponent(f.id)+'&manual=1';
  const previewOnly=media?.state==='private_preview_only';
- $('review').textContent=previewOnly?'Private Vorschau in SMA ansehen':'Beitrag ansehen und freigeben';
- if(previewOnly){$('status').textContent='Private Vorschau mit Logo und Musik · Versand gesperrt.';composer?.setDelivery(false);return;}
+ $('review').textContent=previewOnly?'Beitrag in SMA ansehen':'Beitrag ansehen und freigeben';
+ if(previewOnly){$('status').textContent=isStudioPost(platform,f)?'':'Private Vorschau mit Logo und Musik · Versand gesperrt.';composer?.setDelivery(false);return;}
  $('status').textContent='Versandstatus wird geladen …';await readDelivery(f,v);
 }
 async function readDelivery(f,v,expectedOrder=null){
@@ -221,7 +225,7 @@ if(Object.hasOwn(portals,platform)){
   db.auth.onAuthStateChange((_event,s)=>{
    if(owner&&s?.user?.id!==owner){
     clearTimeout(statusTimer);clearTimeout(folderTimer);lastList++;selection++;owner=null;files=[];chosen='';entry=null;
-    thumbnails.clear();posters.clear();thumbnailClient.dispose();$('driveVideos').replaceChildren();preview.clear();composer?.dispose();
+    thumbnails.clear();posters.clear();thumbnailClient.dispose();$('driveVideos').replaceChildren();preview.clear();studioPost.select(platform,null);composer?.dispose();
     $('fileDetails').hidden=$('review').hidden=$('drive').hidden=true;$('status').textContent=errors.AUTH_REQUIRED;
     $('reload').disabled=true;
    }

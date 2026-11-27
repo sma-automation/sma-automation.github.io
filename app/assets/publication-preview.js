@@ -1,7 +1,8 @@
+import {createStudioPost} from './tiktok-studio-post.mjs?v=1';
 import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=2';
 import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
-import {describeFile} from './file-description.mjs?v=2';
+import {describeFile} from './file-description.mjs?v=3';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountProviderOfferOptions,isSavedProviderOffer} from './publication-offer-options.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=10';
@@ -21,7 +22,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=31';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=32';
 import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=35';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
@@ -79,6 +80,14 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  onSearchReturn:()=>window.top.postMessage({type:'sma-publication-search-return'},location.origin),
  onBrowse:chooseDeviceFile,onDrop:files=>{if(files.length===1)void acceptDeviceFile(files[0]);else status('Wähle für diesen Beitrag genau eine Datei.',true);},
  onEditorSave:saveEditor,onSendNow:postNow,
+ studioPost:selectedPortal==='tiktok'?createStudioPost(document,{owner:()=>signedOut?null:previewOwnerId,caption:()=>{
+  if(busy||signedOut||loadingVideoDraft)throw Error('Der Beitrag wird noch geladen. Versuche es gleich erneut.');
+  const values=editorFields(),body=values.body.trim(),tags=parseHashtags(values.hashtags);
+  if(!body)return '';
+  const saved=current?.preview?.drafts?.find(d=>d.platform===selectedPortal);
+  if(saved&&!hasDraftEdits()&&pendingLink===undefined)return saved.caption;
+  return saved?caption(draftWithLink(saved),body,tags):[body,tags.map(t=>'#'+t).join(' ')].filter(Boolean).join('\n\n');
+ }}):null,
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
  getPreview:()=>{
@@ -2001,7 +2010,7 @@ async function finishInstantApproval(order,context){
 async function postNow(){
  if(posting||busy||signedOut)return;
  if(!selectedAsset){sendFeedback('Ordne dem Beitrag zuerst eine Datei zu.',true);return;}
- if(selectedAsset.profile_media?.state==='private_preview_only'){sendFeedback('Diese Datei ist als private Vorschau gekennzeichnet. Der Versand ist gesperrt.',true);return;}
+ if(selectedPortal==='tiktok'&&selectedAsset.profile_media?.state==='private_preview_only')return;
  const file=selectedAsset,owner=previewOwnerId;
  posting=true;
  try{

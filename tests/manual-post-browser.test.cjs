@@ -163,7 +163,10 @@ test('manual text and hashtags stay editable, preview and save independently of 
    await paste(body,updated);releaseRead();
    assert.equal(await body.inputValue(),updated);
    const send=page.getByRole('button',{name:'Jetzt posten',exact:true});
-   assert.equal(await send.isDisabled(),true);
+   if(portal==='tiktok'){
+    assert.equal(await send.count(),0);
+    assert.equal(await page.getByRole('link',{name:'TikTok Studio öffnen'}).isVisible(),true);
+   }else assert.equal(await send.isDisabled(),true);
    let releaseSave;holdSave=new Promise(r=>{releaseSave=r;});
    await save.click();await page.waitForFunction(()=>document.querySelector('#saveDraft').getAttribute('aria-busy')==='true');
    while(!requests.length)await new Promise(r=>setTimeout(r,5));
