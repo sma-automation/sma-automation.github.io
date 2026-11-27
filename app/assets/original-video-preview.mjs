@@ -22,7 +22,7 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
  }
  let file=null,key='',generation=0,controller=null,url=null,disposed=false;
  let range=null,endTimer=null,introUrl=null;
- function clearIntro(){if(introUrl)revokeURL(introUrl);introUrl=null;delete video.dataset.playbackPhase;}
+ function clearIntro(){if(introUrl)revokeURL(introUrl);introUrl=null;video.removeAttribute('data-playback-phase');}
  function stop(){
   if(range){range=null;clearTimeout(endTimer);status.textContent=loadedText;}
   try{video.pause();}catch{}
