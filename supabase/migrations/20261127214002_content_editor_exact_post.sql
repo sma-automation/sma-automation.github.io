@@ -95,6 +95,12 @@ begin
  execute replace(def,needle,'and (u.mime_type like ''video/%'' or (p_platform in (''instagram'',''facebook'') and u.mime_type like ''image/%''))');
 end $migration$;
 
+-- Some older installations add the combined gallery reader in a later migration.
+-- The editor can also read its portal folder directly on those installations.
+do $upgrade$
+begin
+ if to_regprocedure('public.sma_portal_gallery_v1(text)') is null then return;end if;
+ execute $gallery$
 create or replace function public.sma_portal_gallery_v1(p_platform text)
 returns jsonb language sql stable security invoker set search_path='' as $$
  select public.sma_publication_files_v1('list',jsonb_build_object('platform',p_platform))
@@ -102,3 +108,5 @@ returns jsonb language sql stable security invoker set search_path='' as $$
  from (select public.sma_manual_portal_v1('folder',p_platform) f) state
  where p_platform in ('youtube','tiktok','instagram','facebook')
 $$;
+$gallery$;
+end $upgrade$;

@@ -617,7 +617,7 @@ body.wide #workspaceSelectedFile[hidden],body.wide #workspaceTabBar[hidden]{disp
 body.wide #workspaceFileTools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
 body.wide #workspaceFileTools :is(button,a){border:0;background:transparent;color:#3157cd;font:500 14px/1.5 Inter,Arial,sans-serif;padding:6px 0;text-decoration:underline}
 
-body.wide #workspacePreparationTools #mediaSummary{display:list-item;padding:10px 0;cursor:pointer}
+body.wide #workspaceDetailView #mediaSummary{display:list-item;padding:10px 0;cursor:pointer}
 body.wide #workspacePost #assetPreviewKind{display:none}
 
 /* An embedded frame resizes to its content. Size the player from the available

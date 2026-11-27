@@ -10,7 +10,7 @@ test('edit, attach, save and request the exact portal post without contacting a 
    const context=await browser.newContext(),page=await context.newPage();
    page.setDefaultTimeout(8000);
    const errors=[],sends=[],jobs=new Map(),folder='folder_'+portal+'_privat',shop='https://sma-automation.com/app/shop.html?shop=test';
-   let files=[],saved=null,productReads=0,magicStarts=0;
+   let files=[],saved=null,productReads=0,magicStarts=0,releaseProduct,failProduct=false;
    page.on('pageerror',e=>errors.push(e.message));
    await context.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url()),path=url.pathname;
@@ -26,7 +26,10 @@ test('edit, attach, save and request the exact portal post without contacting a 
     if(path.endsWith('/sma_portal_gallery_v1'))return reply({ok:true,folder,drive_account:'test@example.test',folder_version:folder+'/1',files});
     if(path.endsWith('/sma_publication_files_v1')){
      if(a.p_action==='get')return reply(saved||{ok:true,status:'empty'});
-     if(a.p_action==='product')productReads++;
+     if(a.p_action==='product'){
+      productReads++;if(failProduct)return reply({ok:false,code:'FILE_UNAVAILABLE'});
+      await new Promise(resolve=>{releaseProduct=resolve;});
+     }
      if(a.p_action==='assign'){saved.assignment_revision++;files[0].assignments=[{platform:portal,revision:saved.assignment_revision}];return reply(saved);}
      return reply({ok:true});
     }
@@ -67,6 +70,11 @@ test('edit, attach, save and request the exact portal post without contacting a 
    assert.equal(await page.getByText('Medienprüfung · Datei auswählen',{exact:true}).isVisible(),false);
    const drive=await page.getByRole('link',{name:'Drive-Ordner öffnen'}).getAttribute('href');
    assert.equal(new URL(drive).pathname,'/drive/folders/'+folder);assert.equal(new URL(drive).searchParams.get('authuser'),'test@example.test');
+   await page.locator('#workspaceDrop').evaluate(node=>{
+    const dataTransfer=new DataTransfer();dataTransfer.items.add(new File(['x'],'Beispiel.pdf',{type:'application/pdf'}));
+    node.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer}));
+   });
+   assert.match(await page.locator('#uploadStatus').innerText(),/Bild- oder Videodatei/);assert.equal(jobs.size,0);
    const text='Dieser Beitrag zeigt ein privates Beispiel im Test.';
    await page.getByRole('textbox',{name:'Beitragstext',exact:true}).fill(text);
    await page.getByRole('textbox',{name:'Hashtags',exact:true}).fill('#Privat #Test');
@@ -88,8 +96,16 @@ test('edit, attach, save and request the exact portal post without contacting a 
    // Author-provided evidence avoids a media recognition job.
    await page.locator('#source_text').fill('Eine neue eigene Beschreibung des gezeigten Inhalts für den Magic Effect.');
    await page.locator('#magicText').click();await page.locator('#confirmMagicReplace').click();
+   await page.locator('#magicReadiness[data-state="working"]').waitFor();
+   while(!releaseProduct)await new Promise(resolve=>setTimeout(resolve,10));
+   releaseProduct();
    await page.waitForFunction(()=>document.querySelector('#portalStatus').textContent.includes('Textvorschau ist gespeichert'));
    assert.equal(magicStarts,0);assert.equal(productReads,1);
+   failProduct=true;
+   await page.locator('#magicText').click();
+   await page.waitForFunction(()=>document.querySelector('#portalStatus').dataset.error==='true');
+   assert.match(await page.locator('#portalStatus').textContent(),/Datei/);
+   assert.notEqual(await page.locator('#magicReadiness').getAttribute('data-state'),'working');
    assert.deepEqual(errors,[]);await context.close();
   }
  }finally{await browser.close();}

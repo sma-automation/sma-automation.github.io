@@ -69,6 +69,7 @@ if(params.get('wide')==='1'&&!dashboardLanguage){
 // Standalone controls remain wired only on the standalone page.
 const standaloneLatest=$('loadLatest');
 let manualAttempt=null,instantRequest=null,posting=false;
+let editorFolderKnown=false,editorFolderRead=null;
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
  editorUrl:params.get('kundenmedien')==='pilot'?'media-editor.html?v=17&kundenmedien=pilot':'media-editor.html?v=17',
  onSchedule:window.parent!==window?()=>window.top.postMessage({type:'sma-publication-open-schedule'},location.origin):null,
@@ -93,6 +94,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  onView:(view,requestedView,userInitiated)=>{
   hoverPlayback.stop();
   if(view==='preview'&&selectedAsset&&originalVideo){originalVideo.setContext(selectedAsset);void originalVideo.load();}
+  if(view==='source'&&supabase&&!editorFolderKnown)void readEditorFolder();
   if(view==='source'&&templateDeferred&&!selectedAsset){templateDeferred=false;status('');}
   if(view!=='source')choosingLinkFor=null;
   if(view!=='preview')originalVideo?.stop();
@@ -616,6 +618,19 @@ function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
 }
+async function readEditorFolder(){
+ if(editorFolderRead||signedOut)return;
+ const owner=previewOwnerId;
+ try{
+  const request=supabase.rpc('sma_manual_portal_v1',{p_action:'folder',p_platform:selectedPortal});
+  editorFolderRead=request.abortSignal?.(AbortSignal.timeout(10000))??request;
+  const {data,error}=await editorFolderRead;
+  if(!error&&data?.ok&&owner===previewOwnerId&&!signedOut){
+   workspace.setDrive?.(data.folder,data.drive_account);editorFolderKnown=true;
+  }
+ }catch{ /* The portal watermark can still supply the mapped folder. */ }
+ finally{editorFolderRead=null;}
+}
 async function optimizerCatalog(signal){
  let catalog;
  if(workspace){
@@ -623,7 +638,8 @@ async function optimizerCatalog(signal){
   const {data,error}=await (signal?request.abortSignal(signal):request);
   if(error||data?.ok!==true)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
   galleryFolderVersion=data.folder_version??null;
-  workspace.setDrive?.(data.folder??galleryFolderVersion?.split('/')[0],data.drive_account);
+  if(Object.hasOwn(data,'folder')){workspace.setDrive?.(data.folder,data.drive_account);editorFolderKnown=true;}
+  else if(!editorFolderKnown)workspace.setDrive?.(galleryFolderVersion?.split('/')[0]);
   catalog=data;
  }else catalog=await fileRpc('list',{},signal);
  if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
@@ -1209,8 +1225,12 @@ function showMagic(r,file){
 const magicReads=new Map();
 function magicRpc(file){
  const key=JSON.stringify([previewOwnerId,file.id,file.revision]);
- if(!magicReads.has(key))magicReads.set(key,readMagicStatus(file).finally(()=>magicReads.delete(key)));
- return magicReads.get(key);
+ let request=magicReads.get(key);
+ if(!request){
+  request=readMagicStatus(file);magicReads.set(key,request);
+  const clear=()=>magicReads.delete(key);request.then(clear,clear);
+ }
+ return request;
 }
 async function readMagicStatus(file){const {data,error}=await supabase.rpc(file.media_kind==='video'?'sma_publication_video_magic_v1':'sma_publication_magic_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error('Die Erkennung ist gerade nicht verfügbar.');return data.analysis;}
 async function loadMagicEffect(autoStart=false){
@@ -1253,7 +1273,7 @@ $('recognizePhoto').addEventListener('click',()=>recognizePhoto({retryFailed:tru
 $('applyMagic').addEventListener('click',()=>{
  if(busy||magicState?.status!=='completed'||magicState.asset_id!==selectedAsset?.id||magicState.asset_revision!==selectedAsset?.revision||magicState.result?.subject_type==='unclear')return;
  $('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;attempt=null;
- const message=workspace?'Erkannter Inhalt übernommen. Du kannst ihn direkt bearbeiten.':'Erkannter Inhalt übernommen. Prüfe die Beschreibung und erstelle die Textvorschau.';
+ const message=workspace?'Erkannter Inhalt übernommen. Du kannst ihn direkt bearbeiten.':'Erkannter Inhalt übernommen. Prüfe die Beschreibung und klicke anschließend auf „'+$('generate').textContent+'“.';
  $('magicStatus').textContent=message;$('magicApplied').textContent=message;$('magicApplied').hidden=false;
  workspace?.show('source');
  $('source_text').focus({preventScroll:true});$('sourcePanel').scrollIntoView({block:'start'});
@@ -1317,15 +1337,16 @@ async function runMagicAction(mode,replace=false){
   await ensureFreshFile(context);
   const product=await getDraftProduct(context);
   if(product?.state==='ambiguous')throw Error(askForProduct());
-  if(workspace&&mode==='text'&&hasSourceEdits()&&$('source_text').value.trim().length>=30){
-   // The author supplied the description used for this text.
+  const authored=workspace&&mode==='text'&&hasSourceEdits()?$('source_text').value.trim():'';
+  if(authored.length>=30){
+   $('source_text').value=authored;
   }else if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
    $('source_text').value=product.visual;
   }else{
    // A completed analysis belongs to the file bytes, not the social portal.
    // Read its authenticated cached result before issuing any new n8n analysis.
    // This also covers a quick click made before the background status read ends.
-   if(!magicState){
+   if(!magicState||(file.media_kind==='video'&&magicState.status==='unrecognized')){
     try{
      const previous=await magicRpc(file);assertFileContext(context);
      showMagic(previous,file);
