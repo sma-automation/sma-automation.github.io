@@ -61,14 +61,19 @@ function mediaPreview(host,i){
   }catch{info.textContent='Video derzeit nicht verfügbar.';}finally{loading=false;}
  });
 }
+const privacyLabels={PUBLIC_TO_EVERYONE:'Öffentlich',SELF_ONLY:'Nur ich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
+function showSavedVisibility(row,item){
+ const saved=privacyLabels[item.saved_visibility];
+ if(item.platform==='tiktok'&&saved)write(row,'p','Gespeicherte Sichtbarkeit: '+saved);
+}
 function addRow(i){
  const row=write(el('posts'),'article','');
  write(row,'small',clock.format(new Date(i.due_at))+' Uhr · '+label[i.platform]);write(row,'strong',i.title||i.name);
  mediaPreview(row,i);
  const hold=issue(i);
- if(hold){write(row,'small',hold);return;}
+ if(hold){showSavedVisibility(row,i);write(row,'small',hold);return;}
  const acct=accounts.get(i.platform);
- if(!acct||acct.target.id!==i.target_id){write(row,'small','Zielkonto konnte nicht bestätigt werden.');return;}
+ if(!acct||acct.target.id!==i.target_id){showSavedVisibility(row,i);write(row,'small','Die aktuelle Bestätigung des Zielkontos steht noch aus.');return;}
  const controls={};let choice,inherits;
  if(i.platform==='youtube'){
   const vis=select(row,'Sichtbarkeit',[['public','Öffentlich'],['unlisted','Nicht gelistet'],['private','Privat']],'public');
@@ -144,9 +149,19 @@ async function load(){
  const data=await rpc({}); visible=data.items;
  el('day').textContent=new Intl.DateTimeFormat('de-AT',{dateStyle:'full',timeZone:'Europe/Vienna'}).format(new Date(day+'T12:00:00Z'));
  await Promise.all(Object.keys(label).map(async platform=>{
-  const i=visible.find(x=>x.platform===platform&&!issue(x));if(!i)return;
-  try{const acct=await clientFor(i).account(platform);if(acct.target.id===i.target_id)accounts.set(platform,acct);}
-  catch(err){el('reload').hidden=false;}
+  const candidates=visible.filter(x=>x.platform===platform&&!issue(x));
+  for(const item of candidates.slice(0,2)){
+   try{
+    const acct=await clientFor(item).account(platform);
+    if(acct.target.id===item.target_id)accounts.set(platform,acct);
+    break;
+   }catch(err){
+    el('reload').hidden=false;
+    // Retry a failed file-job lookup once using the next planned file. Explicit
+    // provider restrictions, missing permissions and rate limits end the lookup.
+    if(err.code!=='ORDER_UNAVAILABLE')break;
+   }
+  }
  }));
  const old=savedAttempt();
  if(old?.id){const known=await rpc({p_request:old.id});if(known.receipt){try{sessionStorage.removeItem(key());}catch{}}}
