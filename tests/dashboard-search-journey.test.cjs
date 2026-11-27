@@ -40,7 +40,7 @@ const client=`export function createClient(){
   async signOut(){await fetch('/fixture/sign-out',{method:'POST',body:'{}'});auth.emit('SIGNED_OUT',null);return {error:null};},
   async signInWithPassword(input){const response=await fetch('/fixture/sign-in',{method:'POST',body:JSON.stringify(input)}),data=await response.json();auth.emit('SIGNED_IN',data.owner);return {data:{session:auth.session()},error:null};}
  },
- rpc(name,args){const controller=new AbortController();const p=fetch('/fixture/'+name,{method:'POST',headers:{'X-Fixture-Owner':auth.owner||''},body:JSON.stringify(args),signal:controller.signal}).then(r=>r.json()).then(data=>({data}));
+ rpc(name,args){if(name==='sma_portal_gallery_v1'){name='sma_publication_files_v1';args={p_action:'list',p_input:{platform:args.p_platform}};}const controller=new AbortController();const p=fetch('/fixture/'+name,{method:'POST',headers:{'X-Fixture-Owner':auth.owner||''},body:JSON.stringify(args),signal:controller.signal}).then(r=>r.json()).then(data=>({data}));
  p.abortSignal=signal=>{if(signal.aborted)controller.abort();else signal.addEventListener('abort',()=>controller.abort(),{once:true});return p;};return p;}
 }}`;
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0b8AAAAASUVORK5CYII=';

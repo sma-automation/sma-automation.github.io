@@ -17,6 +17,7 @@ const saved={ok:true,status:'completed',id:'a7700000-0000-4000-8000-000000000022
 let offline=false;
 export function createClient(){return {auth:{onAuthStateChange(){},getSession:async()=>({data:{session:{user:{id:'fixture-owner'},access_token:'fixture'}}})},
  rpc(name,args){
+  if(name==='sma_portal_gallery_v1'){name='sma_publication_files_v1';args={p_action:'list',p_input:{platform:args.p_platform}};}
   const call=(async()=>{
    if(name==='sma_publication_joint_plan_v1') {
      const channels=[{platform:'youtube',target:'YouTube-Test',order_state:'checked'},{platform:'tiktok',target:'Testkonto',order_state:'blocked'}];

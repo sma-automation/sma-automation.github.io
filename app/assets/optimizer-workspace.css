@@ -619,3 +619,10 @@ body.wide #workspaceFileTools :is(button,a){border:0;background:transparent;colo
 
 body.wide #workspacePreparationTools #mediaSummary{display:list-item;padding:10px 0;cursor:pointer}
 body.wide #workspacePost #assetPreviewKind{display:none}
+
+/* An embedded frame resizes to its content. Size the player from the available
+   width and the actual media ratio instead of a fraction of the frame height. */
+body.wide #workspacePost #originalVideoPreview{width:100%;justify-self:stretch}
+body.wide #workspacePost #originalVideoPreview video{width:100%;height:auto;max-height:540px!important;object-fit:contain}
+body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]){max-width:400px;display:block}
+body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]) #originalVideoPreview video{height:auto;max-height:540px!important;aspect-ratio:var(--media-aspect,9 / 16);margin:auto}

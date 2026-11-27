@@ -1,4 +1,4 @@
-import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=1';
+import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=2';
 import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs?v=2';
@@ -8,8 +8,8 @@ import {mountGalleryMusic} from './gallery-music-worker.mjs?v=10';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
-import {mountOriginalVideo} from './original-video-preview.mjs?v=5';
-import {createHoverPlayback,createPortalVideoSource,portalVideo} from './portal-video-playback.mjs?v=1';
+import {mountOriginalVideo} from './original-video-preview.mjs?v=6';
+import {createHoverPlayback,createPortalVideoSource,portalVideo} from './portal-video-playback.mjs?v=2';
 let jointPlan,supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 const portalVideoSource=createPortalVideoSource({client:()=>supabase,owner:()=>signedOut?null:previewOwnerId});
 const hoverPlayback=createHoverPlayback(document,portalVideoSource);
@@ -21,7 +21,7 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=29';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=30';
 import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=34';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
@@ -37,7 +37,7 @@ const tabDrafts=tabDraftStore(window);
 let startupDraft=null,tabRecord=null,comparisonBase=null;
 let reviewStatus=null,reloadChoice=null;
 let retryHistoryPreview=false,currentHistoryAsset=null;
-let galleryConfirmed=false,catalogRetry=null;
+let galleryConfirmed=false,catalogRetry=null,galleryFolderVersion=null,templateDeferred=false;
 let orderReview=null;
 let selectedMediaFacts=null;
 let magicState=null,automaticMode=null,pendingAutomatic=null,automaticInputSignature=null;
@@ -88,6 +88,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  onView:(view,requestedView,userInitiated)=>{
   hoverPlayback.stop();
   if(view==='preview'&&selectedAsset&&originalVideo){originalVideo.setContext(selectedAsset);void originalVideo.load();}
+  if(view==='source'&&templateDeferred&&!selectedAsset){templateDeferred=false;void loadLatest();}
   if(view!=='source')choosingLinkFor=null;
   if(view!=='preview')originalVideo?.stop();
   if(window.parent!==window&&view!==requestedView){
@@ -611,7 +612,14 @@ function renderVideoMetadata(){
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
 }
 async function optimizerCatalog(signal){
- const catalog=await fileRpc('list',workspace?{platform:selectedPortal}:{},signal);
+ let catalog;
+ if(workspace){
+  const request=supabase.rpc('sma_portal_gallery_v1',{p_platform:selectedPortal});
+  const {data,error}=await (signal?request.abortSignal(signal):request);
+  if(error||data?.ok!==true)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
+  galleryFolderVersion=data.folder_version??null;
+  catalog=data;
+ }else catalog=await fileRpc('list',{},signal);
  if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
  return catalog;
 }
@@ -795,12 +803,14 @@ async function loadFiles(preferredId=null,background=false,firstPreview=false){
   catalog=await optimizerCatalog(AbortSignal.timeout(20000));
  }catch(error){
   if(!signedOut){
+   if(workspace)$('workspaceFiles').removeAttribute('aria-busy');
    galleryConfirmed=false;
    catalogRetry={assetId:old};
    for(const id of ['refreshFiles','pickerRefresh'])$(id).textContent='Dateiliste erneut laden';
   }
   throw error?.code&&Object.hasOwn(messages,error.code)?error:fileError('FILE_SYNC_UNAVAILABLE');
  }
+ if(workspace)$('workspaceFiles').removeAttribute('aria-busy');
  if(signedOut)return false;
  if(background){
   if(busy||uploadController)return false;
@@ -1929,6 +1939,7 @@ if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrd
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&($('draftConflictDialog').open||$('draftReloadDialog').open))return;if(event.key==='Escape'&&uploadController){event.preventDefault();return;}if(event.key==='Escape'&&$('filePicker').open)return;if(event.key==='Escape'&&window.parent!==window&&params.get('wide')!=='1'){event.preventDefault();window.top.postMessage({type:'sma-publication-preview-close'},location.origin);}});
 // Build the shared portal workspace before waiting for the external account client.
 syncMedia();sourceBaseline=sourceFormKey();lock(true);status('Deine Dateien werden geladen …');
+if(workspace)$('workspaceFiles').setAttribute('aria-busy','true');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
@@ -1957,7 +1968,7 @@ try{
   return blob;
  }});
  originalVideo=mountOriginalVideo({doc:document,inlinePlay:!!workspace,host:$('assetPreview'),thumbnailHost:$('assetPreviewMedia'),expectedOwnerId:coverOwner,getOwnerId:async()=>signedOut?null:(await session()).user.id,source:async(f,signal)=>(await import('./media-editor-api.mjs?v=13')).editorSource(f,signal,coverOwner),
-  ...(workspace&&{displaySupported:portalVideo,displaySource:(f,signal)=>portalVideoSource.read(f,selectedPortal,signal)})});
+  ...(workspace&&{displaySupported:portalVideo,displayIntro:(f,signal)=>portalVideoSource.intro(f,selectedPortal,signal),displaySource:(f,signal)=>portalVideoSource.read(f,selectedPortal,signal)})});
  if(params.has('order')||startupDraft){
   await loadHistoryPreview();
  }else{
@@ -1965,9 +1976,12 @@ try{
   if(ready&&workspace&&selectedAsset&&(selectedAsset.media_kind==='video'||params.get('fromSearch')==='1')){
    loadingVideoDraft=selectedAsset.media_kind==='video';workspace.show('preview');
   }
-  if(ready)await loadLatest();
+  if(ready&&workspace&&!selectedAsset){
+   templateDeferred=true;lock(false);status('');
+  }else if(ready)await loadLatest();
   if(workspace&&selectedPortal){
    watchPortalCatalog({
+    initialVersion:galleryFolderVersion,
     readFolder:async()=>{const {data,error}=await supabase.rpc('sma_manual_portal_v1',{p_platform:selectedPortal,p_action:'folder'});if(error)throw error;return data;},
     available:()=>!signedOut&&!busy&&!uploadController&&galleryConfirmed,
     refresh:()=>loadFiles(null,true)

@@ -17,11 +17,13 @@ test('four portal icons, muted hover, exact post player, reload and direct entry
     const reply=json=>route.fulfill({json,headers:{'Access-Control-Allow-Origin':'*'}});
     if(path==='/webhook/sma-dashboard-session')return reply({html:newCustomerShell});
     const args=request.postDataJSON()||{};
-    if(path.endsWith('/sma_portal_playback_v1')){
+    if(path.endsWith('/sma_portal_gallery_v1'))return reply({ok:true,folder_version:'folder/version',files:args.p_platform===portal?files:[]});
+    if(path.endsWith('/sma_portal_hover_intro_v1'))return reply(original.toString('base64'));
+    if(path.endsWith('/sma_portal_playback_batch_v1')){
      assert.equal(args.p_portal,portal);
      assert(files.some(row=>row.id===args.p_asset));
      assert.equal(args.p_revision,file.revision);
-     return reply(args.p_part===null?{size:original.length,parts:1,sha:checksum}:original.toString('base64'));
+     return reply({size:original.length,parts:1,sha:checksum,first:0,chunks:[original.toString('base64')]});
     }
     if(path.endsWith('/sma_publication_files_v1')){
      if(args.p_action==='list')return reply({ok:true,files:args.p_input.platform===portal?files:[]});

@@ -206,7 +206,8 @@ async function firstPostRoute(route,readPortalFiles,dashboardFiles=[]){
    if(url.pathname==='/webhook/sma-publication-files-v1')return reply({ok:true});
   }
   const args=request.postDataJSON();
-  if(url.origin===site&&url.pathname==='/fixture/sma_portal_playback_v1')return reply(null);
+  if(url.origin===site&&url.pathname==='/fixture/sma_portal_gallery_v1')return reply({...readPortalFiles(),folder_version:'folder/version'});
+  if(url.origin===site&&['/fixture/sma_portal_playback_batch_v1','/fixture/sma_portal_hover_intro_v1'].includes(url.pathname))return reply(null);
   if(url.origin===site&&url.pathname==='/fixture/sma_manual_portal_v1'&&args.p_action==='folder')return reply({ok:true});
   if(url.origin===site&&url.pathname==='/fixture/sma_publication_files_v1'&&args.p_action==='sync_status'){
    assert.deepEqual(args.p_input,{});return reply(catalogSyncStatus());
