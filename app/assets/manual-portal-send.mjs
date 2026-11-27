@@ -9,7 +9,8 @@ const $=id=>document.getElementById(id);
 const clock=new Intl.DateTimeFormat('de-AT',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 const states={approval_required:'Für dieses Video fehlt die Freigabe.',blocked:'Eine offene Prüfung blockiert den Versand. Öffne den Beitrag für die Details.',
  complete:'Das Portal hat den Beitrag bestätigt.',processing:'Das Portal verarbeitet das Video.',uploading:'Die Datei wird übertragen.',session_ready:'Das Portal ist für die Datei bereit.',failed:'Der Versand ist fehlgeschlagen.',uncertain:'Das Portal hat den letzten Versuch nicht bestätigt.',needs_review:'Der Übertragungsstand muss geklärt werden.'};
-const errors={AUTH_REQUIRED:'Melde dich im SMA-Kundenbereich an.',TARGET_ACCOUNT_REQUIRED:'Für dieses Portal ist kein Versandkonto verbunden.',FOLDER_OR_FILE_UNAVAILABLE:'Dieser Ordner oder diese Dateiversion ist derzeit nicht verfügbar.',INVALID_TIME:'Wähle eine spätere Uhrzeit für heute in Wien.',ORDER_CHANGED:'Die Datei oder Freigabe hat sich geändert. Lade den aktuellen Beitrag.'};
+const errors={PORTAL_MEDIA_PROOF_REQUIRED:'Für diese Datei fehlt der Nachweis für das sichtbare Profillogo und die passende hörbare Musik.',AUTH_REQUIRED:'Melde dich im SMA-Kundenbereich an.',TARGET_ACCOUNT_REQUIRED:'Für dieses Portal ist kein Versandkonto verbunden.',FOLDER_OR_FILE_UNAVAILABLE:'Dieser Ordner oder diese Dateiversion ist derzeit nicht verfügbar.',INVALID_TIME:'Wähle eine spätere Uhrzeit für heute in Wien.',ORDER_CHANGED:'Die Datei oder Freigabe hat sich geändert. Lade den aktuellen Beitrag.'};
+const tiktokReasons={TIKTOK_PUBLIC_AUDIT_REQUIRED:'TikTok verlangt die App-Freigabe für öffentliches Posten.',TIKTOK_ACCESS_TOKEN_INVALID:'Verbinde das TikTok-Konto erneut.',TIKTOK_SCOPE_NOT_AUTHORIZED:'TikTok hat die Berechtigung zum Veröffentlichen abgelehnt.',TIKTOK_VISIBILITY_CHANGED:'Prüfe die Sichtbarkeit im TikTok-Auftrag erneut.',TIKTOK_INVALID_PARAM:'TikTok hat die Beitragsdaten abgelehnt.',TIKTOK_APP_QUOTA:'TikToks App-Limit ist erreicht.',TIKTOK_RATE_LIMIT:'TikTok hat zu viele Anfragen erhalten.',TIKTOK_DAILY_LIMIT:'Das tägliche TikTok-Postinglimit ist erreicht.',TIKTOK_ACCOUNT_RESTRICTED:'TikTok hat dieses Konto für neue Beiträge gesperrt.'};
 const visibility={PUBLIC_TO_EVERYONE:'Öffentlich',public:'Öffentlich',unlisted:'Nicht gelistet',private:'Privat',SELF_ONLY:'Nur ich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
 let owner,files=[],entry=null,selection=0,loading=false,busy=false,statusTimer,folderTimer,folderRound=0;
 const preferred=params.get('asset');
@@ -45,7 +46,7 @@ async function show(){
   const result=await call('read',assetArgs(f));if(v!==selection)return;entry=result;
   $('headline').textContent=result.title||f.name;$('caption').textContent=result.caption||'';
   $('account').textContent=[result.account,visibility[result.visibility]].filter(Boolean).join(' · ');
-  $('actions').hidden=!result.can_send;$('status').textContent=states[result.state]||'Freigabe vorhanden.';
+  $('actions').hidden=!result.can_send;$('status').textContent=tiktokReasons[result.provider_code]||states[result.state]||'Freigabe vorhanden.';
   if(result.due&&!['complete','failed','uncertain','needs_review','blocked'].includes(result.state)){
    $('status').textContent=states[result.state]||('Versand angefordert für '+clock.format(new Date(result.due))+' Uhr.');
   }

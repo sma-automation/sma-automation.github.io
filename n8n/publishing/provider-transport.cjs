@@ -75,6 +75,16 @@ function providerRequest(i,token,now=Date.now()){
 function providerObservation(raw,i,now=Date.now()){
  const h=providerHttp(raw),p=i.platform;
  if(i.operation==='init'){
+  if(p==='tiktok' && [400,401,403,429].includes(h.statusCode) &&
+     !h.body?.data?.publish_id && !h.body?.data?.upload_url){
+   const code=h.body?.error?.code;
+   const errors={invalid_param:'TIKTOK_INVALID_PARAM',access_token_invalid:'TIKTOK_ACCESS_TOKEN_INVALID',
+    scope_not_authorized:'TIKTOK_SCOPE_NOT_AUTHORIZED',privacy_level_option_mismatch:'TIKTOK_VISIBILITY_CHANGED',
+    unaudited_client_can_only_post_to_private_accounts:'TIKTOK_PUBLIC_AUDIT_REQUIRED',
+    reached_active_user_cap:'TIKTOK_APP_QUOTA',rate_limit_exceeded:'TIKTOK_RATE_LIMIT',
+    spam_risk_too_many_posts:'TIKTOK_DAILY_LIMIT',spam_risk_user_banned_from_posting:'TIKTOK_ACCOUNT_RESTRICTED'};
+   if(typeof code==='string'&&Object.hasOwn(errors,code))return {state:'failed',code:errors[code]};
+  }
   if(h.statusCode!==200||(p==='tiktok'&&h.body?.error?.code!=='ok'))return {state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'};
   const session=p==='youtube'?(h.headers.location||h.headers.Location):h.body?.data?.upload_url;
   const pid=p==='tiktok'?h.body?.data?.publish_id:null;
