@@ -14,10 +14,13 @@ export function describeFile(file){
   soundtrack:'Video mit SMA-Musik',export:video?'Bearbeitetes Video':'Bearbeitetes Bild'}[file.display?.variant]||kind;
  const duration=video&&Number.isFinite(file.duration_ms)&&file.duration_ms>0
   ? Math.max(0.1,Math.round(file.duration_ms/100)/10).toLocaleString('de-DE')+' Sek.' : '';
- let title=file.display?.product||file.display?.draft_title||readableFilename(file.display?.source_name)||readableFilename(file.name);
+ let title=file.display?.product||file.display?.draft_title||readableFilename(file.profile_media?.source_name)||readableFilename(file.display?.source_name)||readableFilename(file.name);
  if(!title){
   const modified=new Date(file.modified_at);
   title=Number.isFinite(modified.getTime())?kind+' vom '+dateFormat.format(modified)+' · '+timeFormat.format(modified):kind;
  }
- return {title,version:[variant,duration].filter(Boolean).join(' · ')};
+ const profileLabel={private_preview_only:'Private Vorschau mit Logo und Musik',verified:'Logo und Musik geprüft',
+  processing:'Logo und Musik werden vorbereitet',waiting:'Wartet auf Logo und Musik',
+  references_required:'Logo oder Musik fehlt im Profil'}[file.profile_media?.state];
+ return {title,version:[profileLabel||variant,duration].filter(Boolean).join(' · ')};
 }

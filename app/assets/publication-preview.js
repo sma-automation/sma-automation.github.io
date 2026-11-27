@@ -1,13 +1,13 @@
 import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
-import {describeFile} from './file-description.mjs';
+import {describeFile} from './file-description.mjs?v=2';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountProviderOfferOptions,isSavedProviderOffer} from './publication-offer-options.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=10';
 import {parseHashtags,addHashtagField,hashtagMessage} from './publication-hashtags.mjs?v=2';
 import {refreshMediaCatalog,missingVideoMetadata,videoMetadataNotice,canAdoptVerifiedVideoRevision} from './media-metadata.mjs?v=3';
 import {mountExportCover} from './publication-export-cover.mjs?v=3';
-import {mountOriginalVideo} from './original-video-preview.mjs?v=4';
+import {mountOriginalVideo,originalVideoSupported} from './original-video-preview.mjs?v=4';
 let jointPlan,supabase,coverView,originalVideo,previewOwnerId,galleryMusic;
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './thumbnail-batch.mjs?v=1';
@@ -82,6 +82,7 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
    draftStep,invalidHashtags,draftStatus:draftStep?.note||(draft?'Gespeicherter Entwurf':'')};
  },
  onView:(view,requestedView,userInitiated)=>{
+  renderProfilePlayback(view==='preview'?selectedAsset:null);
   if(view!=='source')choosingLinkFor=null;
   if(view!=='preview')originalVideo?.stop();
   if(window.parent!==window&&view!==requestedView){
@@ -609,7 +610,24 @@ async function optimizerCatalog(signal){
  if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
  return catalog;
 }
+function renderProfilePlayback(file){
+ const host=$('profilePlayback');
+ if(!host)return;
+ const media=file?.profile_media;
+ const id=['verified','private_preview_only'].includes(media?.state)&&/^[A-Za-z0-9_-]{10,200}$/.test(media.drive_id)?media.drive_id:null;
+ if((host.dataset.driveId||'')===(id||''))return;
+ host.replaceChildren();host.hidden=!id;host.dataset.driveId=id||'';
+ if(!id)return;
+ const url='https://drive.google.com/file/d/'+id;
+ if(!originalVideoSupported(file)){
+  const frame=document.createElement('iframe');frame.src=url+'/preview';frame.title='Private Videovorschau mit Logo und Musik';
+  frame.allowFullscreen=true;host.append(frame);
+ }
+ const link=document.createElement('a');link.href=url+'/view';link.target='_blank';link.rel='noopener noreferrer';
+ link.textContent='Private Vorschau in Drive abspielen';host.append(link);
+}
 function renderSelectedFile(refreshCover=false){
+ if(!selectedAsset)renderProfilePlayback(null);
  showProductContext(null,null);
  originalVideo?.setContext(selectedAsset);
  jointPlan?.select(selectedAsset,signedOut?null:previewOwnerId);
@@ -624,7 +642,8 @@ function renderSelectedFile(refreshCover=false){
 function renderFilePicker(){
  pickerThumbnails.reset();
  const query=$('fileSearch').value.trim().toLocaleLowerCase('de');
- const visible=assets.filter(file=>{
+ const gallery=assets.filter(file=>file.profile_media?.state!=='hidden_in_picker');
+ const visible=gallery.filter(file=>{
   if(!query)return true;
   const label=describeFile(file);
   return [file.name,label.title,label.version,file.display?.draft_title].some(value=>value?.toLocaleLowerCase('de').includes(query));
@@ -638,7 +657,7 @@ function renderFilePicker(){
   $('filePickerCount').textContent=!workspace&&catalogRetry&&!signedOut?'Die Dateiliste konnte nicht geladen werden.':'';
   return;
  }
- $('filePickerCount').textContent=!assets.length?'Noch keine Dateien in deiner Galerie.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
+ $('filePickerCount').textContent=!gallery.length?'Noch keine Dateien in deiner Galerie.':!visible.length?'Keine Datei für diese Suche gefunden.':visible.length+' '+(visible.length===1?'Datei':'Dateien')+(query?' gefunden':' in deinem Kundenordner');
  for(const file of visible.slice(filePickerPage*pageSize,(filePickerPage+1)*pageSize)){
   const description=describeFile(file);
   const row=document.createElement('li');row.className='file-picker-row';
@@ -665,7 +684,7 @@ function renderFilePicker(){
  // If a new customer has no media compatible with this portal, the empty
  // gallery must still lead into the large preview, where Add File now lives.
  // No upload, provider request, or file mutation occurs from this placeholder.
- if(workspace&&galleryConfirmed&&!assets.some(fileFitsPortal)&&filePickerPage===0&&!query){
+ if(workspace&&galleryConfirmed&&!gallery.some(fileFitsPortal)&&filePickerPage===0&&!query){
   const row=document.createElement('li');row.className='workspace-first-upload';
   const open=document.createElement('button');open.type='button';open.className='workspace-first-upload-action';
   open.setAttribute('aria-label','Leere Dateivorschau für den ersten Upload öffnen');

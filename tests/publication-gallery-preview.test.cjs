@@ -61,6 +61,16 @@ test('wide gallery shows preview, title and variant, never Dateidetails beneath 
  assert.match(rows[0].children[0].attrs['aria-label'],/Beitragsvorschau öffnen/);
  assert.equal(rows[1].children[0].disabled,true,'YouTube still requires a video');
 });
+test('prepared portal preview has one gallery tile and the corresponding original name',async()=>{
+ const original={id:'raw',name:'Spirograph.mp4',media_kind:'video',profile_media:{state:'hidden_in_picker'}};
+ const ready={id:'prepared',name:'SMA-hashes.mp4',media_kind:'video',duration_ms:39000,
+  profile_media:{state:'private_preview_only',source_name:original.name}};
+ const {rows,observed,nodes}=gallery(true,[original,ready]);
+ assert.equal(rows.length,1);assert.equal(observed,1);assert.match(nodes.filePickerCount.textContent,/1 Datei /);
+ const {describeFile}=await import('../app/assets/file-description.mjs');
+ assert.deepEqual(describeFile(ready),{title:'Spirograph',version:'Private Vorschau mit Logo und Musik · 39 Sek.'});
+ assert.match(describeFile({...original,profile_media:{state:'processing'}}).version,/werden vorbereitet/);
+});
 test('legacy file picker retains file-details disclosure outside wide dashboard',()=>{
  const {rows}=gallery(false);
  assert.equal(rows.length,2);
