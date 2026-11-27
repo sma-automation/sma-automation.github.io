@@ -2,7 +2,7 @@ import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 const portals = {youtube:'YouTube', tiktok:'TikTok', instagram:'Instagram', facebook:'Facebook'};
 const errors = {
   VERSION_CONFLICT:['Die Zeiten wurden inzwischen geändert. Lade den aktuellen Stand.','The times have changed. Load the current schedule.'],
-  INVALID_TIMES:['Bitte drei aufsteigende Uhrzeiten wählen.','Choose three times in ascending order.'],
+  INVALID_TIMES:['Bitte drei verschiedene Uhrzeiten wählen.','Choose three different times.'],
   ACCESS_INACTIVE:['Für dieses Kundenkonto ist die Planung derzeit gesperrt.','Planning is currently unavailable for this account.'],
   AUTH_REQUIRED:['Bitte melde dich erneut an.','Please sign in again.'],
   INVALID_DAY:['Wähle einen Tag innerhalb von 31 Tagen vor oder nach heute.','Choose a day within 31 days of today.']
@@ -56,10 +56,11 @@ export function mountDailySchedule(doc,panel,request,media) {
   const weeks=node(calendar,'div'),days=node(calendar,'div');weeks.className=days.className='sma-calendar-grid';
   const entries=node(panel,'ul'),status=node(panel,'p');status.setAttribute('role','status');
   const retry=button(panel,'Gespeicherten Stand laden','Reload saved schedule');retry.hidden=true;
-  let portal='youtube',day=nextViennaDay(),monthShown,record=null,busy=false,destroyed=false;
+  let portal='youtube',day=offsetViennaDay(0,new Date()),monthShown,record=null,busy=false,destroyed=false;
   const edits=new Map();
+  let saveTimer;
   function controls(){
-    inputs.forEach(input=>{input.disabled=busy||!record;});
+    inputs.forEach(input=>{input.disabled=!record||busy==='get';});
     save.disabled=busy||!record||(!edits.has(portal)&&record.version>0);
     dateTrigger.disabled=busy||!record||edits.has(portal);
     retry.disabled=busy;
@@ -91,6 +92,9 @@ export function mountDailySchedule(doc,panel,request,media) {
       const title=file.current?media?.show(visual,file.name,portal):null;
       if(!title)visual.hidden=true;
       node(li,'strong',title||file.name);
+      if(file.slot&&record.times[portal]?.[file.slot-1]!==time.textContent){
+        node(li,'small','Fester Termin für diesen Beitrag','Fixed time for this post');
+      }
       const note=node(li,'small');
       if(!file.current)translate(note,'Dateiversion prüfen','Check file version');
       else if(file.texts.includes(portal))translate(note,'Beitragstext vorhanden','Post text available');
@@ -132,35 +136,55 @@ export function mountDailySchedule(doc,panel,request,media) {
     closeCalendar(true);if(pick.dataset.day!==day){day=pick.dataset.day;void run('get');}
   }));
   calendar.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeCalendar(true);}});
-  async function run(action){
+  async function run(action,target=portal){
     if(busy||destroyed)return;
-    const target=portal,args={p_action:action,p_day:day};
+    const args={p_action:action,p_day:day};
+    let sent;
     if(action==='save'){
-      const [a,b,c]=inputs.map(el=>el.value);
-      if(!a||!b||!c||a>=b||b>=c){translate(status,...errors.INVALID_TIMES);return;}
-      args.p_times={...record.times,[target]:[a,b,c]};args.p_version=record.version;
+      sent=edits.get(target)||record.times[target];
+      if(!validTimes(sent)){if(target===portal)translate(status,...errors.INVALID_TIMES);return;}
+      args.p_times={...record.times,[target]:sent};args.p_version=record.version;
     }
-    busy=true;retry.hidden=true;controls();translate(status,'Tagesplanung wird geladen …','Loading daily schedule …');
+    busy=action;retry.hidden=true;controls();
+    if(action==='save')translate(status,'Uhrzeit wird gespeichert …','Saving time …');
+    else translate(status,'Tagesplanung wird geladen …','Loading daily schedule …');
     try{
       const data=await request(args);
       if(destroyed)return;
       if(!data?.ok)throw Object.assign(new Error(),{code:data?.code});
-      record=data;if(action==='save')edits.delete(target);
+      record=data;
+      if(action==='save'&&edits.get(target)===sent)edits.delete(target);
       renderHeader();renderDrafts();
-      if(action==='save')translate(status,'Zeiten gespeichert.','Times saved.');
+      if(action==='save'&&data.fixed_slots>0)translate(status,'Standardzeiten gespeichert. Bereits fest gebuchte oder abgelaufene Termine stehen unten mit ihrer gültigen Uhrzeit.','Standard times saved. Fixed or elapsed posts are shown below with their actual times.');
+      else if(action==='save')translate(status,'Zeiten gespeichert.','Times saved.');
       else translate(status,'','');
     }catch(error){
       if(destroyed)return;
       record=null;media?.reset();entries.replaceChildren();retry.hidden=false;
       translate(status,...(errors[error.code]||['Die Planung konnte nicht geladen werden.','The schedule could not be loaded.']));
-    }finally{busy=false;if(!destroyed)controls();}
+    }finally{
+      busy=false;
+      if(!destroyed){controls();if(record&&action==='save')flushEdits();}
+    }
   }
-  form.addEventListener('input',()=>{
-    if(!record||busy)return;
+  function validTimes(values){return values.length===3&&values.every(v=>/^([01]\d|2[0-3]):[0-5]\d$/.test(v))&&new Set(values).size===3;}
+  function flushEdits(){
+    clearTimeout(saveTimer);
+    if(!record||busy||destroyed)return;
+    for(const [target,values] of edits){if(validTimes(values)){void run('save',target);return;}}
+    if(edits.has(portal))translate(status,...errors.INVALID_TIMES);
+  }
+  function trackEdit(){
+    if(!record||busy==='get')return;
     const values=inputs.map(input=>input.value);
-    if(values.every((value,i)=>value===record.times[portal][i]))edits.delete(portal);else edits.set(portal,values);
+    if(!busy&&values.every((value,i)=>value===record.times[portal][i]))edits.delete(portal);
+    else if(!edits.get(portal)?.every((v,i)=>v===values[i]))edits.set(portal,values);
     translate(status,'','');controls();
-  });
+  }
+  form.addEventListener('input',()=>{trackEdit();clearTimeout(saveTimer);saveTimer=setTimeout(flushEdits,650);});
+  form.addEventListener('change',()=>{trackEdit();flushEdits();});
+  const beforeLeave=event=>{if(edits.size||busy==='save'){event.preventDefault();event.returnValue='';}};
+  doc.defaultView?.addEventListener('beforeunload',beforeLeave);
   form.addEventListener('submit',dashboardAction(event=>{event.preventDefault();if(!save.disabled)return run('save');}));
   retry.addEventListener('click',dashboardAction(()=>run('get')));
   const Observer=doc.defaultView?.MutationObserver;
@@ -170,6 +194,6 @@ export function mountDailySchedule(doc,panel,request,media) {
   controls();
   return {
     open(selected){portal=Object.hasOwn(portals,selected)?selected:'youtube';closeCalendar();renderHeader();renderDrafts();if(!record)void run('get');},
-    destroy(){destroyed=true;languageObserver?.disconnect();media?.reset();edits.clear();panel.replaceChildren();}
+    destroy(){destroyed=true;languageObserver?.disconnect();media?.reset();clearTimeout(saveTimer);doc.defaultView?.removeEventListener('beforeunload',beforeLeave);edits.clear();panel.replaceChildren();}
   };
 }

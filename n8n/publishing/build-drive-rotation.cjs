@@ -143,10 +143,28 @@ function include(name){
  for(const port of connections[name]?.main||[])for(const link of port)include(link.node);
 }
 const portalsOnly=process.argv.includes('--portal-folders-only');
-if(portalsOnly){include('Portalordner jetzt prüfen');include('Portalordner täglich prüfen');}
+const customTimes=process.argv.includes('--custom-times');
+if(customTimes){
+ const wake='Geänderter Portaltermin',claim='Versandtermin bestätigen';
+ add(wake,'webhook',{httpMethod:'POST',path:'sma-portal-versandtermin-v1',responseMode:'onReceived',options:{responseData:'noData'}},[0,680],2.1,{webhookId:'2f2f773c-5268-4ffa-aba1-8c39dfea6fd8'});
+ code('Terminticket lesen',`const ticket=$input.first().json.body?.ticket;
+return typeof ticket==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ticket)?[{json:{ticket}}]:[];`,220,680);
+ add(claim,'httpRequest',{method:'POST',url:dueURL.replace('sma_rotation_due_v1','sma_claim_portal_schedule_v1'),authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',
+  sendBody:true,specifyBody:'json',jsonBody:'={{ ({p_ticket:$json.ticket}) }}',options},[440,680],4.5,{credentials:service.credentials});
+ connections['Auftrag einzeln'].main[0]=[];
+ edge(wake,'Terminticket lesen');edge('Terminticket lesen',claim);edge(claim,'Aufträge verteilen');
+ include(wake);
+ const scanWake='Drive-Ordner angefordert',scanClaim='Ordneranfrage bestätigen';
+ add(scanWake,'webhook',{httpMethod:'POST',path:'sma-portalordner-oeffnen-v1',responseMode:'onReceived',options:{responseData:'noData'}},[0,1440],2.1,{webhookId:'4434ae65-7e5c-4683-8201-e7dc67bc6236'});
+ code('Ordnerticket lesen',nodes.find(n=>n.name==='Terminticket lesen').parameters.jsCode,220,1440);
+ add(scanClaim,'httpRequest',{...nodes.find(n=>n.name===claim).parameters,url:dueURL.replace('sma_rotation_due_v1','sma_claim_manual_portal_scan_v1')},[440,1440],4.5,{credentials:service.credentials});
+ nodes.find(n=>n.name==='Portalquelle').parameters.jsCode="const id=$input.first().json.source_id;return id?[{json:{id}}]:[];";
+ edge(scanWake,'Ordnerticket lesen');edge('Ordnerticket lesen',scanClaim);edge(scanClaim,'Portalquelle');include(scanWake);
+}
+else if(portalsOnly){include('Portalordner jetzt prüfen');include('Portalordner täglich prüfen');}
 else if(dispatchOnly)include('Versandtermine Wien');
 else{include('Jetzt abgleichen');include('Täglich vor der Planung');}
-const name=portalsOnly?'SMA – Portalordner abgleichen':dispatchOnly?'SMA – Tagesversand PHP und Geld':'SMA – Drive-Galerie abgleichen';
+const name=customTimes?'SMA – Geänderte Versandtermine':portalsOnly?'SMA – Portalordner abgleichen':dispatchOnly?'SMA – Tagesversand PHP und Geld':'SMA – Drive-Galerie abgleichen';
 process.stdout.write(JSON.stringify({name,nodes:nodes.filter(n=>chosen.has(n.name)),
  connections:Object.fromEntries(Object.entries(connections).filter(([n])=>chosen.has(n))),
- settings:{timezone:'Europe/Vienna',executionOrder:'v1'}},null,2));
+ settings:{timezone:'Europe/Vienna',executionOrder:'v1',...(customTimes?{saveDataSuccessExecution:'none',saveDataErrorExecution:'none'}:{})}},null,2));

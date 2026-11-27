@@ -24,7 +24,7 @@ export function mountPortalConnections(doc,publishing,social){
   const group=control?.closest?.('.sma-portal-actions');
   if(!group||!list.contains(group))return null;
   const portal=group.querySelector('.sma-optimize')?.dataset.portal;
-  const action=control.closest('.sma-optimize')?'optimize':control.closest('a[href],button:not(:disabled)')?'connect':null;
+  const action=control.closest('.sma-manual-post')?'manual':control.closest('.sma-optimize')?'optimize':control.closest('a[href],button:not(:disabled)')?'connect':null;
   return portal&&action?{kind:'portal-action',portal,action}:null;
  }
  function visible(){
@@ -35,7 +35,7 @@ export function mountPortalConnections(doc,publishing,social){
   if(!view||!visible())return false;
   const optimize=[...optimizers.values()].find(el=>el.dataset.portal===view.portal);
   if(!optimize||!list.contains(optimize))return false;
-  const control=view.action==='connect'?optimize.parentElement.querySelector('a[href],button:not(.sma-optimize):not(:disabled)'):null;
+  const control=view.action==='manual'?optimize.parentElement.querySelector('.sma-manual-post'):view.action==='connect'?optimize.parentElement.querySelector('a[href]:not(.sma-manual-post),button:not(.sma-optimize):not(:disabled)'):null;
   (control||optimize).focus();return true;
  }
  let lastFocus=null;
@@ -50,6 +50,11 @@ export function mountPortalConnections(doc,publishing,social){
    actions.classList.add('sma-portal-actions');
    const optimize=optimizers.get(name(row));
    if(optimize.parentNode!==actions)actions.prepend(optimize);
+   if(!actions.querySelector('.sma-manual-post')){
+    const manual=doc.createElement('a');manual.className='sma-manual-post button';manual.target='_top';
+    manual.href=new URL('../sofort-posten.html?portal='+encodeURIComponent(optimize.dataset.portal),import.meta.url).href;
+    manual.textContent=['youtube','tiktok'].includes(optimize.dataset.portal)?'Sofort posten':'Drive-Ordner öffnen';actions.insertBefore(manual,optimize.nextSibling);
+   }
   }
   // The connection list and the publishing list can arrive in different orders.
   ordered.forEach((row,index)=>{if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);});
@@ -69,7 +74,7 @@ export function mountPortalConnections(doc,publishing,social){
    const target=liveOriginal.get(key);
    if(target)target.append(button);else button.remove();
   }
-  for(const actions of list.querySelectorAll('.sma-portal-actions'))actions.classList.remove('sma-portal-actions');
+  for(const actions of list.querySelectorAll('.sma-portal-actions')){actions.querySelector('.sma-manual-post')?.remove();actions.classList.remove('sma-portal-actions');}
   // Restore the initial row order when the session still owns the same nodes.
   for(const row of rows)if(row.parentNode===list)list.append(row);
   if(wasPage)social.classList.add('page');
