@@ -1,6 +1,6 @@
 import {mountTutorials} from './dashboard-tutorials.mjs';
 import {mountDailySchedule} from './publication-daily-schedule.mjs?v=4';
-import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=2';
+import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=3';
 // Presentation only: move the existing elements, never copy forms or customer data.
 export function createChapterTabs({doc,id,entries,initial=entries[0]?.key,list,onSelect}){
  const nav=list||doc.createElement('nav');

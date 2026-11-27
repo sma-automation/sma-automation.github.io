@@ -37,7 +37,7 @@ export function mountPortalConnections(doc,publishing,social){
   if(!view||!visible())return false;
   const optimize=[...optimizers.values()].find(el=>el.dataset.portal===view.portal);
   if(!optimize||!list.contains(optimize))return false;
-  const control=view.action==='manual'?optimize.closest('.platform-card').querySelector('.sma-manual-post'):view.action==='connect'?optimize.parentElement.querySelector('a[href]:not(.sma-manual-post),button:not(.sma-optimize):not(:disabled)'):null;
+  const control=view.action==='manual'?optimize.closest('.platform-card').querySelector('.sma-manual-post'):view.action==='connect'?optimize.closest('.platform-card').querySelector('.platform-action :is(a[href],button:not(:disabled))'):null;
   (control||optimize).focus();return true;
  }
  let lastFocus=null;
@@ -49,14 +49,17 @@ export function mountPortalConnections(doc,publishing,social){
   for(const row of ordered){
    const actions=row.querySelector('.platform-action');
    if(!actions)continue;
-   actions.classList.add('sma-portal-actions');
+   if(actions.closest('.sma-portal-actions'))continue;
    const optimize=optimizers.get(name(row));
-   if(optimize.parentNode!==actions)actions.prepend(optimize);
-   if(!row.querySelector('.sma-manual-post')){
-    const manual=doc.createElement('a');manual.className='sma-manual-post button';manual.dataset.portal=optimize.dataset.portal;manual.target='_top';
-    manual.href=new URL('../sofort-posten.html?portal='+encodeURIComponent(optimize.dataset.portal),import.meta.url).href;
-    manual.textContent=['youtube','tiktok'].includes(optimize.dataset.portal)?'Sofort posten':'Drive-Ordner öffnen';row.append(manual);
-   }
+   const group=doc.createElement('div'),pair=doc.createElement('div');
+   group.className='sma-portal-actions';
+   pair.className='sma-publish-buttons';
+   const manual=doc.createElement('a');
+   manual.className='sma-manual-post button';manual.dataset.portal=optimize.dataset.portal;manual.target='_top';
+   manual.href=new URL('../sofort-posten.html?portal='+encodeURIComponent(optimize.dataset.portal),import.meta.url).href;
+   manual.textContent=['youtube','tiktok'].includes(optimize.dataset.portal)?'Sofort posten':'Drive-Ordner öffnen';
+   // OAuth uses delegated clicks inside .platform-action. Keep its own container.
+   actions.before(group);pair.append(optimize,manual);group.append(pair,actions);
   }
   // The connection list and the publishing list can arrive in different orders.
   ordered.forEach((row,index)=>{if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);});
@@ -76,8 +79,10 @@ export function mountPortalConnections(doc,publishing,social){
    const target=liveOriginal.get(key);
    if(target)target.append(button);else button.remove();
   }
-  for(const manual of list.querySelectorAll('.sma-manual-post'))manual.remove();
-  for(const actions of list.querySelectorAll('.sma-portal-actions'))actions.classList.remove('sma-portal-actions');
+  for(const group of list.querySelectorAll('.sma-portal-actions')){
+   const native=group.querySelector('.platform-action');
+   if(native)group.replaceWith(native);else group.remove();
+  }
   // Restore the initial row order when the session still owns the same nodes.
   for(const row of rows)if(row.parentNode===list)list.append(row);
   if(wasPage)social.classList.add('page');
