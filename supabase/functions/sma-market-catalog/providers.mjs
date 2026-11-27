@@ -41,7 +41,7 @@ function list(data,...keys){
 function id(v){if(!/^[1-9][0-9]*$/.test(String(v??'')))fail('CHECK_RESULT');return String(v);}
 function ensure(result){if(!result||result.userErrors?.length)fail('REJECTED');return result;}
 const shopInfo='{shop{myshopifyDomain currencyCode}}';
-export async function verifyConnection(market,identity,credentials,categories){
+export async function verifyConnection(market,identity,credentials,categories,expectedIds=[]){
  if(market==='shopify'){
   if(!shopDomain.test(identity)||!credentials.client_id||!credentials.client_secret)fail('PRODUCT_INPUT');
   const request=await shopApi(identity,credentials);
@@ -51,13 +51,14 @@ export async function verifyConnection(market,identity,credentials,categories){
  }
  if(market!=='digistore24'||!credentials.key)fail('PRODUCT_INPUT');
  const api=digiApi(credentials.key);const user=await api('getUserInfo');
- if(!user.user_name||String(user.user_name).toLowerCase()!==identity.toLowerCase()||!String(user.granted_roles||'').split(',').some(x=>['merchant','vendor'].includes(x.trim())))fail('CONFLICT');
- const result=await api('listProductTypes');
+ if(!user.user_name||(identity&&String(user.user_name).toLowerCase()!==identity.toLowerCase())||!String(user.granted_roles||'').split(',').some(x=>['merchant','vendor'].includes(x.trim())))fail('CONFLICT');
+ if(expectedIds.length)verifyDigiInventory(expectedIds,await api('listProducts'));
+ const result=await api('listProductTypes',{language:'de'});
  const types=list(result,'product_types').filter(v=>v.is_active==='Y'&&['digital','download','service','shipping'].includes(v.delivery_type))
   .map(v=>({id:Number(v.id),name:String(v.selection_label||v.name),delivery:v.delivery_type}));
  if(categories!=null){
   const groups={Digital:['digital','download'],Dienstleistung:['service'],Physisch:['shipping']};
-  if(typeof categories!=='object'||!Object.keys(categories).length||!Object.entries(categories).every(([k,id])=>groups[k]&&types.some(t=>t.id===id&&groups[k].includes(t.delivery))))fail('CATEGORY');
+  if(typeof categories!=='object'||Array.isArray(categories)||!Object.entries(categories).every(([k,id])=>groups[k]&&types.some(t=>t.id===id&&groups[k].includes(t.delivery))))fail('CATEGORY');
  }
  return {identity:user.user_name,types};
 }
@@ -104,12 +105,56 @@ export async function mirrorShop(job,call,api){
  const actual=(await api(productQuery,{id:product.id})).product;const checked=single(actual);
  if(actual.title!==job.title||actual.description.replace(/\s+/g,' ').trim()!==job.description.replace(/\s+/g,' ').trim()||checked.inventoryItem.requiresShipping!==requiresShipping||checked.id!==v.id||checked.sku!==job.sku||money(checked.price)!==money(job.price))fail('CHECK_RESULT');
 }
+export function verifyDigiInventory(expectedIds,data){
+ const accessible=new Set(list(data,'products','items').filter(p=>p.is_deleted!=='Y').map(p=>String(p.id??p.product_id)));
+ if(expectedIds.some(id=>!accessible.has(String(id))))fail('VENDOR_INVENTORY');
+}
+// Save only unambiguous IDs offered to this vendor by Digistore24.
+export function automaticDigiTypes(types){
+ const known={book:/^(ebooks?|e-books?)$/i,audio:/^(hörbuch|audiobook)\s*\(download\)$/i,download:/^downloads?$/i};
+ const result={};
+ for(const [kind,pattern] of Object.entries(known)){
+  const matches=types.filter(t=>['digital','download'].includes(t.delivery)&&pattern.test(t.name.trim()));
+  if(matches.length===1)result[kind]=matches[0].id;
+ }
+ return result;
+}
+function digiCategory(job){
+ const assigned=job.credentials.categories?.[job.kind];
+ if(Number.isSafeInteger(assigned)&&assigned>0)return assigned;
+ if(job.kind!=='Digital')fail('CATEGORY');
+ const text=[job.sku,job.title,job.description].join(' ');
+ const audio=/\bmp3\b|hör(?:buch|spiel|geschichte)/i.test(text);
+ const download=/\b(?:excel|xlsx?|zip)\b|tabellenvorlag/i.test(text);
+ const book=/e[- ]?book|zum vorlesen|\bpdf\b/i.test(text);
+ const kinds=[audio&&'audio',download&&'download',book&&!audio&&!download&&'book'].filter(Boolean);
+ const category=kinds.length===1?job.credentials.auto_types?.[kinds[0]]:null;
+ if(!Number.isSafeInteger(category)||category<1)fail('CATEGORY');
+ return category;
+}
+async function linkExistingDigi(job,call,api){
+ const ref=job.existing;
+ if(String(ref.vendor).toLowerCase()!==String(job.identity).toLowerCase())fail('CONFLICT');
+ const remote=id(ref.remote_id);
+ if(job.remote_id){if(job.remote_id!==remote||!job.plan_id)fail('CONFLICT');return false;}
+ const products=list(await api('listProducts'),'products','items');
+ const candidates=products.filter(p=>String(p.id??p.product_id)===remote&&p.is_deleted!=='Y');
+ if(candidates.length!==1)fail('CONFLICT');
+ const plans=list(await api('listPaymentPlans',{product_id:remote}),'payment_plans','paymentplans','plans','items');
+ if(plans.length!==1)fail('CHECK_RESULT');
+ const plan=plans[0];
+ if((plan.product_id!=null&&String(plan.product_id)!==remote)||(plan.number_of_installments!=null&&Number(plan.number_of_installments)!==1)||
+    (plan.currency!=null&&plan.currency!==job.currency))fail('CHECK_RESULT');
+ await call('record_link',{remote_id:remote,plan_id:id(plan.id??plan.paymentplan_id),baseline:ref.revision});
+ return true;
+}
 export async function mirrorDigi(job,call,api){
  api??=digiApi(job.credentials.key);
  const user=await api('getUserInfo');if(user.user_name!==job.identity)fail('RECONNECT');
- const category=job.credentials.categories?.[job.kind];if(!Number.isSafeInteger(category)||category<1)fail('CATEGORY');
+ if(job.existing&&await linkExistingDigi(job,call,api))return 'linked';
+ const category=job.existing?null:digiCategory(job);
  const marker='SMA-'+job.source_id;const title=Array.from(job.title).slice(0,63).join('');
- const attrs={'data[product_type_id]':String(category),'data[name_intern]':marker,'data[name_de]':title,'data[description_de]':cleanHtml(job.description)};
+ const attrs={...(job.existing?{}:{'data[product_type_id]':String(category),'data[name_intern]':marker}),'data[name_de]':title,'data[description_de]':cleanHtml(job.description)};
  let remote=job.remote_id,planId=job.plan_id;
  if(!remote){
   const products=list(await api('listProducts'),'products','items');
@@ -124,8 +169,9 @@ export async function mirrorDigi(job,call,api){
   await call('bind',{remote_id:remote});
  }
  const details=await api('getProduct',{product_id:remote});
- if(String(details.id??details.product_id)!==remote||![details.name_intern,details.name].includes(marker))fail('CONFLICT');
- if(String(details.product_type_id)!==String(category)||details.name_de!==title||details.description_de!==attrs['data[description_de]'])
+ if(String(details.id??details.product_id)!==remote||(!job.existing&&![details.name_intern,details.name].includes(marker)))fail('CONFLICT');
+ if(job.existing&&details.is_active==='Y')fail('CHECK_RESULT');
+ if((!job.existing&&String(details.product_type_id)!==String(category))||details.name_de!==title||details.description_de!==attrs['data[description_de]'])
   await api('updateProduct',{product_id:remote,...attrs},'POST');
  const plans=list(await api('listPaymentPlans',{product_id:remote}),'payment_plans','paymentplans','plans','items');
  if(planId&&!plans.some(p=>String(p.id??p.paymentplan_id)===planId))fail('CONFLICT');
@@ -142,7 +188,7 @@ export async function mirrorDigi(job,call,api){
  const confirmedPlan=savedPlans.find(x=>String(x.id??x.paymentplan_id)===planId);
  if(!confirmedPlan||(confirmedPlan.first_amount!=null&&money(confirmedPlan.first_amount)!==money(job.price))||
     (confirmedPlan.currency!=null&&confirmedPlan.currency!==job.currency))fail('CHECK_RESULT');
- if(String(saved.id??saved.product_id)!==remote||![saved.name_intern,saved.name].includes(marker)||saved.name_de!==title||
-    (saved.product_type_id!=null&&String(saved.product_type_id)!==String(category))||
+ if(String(saved.id??saved.product_id)!==remote||(!job.existing&&![saved.name_intern,saved.name].includes(marker))||saved.name_de!==title||
+    (!job.existing&&saved.product_type_id!=null&&String(saved.product_type_id)!==String(category))||
     (saved.description_de!=null&&saved.description_de!==attrs['data[description_de]']))fail('CHECK_RESULT');
 }

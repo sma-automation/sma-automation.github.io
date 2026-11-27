@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mirrorShop, mirrorDigi} from '../supabase/functions/sma-market-catalog/providers.mjs';
+import {mirrorShop, mirrorDigi, automaticDigiTypes, verifyDigiInventory} from '../supabase/functions/sma-market-catalog/providers.mjs';
 
 const article = {
   source_id:'00000000-0000-4000-8000-000000000001', sku:'BOOK-1', title:'Handbuch',
@@ -64,4 +64,39 @@ test('Ambiguous existing price plan needs review and is never duplicated',async(
 });
 test('Digistore24 refuses to confirm a mismatched price returned by the market',async()=>{
   await assert.rejects(mirrorDigi(digiJob,async()=>{},digiApi({price:'8.00'})),{code:'CHECK_RESULT'});
+});
+
+const importedJob={...digiJob,existing:{vendor:'sample',remote_id:'7',revision:1},credentials:{categories:{}}};
+test('Known product and single existing price plan are linked with read-only vendor calls',async()=>{
+ const updates=[];
+ const result=await mirrorDigi(importedJob,async(op,args)=>updates.push([op,args]),digiApi({hasProduct:true,hasPlan:true}));
+ assert.equal(result,'linked');
+ assert.deepEqual(updates,[['record_link',{remote_id:'7',plan_id:'8',baseline:1}]]);
+});
+test('A missing known product or a wrong vendor never falls back to creating an item',async()=>{
+ await assert.rejects(mirrorDigi(importedJob,assert.fail,digiApi()),{code:'CONFLICT'});
+ await assert.rejects(mirrorDigi({...importedJob,existing:{...importedJob.existing,vendor:'elsewhere'}},assert.fail,digiApi()),{code:'CONFLICT'});
+});
+test('Empty category selection assigns a vendor-offered EBook category to a new reading PDF',async()=>{
+ const auto_types=automaticDigiTypes([{id:12,name:'EBooks',delivery:'download'},{id:8,name:'Downloads',delivery:'download'}]);
+ const job={...digiJob,description:'Illustriertes PDF zum Vorlesen',credentials:{categories:{},auto_types}};
+ const basic=digiApi();
+ await mirrorDigi(job,async()=>{},async(name,params)=>{
+  if(name==='createProduct')assert.equal(params['data[product_type_id]'],'12');
+  const data=await basic(name,params);
+  if(name==='getProduct')return {...data,description_de:job.description};
+  return data;
+ });
+});
+test('Unknown formats and ambiguous vendor types are held for review',async()=>{
+ const auto_types=automaticDigiTypes([{id:12,name:'EBooks',delivery:'digital'},{id:13,name:'EBooks',delivery:'digital'}]);
+ assert.deepEqual(auto_types,{});
+ await assert.rejects(mirrorDigi({...digiJob,credentials:{auto_types,categories:{}}},assert.fail,digiApi()),{code:'CATEGORY'});
+});
+
+test('A valid vendor key must cover the imported catalog before any product can be sent',()=>{
+ const inventory={products:[{id:'17'},{id:18,is_deleted:'N'},{id:'19',is_deleted:'Y'}]};
+ assert.doesNotThrow(()=>verifyDigiInventory(['17','18'],inventory));
+ assert.throws(()=>verifyDigiInventory(['17','19'],inventory),{code:'VENDOR_INVENTORY'});
+ assert.throws(()=>verifyDigiInventory(['21'],inventory),{code:'VENDOR_INVENTORY'});
 });

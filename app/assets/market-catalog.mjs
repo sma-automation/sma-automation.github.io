@@ -1,6 +1,6 @@
 const marketName={shopify:'Shopify',digistore24:'Digistore24'};
 const stateLabel={connection:'Konto verbinden',queued:'Vorgemerkt',running:'Wird übertragen',synced:'Übernommen',attention:'Prüfung erforderlich'};
-const reasons={RECONNECT:'Verbindung erneuern',CONFLICT:'Produktzuordnung prüfen',CHECK_RESULT:'Antwort des Marktes prüfen',PRODUCT_INPUT:'Produktangaben prüfen',REJECTED:'Markt hat die Anfrage abgelehnt',SKU_EXISTS:'Diese Artikelnummer ist bereits vergeben.',PLAN_CHANGED:'Der Artikel wurde zwischenzeitlich geändert.',CATEGORY:'Digistore24-Kategorie für diese Produktart wählen.'};
+const reasons={VENDOR_INVENTORY:'Dieser Schlüssel hat keinen Zugriff auf die vorhandenen Produkte. Verwende den Schlüssel aus dem Digistore24-Konto mit deinem Produktkatalog.',RECONNECT:'Verbindung erneuern',CONFLICT:'Produktzuordnung prüfen',CHECK_RESULT:'Antwort des Marktes prüfen',PRODUCT_INPUT:'Produktangaben prüfen',REJECTED:'Markt hat die Anfrage abgelehnt',SKU_EXISTS:'Diese Artikelnummer ist bereits vergeben.',PLAN_CHANGED:'Der Artikel wurde zwischenzeitlich geändert.',CATEGORY:'Digistore24-Kategorie für diese Produktart wählen.'};
 function append(parent,tag,text){const n=document.createElement(tag);if(text)n.textContent=text;parent.append(n);return n;}
 function input(form,label,type='text'){
  const l=append(form,'label',label+' '),n=append(l,type==='textarea'?'textarea':'input');
@@ -35,18 +35,20 @@ export async function mountMarketCatalog(host,db,reload,products,visible){
    const f=append(connections,'form');
    const identity=input(f,market==='shopify'?'Shop-Domain':'Digistore24-ID');
    if(market==='shopify'){identity.value=config.shop;identity.readOnly=true;}
+   else{identity.required=false;identity.placeholder='Wird aus dem API-Schlüssel erkannt';}
    const clientId=market==='shopify'?input(f,'Shopify App-Client-ID'):null;
    const key=input(f,market==='shopify'?'Shopify App-Client-Secret':'Digistore24-API-Schlüssel','password');key.autocomplete='off';
    const categories=market==='digistore24'?append(f,'fieldset'):null;
    if(categories){categories.hidden=true;append(categories,'legend','Produktarten in Digistore24');}
-   const send=button(f,categories?'Produktarten laden':'Konto verbinden','submit');
+   const send=button(f,'Konto verbinden','submit');
+   const loadTypes=categories?button(f,'Kategorien selbst auswählen','submit'):null;
    const note=append(f,'p');note.setAttribute('role','status');
-   const resetTypes=()=>{if(categories){categories.hidden=true;categories.querySelectorAll('label').forEach(l=>l.remove());send.textContent='Produktarten laden';}};
+   const resetTypes=()=>{if(categories){categories.hidden=true;categories.querySelectorAll('label').forEach(l=>l.remove());loadTypes.hidden=false;}};
    identity.addEventListener('input',resetTypes);key.addEventListener('input',resetTypes);
    f.onsubmit=async e=>{
-    e.preventDefault();send.disabled=true;note.textContent='Verbindung wird geprüft …';
+    e.preventDefault();send.disabled=true;if(loadTypes)loadTypes.disabled=true;note.textContent='Verbindung wird geprüft …';
     try{
-     const choose=categories?.hidden===true;
+     const choose=Boolean(loadTypes&&e.submitter===loadTypes);
      const mapping=categories?Object.fromEntries([...categories.querySelectorAll('select')].filter(s=>s.value).map(s=>[s.name,Number(s.value)])):null;
      const res=await edge({market,identity:identity.value.trim(),credentials:clientId?{client_id:clientId.value.trim(),client_secret:key.value.trim()}:{key:key.value.trim()},categories:mapping,action:choose?'categories':'connect'});
      if(choose){
@@ -54,12 +56,12 @@ export async function mountMarketCatalog(host,db,reload,products,visible){
        const options=res.types.filter(t=>allowed.includes(t.delivery));
        if(!options.length)continue;
        const l=append(categories,'label',name+' '),sel=append(l,'select');sel.name=name;
-       sel.append(new Option('Keine Zuordnung',''),...options.map(t=>new Option(t.name,t.id)));
+       sel.append(new Option('Automatisch zuordnen',''),...options.map(t=>new Option(t.name,t.id)));
       }
-      categories.hidden=false;send.textContent='Konto verbinden';note.textContent='Wähle einmalig die Digistore24-Kategorie für die Produktarten in deinem Shop.';
+      categories.hidden=false;loadTypes.hidden=true;note.textContent='Bestehende Artikel behalten ihre Kategorie.';
      }
      else{key.value='';config=await rpc('get');render();await refresh();status.textContent='Verbindung bestätigt. Vorgemerkte Produkte werden automatisch übertragen.';}
-    }catch(e){note.textContent=e.message;}finally{send.disabled=false;}
+    }catch(e){note.textContent=e.message;}finally{send.disabled=false;if(loadTypes)loadTypes.disabled=false;}
    };
   }
  }
