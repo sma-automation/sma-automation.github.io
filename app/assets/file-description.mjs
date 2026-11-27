@@ -19,7 +19,7 @@ export function describeFile(file){
   const modified=new Date(file.modified_at);
   title=Number.isFinite(modified.getTime())?kind+' vom '+dateFormat.format(modified)+' · '+timeFormat.format(modified):kind;
  }
- const profileLabel={private_preview_only:'Video mit Logo und Musik · Manueller TikTok-Upload',verified:'Logo und Musik geprüft',
+ const profileLabel={private_preview_only:'Private Vorschau mit Logo und Musik',verified:'Logo und Musik geprüft',
   processing:'Logo und Musik werden vorbereitet',waiting:'Wartet auf Logo und Musik',
   references_required:'Logo oder Musik fehlt im Profil'}[file.profile_media?.state];
  return {title,version:[profileLabel||variant,duration].filter(Boolean).join(' · ')};

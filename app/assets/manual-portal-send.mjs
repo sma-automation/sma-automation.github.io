@@ -1,4 +1,3 @@
-import {createStudioPost,isStudioPost} from './tiktok-studio-post.mjs?v=1';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import {createOrderClient} from './publication-order.mjs?v=34';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
@@ -6,9 +5,9 @@ import {createPortalVideoSource} from './portal-video-playback.mjs?v=2';
 import {createManualVideoThumbnails} from './manual-video-thumbnail.mjs?v=1';
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient} from './thumbnail-batch.mjs?v=1';
-import {historyStatuses} from './publication-history-model.mjs';
-import {mountManualComposer} from './manual-post-composer.mjs?v=2';
-import {describeFile} from './file-description.mjs?v=3';
+import {createDeliveryMonitor} from './portal-delivery-monitor.mjs?v=1';
+import {mountManualComposer} from './manual-post-composer.mjs?v=3';
+import {describeFile} from './file-description.mjs?v=4';
 
 import {createManualIntake,mountManualDrop,manualURL,driveOpenId,driveIdFromLink} from './manual-file-input.mjs?v=1';
 import {manualVideoPreview} from './manual-video-preview.mjs?v=2';
@@ -17,19 +16,14 @@ const db=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable
 const params=new URLSearchParams(location.search),platform=params.get('portal');
 const portals={youtube:'YouTube',tiktok:'TikTok',instagram:'Instagram',facebook:'Facebook'};
 const $=id=>document.getElementById(id);
-const clock=new Intl.DateTimeFormat('de-AT',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
-const states={approval_required:'Für dieses Video fehlt die Freigabe.',blocked:'Eine offene Prüfung blockiert den Versand. Öffne den Beitrag für die Details.',
- complete:'Das Portal hat den Beitrag bestätigt.',processing:'Das Portal verarbeitet das Video.',uploading:'Die Datei wird übertragen.',session_ready:'Das Portal ist für die Datei bereit.',failed:'Der Versand ist fehlgeschlagen.',uncertain:'Das Portal hat den letzten Versuch nicht bestätigt.',needs_review:'Der Übertragungsstand muss geklärt werden.'};
 const errors={INVALID_EDIT:'Der Beitragstext muss 10 bis 1.200 Zeichen enthalten. Prüfe auch die Hashtags.',INVALID_HASHTAGS:'Prüfe Anzahl und Schreibweise der Hashtags.',CAPTION_TOO_LONG:'Der Beitrag ist mit Hashtags und Link zu lang.',CAPTION_TOO_SIMILAR:'Der Beitragstext ähnelt einem bereits gespeicherten Text zu stark.',PUBLIC_SHOP_REQUIRED:'Für diesen Beitrag ist ein eingerichteter SMA-Shop erforderlich.',ASSIGNMENT_CONFLICT:'Der Entwurf wurde inzwischen geändert. Öffne die Datei erneut.',REVISION_CONFLICT:'Der Beitrag wurde inzwischen geändert. Öffne die Datei erneut.',FILE_REFRESH_REQUIRED:'Die Dateidaten sind veraltet. Aktualisiere den Ordner.',FILE_CHANGED:'Die Dateiversion wurde geändert. Aktualisiere den Ordner.',FILE_UNAVAILABLE:'Diese Datei ist im ausgewählten Portal nicht mehr verfügbar.',PORTAL_MEDIA_PROOF_REQUIRED:'Für diese Datei fehlt der Nachweis für das sichtbare Profillogo und die passende hörbare Musik.',AUTH_REQUIRED:'Melde dich im SMA-Kundenbereich an.',TARGET_ACCOUNT_REQUIRED:'Für dieses Portal ist kein Versandkonto verbunden.',FOLDER_OR_FILE_UNAVAILABLE:'Dieser Ordner oder diese Dateiversion ist derzeit nicht verfügbar.',INVALID_TIME:'Wähle eine spätere Uhrzeit für heute in Wien.',ORDER_CHANGED:'Die Datei oder Freigabe hat sich geändert. Lade den aktuellen Beitrag.'};
-const tiktokReasons={TIKTOK_PUBLIC_AUDIT_REQUIRED:'TikTok verlangt die App-Freigabe für öffentliches Posten.',TIKTOK_ACCESS_TOKEN_INVALID:'Verbinde das TikTok-Konto erneut.',TIKTOK_SCOPE_NOT_AUTHORIZED:'TikTok hat die Berechtigung zum Veröffentlichen abgelehnt.',TIKTOK_VISIBILITY_CHANGED:'Prüfe die Sichtbarkeit im TikTok-Auftrag erneut.',TIKTOK_INVALID_PARAM:'TikTok hat die Beitragsdaten abgelehnt.',TIKTOK_APP_QUOTA:'TikToks App-Limit ist erreicht.',TIKTOK_RATE_LIMIT:'TikTok hat zu viele Anfragen erhalten.',TIKTOK_DAILY_LIMIT:'Das tägliche TikTok-Postinglimit ist erreicht.',TIKTOK_ACCOUNT_RESTRICTED:'TikTok hat dieses Konto für neue Beiträge gesperrt.'};
 const visibility={PUBLIC_TO_EVERYONE:'Öffentlich',public:'Öffentlich',unlisted:'Nicht gelistet',private:'Privat',SELF_ONLY:'Nur ich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
 let owner,driveAccount=null,files=[],entry=null,selection=0,loading=false,busy=false,statusTimer,folderTimer,folderRound=0;
 let chosen=params.get('asset')||'',localMedia=null;
-const studioPost=createStudioPost(document,{owner:()=>owner,caption:()=>$('postBody').value.trim()?$('previewCaption').textContent:''});
-$('actions').before(studioPost.panel);
 const preview=manualVideoPreview($('mediaPreview'),$('mediaNotice'));
 const transport=createOrderClient({session});
-const attempted=new Map(),startedOrders=new Set();
+const startedOrders=new Set();
+const monitor=createDeliveryMonitor({rpc,transport,platform,portalName:portals[platform],ownsOrder,errorLabels:errors});
 const thumbnailClient=createSharedThumbnailClient({getSession:session,getOwnerId:()=>owner});
 const clips=createPortalVideoSource({client:()=>db,owner:()=>owner});
 const posters=createManualVideoThumbnails({portal:platform,clips,drive:thumbnailClient});
@@ -76,6 +70,7 @@ function filterDriveVideos(){
  }
  $('noMatches').hidden=visible>0;
 }
+const clock=new Intl.DateTimeFormat('de-AT',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 function localTime(value){
  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))throw Error(errors.INVALID_TIME);
  const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Vienna'}).format(new Date());
@@ -91,7 +86,6 @@ function selectFile(id){
 }
 async function show(fromPicker=false){
  const f=current(),v=++selection;clearTimeout(statusTimer);entry=null;syncActions();$('fileDetails').hidden=$('review').hidden=!f;
- studioPost.select(platform,f);$('send').hidden=isStudioPost(platform,f);
  void composer?.select(f,fromPicker);if(!f){preview.clear();$('status').textContent='Wähle ein Video aus dem Portalordner.';return;}
  const title=describeFile(f).title,media=f.profile_media,driveVideo=$('driveVideo'),href=driveVideoUrl(f);
  driveVideo.removeAttribute('href');driveVideo.hidden=!href;if(href)driveVideo.href=href;
@@ -101,8 +95,8 @@ async function show(fromPicker=false){
  $('headline').hidden=true;$('headline').textContent=title;$('account').textContent='';
  $('review').href='./publication-preview.html?wide=1&portal='+platform+'&asset='+encodeURIComponent(f.id)+'&manual=1';
  const previewOnly=media?.state==='private_preview_only';
- $('review').textContent=previewOnly?'Beitrag in SMA ansehen':'Beitrag ansehen und freigeben';
- if(previewOnly){$('status').textContent=isStudioPost(platform,f)?'':'Private Vorschau mit Logo und Musik · Versand gesperrt.';composer?.setDelivery(false);return;}
+ $('review').textContent=previewOnly?'Private Vorschau in SMA ansehen':'Beitrag ansehen und freigeben';
+ if(previewOnly){$('status').textContent='Private Vorschau mit Logo und Musik · Versand gesperrt.';composer?.setDelivery(false);return;}
  $('status').textContent='Versandstatus wird geladen …';await readDelivery(f,v);
 }
 async function readDelivery(f,v,expectedOrder=null){
@@ -110,42 +104,13 @@ async function readDelivery(f,v,expectedOrder=null){
  const later=id=>{if(active()){clearTimeout(statusTimer);statusTimer=setTimeout(()=>void readDelivery(f,v,id),6500);}};
  try{
   const r=await call('read',assetArgs(f));if(!active())return;
-  if(expectedOrder&&expectedOrder!==r.order)throw Error('Der gestartete Versandauftrag konnte nicht eindeutig zugeordnet werden.');
   entry=r;
   $('account').textContent=[r.account,visibility[r.visibility]].filter(Boolean).join(' · ');
-  let text=tiktokReasons[r.provider_code]||states[r.state]||'Freigabe vorhanden.';
-  if(r.state==='blocked'&&r.order&&!r.provider_code){
-   const order=await rpc('sma_publication_order_v1',{p_action:'get',p_input:{id:r.order}});if(!active())return;
-   const reasons=(order.blockers||[]).map(b=>typeof b==='string'?b:b?.code).filter(Boolean);
-   if(reasons.length)text+=' '+reasons.map(reason=>errors[reason]||tiktokReasons[reason]||reason).join(' · ');
-  }
-  const terminal=['complete','failed','uncertain','needs_review','blocked','cancelled'].includes(r.state);
-  if(r.provider_code&&!tiktokReasons[r.provider_code]&&terminal&&r.state!=='complete')text+=' ('+r.provider_code+')';
-  if(r.state==='complete'){
-   text='Das Portal bestätigt den Abschluss. Die Sichtbarkeit ist noch unbestätigt.';
-   const h=await rpc('sma_publication_history_order_page_v1',{p_order_id:r.order});if(!active())return;
-   const row=h.entries?.find(x=>x.id===r.order&&x.platform===platform);
-   if(row?.status==='public_confirmed')text='Erfolgreich veröffentlicht. '+portals[platform]+' hat die öffentliche Sichtbarkeit bestätigt.';
-   else if(['private_complete','unlisted_complete','limited_complete','complete_unknown'].includes(row?.status))text=historyStatuses[row.status].join('. ');
-  }
-  if(expectedOrder&&r.due&&!terminal&&!r.pending&&!['uploading','session_ready','processing'].includes(r.state)&&Date.now()-Date.parse(r.due)>=30*60000){
-   $('status').textContent='Das Versandfenster ist abgelaufen. Es liegt keine Portalbestätigung vor. Prüfe den Auftrag in der History.';
-   composer?.setDelivery(true,false);return;
-  }
-  const pending=!terminal&&Boolean(r.pending||r.due&&['uploading','session_ready','processing'].includes(r.state));
-  if(pending){
-   text=Date.parse(r.due)>Date.now()?'Für heute um '+clock.format(new Date(r.due))+' Uhr vorgemerkt.':
-    ['uploading','session_ready','processing'].includes(r.state)?states[r.state]:'Versand angefordert. Die Bestätigung des Portals steht aus.';
-   $('status').textContent=text;composer?.setDelivery(true);
-   await continueApproved(r);if(!active())return;
-   if(attempted.get(r.order)?.failed)text='Der Versanddienst hat den Start noch nicht bestätigt. Der Auftragsstand wird erneut geprüft.';
-   if(!r.background)text+=' Lass diese Seite bis zur Rückmeldung geöffnet.';
-   later(r.order);
-  }else if(expectedOrder&&!terminal&&!r.can_send){
-   text='Für den Versandauftrag liegt noch keine Abschlussmeldung vor. Der Status wird erneut geprüft.';later(expectedOrder);
-  }
-  composer?.setDelivery(pending||!!expectedOrder&&!terminal&&!r.can_send||r.state==='complete'||r.state==='uncertain'||r.state==='needs_review',pending||!!expectedOrder&&!terminal&&!r.can_send);
-  $('status').textContent=text;syncActions();
+  const result=await monitor.describe(r,expectedOrder,active,text=>{$('status').textContent=text;composer?.setDelivery(true);});
+  if(!active()||!result)return;
+  composer?.setDelivery(result.locked,result.progress);
+  $('status').textContent=result.text;syncActions();
+  if(result.progress)later(r.order);
  }catch(e){
   if(!active())return;
   entry=null;$('status').textContent=e.message;syncActions();
@@ -225,7 +190,7 @@ if(Object.hasOwn(portals,platform)){
   db.auth.onAuthStateChange((_event,s)=>{
    if(owner&&s?.user?.id!==owner){
     clearTimeout(statusTimer);clearTimeout(folderTimer);lastList++;selection++;owner=null;files=[];chosen='';entry=null;
-    thumbnails.clear();posters.clear();thumbnailClient.dispose();$('driveVideos').replaceChildren();preview.clear();studioPost.select(platform,null);composer?.dispose();
+    thumbnails.clear();posters.clear();thumbnailClient.dispose();$('driveVideos').replaceChildren();preview.clear();composer?.dispose();
     $('fileDetails').hidden=$('review').hidden=$('drive').hidden=true;$('status').textContent=errors.AUTH_REQUIRED;
     $('reload').disabled=true;
    }

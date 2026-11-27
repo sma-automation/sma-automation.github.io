@@ -337,7 +337,7 @@ test('professional preview places only publication in the primary action host',(
  assert.ok(page.includes("host:workspace?$('workspacePreviewPrimary'):$('save').parentElement"),
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
- assert.ok(html.includes('optimizer-workspace.css?v=25'));
+ assert.match(html,/optimizer-workspace\.css\?v=\d+/);
  assert.match(html,/src="assets\/publication-preview\.js\?v=\d+"/);
 });
 

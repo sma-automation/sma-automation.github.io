@@ -52,9 +52,17 @@ test('edit, attach, save and request the exact portal post without contacting a 
      return reply({ok:true,job_id:j.job_id,commands:[{command_id:j.command_id,operation:j.operation,state:'completed',response:{status:200,body}}]});
     }
     if(path.endsWith('/sma_publication_upload_portal_v1')){assert.equal(a.p_platform,portal);return reply(true);}
+    if(path.endsWith('/sma_manual_portal_v1')&&a.p_action==='read'){
+     assert.equal(a.p_asset,file.id);assert.equal(a.p_revision,file.revision);assert.equal(a.p_platform,portal);
+     return reply({ok:true,order:uuid(88),state:'complete'});
+    }
+    if(path.endsWith('/sma_publication_history_order_page_v1')){
+     assert.equal(a.p_order_id,uuid(88));
+     return reply({entries:[{id:uuid(88),platform:portal,status:'public_confirmed'}]});
+    }
     if(path.endsWith('/sma_content_editor_v1')){
      assert.equal(input.platform,portal);assert.equal(input.asset_id,file.id);assert.equal(input.asset_revision,file.revision);
-     if(a.p_action==='send'){sends.push(input);assert.equal(input.preview_revision,saved.revision);assert.equal(input.assignment_revision,saved.assignment_revision);return reply({ok:true,accepted:true});}
+     if(a.p_action==='send'){sends.push(input);assert.equal(input.preview_revision,saved.revision);assert.equal(input.assignment_revision,saved.assignment_revision);return reply({ok:true,accepted:true,order:uuid(88)});}
      assert.equal(a.p_action,'save');
      const revision=(saved?.revision||0)+1;
      saved={ok:true,status:'completed',id:uuid(93),revision,assignment_revision:revision,input:{editor_source_text:input.source_text,source_text:input.source_text,language:'de',media_kind:'video',platforms:[portal]},
@@ -90,8 +98,8 @@ test('edit, attach, save and request the exact portal post without contacting a 
    await page.getByRole('textbox',{name:'Beitragstext',exact:true}).fill(text+' Geändert.');
    await page.getByRole('textbox',{name:'Hashtags',exact:true}).fill('#Neu');
    await page.locator('#source_text').fill('Die Beschreibung wurde zusammen mit dem Beitrag geändert.');
-   await page.getByRole('button',{name:'Sofort posten'}).click();
-   await page.getByText('Versand angefordert. Die Bestätigung des Portals steht noch aus.',{exact:true}).first().waitFor();
+   await page.getByRole('button',{name:/Auf .* posten/}).click();
+   await page.locator('#workspaceSendStatus').filter({hasText:'hat die öffentliche Sichtbarkeit bestätigt'}).waitFor();
    assert.equal(sends.length,1);assert.equal(saved.preview.drafts[0].body,text+' Geändert.');assert.deepEqual(saved.preview.drafts[0].hashtags,['Neu']);
    // Author-provided evidence avoids a media recognition job.
    await page.locator('#source_text').fill('Eine neue eigene Beschreibung des gezeigten Inhalts für den Magic Effect.');

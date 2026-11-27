@@ -179,7 +179,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     if (width > 0 && height > 0) post.style.setProperty('--media-aspect', width + ' / ' + height);
     else post.style.removeProperty('--media-aspect');
     const step = data.draftStep, prepare = $('preparePublicationOrder');
-    if (prepare) prepare.hidden = !!step||Boolean(studioPost&&!studioPost.panel.hidden);
+    if (prepare) prepare.hidden = !!step;
     draftNotice.textContent = feedback || step?.note || data.draftStatus || '';
     draftAction.dataset.target = step?.target || '';
     draftAction.textContent = step?.label || '';
@@ -318,8 +318,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     drop.classList.toggle('over',type==='dragenter'||type==='dragover');
     if(type==='drop')options.onDrop?.(Array.from(event.dataTransfer?.files||[]));
   });
-  const studioPost=options.studioPost;
-  const sendNow=button('workspaceSendNow','Sofort posten',()=>studioPost&&!studioPost.panel.hidden?studioPost.focus():options.onSendNow?.());
+  const sendNow=button('workspaceSendNow','Auf '+portalName+' posten',()=>options.onSendNow?.());
   const sendStatus=make('p','workspaceSendStatus');sendStatus.setAttribute('role','status');
   const editorLink=make('a','workspaceMediaEditor','Im Medieneditor öffnen');editorLink.hidden=true;
   editorLink.target='_blank';editorLink.rel='noopener';
@@ -358,10 +357,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     if($('workspaceTabBar'))$('workspaceTabBar').hidden=toolbar.hidden;
     statusRow.hidden = key === 'preview';
     empty.hidden = !$('result').hidden;
-    if(studioPost){
-      if(key==='preview')preview.insertBefore(studioPost.panel,previewTabs);
-      else source.insertBefore(studioPost.panel,editor);
-    }
     if(key==='source')fileTools.append($('uploadPanel'));
     if(key==='preview')preview.insertBefore($('uploadPanel'),uploadIntro);
     if (key === 'preview') {
@@ -369,7 +364,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       lastPreviewWasEmpty = uploadOnly;
       previewActions.hidden = !uploadOnly;
       previewHeading.hidden = !uploadOnly;
-      previewPrimary.hidden = uploadOnly||Boolean(studioPost&&!studioPost.panel.hidden);
+      previewPrimary.hidden = uploadOnly;
       uploadIntro.hidden = !uploadOnly;
       draftState.hidden = uploadOnly;
       previewTabs.hidden = uploadOnly;
@@ -442,8 +437,6 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       for (const node of [repeat, previewRepeat, adopt, next, discard, addFile, saveManual, sendNow, ...empty.querySelectorAll('input,textarea')]) node.disabled = value;
     },
     selection(file) {
-      studioPost?.select(portalName.toLowerCase(),file);
-      sendNow.textContent=studioPost&&!studioPost.panel.hidden?'Auf TikTok posten':'Sofort posten';
       editorLink.hidden=!(file?.id&&file.revision&&options.editorUrl);
       if(editorLink.hidden)editorLink.removeAttribute('href');
       else editorLink.href=options.editorUrl+'#asset='+encodeURIComponent(file.id)+'&revision='+encodeURIComponent(file.revision)+'&portal='+encodeURIComponent(portalName.toLowerCase());

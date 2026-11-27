@@ -1,8 +1,8 @@
-import {createStudioPost} from './tiktok-studio-post.mjs?v=1';
+import {createDeliveryMonitor} from './portal-delivery-monitor.mjs?v=1';
 import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=2';
 import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
-import {describeFile} from './file-description.mjs?v=3';
+import {describeFile} from './file-description.mjs?v=4';
 import {mountCatalogLookup,fillProductChoices} from './publication-catalog-lookup.mjs?v=2';
 import {mountProviderOfferOptions,isSavedProviderOffer} from './publication-offer-options.mjs?v=2';
 import {mountGalleryMusic} from './gallery-music-worker.mjs?v=10';
@@ -22,8 +22,8 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=32';
-import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=35';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=33';
+import {createOrderClient,installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=36';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -69,6 +69,7 @@ if(params.get('wide')==='1'&&!dashboardLanguage){
 }
 // Standalone controls remain wired only on the standalone page.
 const standaloneLatest=$('loadLatest');
+let monitored=null,deliveryTimer;
 let manualAttempt=null,instantRequest=null,posting=false;
 let editorFolderKnown=false,editorFolderRead=null;
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
@@ -80,14 +81,6 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  onSearchReturn:()=>window.top.postMessage({type:'sma-publication-search-return'},location.origin),
  onBrowse:chooseDeviceFile,onDrop:files=>{if(files.length===1)void acceptDeviceFile(files[0]);else status('Wähle für diesen Beitrag genau eine Datei.',true);},
  onEditorSave:saveEditor,onSendNow:postNow,
- studioPost:selectedPortal==='tiktok'?createStudioPost(document,{owner:()=>signedOut?null:previewOwnerId,caption:()=>{
-  if(busy||signedOut||loadingVideoDraft)throw Error('Der Beitrag wird noch geladen. Versuche es gleich erneut.');
-  const values=editorFields(),body=values.body.trim(),tags=parseHashtags(values.hashtags);
-  if(!body)return '';
-  const saved=current?.preview?.drafts?.find(d=>d.platform===selectedPortal);
-  if(saved&&!hasDraftEdits()&&pendingLink===undefined)return saved.caption;
-  return saved?caption(draftWithLink(saved),body,tags):[body,tags.map(t=>'#'+t).join(' ')].filter(Boolean).join('\n\n');
- }}):null,
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
  getPreview:()=>{
@@ -154,7 +147,7 @@ if(workspace){
 function status(text,error=false){if(workspace&&!error&&text==='Gespeicherte Textvorlage geladen.')text='';for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){$('status').setAttribute?.('aria-busy',String(Boolean(value)&&!signedOut));value=value||signedOut||automaticMode!==null;if(value&&fileSelectionController){fileSelectionController.abort();fileSelectionController=null;fileSelectionTicket++;}busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
- if(workspace){$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
+ if(workspace){$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);updateSendControl();}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -760,7 +753,8 @@ async function requestFileSelection(id,discard=false,view='preview'){
   if(reopened){magicPreparationError=null;status('Datei wieder geöffnet. Du kannst die gewünschte Verarbeitung erneut starten.');}
   if(workspace&&id)workspace.show(view);else if(!workspace)$('filePicker').close();return;
  }
- pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
+ if(monitored&&(file?.id!==monitored.file.id||file?.revision!==monitored.file.revision)){clearTimeout(deliveryTimer);monitored=null;sendFeedback('');}
+ pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;updateSendControl();assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
  // Show the file preview immediately, but keep Magic disabled until the
  // bound draft and account have finished loading.
@@ -1991,26 +1985,60 @@ function sendFeedback(message,error=false){
  if(field){field.textContent=message;field.dataset.error=String(error);}
  status(message,error);
 }
-function sendReceipt(result){
- if(result.state==='approval_required')return 'Für diese Fassung ist noch keine passende Freigabe vorhanden.';
- if(result.accepted||result.pending)return 'Versand angefordert. Die Bestätigung des Portals steht noch aus.';
- if(result.state==='complete')return 'Das Portal hat den Beitrag bereits bestätigt.';
- if(['session_ready','uploading','processing'].includes(result.state))return 'Das Portal verarbeitet diesen Auftrag bereits.';
- if(result.state==='blocked')return 'Der Versand ist blockiert. Prüfe die offenen Punkte im Veröffentlichungsauftrag.';
- return 'Der Versand ist derzeit nicht möglich. Prüfe den Freigabestand des Auftrags.';
+async function deliveryRpc(name,args){
+ const owner=previewOwnerId;
+ if(signedOut||!owner||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
+ const {data,error}=await supabase.rpc(name,args).abortSignal(AbortSignal.timeout(25000));
+ if(signedOut||previewOwnerId!==owner||(await session()).user.id!==owner)throw Error(messages.AUTH_REQUIRED);
+ if(error||data?.ok===false)throw Error(messages[data?.code]||'Der Versandstatus konnte nicht geladen werden.');
+ return data;
+}
+const editorMonitor=createDeliveryMonitor({rpc:deliveryRpc,transport:createOrderClient({session}),platform:selectedPortal,portalName:names[selectedPortal],
+ ownsOrder:id=>id===monitored?.order,errorLabels:messages});
+function deliveryActive(){
+ return !!monitored&&!signedOut&&monitored.owner===previewOwnerId&&selectedAsset?.id===monitored.file.id&&selectedAsset?.revision===monitored.file.revision;
+}
+function updateSendControl(){
+ const button=$('workspaceSendNow');if(!button)return;
+ const active=deliveryActive();
+ button.disabled=busy||signedOut||!!(active&&monitored.locked);
+ button.setAttribute('aria-busy',String(!!(active&&monitored.progress)));
+}
+async function observeDelivery(item){
+ const active=()=>monitored===item&&deliveryActive();
+ if(!active())return;
+ try{
+  const r=await deliveryRpc('sma_manual_portal_v1',{p_action:'read',p_platform:selectedPortal,p_asset:item.file.id,p_revision:item.file.revision});
+  if(!active())return;
+  const result=await editorMonitor.describe(r,item.order,active,text=>sendFeedback(text));
+  if(!active()||!result)return;
+  Object.assign(item,result);sendFeedback(result.text,['failed','uncertain','needs_review','blocked'].includes(r.state));
+ }catch(e){if(!active())return;sendFeedback(e.message,true);}
+ updateSendControl();
+ if(item.progress)deliveryTimer=setTimeout(()=>void observeDelivery(item),6500);
+}
+function followSend(result,binding){
+ assertFileContext(binding);
+ if(!orderUuid.test(result.order))throw Error('SMA hat keinen Versandauftrag für diesen Beitrag bestätigt.');
+ if(result.accepted===false&&!result.pending&&['approved','checking','checked'].includes(result.state))throw Error('Der Versanddienst hat den Auftrag nicht angenommen.');
+ clearTimeout(deliveryTimer);
+ monitored={order:result.order,file:selectedAsset,owner:previewOwnerId,locked:true,progress:true};
+ if($('publicationOrderDialog')?.open)$('publicationOrderDialog').close();
+ sendFeedback('Versand angefordert. Die Bestätigung des Portals steht noch aus.');
+ updateSendControl();void observeDelivery(monitored);
 }
 async function finishInstantApproval(order,context){
  if(!instantRequest||JSON.stringify(context.binding)!==instantRequest.key)return;
  const request=instantRequest;instantRequest=null;
  try{
   const result=await editorRpc('send',{...context.binding,order:order.id,request_id:request.id});
-  const message=sendReceipt(result);sendFeedback(message);return message;
+  followSend(result,context.binding);
  }catch(e){sendFeedback(e.message,true);return e.message;}
 }
 async function postNow(){
- if(posting||busy||signedOut)return;
+ if(posting||busy||signedOut||(deliveryActive()&&monitored.locked))return;
  if(!selectedAsset){sendFeedback('Ordne dem Beitrag zuerst eine Datei zu.',true);return;}
- if(selectedPortal==='tiktok'&&selectedAsset.profile_media?.state==='private_preview_only')return;
+ if(selectedAsset.profile_media?.state==='private_preview_only'){sendFeedback('Diese Datei ist als private Vorschau gekennzeichnet. Der Versand ist gesperrt.',true);return;}
  const file=selectedAsset,owner=previewOwnerId;
  posting=true;
  try{
@@ -2025,7 +2053,7 @@ async function postNow(){
   if(result.state==='approval_required'){
    sendFeedback('Prüfe Zielkonto und Sichtbarkeit und bestätige den aktuellen Beitrag.');
    await orderReview.openInstant();
-  }else{instantRequest=null;sendFeedback(sendReceipt(result));}
+  }else{instantRequest=null;followSend(result,binding);}
  }catch(e){if(!signedOut)sendFeedback(e.message,true);}
  finally{posting=false;}
 }
