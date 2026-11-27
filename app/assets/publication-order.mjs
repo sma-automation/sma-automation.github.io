@@ -208,7 +208,7 @@ export function accountChoiceOptions(platform,account) {
   return {visibility:policy.privacy_levels.map(x=>[x,labels[x]]),forced:{disable_comment:policy.comment_disabled,disable_duet:policy.duet_disabled,disable_stitch:policy.stitch_disabled}};
 }
 
-export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDefaults,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft}) {
+export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDefaults,readStoredOrder,cancelStoredOrder,saveSupplementalReview,readTransferStatus,command,host,portalName,verifySavedDraft,onUnavailableLink,onOutdatedDraft,sendApproved}) {
   const make=(tag,text)=>{const e=doc.createElement(tag);if(text)e.textContent=text;return e;};
   const button=make('button','Freigabe vorbereiten');button.type='button';button.className='secondary';button.id='preparePublicationOrder';
   button.setAttribute('aria-controls','publicationOrderDialog');button.setAttribute('aria-expanded','false');host.append(button);
@@ -642,6 +642,10 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
       unchanged();
       if(sentApproval&&!recordedApproval(result))throw Error();
       showOrder(result);
+      if(sentApproval&&instant&&sendApproved){
+        instant=false;const message=await sendApproved(result,context);
+        if(message&&generation===epoch)notice.textContent=message;
+      }
       if(choices&&preparationToResume?.state==='prepared'&&preparationToResume.id===result.id&&
          result.state==='prepared'&&!result.check_error&&!preparationEnded(result)){
         notice.textContent='Deine Einstellungen stimmen mit dem vorbereiteten Auftrag überein. Die ursprüngliche Frist gilt weiter.';
@@ -795,7 +799,8 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
     }catch(e){if(generation===epoch&&!offerDraftRepair(e))notice.textContent=e.message||orderError();}
     finally{if(generation===epoch){opening=false;setWorking(false);}}
   }
-  button.addEventListener('click',openPreparation);
+  let instant=false;
+  button.addEventListener('click',()=>{instant=false;return openPreparation();});
   retryAccount.addEventListener('click',()=>{
     if(working||!dialog.open||retryAccount.hidden||order||recovery)return;
     try{unchanged();}catch(error){retryAccount.hidden=true;notice.textContent=error.message;return;}
@@ -881,9 +886,9 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   });
   function closeDialog(){leaveOpening();retryAccount.hidden=true;dialog.close();button.focus?.();}
   close.addEventListener('click',()=>{if(!close.disabled)closeDialog();});
-  dialog.addEventListener('close',()=>{if(!dialog.open){button.setAttribute('aria-expanded','false');leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
+  dialog.addEventListener('close',()=>{if(!dialog.open){instant=false;button.setAttribute('aria-expanded','false');leaveOpening();retryAccount.hidden=true;clearExpiryTimer();}});
   dialog.addEventListener('cancel',e=>{if(working){e.preventDefault();if(opening)closeDialog();}});
-  return {rememberVideoChoices,resumePrepared,bindHistoryReview,lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
+  return {openInstant(){instant=true;return openPreparation();},rememberVideoChoices,resumePrepared,bindHistoryReview,lock:value=>{button.disabled=value;},clear(){historyReview=null;button.textContent='Freigabe vorbereiten';clearExpiryTimer();epoch++;opening=false;pendingAccounts.clear();retryAccount.hidden=true;working=false;recovery=null;preparationToResume=null;order=null;context=null;savedVideo=null;reuse.hidden=true;options.replaceChildren();fields.clear();controls.hidden=true;client.reset();dialog.close();details.replaceChildren();notice.textContent='';}};
 }
 
 function blockerText(code) {

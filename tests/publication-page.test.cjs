@@ -1733,7 +1733,7 @@ test('source-only edits are restored as unconsumed input and never treated as a 
  assert.equal(restored.get('source_text').value,old.get('source_text').value);
  assert.equal(restored.get('drafts').querySelector('textarea').value,f.view().preview.drafts[0].body);
  assert.equal(restored.workspaceOptions.getPreview().draftStep.target,'source_text');
- assert.equal(restored.get('save').disabled,true);assert.equal(f.writes.length,0);
+ assert.equal(restored.get('save').disabled,false);assert.equal(f.writes.length,0);
  assert.throws(()=>restored.orderOptions.getContext(),/speichere/);
 });
 test('two files in the same portal keep their own ordinary edits through later input and reload',async()=>{
@@ -1875,7 +1875,7 @@ for(const portal of ['youtube','tiktok'])test(portal+': choosing saved portal fi
  assert.equal(again.get('source_text').value,description,'the remaining local source must survive another reload');
  assert.equal(again.get('language').value,'en');assert.equal(again.get('compareDraft').hidden,true);
  assert.equal(again.workspaceOptions.getPreview().draftStep.target,'source_text');
- assert.equal(again.get('save').disabled,true);assert.equal(sessionStorage.rows.size,2);
+ assert.equal(again.get('save').disabled,false);assert.equal(sessionStorage.rows.size,2);
  const other=await b.open(b.rpc,options);
  assert.equal(other.get('drafts').querySelector('textarea').value,'Die unabhängigen Eingaben der zweiten Datei bleiben offen.');
  assert.equal(a.writes.length+b.writes.length,0);

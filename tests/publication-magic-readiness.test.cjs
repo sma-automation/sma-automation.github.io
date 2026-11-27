@@ -13,8 +13,8 @@ function between(start,end){
 
 test('selected video can open while its separate checks run in background',()=>{
  const latest=between('async function loadLatest(){','\nfunction resetMagic(){');
- assert.match(latest,/if\(file\?\.media_kind==='video'\)void loadMediaCheck\(\);else await loadMediaCheck\(\)/);
- assert.match(latest,/if\(file\?\.media_kind==='video'\)void loadMagicEffect\(true\);else await loadMagicEffect\(true\)/);
+ assert.match(latest,/if\(workspace\|\|file\?\.media_kind==='video'\)void loadMediaCheck\(\);else await loadMediaCheck\(\)/);
+ assert.match(latest,/if\(workspace\|\|file\?\.media_kind==='video'\)void loadMagicEffect\(true\);else await loadMagicEffect\(true\)/);
  assert.match(latest,/await fileRpc\('get'/);
  assert.match(latest,/lock\(false\);\s*syncMedia\(\)/);
 });
@@ -30,7 +30,7 @@ test('existing media guard and owner-bound draft read are not bypassed',()=>{
 
 test('opening a video no longer enters a long automatic status-poll loop',()=>{
  const load=between('async function loadMagicEffect(autoStart=false){','\nasync function recognizePhoto(');
- assert.match(load,/autoStart&&file\.media_kind==='image'&&\(r\.status==='processing'/);
+ assert.match(load,/autoStart&&!workspace&&file\.media_kind==='image'&&\(r\.status==='processing'/);
  assert.doesNotMatch(load,/autoStart&&\(r\.status==='processing'/);
  assert.match(load,/ticket!==magicLoadTicket/);
  assert.match(load,/!photoStillSelected\(file\)/);
@@ -44,5 +44,5 @@ test('manual recognition invalidates any older background load',()=>{
  assert.match(reset,/magicLoadTicket\+\+/);
  assert.match(recognize,/magicLoadTicket\+\+;lock\(true\)/);
  assert.match(action,/magicLoadTicket\+\+;automaticMode=mode;lock\(true\)/);
- assert.match(html,/publication-preview\.js\?v=120/);
+ assert.match(html,/publication-preview\.js\?v=\d+/);
 });

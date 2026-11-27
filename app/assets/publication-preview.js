@@ -21,8 +21,8 @@ import {deviceFileMetadata,transferDeviceFile} from './device-upload.mjs?v=1';
 import {tabDraftStore} from './publication-tab-draft.mjs?v=3';
 import {mountDraftConflict} from './publication-draft-conflict.mjs?v=1';
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=30';
-import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=34';
+import {createOptimizerWorkspace} from './optimizer-workspace.mjs?v=31';
+import {installOrderReview,checkedHistoryOrder,blockedHistoryOrder} from './publication-order.mjs?v=35';
 import {readPublicationCoverHistory} from './publication-cover-history-model.mjs?v=4';
 import {historyStatuses} from './publication-history-model.mjs?v=4';
 const endpoint='https://johnmusic.app.n8n.cloud/webhook/sma-publication-preview-v1';
@@ -66,6 +66,10 @@ let dashboardLanguage=params.get('embedded')==='1'&&['de','en'].includes(params.
 if(params.get('wide')==='1'&&!dashboardLanguage){
  try{const saved=window.localStorage?.getItem('sma_language');if(['de','en'].includes(saved))dashboardLanguage=saved;}catch{}
 }
+// Standalone controls remain wired only on the standalone page.
+const standaloneLatest=$('loadLatest');
+let manualAttempt=null,instantRequest=null,posting=false;
+let editorFolderKnown=false,editorFolderRead=null;
 const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspace(document,names[selectedPortal],()=>renderFilePicker(),{
  editorUrl:params.get('kundenmedien')==='pilot'?'media-editor.html?v=17&kundenmedien=pilot':'media-editor.html?v=17',
  onSchedule:window.parent!==window?()=>window.top.postMessage({type:'sma-publication-open-schedule'},location.origin):null,
@@ -73,6 +77,8 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  fromSearch:window.parent!==window&&params.get('fromSearch')==='1',
  deferInitialFocus:params.get('restoring')==='1',
  onSearchReturn:()=>window.top.postMessage({type:'sma-publication-search-return'},location.origin),
+ onBrowse:chooseDeviceFile,onDrop:files=>{if(files.length===1)void acceptDeviceFile(files[0]);else status('Wähle für diesen Beitrag genau eine Datei.',true);},
+ onEditorSave:saveEditor,onSendNow:postNow,
  describeFile,onEditLink:openDraftLinkEditor,onDraftAction:runPreviewDraftAction,
  onNewVariant:generateTextVariant,onAcceptVariant:acceptTextVariant,onDiscardVariant:discardTextVariant,
  getPreview:()=>{
@@ -88,7 +94,8 @@ const workspace=params.get('wide')==='1'&&selectedPortal?createOptimizerWorkspac
  onView:(view,requestedView,userInitiated)=>{
   hoverPlayback.stop();
   if(view==='preview'&&selectedAsset&&originalVideo){originalVideo.setContext(selectedAsset);void originalVideo.load();}
-  if(view==='source'&&templateDeferred&&!selectedAsset){templateDeferred=false;void loadLatest();}
+  if(view==='source'&&supabase&&!editorFolderKnown)void readEditorFolder();
+  if(view==='source'&&templateDeferred&&!selectedAsset){templateDeferred=false;status('');}
   if(view!=='source')choosingLinkFor=null;
   if(view!=='preview')originalVideo?.stop();
   if(window.parent!==window&&view!==requestedView){
@@ -138,7 +145,7 @@ if(workspace){
 function status(text,error=false){if(workspace&&!error&&text==='Gespeicherte Textvorlage geladen.')text='';for(const id of ['status','portalStatus']){$(id).textContent=text;$(id).dataset.error=String(error);}}
 function errorText(r){return messages[r?.code||r?.error_code]||'Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.';}
 function lock(value){$('status').setAttribute?.('aria-busy',String(Boolean(value)&&!signedOut));value=value||signedOut||automaticMode!==null;if(value&&fileSelectionController){fileSelectionController.abort();fileSelectionController=null;fileSelectionTicket++;}busy=value;orderReview?.lock(value);syncReviewButton();syncMagicButton();for(const id of ['checkDraftSave','compareDraft','draftLinkProduct','draftLinkShop','draftLinkUndo','refreshVideoMetadata','deviceBrowse','deviceBrowseResult','deviceFile','browseFiles','browseResultFiles','refreshFiles','pickerRefresh','confirmFileSwitch','chooseGeneralTemplate'])$(id).disabled=value;$('inputFields').disabled=value;$('catalogLookupFields').disabled=value;$('language').disabled=value;syncSaveButton();for(const el of $('drafts').querySelectorAll('input,textarea'))el.disabled=value;renderFilePicker();
- if(workspace){$('loadLatest').disabled=value;$('generate').disabled=value;$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
+ if(workspace){$('workspaceDraftAction').disabled=value||!!(magicPreparationError&&previewDraftStep()?.target==='magic_text');$('workspaceEditPost').disabled=value;$('workspacePreviewEdits').disabled=value;workspace.lockVariant?.(value);}
  if(!value&&pendingProductFocus){$(pendingProductFocus).focus();pendingProductFocus=null;}
 }
 async function session(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw Error(messages.AUTH_REQUIRED);return data.session;}
@@ -322,7 +329,7 @@ function sourceFormKey(){
 function hasSourceEdits(){return sourceBaseline!==null&&sourceFormKey()!==sourceBaseline;}
 function fillInput(input){
  if(input){
-  for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?originalSource(input[k]):input[k])||'';
+  for(const k of ['source_text','language','media_kind'])$(k).value=(k==='source_text'?(input.editor_source_text??originalSource(input[k])):input[k])||'';
   if(dashboardLanguage)$('language').value=dashboardLanguage;
   for(const c of document.querySelectorAll('[name=platforms]'))c.checked=input.platforms?.includes(c.value)===true;
  }
@@ -368,9 +375,9 @@ function setUncertainSave(snapshot){
 function hasFormChanges(){
  return pendingLink!==undefined||[...$('drafts').querySelectorAll('input,textarea')].some(field=>field.value!==field.defaultValue);
 }
-function hasDraftEdits(){return !!current&&(!!uncertainSave||!!comparisonBase||!$('compareDraft').hidden||hasFormChanges());}
+function hasDraftEdits(){if(!current&&workspace)return ['Title','Body','Hashtags'].some(k=>Boolean($('workspaceEmpty'+k)?.value));return !!current&&(!!uncertainSave||!!comparisonBase||!$('compareDraft').hidden||hasFormChanges());}
 function syncSaveButton(){
- $('save').disabled=busy||signedOut||!current||!!comparisonBase||!!uncertainSave||!hasFormChanges();
+ $('save').disabled=busy||signedOut||!current||!!comparisonBase||!!uncertainSave||!(hasFormChanges()||(workspace&&hasSourceEdits()));
 }
 function updateDraftStatus(){
  syncSaveButton();
@@ -553,7 +560,7 @@ async function withFreshFile(context,action){
  }
 }
 function fileChanged(){if(window.parent!==window)window.top.postMessage({type:'sma-publication-file-updated'},location.origin);}
-function clearDraft(){discardTextVariant();closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=true;$('source_text').value='';fillInput(null);}
+function clearDraft(){if(workspace)for(const k of ['Title','Body','Hashtags'])$('workspaceEmpty'+k).value='';manualAttempt=null;instantRequest=null;discardTextVariant();closeReloadChoice(false);forgetTabAttempt();setUncertainSave(null);$('compareDraft').hidden=true;draftConflict.clear();resetMagic();pendingLink=undefined;refreshDraftLink=null;choosingLinkFor=null;$('draftLinkEditor').hidden=true;$('draftLinkIssue').hidden=true;$('draftLinkIssueText').textContent='';for(const id of ['shopLink','draftLinkValue']){$(id).textContent='';$(id).removeAttribute('href');}current=null;attempt=null;$('result').hidden=true;workspace?.textAvailable(false);$('drafts').replaceChildren();$('sourcePanel').open=true;$('source_text').value='';fillInput(null);}
 function fileFitsPortal(file){return !(file.media_kind==='image'&&['youtube','tiktok'].includes(selectedPortal));}
 const previewThumbnails=createSharedThumbnailClient({getOwnerId:()=>signedOut?null:previewOwnerId,getSession:async()=>{const auth=await session();if(signedOut||auth.user.id!==previewOwnerId)throw Error(messages.AUTH_REQUIRED);return auth;}});
 const pickerThumbnails=createMediaThumbnailLoader(null,{client:previewThumbnails});
@@ -611,6 +618,19 @@ function renderVideoMetadata(){
  $('videoMetadataPanel').hidden=!missingVideoMetadata(selectedAsset).length;
  $('videoMetadataStatus').textContent=videoMetadataNotice(selectedAsset);
 }
+async function readEditorFolder(){
+ if(editorFolderRead||signedOut)return;
+ const owner=previewOwnerId;
+ try{
+  const request=supabase.rpc('sma_manual_portal_v1',{p_action:'folder',p_platform:selectedPortal});
+  editorFolderRead=request.abortSignal?.(AbortSignal.timeout(10000))??request;
+  const {data,error}=await editorFolderRead;
+  if(!error&&data?.ok&&owner===previewOwnerId&&!signedOut){
+   workspace.setDrive?.(data.folder,data.drive_account);editorFolderKnown=true;
+  }
+ }catch{ /* The portal watermark can still supply the mapped folder. */ }
+ finally{editorFolderRead=null;}
+}
 async function optimizerCatalog(signal){
  let catalog;
  if(workspace){
@@ -618,6 +638,8 @@ async function optimizerCatalog(signal){
   const {data,error}=await (signal?request.abortSignal(signal):request);
   if(error||data?.ok!==true)throw fileError(data?.code||'FILE_SYNC_UNAVAILABLE');
   galleryFolderVersion=data.folder_version??null;
+  if(Object.hasOwn(data,'folder')){workspace.setDrive?.(data.folder,data.drive_account);editorFolderKnown=true;}
+  else if(!editorFolderKnown)workspace.setDrive?.(galleryFolderVersion?.split('/')[0]);
   catalog=data;
  }else catalog=await fileRpc('list',{},signal);
  if(!Array.isArray(catalog.files))throw fileError('FILE_SYNC_UNAVAILABLE');
@@ -700,11 +722,14 @@ function openFilePicker(trigger){
  if(workspace){workspace.show('folder');renderFilePicker();$('fileSearch').focus();return;}
  if(!$('filePicker').open)$('filePicker').showModal();renderFilePicker();$('fileSearch').focus();
 }
-async function requestFileSelection(id,discard=false){
+async function requestFileSelection(id,discard=false,view='preview'){
  if(busy||signedOut)return;let file=id?assets.find(f=>f.id===id):null;
  if(id&&(!file||!fileFitsPortal(file)))return;
  const ticket=++fileSelectionTicket;fileSelectionController?.abort();fileSelectionController=null;
- if((selectedAsset?.id||'')!==id&&(hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
+ const attaching=!!(workspace&&!selectedAsset&&file&&(hasDraftEdits()||hasSourceEdits()));
+ const unbound=attaching?editorFields():null;
+ if(attaching)view='source';
+ if(!attaching&&(selectedAsset?.id||'')!==id&&(hasDraftEdits()||hasSourceEdits())&&!discard){pendingAssetId=id;$('fileSwitchMessage').textContent='Du hast ungespeicherte Änderungen. Zum Wechsel zu „'+(file?describeFile(file).title:'Allgemeine Textvorlage')+'“ kannst du sie verwerfen oder zuerst behalten und speichern.';$('fileSwitchNotice').hidden=false;$('fileSwitchNotice').scrollIntoView({block:'nearest'});$('cancelFileSwitch').focus();return;}
  const controller=new AbortController();fileSelectionController=controller;
  let reopened=false;
  try{
@@ -724,17 +749,18 @@ async function requestFileSelection(id,discard=false){
  }finally{if(fileSelectionController===controller)fileSelectionController=null;}
  if((selectedAsset?.id||'')===id){
   if(reopened){magicPreparationError=null;status('Datei wieder geöffnet. Du kannst die gewünschte Verarbeitung erneut starten.');}
-  if(workspace&&id)workspace.show('preview');else if(!workspace)$('filePicker').close();return;
+  if(workspace&&id)workspace.show(view);else if(!workspace)$('filePicker').close();return;
  }
  pendingAssetId=null;$('fileSwitchNotice').hidden=true;magicPreparationError=null;selectedAsset=file;assignmentRevision=file?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;
  if(workspace)workspace.show('files');else $('filePicker').close();clearDraft();renderSelectedFile();syncMedia();if(!workspace)$('assetPanel').scrollIntoView({block:'start'});renderFilePicker();
  // Show the file preview immediately, but keep Magic disabled until the
  // bound draft and account have finished loading.
- if(workspace&&file?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
+ if(workspace&&file?.media_kind==='video'){loadingVideoDraft=true;workspace.show(view);}
  await loadLatest();
+ if(unbound&&photoStillSelected(file)&&!signedOut&&!magicPreparationError){workspace.show('source');restoreEditorFields(unbound);}
  // The card click itself opens the preview after its matching saved draft is loaded.
  // Keep the existing unsaved-edits confirmation and never navigate a stale/foreign file.
- if(workspace&&file&&file.media_kind!=='video'&&ticket===fileSelectionTicket&&!signedOut&&selectedAsset?.id===file.id&&selectedAsset.revision===file.revision)workspace.show('preview');
+ if(workspace&&file&&file.media_kind!=='video'&&ticket===fileSelectionTicket&&!signedOut&&selectedAsset?.id===file.id&&selectedAsset.revision===file.revision)workspace.show(view);
 }
 Object.assign(messages,{UPLOAD_FORMAT:'Bitte wähle eine Bild- oder Videodatei, zum Beispiel JPG, PNG, HEIC, MP4 oder MOV. Dokumentdateien wie PDF oder Word können über diesen Veröffentlichungsweg nicht gepostet werden.',UPLOAD_SIZE:'Bitte wähle eine nicht leere Datei bis 4 GB.',UPLOAD_RATE_LIMITED:'Das Uploadlimit ist erreicht (30 Dateien pro Stunde, 20 GB pro Tag). Bitte versuche es später erneut.',UPLOAD_UNAVAILABLE:'Der Upload ist momentan nicht erreichbar. Du kannst die Übertragung erneut versuchen.',UPLOAD_NETWORK:'Die Verbindung wurde unterbrochen. Klicke auf „Upload fortsetzen“.',UPLOAD_EXPIRED:'Die Uploadsitzung ist abgelaufen. Bitte wähle die Datei erneut über „Dateien durchsuchen“.',UPLOAD_INITIALIZING:'Der Upload wird noch vorbereitet. Bitte versuche „Upload fortsetzen“ in zwei Minuten erneut.',UPLOAD_INCOMPLETE:'Die hochgeladene Datei konnte noch nicht bestätigt werden. Bitte klicke auf „Upload fortsetzen“.',UPLOAD_CONFLICT:'Die Datei hat sich geändert. Bitte wähle sie erneut aus.'});
 let deviceUpload=null,uploadController=null;
@@ -757,7 +783,7 @@ async function runDeviceUpload(){
  let completed=null;
  try{
   let data=await uploadCall({action:'start',upload_id:job.id,...job.meta},controller.signal,job);
-  if(selectedPortal&&job.meta.mime_type.startsWith('video/')){
+  if(selectedPortal&&(job.meta.mime_type.startsWith('video/')||workspace)){
    const route=await supabase.rpc('sma_publication_upload_portal_v1',{p_upload:job.id,p_platform:selectedPortal});
    if(route.error||route.data!==true)throw Error('UPLOAD_PORTAL_UNAVAILABLE');
   }
@@ -775,13 +801,19 @@ async function runDeviceUpload(){
  }catch(e){
   if(!signedOut){$('uploadStatus').textContent=controller.signal.aborted?'Upload angehalten. Mit „Upload fortsetzen“ kannst du weitermachen.':errorText({code:e.code||e.message});$('retryUpload').hidden=false;}
  }finally{uploadController=null;$('cancelUpload').hidden=true;lock(false);}
- if(completed&&!signedOut){if(hasDraftEdits()||hasSourceEdits())openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
+ if(completed&&!signedOut&&job.editor){
+  await requestFileSelection(completed,true,'source');
+  if(selectedAsset?.id===completed&&!magicPreparationError){
+   workspace.show('source');restoreEditorFields(job.fields);status('Datei zugeordnet: '+selectedAsset.name);
+  }
+ }else if(completed&&!signedOut){if(hasDraftEdits()||hasSourceEdits())openFilePicker($('deviceBrowse'));await requestFileSelection(completed);}
 }
-$('deviceFile').addEventListener('change',async()=>{
- if(busy||signedOut)return;const file=$('deviceFile').files?.[0];if(!file)return;
- try{const meta=deviceFileMetadata(file,selectedPortal);deviceUpload={id:crypto.randomUUID(),file,meta};$('uploadProgress').value=0;await runDeviceUpload();}
+async function acceptDeviceFile(file){
+ if(busy||signedOut||!file)return;
+ try{const meta=deviceFileMetadata(file,selectedPortal);deviceUpload={id:crypto.randomUUID(),file,meta,editor:workspace?.editing?.(),fields:workspace&&(hasDraftEdits()||hasSourceEdits()||current)?editorFields():null};$('uploadProgress').value=0;await runDeviceUpload();}
  catch(e){$('uploadPanel').hidden=false;$('uploadStatus').textContent=errorText({code:e.message});$('retryUpload').hidden=true;$('cancelUpload').hidden=true;}
-});
+}
+$('deviceFile').addEventListener('change',()=>acceptDeviceFile($('deviceFile').files?.[0]));
 $('retryUpload').addEventListener('click',runDeviceUpload);
 $('cancelUpload').addEventListener('click',()=>uploadController?.abort());
 window.addEventListener('beforeunload',event=>{if(uploadController){event.preventDefault();event.returnValue='';}});
@@ -1110,7 +1142,7 @@ async function loadLatest(){
  lock(true);
  try{
   // Independent video review must not block the current portal draft read.
-  if(file?.media_kind==='video')void loadMediaCheck();else await loadMediaCheck();
+  if(workspace||file?.media_kind==='video')void loadMediaCheck();else await loadMediaCheck();
   const data=selectedAsset
    ?await fileRpc('get',{asset_id:selectedAsset.id,platform:selectedPortal},AbortSignal.timeout(20000))
    :await rpc('latest',selectedPortal?{platform:selectedPortal}:{});
@@ -1142,7 +1174,7 @@ async function loadLatest(){
   lock(false);
   syncMedia();
   workspace?.refreshPreview();
-  if(file?.media_kind==='video')void loadMagicEffect(true);else await loadMagicEffect(true);
+  if(workspace||file?.media_kind==='video')void loadMagicEffect(true);else await loadMagicEffect(true);
  }
 }
 
@@ -1190,7 +1222,17 @@ function showMagic(r,file){
  }
  syncMagicButton();return true;
 }
-async function magicRpc(file){const {data,error}=await supabase.rpc(file.media_kind==='video'?'sma_publication_video_magic_v1':'sma_publication_magic_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error('Die Erkennung ist gerade nicht verfügbar.');return data.analysis;}
+const magicReads=new Map();
+function magicRpc(file){
+ const key=JSON.stringify([previewOwnerId,file.id,file.revision]);
+ let request=magicReads.get(key);
+ if(!request){
+  request=readMagicStatus(file);magicReads.set(key,request);
+  const clear=()=>magicReads.delete(key);request.then(clear,clear);
+ }
+ return request;
+}
+async function readMagicStatus(file){const {data,error}=await supabase.rpc(file.media_kind==='video'?'sma_publication_video_magic_v1':'sma_publication_magic_v1',{p_action:'get',p_input:{asset_id:file.id,asset_revision:file.revision}});if(error||!data?.ok)throw Error('Die Erkennung ist gerade nicht verfügbar.');return data.analysis;}
 async function loadMagicEffect(autoStart=false){
  const file=selectedAsset;resetMagic();const ticket=magicLoadTicket;if(!file||!['image','video'].includes(file.media_kind))return;
  const hint=magicHint(file);if(hint){$('magicStatus').textContent=hint;return;}
@@ -1201,7 +1243,7 @@ async function loadMagicEffect(autoStart=false){
   // Preserve automatic photo recognition, but do not auto-resume a processing
   // video when opening its preview: that would lock the Magic controls. The explicit
   // "Erkennungsstand laden" action remains available to the customer.
-  if(autoStart&&file.media_kind==='image'&&(r.status==='processing'||(r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
+  if(autoStart&&!workspace&&file.media_kind==='image'&&(r.status==='processing'||(r.status==='unrecognized'&&!hasSourceEdits()&&!$('source_text').value.trim()&&/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32}):\d+$/.test(file.revision))))await recognizePhoto();
  }catch(e){if(ticket===magicLoadTicket&&!busy&&photoStillSelected(file))$('magicStatus').textContent=e.message;}
 }
 async function recognizePhoto({withinAutomatic=false,retryFailed=false}={}){
@@ -1209,7 +1251,7 @@ async function recognizePhoto({withinAutomatic=false,retryFailed=false}={}){
  const hint=magicHint();if(hint){$('magicStatus').textContent=hint;return;}
  const file=selectedAsset,context=fileContext();magicLoadTicket++;lock(true);$('magicStatus').textContent='Der Magic Effect wird gestartet …';
  try{
-  await ensureFreshFile(context);
+  if(!withinAutomatic)await ensureFreshFile(context);
   if(magicState?.status!=='processing'){
    const d=await withFreshFile(context,async retryAfter=>{
     await session();assertFileContext(context);
@@ -1218,8 +1260,9 @@ async function recognizePhoto({withinAutomatic=false,retryFailed=false}={}){
    });
    if(!showMagic(d.analysis,file))return;
   }
-  for(let i=0;i<(file.media_kind==='video'?210:80)&&magicState?.status==='processing';i++){
-   await new Promise(resolve=>setTimeout(resolve,3000));if(!photoStillSelected(file))return;
+  const deadline=Date.now()+(file.media_kind==='video'?630000:240000);
+  for(let delay=400;Date.now()<deadline&&magicState?.status==='processing';delay=Math.min(delay*2,4500)){
+   await new Promise(resolve=>setTimeout(resolve,delay));if(!photoStillSelected(file))return;
    if(!showMagic(await magicRpc(file),file))return;
   }
   if(photoStillSelected(file)&&magicState?.status==='processing')$('magicStatus').textContent='Die Erkennung läuft noch. Klicke auf „Erkennungsstand laden“, um das Ergebnis weiter abzurufen.';
@@ -1230,7 +1273,7 @@ $('recognizePhoto').addEventListener('click',()=>recognizePhoto({retryFailed:tru
 $('applyMagic').addEventListener('click',()=>{
  if(busy||magicState?.status!=='completed'||magicState.asset_id!==selectedAsset?.id||magicState.asset_revision!==selectedAsset?.revision||magicState.result?.subject_type==='unclear')return;
  $('source_text').value=magicState.result.source_text;$('sourcePanel').open=true;attempt=null;
- const message='Erkannter Inhalt übernommen. Prüfe die Beschreibung und klicke anschließend auf „'+$('generate').textContent+'“.';
+ const message=workspace?'Erkannter Inhalt übernommen. Du kannst ihn direkt bearbeiten.':'Erkannter Inhalt übernommen. Prüfe die Beschreibung und klicke anschließend auf „'+$('generate').textContent+'“.';
  $('magicStatus').textContent=message;$('magicApplied').textContent=message;$('magicApplied').hidden=false;
  workspace?.show('source');
  $('source_text').focus({preventScroll:true});$('sourcePanel').scrollIntoView({block:'start'});
@@ -1294,13 +1337,16 @@ async function runMagicAction(mode,replace=false){
   await ensureFreshFile(context);
   const product=await getDraftProduct(context);
   if(product?.state==='ambiguous')throw Error(askForProduct());
-  if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
+  const authored=workspace&&mode==='text'&&hasSourceEdits()?$('source_text').value.trim():'';
+  if(authored.length>=30){
+   $('source_text').value=authored;
+  }else if(product?.state==='matched'&&typeof product.visual==='string'&&product.visual.trim().length>=30){
    $('source_text').value=product.visual;
   }else{
    // A completed analysis belongs to the file bytes, not the social portal.
    // Read its authenticated cached result before issuing any new n8n analysis.
    // This also covers a quick click made before the background status read ends.
-   if(file.media_kind==='video'&&magicState?.status!=='completed'){
+   if(!magicState||(file.media_kind==='video'&&magicState.status==='unrecognized')){
     try{
      const previous=await magicRpc(file);assertFileContext(context);
      showMagic(previous,file);
@@ -1317,7 +1363,7 @@ async function runMagicAction(mode,replace=false){
    $('source_text').value=magicState.result.source_text;
   }
   automaticInputSignature=JSON.stringify(sourceInput());if(!workspace)$('sourcePanel').open=true;
-  if(mode==='text')await generatePreview({withinAutomatic:true});
+  if(mode==='text')await generatePreview({withinAutomatic:true,preparedProduct:product,preparedContext:context});
   else{workspace?.show('source');status('Der erkannte Inhalt ist übernommen. Du kannst die Angaben bearbeiten oder unter „Text für '+(names[selectedPortal]||'das Portal')+'“ automatisch den Beitragstext erstellen.');}
  }catch(e){if(!signedOut)status(e.message,true);}
  finally{automaticMode=null;lock(false);syncMedia();}
@@ -1341,7 +1387,7 @@ async function refreshFiles(){
   await loadFiles(selectedAsset?.id??retry?.assetId);
   if(signedOut)return;
   if(!retry)fileChanged();
-  if(reopenVideo&&workspace&&selectedAsset?.media_kind==='video'){loadingVideoDraft=true;workspace.show('preview');}
+  if(reopenVideo&&workspace&&selectedAsset?.media_kind==='video'){loadingVideoDraft=true;workspace.show(view);}
   await loadLatest();
   if(!signedOut)$('filePickerStatus').textContent='Dateiliste aktualisiert.';
  }catch(error){
@@ -1394,7 +1440,8 @@ $('refreshFiles').addEventListener('click',()=>{
  return retryHistoryPreview?loadHistoryPreview():refreshFiles();
 });
 $('pickerRefresh').addEventListener('click',refreshFiles);
-$('previewForm').addEventListener('input',()=>{attempt=null;updateTabForm();});
+$('previewForm').addEventListener('input',()=>{attempt=null;updateTabForm();syncSaveButton();});
+$('source_text').addEventListener('input',()=>{syncSaveButton();updateTabForm();});
 $('media_kind').addEventListener('change',syncMedia);
 $('language').addEventListener('change',()=>{attempt=null;updateTabForm();});
 function closeReloadChoice(accepted){
@@ -1445,7 +1492,7 @@ function reloadVersion(saved){
   saved.product_link_available,saved.input?.source_text,saved.input?.language,saved.input?.media_kind,saved.input?.platforms,
   visibleSavedDrafts(saved).map(d=>[d.platform,d.title,d.body,d.hashtags,d.product_id,d.caption,d.review_notes])]);
 }
-$('loadLatest').addEventListener('click',async()=>{
+standaloneLatest.addEventListener('click',async()=>{
  if(busy||signedOut)return;
  const context=selectedAsset?fileContext():null,original=current;
  lock(true);
@@ -1470,16 +1517,21 @@ $('loadLatest').addEventListener('click',async()=>{
  }catch(error){if(!signedOut)status(error.message,true);}
  finally{lock(false);syncMedia();}
 });
-async function generatePreview({withinAutomatic=false}={}){
+async function generatePreview({withinAutomatic=false,preparedProduct,preparedContext}={}){
  if(signedOut||(busy&&!withinAutomatic))return false;const input=sourceInput();if(!input.platforms.length){status(messages.INVALID_INPUT,true);return;}
  const context=selectedAsset?fileContext():null;
 
  lock(true);status('Eigene Texte je Portal werden erstellt und der Shop-Link wird geprüft …');
  try{
-  await ensureFreshFile(context);
-  const product=await getDraftProduct(context);
+  if(preparedContext)assertFileContext(preparedContext);else await ensureFreshFile(context);
+  const product=preparedContext?preparedProduct:await getDraftProduct(context);
   if(product?.state==='ambiguous'&&(withinAutomatic||!hasSourceEdits()))throw Error(askForProduct());
   const draftInput=attachProduct(input,product);
+  if(withinAutomatic&&context&&current?.revision===1&&current.input?.audience===draftInput.audience&&current.input.goal===draftInput.goal
+     &&current.input.source_text===draftInput.source_text&&current.input.language===draftInput.language
+     &&current.preview?.drafts?.some(d=>d.platform===selectedPortal)&&!hasDraftEdits()&&!unavailableDraftLink(current.preview.drafts.find(d=>d.platform===selectedPortal))){
+   sourceBaseline=sourceFormKey();workspace?.show('source');status('Der passende Beitragstext ist bereits geladen.');return true;
+  }
   const signature=JSON.stringify({input:draftInput,asset_id:context?.asset_id,asset_revision:context?.asset_revision});
   if(!attempt||attempt.signature!==signature||attempt.finished)attempt={signature,id:crypto.randomUUID(),finished:false};
   const request=attempt;
@@ -1595,7 +1647,7 @@ async function acceptTextVariant(){
  }catch(error){if(!signedOut){status(error.message,true);workspace?.setVariantFeedback?.(error.message,true);}}
  finally{lock(false);syncMedia();}
 }
-$('previewForm').addEventListener('submit',event=>{event.preventDefault();return generatePreview();});
+$('previewForm').addEventListener('submit',event=>{event.preventDefault();return workspace?saveEditor():generatePreview();});
 
 function openDraftLinkEditor(){
  if(signedOut||!current||$('draftLinkEditor').hidden)return;
@@ -1625,7 +1677,7 @@ async function verifySavedDraft({binding,post,productId}){
 }
 function openOutdatedDraft(){
  if(signedOut)return;
- workspace?.show('source');$('sourcePanel').open=true;$('loadLatest').focus();
+ workspace?.show('source');$('sourcePanel').open=true;if(workspace)standaloneLatest.click();else standaloneLatest.focus();
  status('Die gespeicherte Fassung hat sich geändert. Lade den gespeicherten Entwurf und prüfe den aktuellen Beitrag.',true);
 }
 function setDraftLink(target){
@@ -1872,6 +1924,103 @@ $('checkDraftSave').addEventListener('click',async()=>{
  lock(true);try{await checkDraftSave();}finally{lock(false);syncMedia();}
 });
 
+function editorFields(){
+ if(!workspace)return null;
+ const field=(key)=>current?$(selectedPortal+'-'+key):$('workspaceEmpty'+({body:'Body',hashtags:'Hashtags',title:'Title'})[key]);
+ return {title:field('title')?.value||'',body:field('body')?.value||'',hashtags:field('hashtags')?.value||'',source:$('source_text').value};
+}
+function restoreEditorFields(values){
+ if(!values||!workspace)return;
+ for(const key of ['title','body','hashtags']){
+  const input=current?$(selectedPortal+'-'+key):$('workspaceEmpty'+key[0].toUpperCase()+key.slice(1));
+  if(input){input.value=values[key];input.dispatchEvent(new Event('input',{bubbles:true}));}
+ }
+ $('source_text').value=values.source;$('source_text').dispatchEvent(new Event('input',{bubbles:true}));
+}
+async function editorRpc(action,input){
+ const owner=previewOwnerId;
+ if(signedOut||!owner||(await session()).user.id!==owner)throw fileError('AUTH_REQUIRED');
+ const {data,error}=await supabase.rpc('sma_content_editor_v1',{p_action:action,p_input:input}).abortSignal(AbortSignal.timeout(25000));
+ if(signedOut||previewOwnerId!==owner)throw fileError('AUTH_REQUIRED');
+ if(error)throw Error(action==='save'?'Speicherung nicht bestätigt. Deine Eingaben bleiben erhalten.':'Versand nicht bestätigt. Prüfe den Auftragsstand.');
+ if(data?.ok!==true){
+  const reason={TARGET_ACCOUNT_REQUIRED:'Für dieses Portal ist kein Versandkonto eingerichtet.',FOLDER_OR_FILE_UNAVAILABLE:'Die ausgewählte Datei ist im Portalordner nicht mehr verfügbar.',PORTAL_MEDIA_PROOF_REQUIRED:'Der Nachweis für das Profillogo und die Musik fehlt. Der Versand ist gesperrt.'}[data?.code];
+  if(reason)throw Error(reason);throw fileError(data?.code);
+ }
+ return data;
+}
+async function saveEditor(){
+ if(busy||signedOut||!workspace)return false;
+ if(!selectedAsset){status('Ordne dem Beitrag zuerst eine Datei zu.',true);return false;}
+ if(uncertainSave||comparisonBase||!$('compareDraft').hidden||magicPreparationError){status('Prüfe zuerst die aktuelle gespeicherte Fassung.',true);return false;}
+ if(current&&!hasFormChanges()&&!hasSourceEdits())return true;
+ if(current&&!hasSourceEdits()){
+  await saveDraft();
+  return !hasDraftEdits()&&!hasSourceEdits();
+ }
+ const values=editorFields(),context=fileContext();
+ const title=values.title.trim()||values.body.trim().split(/\r?\n/)[0].slice(0,80);
+ if(values.body.trim().length<10){status('Gib einen Beitragstext mit mindestens 10 Zeichen ein.',true);(current?$(selectedPortal+'-body'):$('workspaceEmptyBody')).focus();return false;}
+ let hashtags;try{hashtags=parseHashtags(values.hashtags);}catch(e){status(e.message,true);return false;}
+ const input={...context,preview_id:current?.id??null,preview_revision:current?.revision??null,language:$('language').value,
+  source_text:values.source,title,body:values.body.trim(),hashtags,...(pendingLink===undefined?{}:{link_target:pendingLink})};
+ const signature=JSON.stringify(input);
+ if(manualAttempt?.signature!==signature)manualAttempt={signature,id:crypto.randomUUID()};
+ input.request_id=manualAttempt.id;lock(true);
+ try{
+  await ensureFreshFile(context);
+  const saved=await withFreshFile(context,()=>editorRpc('save',input));
+  assertFileContext(context);
+  if(saved.status!=='completed'||saved.preview?.drafts?.[0]?.platform!==selectedPortal||saved.input?.editor_source_text!==values.source)throw Error('Die gespeicherte Fassung konnte nicht bestätigt werden.');
+  fillInput(saved.input);finishDraftSave(saved,context);manualAttempt=null;status('Entwurf gespeichert.');return true;
+ }catch(e){if(!signedOut)status(e.message,true);return false;}
+ finally{lock(false);}
+}
+function editorBinding(){return {...fileContext(),preview_id:current.id,preview_revision:current.revision};}
+function sendFeedback(message,error=false){
+ const field=$('workspaceSendStatus');
+ if(field){field.textContent=message;field.dataset.error=String(error);}
+ status(message,error);
+}
+function sendReceipt(result){
+ if(result.state==='approval_required')return 'Für diese Fassung ist noch keine passende Freigabe vorhanden.';
+ if(result.accepted||result.pending)return 'Versand angefordert. Die Bestätigung des Portals steht noch aus.';
+ if(result.state==='complete')return 'Das Portal hat den Beitrag bereits bestätigt.';
+ if(['session_ready','uploading','processing'].includes(result.state))return 'Das Portal verarbeitet diesen Auftrag bereits.';
+ if(result.state==='blocked')return 'Der Versand ist blockiert. Prüfe die offenen Punkte im Veröffentlichungsauftrag.';
+ return 'Der Versand ist derzeit nicht möglich. Prüfe den Freigabestand des Auftrags.';
+}
+async function finishInstantApproval(order,context){
+ if(!instantRequest||JSON.stringify(context.binding)!==instantRequest.key)return;
+ const request=instantRequest;instantRequest=null;
+ try{
+  const result=await editorRpc('send',{...context.binding,order:order.id,request_id:request.id});
+  const message=sendReceipt(result);sendFeedback(message);return message;
+ }catch(e){sendFeedback(e.message,true);return e.message;}
+}
+async function postNow(){
+ if(posting||busy||signedOut)return;
+ if(!selectedAsset){sendFeedback('Ordne dem Beitrag zuerst eine Datei zu.',true);return;}
+ if(selectedAsset.profile_media?.state==='private_preview_only'){sendFeedback('Diese Datei ist als private Vorschau gekennzeichnet. Der Versand ist gesperrt.',true);return;}
+ const file=selectedAsset,owner=previewOwnerId;
+ posting=true;
+ try{
+  if(!await saveEditor())return;
+  if(signedOut||owner!==previewOwnerId||!photoStillSelected(file))throw fileError('FILE_CHANGED');
+  const binding=editorBinding(),key=JSON.stringify(binding);
+  if(instantRequest?.key!==key)instantRequest={key,id:crypto.randomUUID()};
+  lock(true);sendFeedback('Aktueller Beitrag und Versandfreigabe werden geprüft …');
+  let result;
+  try{result=await editorRpc('send',{...binding,request_id:instantRequest.id});assertFileContext(binding);}
+  finally{lock(false);}
+  if(result.state==='approval_required'){
+   sendFeedback('Prüfe Zielkonto und Sichtbarkeit und bestätige den aktuellen Beitrag.');
+   await orderReview.openInstant();
+  }else{instantRequest=null;sendFeedback(sendReceipt(result));}
+ }catch(e){if(!signedOut)sendFeedback(e.message,true);}
+ finally{posting=false;}
+}
+
 async function saveDraft(){
  if(busy||signedOut||!current||uncertainSave||comparisonBase||!hasFormChanges())return;
  const cards=[...$('drafts').children];
@@ -1908,14 +2057,14 @@ async function saveDraft(){
   }else status(e.message,true);
  }}finally{lock(false);syncMedia();}
 }
-$('save').addEventListener('click',saveDraft);
+$('save').addEventListener('click',()=>workspace&&hasSourceEdits()?saveEditor():saveDraft());
 if(selectedPortal)orderReview=installOrderReview(document,{session,readStoredOrder,cancelStoredOrder,
  readYoutubeDefaults:async(binding,channel)=>{
   const {data,error}=await supabase.rpc('sma_youtube_file_defaults_v1',{
    p_asset_id:binding.asset_id,p_asset_revision:binding.asset_revision,p_channel_id:channel});
   return error?null:data;
  },
- saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
+ sendApproved:finishInstantApproval,saveSupplementalReview:(id,review)=>storedOrderRequest('supplement',id,{confirm:true,review}),
  readTransferStatus,portalName:names[selectedPortal],host:workspace?$('workspacePreviewPrimary'):$('save').parentElement,
  command:async(action,input,binding,options)=>{
   if(action==='get')return new Response(JSON.stringify(await readStoredOrder(input.id)),{status:200,headers:{'Content-Type':'application/json'}});
@@ -1943,7 +2092,7 @@ if(workspace)$('workspaceFiles').setAttribute('aria-busy','true');
 try{
  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
  supabase=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
- supabase.auth.onAuthStateChange((event,s)=>{if(event==='INITIAL_SESSION'&&previewOwnerId&&s?.user?.id!==previewOwnerId)return;syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){portalVideoSource.clear();hoverPlayback.stop();fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);clearSharedOriginalMediaCache(undefined,previewOwnerId);clearSharedCatalogRefreshCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
+ supabase.auth.onAuthStateChange((event,s)=>{if(event==='INITIAL_SESSION'&&previewOwnerId&&s?.user?.id!==previewOwnerId)return;syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});originalVideo?.invalidateOwner(s?.user?.id||null);if(event==='SIGNED_OUT'||(previewOwnerId&&s?.user?.id&&s.user.id!==previewOwnerId)){portalVideoSource.clear();hoverPlayback.stop();fileJobs.clear();clearSharedThumbnailCache(undefined,previewOwnerId);clearSharedOriginalMediaCache(undefined,previewOwnerId);clearSharedCatalogRefreshCache(undefined,previewOwnerId);tabDrafts.clearOwner(previewOwnerId);startupDraft=null;currentHistoryAsset=null;galleryMusic?.destroy();coverView?.clear();signedOut=true;workspace?.setDrive?.(null);loadingVideoDraft=false;magicPreparationError=null;orderReview?.clear();clearAssetPreview();pickerThumbnails.clear();localMedia=null;uploadController?.abort();deviceUpload=null;$('deviceFile').value='';$('uploadPanel').hidden=true;$('uploadStatus').textContent='';lock(true);$('result').hidden=true;assets=[];selectedAsset=null;pendingAssetId=null;clearDraft();for(const id of ['source_text','fileSearch'])$(id).value='';$('fileSwitchMessage').textContent='';$('filePickerStatus').textContent='';$('fileSwitchNotice').hidden=true;if($('filePicker').open)$('filePicker').close();renderSelectedFile();renderFilePicker();$('assetStatus').textContent='';resetMediaCheck(messages.AUTH_REQUIRED);status(messages.AUTH_REQUIRED,true);}});
  const coverOwner=(await session()).user.id;previewOwnerId=coverOwner;
  if(['youtube','tiktok','instagram','facebook'].includes(selectedPortal)){
   if(workspace)$('workspacePreparationTools').append($('jointPlan'));

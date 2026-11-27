@@ -9,6 +9,8 @@ function setup(previewData={},callbacks={}){
   constructor(tag){this.tag=tag;this.children=[];this.events={};this.attrs={};this.dataset={};this.hidden=false;this.classes=new Set();this.style={setProperty(k,v){this[k]=v},removeProperty(k){delete this[k]}};this.classList={contains:n=>this.classes.has(n),add:n=>this.classes.add(n),toggle:(n,v)=>v?this.classes.add(n):this.classes.delete(n)};}
   set id(value){this._id=value;byId.set(value,this)}get id(){return this._id}
   append(...nodes){for(const node of nodes){if(node.parentElement)node.parentElement.children=node.parentElement.children.filter(n=>n!==node);node.parentElement=this;this.children.push(node)}}
+  remove(){if(this.parentElement){this.parentElement.children=this.parentElement.children.filter(n=>n!==this);this.parentElement=null;}}
+  insertBefore(node,before){node.remove();node.parentElement=this;this.children.splice(this.children.indexOf(before),0,node);}
   prepend(...nodes){this.append(...nodes);this.children=[...nodes,...this.children.filter(n=>!nodes.includes(n))]}
   setAttribute(k,v){this.attrs[k]=v}removeAttribute(k){delete this.attrs[k]}
   addEventListener(k,f){this.events[k]=f}click(){this.events.click?.()}
@@ -29,6 +31,7 @@ function setup(previewData={},callbacks={}){
  for(const id of ['pickerRefresh','chooseGeneralTemplate']){const parent=el('div');parent.append(byId.get(id));pickerBody.append(parent)}
  byId.get('assetPanel').append(byId.get('deviceBrowse'),byId.get('browseFiles'),byId.get('refreshFiles'),byId.get('magicPanel'));
  const languageField=el('div');languageField.append(byId.get('language'));byId.get('sourcePanel').append(languageField,byId.get('source_text'));
+ const oldActions=el('div');oldActions.append(byId.get('generate'),byId.get('loadLatest'));byId.get('sourcePanel').append(oldActions);
  const form=el('form');form.value='Noch nicht gespeicherte Kundeneingabe';byId.get('sourcePanel').append(form);
  for(const name of ['checks','note','notice']){const node=el('div');node.className=name;node.textContent='Pending verification';byId.get('result').append(node);}
  const actions=el('div');actions.append(byId.get('save'));byId.get('result').append(actions);
@@ -232,7 +235,7 @@ test('text completion and clearing switch placeholders without moving the edit f
 test('media checks remain accessible and videos pause when leaving the gallery',()=>{
  const p=setup();p.workspace.selection({id:'own',name:'Video.mp4',media_kind:'video'});
  p.workspace.show('preview');assert.equal(p.get('workspacePreview').hidden,false);
- assert.equal(p.get('mediaPanel').parentElement,p.get('workspacePreparationTools'));
+ assert.equal(p.get('mediaPanel').parentElement,p.get('workspaceDetailView'));
  const notes=p.get('workspaceResultDetails').children.filter(n=>n.textContent==='Pending verification');assert.equal(notes.length,3);
  p.video.paused=false;p.get('workspaceTab-source').click();assert.equal(p.video.paused,true);
  p.workspace.selection(null);assert.equal(p.get('workspacePreview').hidden,true);assert.equal(p.get('workspaceViewFile'),undefined);
@@ -334,7 +337,7 @@ test('professional preview places only publication in the primary action host',(
  assert.ok(page.includes("host:workspace?$('workspacePreviewPrimary'):$('save').parentElement"),
   'Existing approval controller must be mounted in the one primary area');
  const html=fs.readFileSync('app/publication-preview.html','utf8');
- assert.ok(html.includes('optimizer-workspace.css?v=24'));
+ assert.ok(html.includes('optimizer-workspace.css?v=25'));
  assert.match(html,/src="assets\/publication-preview\.js\?v=\d+"/);
 });
 

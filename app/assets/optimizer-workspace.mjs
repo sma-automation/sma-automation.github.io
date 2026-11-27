@@ -222,9 +222,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   $('magicActionsText').hidden = false;
   $('sourceSummary').hidden=true;
   $('sourcePanel').open = true;
-  $('generate').textContent = 'Text aus eigenen Angaben erstellen';
-  $('generate').classList.add('secondary');
-  $('loadLatest').textContent = 'Gespeicherten Entwurf laden';
+  // These controls belong to the standalone form. Remove their row from the workspace.
+  const standaloneActions = $('generate').parentElement;
   const evidence = make('details', 'workspaceMagicEvidence');
   evidence.append(make('summary', null, 'Erkennung ansehen'), $('magicPanel'));
 
@@ -237,16 +236,19 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   textHeader.hidden=true;
   const empty = make('div', 'workspaceTextEmpty');
   for (const [tag, id, label, placeholder] of [
-    ['input', 'workspaceEmptyTitle', 'Titel / Einstieg', 'Dein Titel wird hier vorbereitet.'],
-    ['textarea', 'workspaceEmptyBody', 'Beitragstext', 'Dein Text mit passenden Hashtags und Shop-Link erscheint hier.'],
+    ['input', 'workspaceEmptyTitle', 'Titel / Einstieg', 'Titel eingeben'],
+    ['textarea', 'workspaceEmptyBody', 'Beitragstext', 'Beitragstext eingeben'],
     ['input', 'workspaceEmptyHashtags', 'Hashtags', ''],
   ]) {
     const field = make('div'); field.className = 'field';
     const fieldLabel = make('label', null, label); fieldLabel.htmlFor = id;
-    const control = make(tag, id); control.placeholder = placeholder; control.disabled = true;
+    const control = make(tag, id); control.placeholder = placeholder;
+    control.maxLength = id.endsWith('Body') ? 1200 : id.endsWith('Title') ? 80 : 1000;
     field.append(fieldLabel, control); empty.append(field);
   }
 
+  const saveManual=button('workspaceSaveManual','Entwurf speichern',()=>options.onEditorSave?.());
+  empty.append(saveManual);
   const resultDetails = make('details', 'workspaceResultDetails');
   resultDetails.append(make('summary', null, 'Prüfdetails und Shop-Link'));
   // Keep pending checks accessible; collapsing them never changes publish approval.
@@ -305,18 +307,28 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
   text.append(textHeader, variantPanel, empty, $('result'));
   const tools=make('div','workspacePreparationTools');
   const fileTools=make('div','workspaceFileTools');
-  const addFile=button('workspaceAddFile','Datei hinzufügen',()=>{if(!$('deviceBrowse').disabled)$('deviceBrowse').click();});
+  const drop=make('div','workspaceDrop');
+  const addFile=button('workspaceBrowse','Datei auswählen',()=>options.onBrowse?.());
+  const dropHint=make('span',null,'Datei hier ablegen');
+  const drive=make('a','workspaceDrive','Drive-Ordner öffnen');
+  drive.target='_blank';drive.rel='noopener noreferrer';drive.hidden=true;
+  drop.append(dropHint,addFile);
+  for(const type of ['dragenter','dragover','dragleave','drop'])drop.addEventListener(type,event=>{
+    event.preventDefault();event.stopPropagation();
+    drop.classList.toggle('over',type==='dragenter'||type==='dragover');
+    if(type==='drop')options.onDrop?.(Array.from(event.dataTransfer?.files||[]));
+  });
+  const sendNow=button('workspaceSendNow','Sofort posten',()=>options.onSendNow?.());
+  const sendStatus=make('p','workspaceSendStatus');sendStatus.setAttribute('role','status');
   const editorLink=make('a','workspaceMediaEditor','Im Medieneditor öffnen');editorLink.hidden=true;
   editorLink.target='_blank';editorLink.rel='noopener';
-  fileTools.append(addFile,editorLink);
-  tools.append($('catalogLookup'),evidence,$('mediaPanel'),fileTools);
+  fileTools.append(drop,drive,editorLink);
+  tools.append($('catalogLookup'),evidence,fileTools);
+  const mediaPanel=$('mediaPanel');mediaPanel.hidden=true;detailView.append(mediaPanel);
   if($('videoMetadataPanel'))tools.append($('videoMetadataPanel'));
   if($('exportCoverPanel'))tools.append($('exportCoverPanel'));
-  const createActions=$('generate').parentElement;
-  if(createActions?.classList.contains('actions')){
-    $('generate').setAttribute('form','previewForm');tools.prepend(createActions);
-  }
-  editor.append($('magicActionsText'), $('sourcePanel'), text,tools);
+  standaloneActions.remove();
+  editor.append($('magicActionsText'), $('sourcePanel'), text,tools,sendNow,sendStatus);
   $('assetPanel').hidden = true;
   $('resultFileActions').hidden = true;
   $('exampleFiles').hidden = true;
@@ -345,6 +357,8 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     if($('workspaceTabBar'))$('workspaceTabBar').hidden=toolbar.hidden;
     statusRow.hidden = key === 'preview';
     empty.hidden = !$('result').hidden;
+    if(key==='source')fileTools.append($('uploadPanel'));
+    if(key==='preview')preview.insertBefore($('uploadPanel'),uploadIntro);
     if (key === 'preview') {
       const uploadOnly = !selectedFile;
       lastPreviewWasEmpty = uploadOnly;
@@ -378,6 +392,14 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       if (view === 'files'&&restoreFocus) focusGalleryEntry();
     },
     galleryVisible: () => active === 'files',
+    editing: () => active==='source',
+    setDrive(folder,account) {
+      drive.hidden=typeof folder!=='string'||!/^[-\w]{10,200}$/.test(folder);
+      if(drive.hidden){drive.removeAttribute('href');return;}
+      const url=new URL('https://drive.google.com/drive/folders/'+folder);
+      if(account)url.searchParams.set('authuser',account);
+      drive.href=url.href;
+    },
     openEmptyPreview() { if (!selectedFile) show('upload'); },
     refreshPreview(feedback) { if (active === 'preview') refreshPreview(feedback); },
     setCaptionNode(node) {
@@ -412,18 +434,18 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
       variantStatus.dataset.error = String(error);
     },
     lockVariant(value) {
-      for (const node of [repeat, previewRepeat, adopt, next, discard, addFile]) node.disabled = value;
+      for (const node of [repeat, previewRepeat, adopt, next, discard, addFile, saveManual, sendNow, ...empty.querySelectorAll('input,textarea')]) node.disabled = value;
     },
     selection(file) {
       editorLink.hidden=!(file?.id&&file.revision&&options.editorUrl);
       if(editorLink.hidden)editorLink.removeAttribute('href');
       else editorLink.href=options.editorUrl+'#asset='+encodeURIComponent(file.id)+'&revision='+encodeURIComponent(file.revision)+'&portal='+encodeURIComponent(portalName.toLowerCase());
       mediaLabel.textContent = file ? portalName + ' · ' + file.name : '';
-      mediaLabel.hidden = !file;
+      mediaLabel.hidden = !file;$('mediaPanel').hidden=!file;
       selectedFile = file; previewBack.textContent=backText(); variantPanel.hidden = true; clearPreview();
       const description = file ? describe(file) : null;
       selectedRow.hidden=!file;
-      selectedName.textContent = description?.title || '';
+      selectedName.textContent = file?.name || '';
       selectedKind.textContent = description ? description.version + ' · ' + portalName : '';
       previewEdits.hidden = !file;
       if (active === 'preview') {
