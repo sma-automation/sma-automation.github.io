@@ -1,13 +1,30 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Manuell posten · SMA</title>
-<style>*{box-sizing:border-box}body{margin:auto;max-width:48rem;padding:1.5rem;font:1rem/1.5 Inter,Arial,sans-serif;color:#15213b;background:#f7f8fb}header,section{margin:1rem 0}section{background:white;border:1px solid #d7dfed;border-radius:12px;padding:1.25rem}button,select,input,.action{font:inherit;padding:.5rem .75rem;border-radius:6px;border:1px solid #a9b6cc}button{cursor:pointer;background:white}button:disabled{cursor:default;opacity:.6}select{width:100%}#send{background:#3157cd;color:white;font-weight:bold}a{color:#254cb6}#drive{display:inline-block;background:#3157cd;border-color:#3157cd;color:white;text-decoration:none;font-weight:600}#drive:hover,#drive:focus-visible{background:#2447aa}#videoSearch{width:100%;max-width:26rem}#driveVideos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(15rem,100%),1fr));gap:.4rem .85rem;list-style:none;padding:0;margin:.75rem 0 0}#driveVideos a{display:block;padding:.45rem 0;overflow-wrap:anywhere}h1{line-height:1.2}p{white-space:pre-line}label{display:block;margin:.75rem 0 .25rem}summary{cursor:pointer}#status{font-weight:600}[hidden]{display:none!important}</style></head>
-<body><header><a href="./dashboard.html#publishing">← Veröffentlichung</a><h1 id="title">Manuell posten</h1></header>
-<section><a id="drive" class="action" target="_blank" rel="noopener noreferrer" hidden>Drive-Ordner öffnen ↗</a>
-<div id="drivePreviews" hidden><label for="videoSearch">Fertige Videos in Google Drive</label><input id="videoSearch" type="search" placeholder="Videotitel suchen" aria-label="Videotitel suchen"><ul id="driveVideos"></ul><small id="noMatches" hidden>Kein passender Videotitel gefunden.</small></div>
-<div id="smaSelection"><label for="files">Video in SMA nach Titel auswählen</label><select id="files" disabled><option>Lade Dateien …</option></select></div>
-<p><button id="reload" type="button">Ordner aktualisieren</button></p><small id="folderStatus" role="status"></small></section>
-<section id="post" hidden><h2 id="headline"></h2><a id="driveVideo" target="_blank" rel="noopener noreferrer" hidden>Dieses Video in Google Drive abspielen ↗</a><p id="caption"></p><p id="account"></p>
-<a id="review">Beitrag ansehen und freigeben</a><p id="status" role="status" aria-live="polite"></p>
-<div id="actions" hidden><button id="send" type="button">Sofort posten</button>
-<details><summary>Heute zu einer anderen Uhrzeit posten</summary><label for="when">Uhrzeit in Wien</label>
-<input type="time" id="when"><button type="button" id="schedule">Termin übernehmen</button></details></div></section>
-<script type="module" src="./assets/manual-portal-send.mjs?v=3"></script></body></html>
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Manuell posten · SMA</title>
+<style>
+*{box-sizing:border-box}body{max-width:55rem;margin:auto;padding:1.25rem;font:1rem/1.45 Inter,Arial,sans-serif;color:#17233b;background:#f6f7fb}
+header,section{margin:.85rem 0}section{background:white;border:1px solid #d7dfed;border-radius:12px;padding:1rem 1.2rem}
+button,input,.action{font:inherit;padding:.5rem .8rem;border-radius:7px;border:1px solid #a9b6cc}button,summary{cursor:pointer}button{background:white;color:#192943}button:disabled{cursor:default;opacity:.5}
+h1{font-size:1.85rem;margin:.45rem 0}h2{font-size:1.25rem;margin:.3rem 0}a{color:#264cb5}p{white-space:pre-line}
+#drive,.primary{display:inline-block;background:#3157cd;border-color:#3157cd;color:white;font-weight:600;text-decoration:none}
+#dropZone{padding:.7rem 1rem;border:1px dashed #879cbd;border-radius:7px;background:#f8faff;margin-top:.65rem}
+#chooser{margin-top:.6rem}summary{color:#274bb0;width:fit-content}#videoSearch{width:100%;max-width:27rem;margin:.5rem 0}
+#driveVideos{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(16rem,100%),1fr));gap:.3rem .5rem;max-height:15rem;overflow:auto}
+#driveVideos button{width:100%;text-align:left;border-color:#dbe2ef}#driveVideos button[aria-pressed=true]{border-color:#3157cd;background:#ecf1ff}
+#post{border-top:3px solid #3157cd}#portalLabel{display:inline-block;margin-left:.4rem;padding:.15rem .6rem;border-radius:12px;background:#edf1ff;color:#2446a9;font-weight:bold}#selectedName{overflow-wrap:anywhere;font-size:1.14rem;font-weight:650;margin:.35rem 0 .65rem}
+#mediaPreview{background:#111722;max-width:100%;border-radius:7px;overflow:hidden}#mediaPreview:empty{display:none}#mediaPreview img,#mediaPreview video,#mediaPreview iframe{display:block;width:100%;height:clamp(10rem,32vh,22rem);object-fit:contain;border:0}
+#mediaNotice,#folderStatus,#dropStatus{display:block;font-size:.86rem;color:#4f607a}#folderStatus:empty,#dropStatus:empty,#mediaNotice:empty,#caption:empty,#account:empty{display:none}
+#actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}#status{font-weight:600;margin:.55rem 0}#review,#driveVideo{margin-right:1rem}#reload{margin-top:.5rem}
+[hidden]{display:none!important}
+</style></head><body>
+<header><a href="./dashboard.html#publishing">← Veröffentlichung</a><h1 id="title">Manuell posten</h1></header>
+<section><a id="drive" class="action" target="_blank" rel="noopener noreferrer" hidden>Ordner in Google Drive öffnen ↗</a>
+<div id="dropZone">MP4 oder Drive-Dateilink hierher ziehen · <button type="button" id="browse">MP4 auswählen</button><input id="device" type="file" accept="video/mp4,.mp4,.m4v" hidden></div><small id="dropStatus" role="status"></small>
+<details id="chooser" open><summary>Video aus dem Portalordner auswählen</summary>
+<input id="videoSearch" type="search" placeholder="Videotitel suchen" aria-label="Videotitel suchen"><ul id="driveVideos"></ul><small id="noMatches" hidden>Kein passender Videotitel gefunden.</small>
+<button id="reload" type="button">Ordner aktualisieren</button><small id="folderStatus" role="status"></small></details></section>
+<section id="post" hidden aria-label="Ausgewählte Datei"><div><strong>Ausgewählte Datei</strong> <span id="portalLabel"></span></div><p id="selectedName"></p>
+<div id="mediaPreview"></div><small id="mediaNotice" role="status"></small><a id="driveVideo" target="_blank" rel="noopener noreferrer" hidden>Video in Drive ansehen ↗</a>
+<h2 id="headline" hidden></h2><p id="caption"></p><p id="account"></p><p id="status" role="status"></p>
+<div id="actions"><button class="primary" id="send" type="button" disabled>Direkt posten</button>
+<label>Heute um <input type="time" id="when" aria-label="Uhrzeit in Wien"> Uhr</label><button id="schedule" type="button" disabled>Automatisch posten starten</button></div>
+<a id="review">Beitrag ansehen und freigeben</a></section><script type="module" src="./assets/manual-portal-send.mjs?v=5"></script></body></html>
