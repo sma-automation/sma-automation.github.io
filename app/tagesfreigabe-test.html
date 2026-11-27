@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>Tagesfreigabe testen · SMA</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7fa;color:#162338;font:16px/1.5 Inter,system-ui,sans-serif}header{background:#11233c;color:white}header div,main{max-width:860px;margin:auto;padding:16px 24px}header div{display:flex;justify-content:space-between;align-items:center}header a{color:#fff}main{padding-top:32px;padding-bottom:70px}h1{font-size:clamp(1.8rem,5vw,2.6rem);line-height:1.1;margin:5px 0 12px}h2{font-size:1.15rem;margin:16px 0 0}.note,small{color:#4f6175}.list{margin:22px 0}.row{background:white;border:1px solid #d6dfeb;border-radius:12px;margin:8px 0;padding:13px 16px;display:grid;grid-template-columns:80px 1fr;gap:10px}.row time{font-weight:700}.row strong,.row small{display:block}.row details{margin-top:5px;font-size:.9rem}.row p{white-space:pre-line;margin:5px 0;overflow-wrap:anywhere}select,button{font:inherit;padding:7px 10px;border:1px solid #a6b3c2;border-radius:7px}.row label,fieldset label{display:block;margin-top:9px}label select{margin:3px 0 0 8px;max-width:100%}fieldset{margin:12px 0;border:1px solid #d6dfeb;border-radius:10px;background:#fff}button{background:#174aa9;color:white;font-weight:650;padding:11px 17px;cursor:pointer}button:disabled{opacity:.6;cursor:default}[hidden]{display:none!important}#status{font-weight:650}summary{cursor:pointer;color:#254e83}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #4383ef;outline-offset:2px}@media(max-width:520px){main,header div{padding-left:14px;padding-right:14px}.row{grid-template-columns:55px 1fr}.row select,label select{display:block;margin-left:0}}
+</style>
+</head><body><header><div><strong>Social Media Automation</strong><a href="./dashboard.html">Dashboard</a></div></header>
+<main><p class="note">Private Testkopie · Wien</p><h1>Tagesfreigabe</h1><h2 id="day"></h2>
+<p>Ein Klick übernimmt den angezeigten Plan in den simulierten Versand.</p>
+<div id="items" class="list"></div>
+<fieldset id="defaults" hidden><legend>TikTok-Vorgabe für diese Testkopie</legend><label>KI-generiert <select id="ai"><option value="">Noch offen</option><option value="true">Ja</option><option value="false">Nein</option></select></label></fieldset>
+<button id="confirm" type="button" hidden>Tagesplan im Test freigeben</button>
+<p id="status" role="status" aria-live="polite">Testkopie wird geladen …</p>
+<a id="login" href="./index.html" hidden>Bei SMA anmelden</a>
+<script type="module" src="./assets/day-release-test.mjs"></script></main></body></html>
