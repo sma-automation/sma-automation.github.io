@@ -1,3 +1,4 @@
+import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=1';
 import {mountJointPlan} from './publication-joint-plan.mjs?v=3';
 import {syncSharedCatalogRefreshOwner,clearSharedCatalogRefreshCache} from './catalog-refresh.mjs?v=1';
 import {describeFile} from './file-description.mjs?v=2';
@@ -799,8 +800,8 @@ $('fileNext').addEventListener('click',()=>{if(!busy&&!$('fileNext').disabled){f
 $('chooseGeneralTemplate').addEventListener('click',()=>requestFileSelection(''));
 $('confirmFileSwitch').addEventListener('click',()=>pendingAssetId!==null?requestFileSelection(pendingAssetId,true):undefined);
 $('cancelFileSwitch').addEventListener('click',()=>{pendingAssetId=null;$('fileSwitchNotice').hidden=true;});
-async function loadFiles(preferredId=null){
- const old=preferredId??selectedAsset?.id??'';
+async function loadFiles(preferredId=null,background=false){
+ let old=preferredId??selectedAsset?.id??'';
  let catalog;
  try{
   catalog=await optimizerCatalog(AbortSignal.timeout(20000));
@@ -812,14 +813,20 @@ async function loadFiles(preferredId=null){
   }
   throw error?.code&&Object.hasOwn(messages,error.code)?error:fileError('FILE_SYNC_UNAVAILABLE');
  }
- if(signedOut)return;
+ if(signedOut)return false;
+ if(background){
+  if(busy||uploadController)return false;
+  old=selectedAsset?.id??'';
+ }
  galleryConfirmed=true;
  catalogRetry=null;
  for(const id of ['refreshFiles','pickerRefresh'])$(id).textContent='Dateien aktualisieren';
  void galleryMusic?.wake();assets=catalog.files;
  selectedAsset=assets.find(f=>f.id===old&&fileFitsPortal(f))||null;
  assignmentRevision=selectedAsset?.assignments?.find(a=>a.platform===selectedPortal)?.revision||0;renderSelectedFile(!!selectedAsset&&mediaViewKey===selectedAsset.id+':'+selectedAsset.revision);renderFilePicker();
- if(old&&!selectedAsset){clearDraft();resetMediaCheck(messages.FILE_UNAVAILABLE);throw Error(messages.FILE_UNAVAILABLE);}
+ if(old&&!selectedAsset){localMedia=null;clearDraft();resetMediaCheck(messages.FILE_UNAVAILABLE);
+  if(background){status(messages.FILE_UNAVAILABLE,true);return;}
+  throw Error(messages.FILE_UNAVAILABLE);}
 }
 function resetMediaCheck(message='Wähle zuerst eine Datei aus.'){
  selectedMediaFacts=null;workspace?.refreshPreview();
@@ -1970,6 +1977,13 @@ try{
    loadingVideoDraft=selectedAsset.media_kind==='video';workspace.show('preview');
   }
   if(ready)await loadLatest();
+  if(workspace&&selectedPortal){
+   watchPortalCatalog({
+    readFolder:async()=>{const {data,error}=await supabase.rpc('sma_manual_portal_v1',{p_platform:selectedPortal,p_action:'folder'});if(error)throw error;return data;},
+    available:()=>!signedOut&&!busy&&!uploadController&&galleryConfirmed,
+    refresh:()=>loadFiles(null,true)
+   });
+  }
  }
 }catch(e){lock(true);status(supabase?e.message:'Die Ansicht konnte nicht geladen werden. Bitte lade die Seite erneut.',true);}
 finally{
