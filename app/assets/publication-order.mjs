@@ -339,6 +339,7 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   function reviewValues(){return {...Object.fromEntries([...reviewFields,...humanFields].map(([k,e])=>[k,e.checked])),human_review_enabled:humanEnabled.checked};}
   function reviewReady(){try{reviewConfirmation(order,reviewValues());return !order.check_error;}catch{return false;}}
   function setWorking(value){
+    approve.textContent=instant?'Auf '+portalName+' posten':'Veröffentlichung freigeben';
     dialog.setAttribute('aria-busy',String(value));
     working=value;
     const ended=preparationEnded(order),locked=ended||recovery!==null;

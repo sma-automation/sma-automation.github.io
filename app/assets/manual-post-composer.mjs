@@ -1,5 +1,5 @@
 import {draftDestination} from './publication-destination.mjs?v=1';
-import {installOrderReview} from './publication-order.mjs?v=34';
+import {installOrderReview} from './publication-order.mjs?v=36';
 import {parseHashtags} from './publication-hashtags.mjs?v=2';
 import {createFileJobClient,fileJobAnchor} from './file-job-client.mjs?v=1';
 
