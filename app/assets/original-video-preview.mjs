@@ -1,6 +1,6 @@
 // Explicit, read-only access to the exact original. No analysis or attestation.
 export function originalVideoSupported(file){return file?.media_kind==='video'&&file.mime_type==='video/mp4'&&Number.isInteger(file.size_bytes)&&file.size_bytes>=12&&file.size_bytes<=24000000&&Number.isFinite(file.duration_ms)&&file.duration_ms>0&&file.duration_ms<=60000;}
-export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOwnerId,source,displaySource=null,displaySupported=originalVideoSupported,onReadyChange,editorStage=null,inlinePlay=false,loadedText='Originalvideo geladen. Abspielen speichert keine Prüfbestätigung oder Freigabe.',createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL}){
+export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOwnerId,source,displaySource=null,displayIntro=null,displaySupported=originalVideoSupported,onReadyChange,editorStage=null,inlinePlay=false,loadedText='Originalvideo geladen. Abspielen speichert keine Prüfbestätigung oder Freigabe.',createURL=URL.createObjectURL,revokeURL=URL.revokeObjectURL}){
  const box=doc.createElement('div'),button=doc.createElement('button'),video=doc.createElement('video'),status=doc.createElement('p');
  box.id='originalVideoPreview';box.hidden=true;button.type='button';button.className='secondary';button.textContent='Originalvideo laden';
  video.controls=true;video.playsInline=true;video.preload='metadata';video.hidden=true;video.setAttribute('aria-label','Originalvideo der ausgewählten Datei');video.style.cssText='display:block;width:100%;max-height:var(--original-video-max-height,500px);object-fit:contain;background:#111827';
@@ -21,7 +21,8 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
   return true;
  }
  let file=null,key='',generation=0,controller=null,url=null,disposed=false;
- let range=null,endTimer=null;
+ let range=null,endTimer=null,introUrl=null;
+ function clearIntro(){if(introUrl)revokeURL(introUrl);introUrl=null;video.removeAttribute('data-playback-phase');}
  function stop(){
   if(range){range=null;clearTimeout(endTimer);status.textContent=loadedText;}
   try{video.pause();}catch{}
@@ -45,14 +46,14 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
   }
  }
  for(const event of ['playing','timeupdate','seeked','ratechange','pause','ended'])video.addEventListener(event,checkRange);
- function release(){onReadyChange?.(false);stop();video.removeAttribute('src');try{video.load();}catch{}video.hidden=true;if(stage)stage.hidden=false;if(url)revokeURL(url);url=null;thumbnailHost.style.display='';}
- function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;release();button.removeAttribute('aria-busy');button.disabled=false;showPoster();status.textContent='';}
+ function release(){onReadyChange?.(false);stop();video.removeAttribute('src');try{video.load();}catch{}video.hidden=true;if(stage)stage.hidden=false;if(url)revokeURL(url);url=null;clearIntro();thumbnailHost.style.display='';}
+ function reset(){video.removeAttribute('poster');generation++;controller?.abort();controller=null;box.removeAttribute('aria-busy');release();button.removeAttribute('aria-busy');button.disabled=false;showPoster();status.textContent='';}
  const current=g=>!disposed&&g===generation;
  async function owner(g,read){if(!current(g))return false;if(await read(()=>getOwnerId())!==expectedOwnerId){if(current(g)){reset();file=null;key='';box.hidden=true;showPoster();}return false;}return current(g);}
  async function load(){
   if(disposed||controller||url||!displaySupported(file))return;
   const g=generation,selected=file,attempt=new AbortController(),signal=attempt.signal;
-  controller=attempt;button.setAttribute('aria-busy','true');button.disabled=true;status.textContent='Originalvideo wird geprüft und geladen …';
+  controller=attempt;box.setAttribute('aria-busy','true');button.setAttribute('aria-busy','true');button.disabled=true;status.textContent=displaySource?'Video wird geladen …':'Originalvideo wird geprüft und geladen …';
   let timedOut=false;
   // Preserve the existing source allowance, shared by both owner checks and bytes.
   const deadline=setTimeout(()=>{timedOut=true;attempt.abort();},180000);
@@ -68,12 +69,26 @@ export function mountOriginalVideo({doc,host,thumbnailHost,getOwnerId,expectedOw
     .then(value=>finish(resolve,value),error=>finish(reject,error));
   });
   try{
-   if(!await owner(g,read))return;const blob=await read(()=>(displaySource||source)(selected,signal));signal.throwIfAborted();if(!await owner(g,read))return;
+   if(!await owner(g,read))return;
+   if(displayIntro&&stage){
+    const start=await read(()=>displayIntro(selected,signal)).catch(()=>null);
+    signal.throwIfAborted();
+    if(start&&current(g)){
+     introUrl=createURL(start);video.dataset.playbackPhase='start';video.src=introUrl;video.hidden=false;
+     stage.hidden=true;button.hidden=true;thumbnailHost.style.display='none';status.textContent='Vollständiges Video wird geladen …';
+     if(visiblePlayer())video.play().catch(()=>{});
+    }
+   }
+   const blob=await read(()=>(displaySource||source)(selected,signal));signal.throwIfAborted();if(!await owner(g,read))return;
    if(!(blob instanceof Blob)||blob.type!=='video/mp4'||(displaySource?blob.size<1:blob.size!==selected.size_bytes))throw Error('SOURCE_UNAVAILABLE');
-   url=createURL(blob);video.src=url;video.hidden=false;if(!editorStage)thumbnailHost.style.display='none';button.hidden=true;status.textContent=inlinePlay||editorStage?'':loadedText;
-   if(stage){stage.hidden=true;if(visiblePlayer())video.play().catch(()=>{});}
-  }catch(e){if(current(g)&&controller===attempt&&(timedOut||!signal.aborted)){release();status.textContent=timedOut?'Das Laden des Originalvideos dauert gerade zu lange. Bitte versuche es erneut.':e?.message==='FILE_CHANGED'?'Die Datei wurde geändert. Bitte aktualisiere die Dateiliste.':'Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.';}}
-  finally{clearTimeout(deadline);if(current(g)&&controller===attempt){controller=null;button.removeAttribute('aria-busy');button.disabled=false;}}
+   const at=introUrl?video.currentTime:0;
+   const resume=!introUrl||!video.paused||video.ended;
+   url=createURL(blob);video.src=url;clearIntro();if(displaySource)video.dataset.playbackPhase='full';
+   if(at>0)video.currentTime=at;
+   video.hidden=false;if(!editorStage)thumbnailHost.style.display='none';button.hidden=true;status.textContent=inlinePlay||editorStage?'':loadedText;
+   if(stage){stage.hidden=true;if(resume&&visiblePlayer())video.play().catch(()=>{});}
+  }catch(e){if(current(g)&&controller===attempt&&(timedOut||!signal.aborted)){release();showPoster();status.textContent=timedOut?'Das Laden des Originalvideos dauert gerade zu lange. Bitte versuche es erneut.':e?.message==='FILE_CHANGED'?'Die Datei wurde geändert. Bitte aktualisiere die Dateiliste.':(displaySource?'Das Video konnte nicht geladen werden. Klicke auf Abspielen, um es erneut zu laden.':'Das Originalvideo konnte nicht geladen werden. Bitte versuche es erneut.');}}
+  finally{clearTimeout(deadline);if(current(g)&&controller===attempt){controller=null;box.removeAttribute('aria-busy');button.removeAttribute('aria-busy');button.disabled=false;}}
  }
  button.addEventListener('click',load);
  video.addEventListener('error',()=>{if(!url||disposed)return;release();button.hidden=!!editorStage;status.textContent='Der Browser kann das Originalvideo nicht abspielen. Bitte lade es erneut.';});

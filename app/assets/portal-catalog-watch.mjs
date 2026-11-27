@@ -1,6 +1,6 @@
 // The folder timestamp advances only after a complete Drive scan has committed.
-export function watchPortalCatalog({readFolder, available, refresh}) {
-  let applied, running = false, timer;
+export function watchPortalCatalog({readFolder, available, refresh, initialVersion=null}) {
+  let applied=initialVersion, running = false, timer;
   async function check() {
     if (running || document.hidden || !available()) return;
     const frame = window.frameElement;
@@ -29,5 +29,5 @@ export function watchPortalCatalog({readFolder, available, refresh}) {
   window.addEventListener('pageshow', resume);
   document.addEventListener('visibilitychange', resume);
   window.addEventListener('pagehide', () => clearInterval(timer));
-  resume();
+  if(initialVersion&&!document.hidden)timer=setInterval(check,30000);else resume();
 }

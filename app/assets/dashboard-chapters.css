@@ -153,3 +153,13 @@
 .sma-lesson-view ol{padding-left:1.5em}
 .sma-lesson-view li+li{margin-top:.5em}
 @media(max-width:760px){.sma-tutorials{grid-template-columns:minmax(0,1fr);gap:12px}.sma-lesson-list{display:flex;gap:5px;flex-wrap:wrap}.sma-lesson-list button{font-size:14px;padding:8px 10px}.sma-lesson-view{padding:12px}}
+
+.sma-playback-feedback{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:#fff;background:#10131a55}
+.sma-playback-feedback.error{padding:8px;background:#10131ad9;font:600 13px/1.4 system-ui;text-align:center}
+.sma-playback-feedback:not(.error)::before,#workspaceFiles[aria-busy=true]::before,#originalVideoPreview[aria-busy=true] p::before{
+ content:"";display:inline-block;width:21px;height:21px;border:3px solid #bdc9e5;border-top-color:#355ecb;border-radius:50%;vertical-align:middle;animation:sma-video-spin .8s linear infinite;
+}
+#workspaceFiles[aria-busy=true]::before{display:block;margin:12px auto}
+#originalVideoPreview[aria-busy=true] p::before{margin-right:8px}
+@keyframes sma-video-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.sma-playback-feedback::before,#workspaceFiles::before,#originalVideoPreview p::before{animation:none!important}}

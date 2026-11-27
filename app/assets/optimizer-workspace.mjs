@@ -340,7 +340,7 @@ export function createOptimizerWorkspace(doc, portalName, onGallery, options = {
     }
     for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== key;
     for (const [name, tab] of Object.entries(buttons)) {tab.setAttribute('aria-pressed', String(name === key));tab.setAttribute('aria-selected',String(name===key));tab.tabIndex=name===key?0:-1;}
-    for (const video of main.querySelectorAll('video')) video.pause();
+    if (changed) for (const video of main.querySelectorAll('video')) video.pause();
     toolbar.hidden = key === 'preview';
     if($('workspaceTabBar'))$('workspaceTabBar').hidden=toolbar.hidden;
     statusRow.hidden = key === 'preview';

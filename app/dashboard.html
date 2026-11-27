@@ -45,7 +45,7 @@ import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=4
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=15';
 import {mountDashboardMobileNav} from './assets/dashboard-mobile-nav.mjs?v=4';
-import {createHoverPlayback,createPortalVideoSource} from './assets/portal-video-playback.mjs?v=1';
+import {createHoverPlayback,createPortalVideoSource} from './assets/portal-video-playback.mjs?v=2';
 import {createMediaThumbnailLoader} from './assets/asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient,clearSharedThumbnailCache} from './assets/thumbnail-batch.mjs?v=1';
 import {clearSharedOriginalMediaCache} from './assets/original-media-cache.mjs?v=1';
@@ -138,7 +138,7 @@ function openOptimizer(portal,trigger,restoring=false,searchKey=null){
  const reused=Boolean(preview);
  if(!preview){
   preview=publishingPage.ownerDocument.createElement('iframe');preview.dataset.portal=portal;preview.dataset.key=frameKey;preview.title=portalNames[portal]+' – Medien und Beitrag optimieren';
-  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','62');if(restoring&&history.state?.view==='preview'&&!selectedFileId)url.searchParams.set('openPreview','1');url.searchParams.set('lang',publishingPage.ownerDocument.documentElement?.lang==='en'?'en':'de');if(typeof document!=='undefined'&&document.documentElement.dataset.smaCustomerMedia==='pilot')url.searchParams.set('kundenmedien','pilot');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.addEventListener('load',()=>{if(preview.contentDocument&&dashboardOwnerId)mountDashboardManualDrop(preview.contentDocument,supabase,dashboardOwnerId,async()=>(await dashboardSession()).user.id,portal);});preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
+  const url=new URL('publication-preview.html',window.location.href);url.searchParams.set('embedded','1');url.searchParams.set('wide','1');url.searchParams.set('portal',portal);url.searchParams.set('v','63');if(restoring&&history.state?.view==='preview'&&!selectedFileId)url.searchParams.set('openPreview','1');url.searchParams.set('lang',publishingPage.ownerDocument.documentElement?.lang==='en'?'en':'de');if(typeof document!=='undefined'&&document.documentElement.dataset.smaCustomerMedia==='pilot')url.searchParams.set('kundenmedien','pilot');if(selectedFileId)url.searchParams.set('asset',selectedFileId);if(searchKey)url.searchParams.set('fromSearch','1');if(restoring)url.searchParams.set('restoring','1');preview.dataset.restoring=String(restoring);preview.addEventListener('load',()=>{if(preview.contentDocument&&dashboardOwnerId)mountDashboardManualDrop(preview.contentDocument,supabase,dashboardOwnerId,async()=>(await dashboardSession()).user.id,portal);});preview.src=url.href;optimizerFrames.append(preview);optimizerFrameObserver.observe(preview);
  }
  for(const el of optimizerFrames.children)el.hidden=el!==preview;
  for(const child of publishingPage.children)if(child!==optimizerPage)child.classList.add('sma-publishing-hidden');
@@ -416,7 +416,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=12',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=13',location.href).href,
     scheduleMedia:fileView?.scheduleMedia,
     dailyScheduleRequest:ownerId?async args=>{
       const {data:{session}}=await supabase.auth.getSession();
@@ -1113,7 +1113,7 @@ supabase.auth.onAuthStateChange((event,s)=>{
  syncSharedCatalogRefreshOwner(s?.user?.id||null,undefined,{initial:event==='INITIAL_SESSION'});
  if(event==='SIGNED_OUT'||(dashboardOwnerId&&s?.user?.id&&s.user.id!==dashboardOwnerId))leaveDashboard();
 });
-window.dispatchEvent(new Event('sma-dashboard-started'));
+window.dispatchEvent?.(new Event('sma-dashboard-started'));
 await load();
 </script><script type="module" src="./assets/dashboard-feedback-page.mjs?v=1"></script>
 </body></html>
