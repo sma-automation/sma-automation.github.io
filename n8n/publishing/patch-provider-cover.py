@@ -63,6 +63,11 @@ def patch(source):
   before,tail=node['jsCode'].split('function providerSession(',1)
   _,after=tail.split('function providerHttp(',1)
   node['jsCode']=before+'function providerSession('+session_code+'function providerHttp('+after
+ # The result node owns the stored, redacted reason for an explicit TikTok rejection.
+ result_node=nodes['Providerantwort auswerten']['parameters']
+ prefix,legacy=result_node['jsCode'].split('function providerObservation(',1)
+ suffix=legacy[legacy.index('\nreturn [{json:providerObservation'):]
+ result_node['jsCode']=prefix+'function providerObservation('+core('provider-transport.cjs').split('function providerObservation(',1)[1]+suffix
  # The task runner exposes helpers on the execution context. Strict-mode
  # Code nodes have no bound JavaScript receiver.
  for name in ('Provider-Dateiprüfsumme bestätigen','Provider-Dateirest auswählen'):

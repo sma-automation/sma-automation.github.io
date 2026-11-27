@@ -97,3 +97,11 @@ test('binary transfer verifies the full source checksum before slicing',()=>{
  assert.throws(()=>providerBytes(Buffer.concat([b,Buffer.from('x')]),{size_bytes:b.length,binding:{asset_revision:revision}}));
  assert.throws(()=>providerBytes(b,{size_bytes:b.length,binding:{asset_revision:'sha256:'+'f'.repeat(64)+':1'}}));
 });
+test('Direct Post preserves explicit rejections and leaves ambiguous init responses unresolved',()=>{
+ for(const [code,expected,statusCode] of [['unaudited_client_can_only_post_to_private_accounts','TIKTOK_PUBLIC_AUDIT_REQUIRED',403],['access_token_invalid','TIKTOK_ACCESS_TOKEN_INVALID',401],['invalid_param','TIKTOK_INVALID_PARAM',400]]){
+  assert.deepEqual(providerObservation({statusCode,body:{error:{code}}},tk,now),{state:'failed',code:expected});
+ }
+ for(const response of [{statusCode:503,body:{error:{code:'invalid_param'}}},{statusCode:403,body:{data:{publish_id:'test'},error:{code:'invalid_param'}}},{statusCode:400,body:{error:{code:'unexpected'}}}]){
+  assert.equal(providerObservation(response,tk,now).state,'uncertain');
+ }
+});
