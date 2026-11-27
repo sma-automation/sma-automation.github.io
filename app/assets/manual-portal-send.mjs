@@ -3,6 +3,8 @@ import {createOrderClient} from './publication-order.mjs?v=34';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
 import {describeFile} from './file-description.mjs?v=2';
 
+import {createManualIntake,mountManualDrop,manualURL,driveOpenId,driveIdFromLink} from './manual-file-input.mjs?v=1';
+import {manualVideoPreview} from './manual-video-preview.mjs?v=1';
 const db=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const params=new URLSearchParams(location.search),platform=params.get('portal');
 const portals={youtube:'YouTube',tiktok:'TikTok',instagram:'Instagram',facebook:'Facebook'};
@@ -13,12 +15,13 @@ const states={approval_required:'Für dieses Video fehlt die Freigabe.',blocked:
 const errors={PORTAL_MEDIA_PROOF_REQUIRED:'Für diese Datei fehlt der Nachweis für das sichtbare Profillogo und die passende hörbare Musik.',AUTH_REQUIRED:'Melde dich im SMA-Kundenbereich an.',TARGET_ACCOUNT_REQUIRED:'Für dieses Portal ist kein Versandkonto verbunden.',FOLDER_OR_FILE_UNAVAILABLE:'Dieser Ordner oder diese Dateiversion ist derzeit nicht verfügbar.',INVALID_TIME:'Wähle eine spätere Uhrzeit für heute in Wien.',ORDER_CHANGED:'Die Datei oder Freigabe hat sich geändert. Lade den aktuellen Beitrag.'};
 const tiktokReasons={TIKTOK_PUBLIC_AUDIT_REQUIRED:'TikTok verlangt die App-Freigabe für öffentliches Posten.',TIKTOK_ACCESS_TOKEN_INVALID:'Verbinde das TikTok-Konto erneut.',TIKTOK_SCOPE_NOT_AUTHORIZED:'TikTok hat die Berechtigung zum Veröffentlichen abgelehnt.',TIKTOK_VISIBILITY_CHANGED:'Prüfe die Sichtbarkeit im TikTok-Auftrag erneut.',TIKTOK_INVALID_PARAM:'TikTok hat die Beitragsdaten abgelehnt.',TIKTOK_APP_QUOTA:'TikToks App-Limit ist erreicht.',TIKTOK_RATE_LIMIT:'TikTok hat zu viele Anfragen erhalten.',TIKTOK_DAILY_LIMIT:'Das tägliche TikTok-Postinglimit ist erreicht.',TIKTOK_ACCOUNT_RESTRICTED:'TikTok hat dieses Konto für neue Beiträge gesperrt.'};
 const visibility={PUBLIC_TO_EVERYONE:'Öffentlich',public:'Öffentlich',unlisted:'Nicht gelistet',private:'Privat',SELF_ONLY:'Nur ich',MUTUAL_FOLLOW_FRIENDS:'Freunde',FOLLOWER_OF_CREATOR:'Follower'};
-let owner,files=[],entry=null,selection=0,loading=false,busy=false,statusTimer,folderTimer,folderRound=0;
-const preferred=params.get('asset');
+let owner,driveAccount=null,files=[],entry=null,selection=0,loading=false,busy=false,statusTimer,folderTimer,folderRound=0;
+let chosen=params.get('asset')||'',localMedia=null;
+const preview=manualVideoPreview($('mediaPreview'),$('mediaNotice'));
 const transport=createOrderClient({session});
-const attempted=new Map();
+const attempted=new Map(),startedOrders=new Set();
 async function continueApproved(result){
- if(!result?.order||!result.due||!result.pending||Date.parse(result.due)>Date.now()||
+ if(!startedOrders.has(result?.order)||!result.due||!result.pending||Date.parse(result.due)>Date.now()||
     Date.now()-Date.parse(result.due)>30*60000||document.hidden)return;
  const last=attempted.get(result.order);
  const stage=result.state+'/'+result.sequence;
@@ -30,12 +33,17 @@ async function continueApproved(result){
 async function session(){const {data,error}=await db.auth.getSession();if(error||!data.session||owner&&data.session.user.id!==owner)throw Error(errors.AUTH_REQUIRED);return data.session;}
 async function rpc(name,args){await session();const {data,error}=await db.rpc(name,args);await session();if(error||data?.ok===false)throw Error(errors[data?.code]||'SMA konnte den Stand nicht bestätigen.');return data;}
 function call(action,extra={}){return rpc('sma_manual_portal_v1',{p_platform:platform,p_action:action,...extra});}
-function current(){return files.find(f=>f.id===$('files').value);}
+function current(){return files.find(f=>f.id===chosen);}
 function assetArgs(f){return {p_asset:f.id,p_revision:f.revision};}
 function isDriveId(value){return typeof value==='string'&&/^[\w-]{10,200}$/.test(value);}
+function driveUrl(path){
+ const url=new URL(path,'https://drive.google.com');
+ if(driveAccount)url.searchParams.set('authuser',driveAccount);
+ return url.href;
+}
 function driveVideoUrl(file){
  const media=file.profile_media;
- return ['verified','private_preview_only'].includes(media?.state)&&isDriveId(media.drive_id)?'https://drive.google.com/file/d/'+media.drive_id+'/view':null;
+ return ['verified','private_preview_only'].includes(media?.state)&&isDriveId(media.drive_id)?driveUrl('/file/d/'+media.drive_id+'/view'):null;
 }
 function filterDriveVideos(){
  const search=$('videoSearch').value.trim().toLocaleLowerCase('de');
@@ -52,9 +60,16 @@ function localTime(value){
  const candidates=['+02:00','+01:00'].map(offset=>new Date(day+'T'+value+':00'+offset)).filter(d=>clock.format(d)===value&&d.getTime()>Date.now());
  if(!candidates.length)throw Error(errors.INVALID_TIME);return candidates[candidates.length-1].toISOString();
 }
+function setActions(enabled){$('send').disabled=$('schedule').disabled=$('when').disabled=!enabled;}
+function selectFile(id){
+ chosen=id;$('chooser').open=false;
+ const url=new URL(location.href);url.searchParams.set('asset',id);history.replaceState(null,'',url);
+ for(const b of $('driveVideos').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.value===id));
+ void show();
+}
 async function show(){
- const f=current(),v=++selection;clearTimeout(statusTimer);entry=null;$('actions').hidden=true;$('post').hidden=!f;
- if(!f)return;
+ const f=current(),v=++selection;clearTimeout(statusTimer);entry=null;setActions(false);$('post').hidden=!f;
+ if(!f){preview.clear();return;}
  const title=describeFile(f).title,media=f.profile_media;
  const driveVideo=$('driveVideo');
  driveVideo.removeAttribute('href');driveVideo.hidden=true;
@@ -62,16 +77,19 @@ async function show(){
  if(href){
   driveVideo.href=href;driveVideo.hidden=false;
  }
- $('headline').textContent=title;$('caption').textContent='';$('account').textContent='';$('status').textContent='Lade Beitrag …';
+ $('portalLabel').textContent=portals[platform];
+ $('selectedName').textContent=media?.source_name||f.display?.source_name||f.name;
+ void preview.render(f,owner,href,localMedia?.id===f.id&&localMedia.revision===f.revision?localMedia.file:null);
+ $('headline').hidden=true;$('headline').textContent=title;$('caption').textContent='';$('account').textContent='';$('status').textContent='Lade Beitrag …';
  $('review').href='./publication-preview.html?wide=1&portal='+platform+'&asset='+encodeURIComponent(f.id)+'&manual=1';
  const previewOnly=media?.state==='private_preview_only';
  $('review').textContent=previewOnly?'Private Vorschau in SMA ansehen':'Beitrag ansehen und freigeben';
- if(previewOnly){$('status').textContent='Private Vorschau mit Logo und Musik.';return;}
+ if(previewOnly){$('status').textContent='Private Vorschau mit Logo und Musik · Versand gesperrt.';return;}
  try{
   const result=await call('read',assetArgs(f));if(v!==selection)return;entry=result;
   $('headline').textContent=result.title||title;$('caption').textContent=result.caption||'';
   $('account').textContent=[result.account,visibility[result.visibility]].filter(Boolean).join(' · ');
-  $('actions').hidden=!result.can_send;$('status').textContent=tiktokReasons[result.provider_code]||states[result.state]||'Freigabe vorhanden.';
+  setActions(result.can_send);$('headline').hidden=!result.title||result.title===title;$('status').textContent=tiktokReasons[result.provider_code]||states[result.state]||'Freigabe vorhanden.';
   if(result.due&&!['complete','failed','uncertain','needs_review','blocked'].includes(result.state)){
    $('status').textContent=states[result.state]||('Versand angefordert für '+clock.format(new Date(result.due))+' Uhr.');
   }
@@ -88,32 +106,28 @@ async function show(){
  }catch(e){if(v===selection)$('status').textContent=e.message;}
 }
 async function list(){
- const prior=$('files').value,data=await rpc('sma_publication_files_v1',{p_action:'list',p_input:{platform}});
- files=data.files.filter(f=>f.media_kind==='video'&&f.mime_type==='video/mp4'&&(f.profile_media?.state!=='hidden_in_picker'||f.id===preferred));
- const entries=files.map(file=>({file,...describeFile(file),href:driveVideoUrl(file)}))
-  .sort((a,b)=>a.title.localeCompare(b.title,'de',{numeric:true}));
- const links=[],options=[];
- for(const {file,title,version,href} of entries){
-  if(href){
-   const link=document.createElement('a');link.href=href;link.target='_blank';link.rel='noopener noreferrer';link.textContent=title;
-   const item=document.createElement('li');item.append(link);links.push(item);
-  }
-  if(file.profile_media?.state!=='private_preview_only'||!href||file.id===preferred)options.push(new Option(title+' · '+version,file.id));
- }
- $('driveVideos').replaceChildren(...links);$('drivePreviews').hidden=!links.length;filterDriveVideos();
- $('smaSelection').hidden=!options.length&&links.length>0;
- $('files').replaceChildren(new Option(options.length?'Videotitel auswählen':'Keine Videos im Portalordner',''),...options);
- $('files').value=options.some(o=>o.value===prior)?prior:options.some(o=>o.value===preferred)?preferred:'';
- $('files').disabled=!options.length;await show();
+ const data=await rpc('sma_publication_files_v1',{p_action:'list',p_input:{platform}});
+ files=data.files.filter(f=>f.media_kind==='video'&&f.mime_type==='video/mp4');
+ const entries=files.filter(f=>f.profile_media?.state!=='hidden_in_picker'||f.id===chosen)
+  .map(file=>({file,...describeFile(file)})).sort((a,b)=>a.title.localeCompare(b.title,'de',{numeric:true}));
+ const items=entries.map(({file,title})=>{
+  const button=document.createElement('button');button.type='button';button.value=file.id;
+  button.textContent=title;button.setAttribute('aria-pressed',String(file.id===chosen));
+  button.addEventListener('click',()=>selectFile(file.id));
+  const item=document.createElement('li');item.append(button);return item;
+ });
+ $('driveVideos').replaceChildren(...items);filterDriveVideos();
+ if(chosen&&!current()){$('dropStatus').textContent='Die ausgewählte Datei ist in diesem Portal nicht mehr verfügbar.';chosen='';$('chooser').open=true;}
+ if(current())$('chooser').open=false;await show();
 }
 async function refresh(){
  if(loading||busy)return;clearTimeout(folderTimer);loading=true;$('reload').disabled=true;
  try{
   const drive=$('drive');drive.hidden=true;drive.removeAttribute('href');
-  const folder=await call('folder');
+  const folder=await call('folder');driveAccount=folder.drive_account||null;
   if(isDriveId(folder.folder)){
-   drive.href='https://drive.google.com/drive/folders/'+folder.folder;drive.hidden=false;
-   drive.textContent=portals[platform]+'-Ordner in Google Drive öffnen ↗';
+   drive.href=driveUrl('/drive/folders/'+folder.folder);drive.hidden=false;
+
   }
   await list();
   $('folderStatus').textContent='Google Drive wird abgefragt …';
@@ -133,19 +147,44 @@ async function refresh(){
 }
 async function send(scheduled){
  const f=current(),saved=entry;if(busy||!f||!saved?.can_send)return;
- busy=true;clearTimeout(statusTimer);$('send').disabled=$('schedule').disabled=$('files').disabled=true;
+ busy=true;clearTimeout(statusTimer);setActions(false);
  try{
   const time=scheduled?localTime($('when').value):null;
   $('status').textContent=scheduled?'Termin wird gespeichert …':'Versand wird angefordert …';
   const r=await call('send',{...assetArgs(f),p_order:saved.order,p_request:crypto.randomUUID(),p_time:time});
-  if(r.accepted)attempted.delete(saved.order);await show();
- }catch(e){$('status').textContent=e.message;}finally{busy=false;$('send').disabled=$('schedule').disabled=false;$('files').disabled=!files.length;}
+  if(r.accepted){startedOrders.add(saved.order);attempted.delete(saved.order);}await show();
+ }catch(e){$('status').textContent=e.message;}finally{busy=false;setActions(!!entry?.can_send);}
 }
+const notify=message=>{$('dropStatus').textContent=message;};
 if(Object.hasOwn(portals,platform)){
  $('title').textContent=portals[platform]+' · Manuell posten';
- $('files').addEventListener('change',show);$('reload').addEventListener('click',refresh);
- $('videoSearch').addEventListener('input',filterDriveVideos);
+ $('reload').addEventListener('click',refresh);$('videoSearch').addEventListener('input',filterDriveVideos);
  $('send').addEventListener('click',()=>send(false));$('schedule').addEventListener('click',()=>send(true));
- try{owner=(await session()).user.id;await refresh();}catch(e){$('folderStatus').textContent=e.message;}
-}else $('folderStatus').textContent='Öffne das gewünschte Portal im SMA-Kundenbereich.';
-window.addEventListener('pagehide',()=>{clearTimeout(folderTimer);clearTimeout(statusTimer);});
+ try{
+  owner=(await session()).user.id;
+  const intake=createManualIntake({doc:document,db,owner,portal:platform,getOwner:async()=>(await session()).user.id,report:notify,
+   selected:async(item,localFile)=>{
+    if(item.platform!==platform){location.assign(manualURL(item.platform,item.id));return;}
+    if(!files.some(f=>f.id===item.id))await list();
+    const file=files.find(f=>f.id===item.id&&(!item.revision||item.revision===f.revision));
+    if(!file)throw Error('Die Datei wird im Portalordner noch eingelesen. Bitte aktualisiere die Dateiliste.');
+    localMedia=localFile?{id:file.id,revision:file.revision,file:localFile}:null;
+    selectFile(file.id);notify('');
+   }});
+  mountManualDrop(document,intake,notify);
+  $('browse').onclick=()=>$('device').click();
+  $('device').onchange=()=>{const file=$('device').files[0];$('device').value='';if(file)intake({file}).catch(e=>notify(e.message));};
+  document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable]'))return;
+   const id=driveIdFromLink(e.clipboardData?.getData('text/plain'));if(id){e.preventDefault();intake({drive:id}).catch(err=>notify(err.message));}});
+  await refresh();
+ }catch(e){notify(e.message);}
+}else{
+ const id=driveOpenId(params.get('state'));
+ if(!id)notify('Öffne das gewünschte Portal im SMA-Kundenbereich.');
+ else try{owner=(await session()).user.id;
+  const result=await rpc('sma_manual_drive_selection_v1',{p_drive:id,p_sha:null});
+  if(!Object.hasOwn(portals,result?.platform)||!result?.id)throw Error('Diese Drive-Datei ist in deinen SMA-Portalordnern nicht verfügbar.');
+  location.replace(manualURL(result.platform,result.id));
+ }catch(e){notify(e.message);}
+}
+window.addEventListener('pagehide',()=>{clearTimeout(folderTimer);clearTimeout(statusTimer);preview.clear();});

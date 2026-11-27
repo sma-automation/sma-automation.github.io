@@ -66,14 +66,19 @@ export async function editorThumbnail(file,signal,owner){
 }
 export const exportRequest=(action,input,owner)=>rpc('sma_publication_editor_export_v1',{p_action:action,p_input:input},owner);
 export function editorSource(file,signal,owner){originalMedia??=createSharedOriginalMediaClient({getSession:()=>session()});return originalMedia.request(file,{owner,signal});}
-export async function uploadExport(blob,artifact,signal,owner,onProgress=()=>{}){
+export async function uploadExport(blob,artifact,signal,owner,onProgress=()=>{},portal=null){
  const call=async(action)=>{
   signal.throwIfAborted();await session(owner);
   const meta={name:artifact.name,mime_type:artifact.mime_type,size_bytes:blob.size};
   const response=await fileJobs.request({anchor:{kind:'upload',upload_id:artifact.upload_id,...meta},operation:action==='start'?'upload_start':'upload_finish',input:{upload_id:artifact.upload_id,...(action==='start'?meta:{})},signal,timeoutMs:90000});
   if(!response.ok)throw Error('UPLOAD_UNAVAILABLE');const r=await response.json();if(r?.ok!==true)throw Error(r?.code||'UPLOAD_UNAVAILABLE');if(r.upload_id!==artifact.upload_id||r.can_publish!==false||!['ready','completed'].includes(r.status)||r.status==='completed'&&!editorUUID(r.asset_id))throw Error('UPLOAD_UNAVAILABLE');await session(owner);return r;
  };
- const started=await call('start');if(started.status==='completed')return started.asset_id;
+ const started=await call('start');
+ if(portal){
+  const bound=await rpc('sma_publication_upload_portal_v1',{p_upload:artifact.upload_id,p_platform:portal},owner,signal);
+  if(bound!==true)throw Error('UPLOAD_PORTAL_UNAVAILABLE');
+ }
+ if(started.status==='completed')return started.asset_id;
  await transferDeviceFile({file:blob,url:started.upload_url,mime:artifact.mime_type,signal,onProgress});
  const completed=await call('finish');if(completed.status!=='completed')throw Error('UPLOAD_INCOMPLETE');return completed.asset_id;
 }
