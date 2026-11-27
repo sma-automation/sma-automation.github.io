@@ -159,7 +159,7 @@ async function load(){
     el('reload').hidden=false;
     // Retry a failed file-job lookup once using the next planned file. Explicit
     // provider restrictions, missing permissions and rate limits end the lookup.
-    if(err.code!=='ORDER_UNAVAILABLE')break;
+    if(err.code!=='TARGET_CHECK_UNAVAILABLE')break;
    }
   }
  }));
