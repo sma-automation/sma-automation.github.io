@@ -8,7 +8,7 @@ test('manual picker refresh, real video frames, exact posts, approval and provid
   for(const portal of ['youtube','tiktok','instagram','facebook']){
    const context=await browser.newContext(),page=await context.newPage();page.setDefaultTimeout(10000);
    let visible=[{...file,profile_media:{source_name:'Original A.mp4'}},{...file,id:uuid(77),revision:'other:1',profile_media:{source_name:'Original B.mp4'}}];
-   let notifyScan,posts=0,providerCalls=0,saved=null,stage='empty',prepared=null,orderId=uuid(81),needsApproval=portal==='youtube';
+   let notifyScan,posts=0,providerCalls=0,saved=null,stage='empty',prepared=null,orderId=uuid(81),needsApproval=['youtube','tiktok'].includes(portal);
    const jobs=new Map(),err=[],clicks=[];page.on('pageerror',e=>err.push(e.message));
    const chosen=visible[1],tags=['Test','Wien'],text='Text für genau das zweite Video.';
    await context.route('**/*',async route=>{
@@ -50,16 +50,16 @@ test('manual picker refresh, real video frames, exact posts, approval and provid
     if(path.endsWith('/sma_file_job_v1')){
      if(a.p_action==='start')return reply({ok:true,job_id:uuid(17),deadline_at:new Date(Date.now()+600000).toISOString()});
      const j=jobs.get(b.command_id),input=j.input;
-     const target={platform:portal,id:'test-channel',name:'Testkonto'},account_check={target_id:target.id,display_name:target.name};
+     const target={platform:portal,id:'test-channel',name:'Testkonto'},account_check={target_id:target.id,display_name:target.name,policy:{privacy_levels:['SELF_ONLY','PUBLIC_TO_EVERYONE'],comment_disabled:false,duet_disabled:false,stitch_disabled:false,max_duration_sec:60}};
      const base={ok:true,id:input.id,can_upload:false,can_publish:false,target,account_check};
      let body;
      if(j.operation==='account')body={...base,stage:'account'};
      if(j.operation==='order_prepare'){
       const binding=Object.fromEntries(['asset_id','asset_revision','platform','assignment_revision','preview_id','preview_revision'].map(k=>[k,input[k]]));
-      orderId=input.id;prepared={...base,binding,draft:saved.preview.drafts[0],choices:input.choices,state:'prepared',approval_policy:'media-consent-2026-11-03.1',approval_token:'test',
+      orderId=input.id;prepared={...base,binding,draft:saved.preview.drafts[0],choices:input.choices,state:'prepared',direct_post_policy:portal==='tiktok'?'sma-tiktok-direct-v1':null,approval_policy:'media-consent-2026-11-03.1',approval_token:'test',
        approved_at:null,approval_window:{status:'active',expires_at:new Date(Date.now()+60000).toISOString()},blockers:[]};body=prepared;
      }
-     if(j.operation==='order_approve'){assert.equal(input.confirm,true);prepared={...prepared,state:'approved',approved_at:new Date().toISOString(),approval_token:null,approval_window:null,approval_review:input.review};body=prepared;}
+     if(j.operation==='order_approve'){assert.equal(input.confirm,true);if(portal==='tiktok')assert.deepEqual(input.review,{policy_version:'sma-tiktok-direct-v1',tiktok_music_terms:true,tiktok_branded_terms:true});prepared={...prepared,state:'approved',approved_at:new Date().toISOString(),approval_token:null,approval_window:null,approval_review:input.review};body=prepared;}
      return reply({ok:true,job_id:j.job_id,commands:[{command_id:j.command_id,operation:j.operation,state:'completed',response:{status:200,body}}]});
     }
     if(path.endsWith('/sma-publication-order-v1')){assert.equal(a.action,'get');assert.equal(a.input.id,orderId);providerCalls++;stage=portal==='youtube'?'complete':'failed';return reply({ok:true,id:orderId,state:'checked',can_publish:false,can_upload:false});}
@@ -83,6 +83,17 @@ test('manual picker refresh, real video frames, exact posts, approval and provid
    await page.getByRole('button',{name:'Original B'}).click();
    await page.getByLabel('Beitragstext',{exact:true}).fill(text);await page.getByLabel('Hashtags',{exact:true}).fill('#Test #Wien');
    await send.click();
+   if(portal==='tiktok'){
+    const dialog=page.getByRole('dialog');await dialog.waitFor();
+    await page.locator('#order-visibility').selectOption('PUBLIC_TO_EVERYONE');
+    await page.locator('#order-is_aigc').selectOption('false');
+    await page.locator('#order-commercial').check();await page.locator('#order-brand_content_toggle').check();
+    assert.deepEqual(await dialog.getByRole('button').allTextContents(),['Auf TikTok posten','Schließen']);
+    assert.equal(await dialog.locator('#order-final-consent').isVisible(),false);
+    assert.equal(await dialog.locator('#order-review-content_checked').isVisible(),false);
+    assert.equal(await dialog.locator('a:visible').filter({hasText:/Music Usage|Branded Content/}).count(),2);
+    assert.equal(posts,0);await dialog.getByRole('button',{name:'Auf TikTok posten'}).click();
+   }
    if(portal==='youtube'){
     await page.getByRole('dialog').waitFor();await page.locator('#order-visibility').selectOption('public');
     await page.getByRole('button',{name:'Auftrag prüfen'}).click();

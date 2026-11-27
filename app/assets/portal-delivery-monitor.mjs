@@ -1,11 +1,26 @@
 import {historyStatuses} from './publication-history-model.mjs';
 const clock=new Intl.DateTimeFormat('de-AT',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
-const states={approval_required:'Für dieses Video fehlt die Freigabe.',blocked:'Eine offene Prüfung blockiert den Versand. Öffne den Beitrag für die Details.',
+const states={ready_to_send:'Der Beitrag ist freigegeben und bereit zum Posten.',approval_required:'Für dieses Video fehlt die Freigabe.',blocked:'Eine offene Prüfung blockiert den Versand. Öffne den Beitrag für die Details.',
  complete:'Das Portal hat den Beitrag bestätigt.',processing:'Das Portal verarbeitet das Video.',uploading:'Die Datei wird übertragen.',session_ready:'Das Portal ist für die Datei bereit.',failed:'Der Versand ist fehlgeschlagen.',uncertain:'Das Portal hat den letzten Versuch nicht bestätigt.',needs_review:'Der Übertragungsstand muss geklärt werden.'};
 const tiktokReasons={TIKTOK_PUBLIC_AUDIT_REQUIRED:'TikTok verlangt die App-Freigabe für öffentliches Posten.',TIKTOK_ACCESS_TOKEN_INVALID:'Verbinde das TikTok-Konto erneut.',TIKTOK_SCOPE_NOT_AUTHORIZED:'TikTok hat die Berechtigung zum Veröffentlichen abgelehnt.',TIKTOK_VISIBILITY_CHANGED:'Prüfe die Sichtbarkeit im TikTok-Auftrag erneut.',TIKTOK_INVALID_PARAM:'TikTok hat die Beitragsdaten abgelehnt.',TIKTOK_APP_QUOTA:'TikToks App-Limit ist erreicht.',TIKTOK_RATE_LIMIT:'TikTok hat zu viele Anfragen erhalten.',TIKTOK_DAILY_LIMIT:'Das tägliche TikTok-Postinglimit ist erreicht.',TIKTOK_ACCOUNT_RESTRICTED:'TikTok hat dieses Konto für neue Beiträge gesperrt.'};
 
 export function createDeliveryMonitor({rpc,transport,platform,portalName,ownsOrder,errorLabels={}}){
- const attempted=new Map();
+ const attempted=new Map(),observations=new Map();
+ function refreshStalled(r,blocked){
+  if(!r.order||(!blocked&&!r.pending)||(!blocked&&Date.parse(r.due)>Date.now()))return;
+  const now=Date.now(),stage=[r.state,r.sequence,r.bytes].join('/');
+  let last=observations.get(r.order);
+  if(!last||last.stage!==stage){
+   last={stage,since:now,lastRefresh:last?.lastRefresh??null};
+   observations.set(r.order,last);
+   if(observations.size>64)observations.delete(observations.keys().next().value);
+  }
+  if((blocked||now-last.since>=30000)&&(last.lastRefresh===null||now-last.lastRefresh>=120000)){
+   last.lastRefresh=now;
+   // Refresh source membership independently. Never restart a provider upload here.
+   void rpc('sma_refresh_portal_folder_v1',{p_platform:platform}).catch(()=>{});
+  }
+ }
  async function continueApproved(result){
   if(result.background||!result?.order||!ownsOrder(result.order)||!result.due||!result.pending||Date.parse(result.due)>Date.now()||
      Date.now()-Date.parse(result.due)>30*60000||document.hidden)return;
@@ -19,15 +34,19 @@ export function createDeliveryMonitor({rpc,transport,platform,portalName,ownsOrd
 
  async function describe(r,expectedOrder,active,onProgress){
   if(expectedOrder&&expectedOrder!==r.order)throw Error('Der gestartete Versandauftrag konnte nicht eindeutig zugeordnet werden.');
+  refreshStalled(r,r.state==='blocked'&&!r.provider_code);
   let text=tiktokReasons[r.provider_code]||states[r.state]||'Freigabe vorhanden.';
   if(r.state==='blocked'&&r.order&&!r.provider_code){
    const order=await rpc('sma_publication_order_v1',{p_action:'get',p_input:{id:r.order}});if(!active())return null;
    const reasons=(order.blockers||[]).map(b=>typeof b==='string'?b:b?.code).filter(Boolean);
    if(reasons.length)text+=' '+reasons.map(reason=>errorLabels[reason]||tiktokReasons[reason]||reason).join(' · ');
   }
-  const safeRestart=r.pending&&r.state==='uncertain'&&r.bytes===0&&r.provider_code==='PROVIDER_INIT_UNCERTAIN';
+  const emptyStart=r.state==='uncertain'&&r.bytes===0&&r.provider_code==='PROVIDER_INIT_UNCERTAIN';
+  if(emptyStart&&r.can_send&&!r.pending)return {text:'TikTok hat den Uploadstart nicht bestätigt. Es wurden 0 Bytes übertragen. Du kannst den Versand erneut starten.',progress:false,locked:false};
+  const safeRestart=r.pending&&emptyStart;
   const terminal=!safeRestart&&['complete','failed','uncertain','needs_review','blocked','cancelled'].includes(r.state);
-  if(r.provider_code&&!tiktokReasons[r.provider_code]&&terminal&&r.state!=='complete')text+=' ('+r.provider_code+')';
+  if(/^TIKTOK_HTTP_(400|401|403|404|413|422|429)$/.test(r.provider_code))text='TikTok hat den Uploadstart abgelehnt (HTTP '+r.provider_code.slice(-3)+').';
+  else if(r.provider_code&&!tiktokReasons[r.provider_code]&&terminal&&r.state!=='complete')text+=' ('+r.provider_code+')';
   if(r.state==='complete'){
    text='Das Portal bestätigt den Abschluss. Die Sichtbarkeit ist noch unbestätigt.';
    const h=await rpc('sma_publication_history_order_page_v1',{p_order_id:r.order});if(!active())return null;
@@ -42,6 +61,7 @@ export function createDeliveryMonitor({rpc,transport,platform,portalName,ownsOrd
   if(pending){
    text=Date.parse(r.due)>Date.now()?'Für heute um '+clock.format(new Date(r.due))+' Uhr vorgemerkt.':
     ['uploading','session_ready','processing'].includes(r.state)?states[r.state]:'Versand angefordert. Die Bestätigung des Portals steht aus.';
+   if(r.state==='checked'&&!r.bytes&&Date.parse(r.due)<Date.now()-45000)text='Beitrag geprüft. Der Versanddienst wartet auf den Uploadstart. Bisher wurden keine Videodaten bestätigt.';
    onProgress(text);
    await continueApproved(r);if(!active())return null;
    if(attempted.get(r.order)?.failed)text='Der Versanddienst hat den Start noch nicht bestätigt. Der Auftragsstand wird erneut geprüft.';

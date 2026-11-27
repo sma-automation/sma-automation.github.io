@@ -1,12 +1,12 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-import {createOrderClient} from './publication-order.mjs?v=34';
+import {createOrderClient} from './publication-order.mjs?v=37';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
 import {createPortalVideoSource} from './portal-video-playback.mjs?v=2';
 import {createManualVideoThumbnails} from './manual-video-thumbnail.mjs?v=1';
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient} from './thumbnail-batch.mjs?v=1';
-import {createDeliveryMonitor} from './portal-delivery-monitor.mjs?v=1';
-import {mountManualComposer} from './manual-post-composer.mjs?v=3';
+import {createDeliveryMonitor} from './portal-delivery-monitor.mjs?v=2';
+import {mountManualComposer} from './manual-post-composer.mjs?v=4';
 import {describeFile} from './file-description.mjs?v=4';
 
 import {createManualIntake,mountManualDrop,manualURL,driveOpenId,driveIdFromLink} from './manual-file-input.mjs?v=1';
@@ -78,7 +78,7 @@ function localTime(value){
  if(!candidates.length)throw Error(errors.INVALID_TIME);return candidates[candidates.length-1].toISOString();
 }
 function selectFile(id){
- if(busy||composer?.isWorking())return;
+ if(id===chosen&&(busy||composer?.isWorking()))return;
  chosen=id;$('dropStatus').textContent='';$('chooser').open=false;
  const url=new URL(location.href);url.searchParams.set('asset',id);history.replaceState(null,'',url);
  for(const b of $('driveVideos').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.value===id));
@@ -104,6 +104,7 @@ async function readDelivery(f,v,expectedOrder=null){
  const later=id=>{if(active()){clearTimeout(statusTimer);statusTimer=setTimeout(()=>void readDelivery(f,v,id),6500);}};
  try{
   const r=await call('read',assetArgs(f));if(!active())return;
+  if(expectedOrder&&expectedOrder!==r.order)throw Error('Der gestartete Versandauftrag gehört nicht zu dieser Dateifassung.');
   entry=r;
   $('account').textContent=[r.account,visibility[r.visibility]].filter(Boolean).join(' · ');
   const result=await monitor.describe(r,expectedOrder,active,text=>{$('status').textContent=text;composer?.setDelivery(true);});
@@ -118,6 +119,7 @@ async function readDelivery(f,v,expectedOrder=null){
  }
 }
 async function receipt(r,f){
+ if(current()?.id!==f.id||current()?.revision!==f.revision)return;
  if(r.accepted||r.pending){if($('publicationOrderDialog')?.open)$('publicationOrderDialog').close();rememberOrder(r.order);composer.setDelivery(true);$('status').textContent='Versand angefordert. Die Bestätigung des Portals steht aus.';}
  await readDelivery(f,selection,r.order);
 }
@@ -172,13 +174,14 @@ async function refresh(){
  }catch(e){$('folderStatus').textContent=e.code==='FILE_SYNC_RATE_LIMITED'?'Die Dateiliste ist neu geladen. Der nächste Drive-Abgleich ist in Kürze möglich.':e.message;}finally{loading=false;$('reload').disabled=false;$('reload').setAttribute('aria-busy','false');}
 }
 async function schedule(){
- const f=current(),saved=entry;if(busy||!f||!composer.allowsSchedule())return;
+ const f=current(),saved=entry,v=selection;if(busy||!f||!composer.allowsSchedule())return;
  busy=true;clearTimeout(statusTimer);syncActions();
  try{
   const time=localTime($('when').value);$('status').textContent='Termin wird gespeichert …';
   const r=await call('send',{...assetArgs(f),p_order:saved.order,p_request:crypto.randomUUID(),p_time:time});
-  if(r.accepted)rememberOrder(saved.order);await readDelivery(f,selection,saved.order);
- }catch(e){$('status').textContent=e.message;}finally{busy=false;syncActions();}
+  if(v!==selection)return;
+  if(r.accepted)rememberOrder(saved.order);await readDelivery(f,v,saved.order);
+ }catch(e){if(v===selection)$('status').textContent=e.message;}finally{busy=false;syncActions();}
 }
 const notify=message=>{$('dropStatus').textContent=message;};
 if(Object.hasOwn(portals,platform)){

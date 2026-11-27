@@ -101,7 +101,9 @@ test('Direct Post preserves explicit rejections and leaves ambiguous init respon
  for(const [code,expected,statusCode] of [['unaudited_client_can_only_post_to_private_accounts','TIKTOK_PUBLIC_AUDIT_REQUIRED',403],['access_token_invalid','TIKTOK_ACCESS_TOKEN_INVALID',401],['invalid_param','TIKTOK_INVALID_PARAM',400]]){
   assert.deepEqual(providerObservation({statusCode,body:{error:{code}}},tk,now),{state:'failed',code:expected});
  }
- for(const response of [{statusCode:503,body:{error:{code:'invalid_param'}}},{statusCode:403,body:{data:{publish_id:'test'},error:{code:'invalid_param'}}},{statusCode:400,body:{error:{code:'unexpected'}}}]){
+ assert.deepEqual(providerObservation({statusCode:400,body:{error:{code:'unexpected'}}},tk,now),{state:'failed',code:'TIKTOK_HTTP_400'});
+ assert.deepEqual(providerObservation({statusCode:403,data:JSON.stringify({error:{code:'unaudited_client_can_only_post_to_private_accounts'}})},tk,now),{state:'failed',code:'TIKTOK_PUBLIC_AUDIT_REQUIRED'});
+ for(const response of [{statusCode:503,body:{error:{code:'invalid_param'}}},{statusCode:403,body:{data:{publish_id:'test'},error:{code:'invalid_param'}}}]){
   assert.equal(providerObservation(response,tk,now).state,'uncertain');
  }
 });
