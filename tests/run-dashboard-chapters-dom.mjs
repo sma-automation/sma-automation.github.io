@@ -137,16 +137,16 @@ await test('connection cards preserve the delegated OAuth click, native status r
   assert(doc.getElementById('sma-publishing-panel-portals').contains(connect));
   assert.equal(doc.querySelector('#page-publishing .platform-list'),pub);
   assert.deepEqual([...native.children].map(c=>c.dataset.smaPlatform),names);
-  assert.equal(connect.previousElementSibling,originals[0]);assert.equal(connect.target,'_blank');
-  const manual=native.querySelector('.sma-manual-post');assert.equal(manual.textContent,'Sofort posten');assert.equal(manual.closest('.platform-action'),null);assert.match(manual.href,/sofort-posten\.html\?portal=youtube$/);
+  assert.equal(connect.closest('.sma-portal-actions').querySelector('.sma-optimize'),originals[0]);assert.equal(connect.target,'_blank');
+  const manual=native.querySelector('.sma-manual-post');assert.equal(manual.textContent,'Sofort posten');assert.equal(manual.closest('.platform-action'),null);assert.equal(manual.previousElementSibling,originals[0]);assert.match(manual.href,/sofort-posten\.html\?portal=youtube$/);
   connect.click();assert.equal(pending,'YouTube');
   // The session shell replaces both lists after verifying the customer's fresh response.
   native.innerHTML=sourceRows.replace('>Verbinden<','>Neu verbinden<').replace('href="/connect/test"','href="/connect/fresh"');
   pub.innerHTML=names.map(name=>portal(name)+'</article>').join('');
   await tick();
   assert.deepEqual([...native.querySelectorAll('.sma-optimize')],originals);
-  assert.equal(native.querySelector('a').textContent,'Neu verbinden');
-  assert.equal(native.querySelector('a').getAttribute('href'),'/connect/fresh');
+  assert.equal(native.querySelector('.platform-action a').textContent,'Neu verbinden');
+  assert.equal(native.querySelector('.platform-action a').getAttribute('href'),'/connect/fresh');
   assert(native.querySelector('button[disabled]').disabled);
   view.destroy();assert(!nav.hidden&&!pub.hidden);assert.equal(source.parentElement,home);
   assert.deepEqual([...pub.querySelectorAll('.sma-optimize')],originals);

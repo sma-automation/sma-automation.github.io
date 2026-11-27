@@ -28,7 +28,7 @@ import {mountCompanyProfileDashboard} from './assets/company-profile-dashboard.m
 import {mountCustomerWebsiteDashboard} from './assets/customer-website-dashboard.mjs?v=3';
 import {mountMediaEditorEntry} from './assets/media-editor-dashboard.mjs?v=4';
 import {mountPublicationHistory} from './assets/publication-history-dashboard.mjs?v=33';
-import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=14';
+import {mountDashboardChapters} from './assets/dashboard-chapters.mjs?v=15';
 import {mountDashboardCloudUpload} from './assets/dashboard-cloud-upload.mjs?v=4';
 import {filterDashboardFiles,dashboardFileDescription,searchFilePage} from './assets/dashboard-file-search.mjs?v=2';
 import {mountDashboardQuickFind,sectionCatalog,canSearchHistory,canSearchOrders} from './assets/dashboard-quick-find.mjs?v=15';
@@ -396,7 +396,7 @@ frame.addEventListener('load',async()=>{
     }
   }):null;
   dashboardChapters=mountDashboardChapters({
-    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=11',location.href).href,
+    doc,websiteView:websitePreparation,stylesheetUrl:new URL('./assets/dashboard-chapters.css?v=12',location.href).href,
     scheduleMedia:fileView?.scheduleMedia,
     dailyScheduleRequest:ownerId?async args=>{
       const {data:{session}}=await supabase.auth.getSession();
