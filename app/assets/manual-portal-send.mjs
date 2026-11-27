@@ -4,7 +4,8 @@ import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
 import {describeFile} from './file-description.mjs?v=2';
 
 import {createManualIntake,mountManualDrop,manualURL,driveOpenId,driveIdFromLink} from './manual-file-input.mjs?v=1';
-import {manualVideoPreview} from './manual-video-preview.mjs?v=1';
+import {manualVideoPreview} from './manual-video-preview.mjs?v=2';
+import {watchPortalCatalog} from './portal-catalog-watch.mjs?v=1';
 const db=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const params=new URLSearchParams(location.search),platform=params.get('portal');
 const portals={youtube:'YouTube',tiktok:'TikTok',instagram:'Instagram',facebook:'Facebook'};
@@ -62,7 +63,7 @@ function localTime(value){
 }
 function setActions(enabled){$('send').disabled=$('schedule').disabled=$('when').disabled=!enabled;}
 function selectFile(id){
- chosen=id;$('chooser').open=false;
+ chosen=id;$('dropStatus').textContent='';$('chooser').open=false;
  const url=new URL(location.href);url.searchParams.set('asset',id);history.replaceState(null,'',url);
  for(const b of $('driveVideos').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.value===id));
  void show();
@@ -105,8 +106,9 @@ async function show(){
   }else if(result.due&&['processing','session_ready','uploading'].includes(result.state))statusTimer=setTimeout(show,7000);
  }catch(e){if(v===selection)$('status').textContent=e.message;}
 }
-async function list(){
+async function list(background=false){
  const data=await rpc('sma_publication_files_v1',{p_action:'list',p_input:{platform}});
+ if(background&&(busy||loading))return false;
  files=data.files.filter(f=>f.media_kind==='video'&&f.mime_type==='video/mp4');
  const entries=files.filter(f=>f.profile_media?.state!=='hidden_in_picker'||f.id===chosen)
   .map(file=>{
@@ -121,7 +123,7 @@ async function list(){
   const item=document.createElement('li');item.append(button);return item;
  });
  $('driveVideos').replaceChildren(...items);filterDriveVideos();
- if(chosen&&!current()){$('dropStatus').textContent='Die ausgewählte Datei ist in diesem Portal nicht mehr verfügbar.';chosen='';$('chooser').open=true;}
+ if(chosen&&!current()){$('dropStatus').textContent='Die ausgewählte Datei ist in diesem Portal nicht mehr verfügbar.';chosen='';localMedia=null;const url=new URL(location.href);url.searchParams.delete('asset');history.replaceState(null,'',url);$('chooser').open=true;}
  if(current())$('chooser').open=false;await show();
 }
 async function refresh(){
@@ -181,6 +183,7 @@ if(Object.hasOwn(portals,platform)){
   document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable]'))return;
    const id=driveIdFromLink(e.clipboardData?.getData('text/plain'));if(id){e.preventDefault();intake({drive:id}).catch(err=>notify(err.message));}});
   await refresh();
+  watchPortalCatalog({readFolder:()=>call('folder'),available:()=>!busy&&!loading,refresh:()=>list(true)});
  }catch(e){notify(e.message);}
 }else{
  const id=driveOpenId(params.get('state'));
