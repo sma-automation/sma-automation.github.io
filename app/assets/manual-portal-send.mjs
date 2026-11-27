@@ -19,9 +19,9 @@ let owner,driveAccount=null,files=[],entry=null,selection=0,loading=false,busy=f
 let chosen=params.get('asset')||'',localMedia=null;
 const preview=manualVideoPreview($('mediaPreview'),$('mediaNotice'));
 const transport=createOrderClient({session});
-const attempted=new Map();
+const attempted=new Map(),startedOrders=new Set();
 async function continueApproved(result){
- if(!result?.order||!result.due||!result.pending||Date.parse(result.due)>Date.now()||
+ if(!startedOrders.has(result?.order)||!result.due||!result.pending||Date.parse(result.due)>Date.now()||
     Date.now()-Date.parse(result.due)>30*60000||document.hidden)return;
  const last=attempted.get(result.order);
  const stage=result.state+'/'+result.sequence;
@@ -152,7 +152,7 @@ async function send(scheduled){
   const time=scheduled?localTime($('when').value):null;
   $('status').textContent=scheduled?'Termin wird gespeichert …':'Versand wird angefordert …';
   const r=await call('send',{...assetArgs(f),p_order:saved.order,p_request:crypto.randomUUID(),p_time:time});
-  if(r.accepted)attempted.delete(saved.order);await show();
+  if(r.accepted){startedOrders.add(saved.order);attempted.delete(saved.order);}await show();
  }catch(e){$('status').textContent=e.message;}finally{busy=false;setActions(!!entry?.can_send);}
 }
 const notify=message=>{$('dropStatus').textContent=message;};
