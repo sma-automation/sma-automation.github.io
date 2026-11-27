@@ -78,12 +78,31 @@ function addRow(i){
   choice=()=>kids.value&&ai.value?{visibility:vis.value,made_for_kids:kids.value==='true',contains_synthetic_media:ai.value==='true'}:null;
  }else{
   const allowed=accountChoiceOptions('tiktok',acct);
-  const vis=select(row,'Sichtbarkeit',[['','Auswählen'],...allowed.visibility]);
+  const saved=allowed.visibility.some(([value])=>value===i.saved_visibility)?i.saved_visibility:'';
+  const vis=select(row,'Sichtbarkeit',[['','Auswählen'],...allowed.visibility],saved);
+  const saveStatus=write(row,'small','');saveStatus.setAttribute('role','status');
+  let saving=false,confirmed=saved;
+  vis.addEventListener('change',async()=>{
+   const selected=vis.value;
+   saving=true;vis.disabled=true;saveStatus.textContent='Sichtbarkeit wird gespeichert …';refreshButton();
+   try{
+    await session();
+    const {data,error}=await db.rpc('sma_save_day_visibility_v1',{p_day:day,p_key:i.visibility_key,p_visibility:selected||null});
+    if(error||data?.ok!==true||data.visibility!==(selected||null))throw Error();
+    confirmed=selected;saveStatus.textContent=confirmed?'Auswahl gespeichert.':'Auswahl entfernt.';
+   }catch{
+    vis.value=confirmed;saveStatus.textContent='Speichern nicht bestätigt. Lade den aktuellen Stand.';
+    el('reload').hidden=false;
+   }finally{
+    saving=false;vis.disabled=false;third.disabled=vis.value==='SELF_ONLY';if(third.disabled)third.checked=false;
+    refreshButton();
+   }
+  });
   const opts=write(row,'details','');write(opts,'summary','Interaktionen, Werbung und KI');
   for(const [key,title] of [['disable_comment','Kommentare'],['disable_duet','Duette'],['disable_stitch','Stitch']])controls[key]=box(opts,title,allowed.forced[key]);
   const commercial=box(opts,'Dieser Beitrag bewirbt eine Marke, ein Produkt oder eine Dienstleistung');
   const brands=write(opts,'div','');brands.hidden=true;
-  const own=box(brands,'Eigene Marke'),third=box(brands,'Bezahlte Partnerschaft');
+  const own=box(brands,'Eigene Marke'),third=box(brands,'Bezahlte Partnerschaft',saved==='SELF_ONLY');
   const disclosure=write(brands,'small','');
   const display=()=>{brands.hidden=!commercial.checked;if(!commercial.checked){own.checked=false;third.checked=false;}
    disclosure.textContent=third.checked?'TikTok zeigt „Bezahlte Partnerschaft“.':own.checked?'TikTok kennzeichnet diesen Beitrag als Werbung.':'Wähle die Art der Werbung.';
@@ -95,7 +114,7 @@ function addRow(i){
   third.addEventListener('change',syncThird);
   choice=()=>{
    const value=ai.value||el('ai').value;
-   if(!vis.value||!value||commercial.checked&&!own.checked&&!third.checked||third.checked&&vis.value==='SELF_ONLY')return null;
+   if(saving||!vis.value||!value||commercial.checked&&!own.checked&&!third.checked||third.checked&&vis.value==='SELF_ONLY')return null;
    return {visibility:vis.value,is_aigc:value==='true',brand_content_toggle:third.checked,brand_organic_toggle:own.checked,
     ...Object.fromEntries(Object.entries(controls).map(([key,b])=>[key,!b.checked]))};
   };
