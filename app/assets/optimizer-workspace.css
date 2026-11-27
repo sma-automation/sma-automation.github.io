@@ -626,3 +626,9 @@ body.wide #workspacePost #originalVideoPreview{width:100%;justify-self:stretch}
 body.wide #workspacePost #originalVideoPreview video{width:100%;height:auto;max-height:540px!important;object-fit:contain}
 body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]){max-width:400px;display:block}
 body.wide #workspacePost:is([data-orientation=portrait],[data-portal=tiktok]) #originalVideoPreview video{height:auto;max-height:540px!important;aspect-ratio:var(--media-aspect,9 / 16);margin:auto}
+body.wide #workspaceDrop{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;width:100%;min-height:82px;padding:12px;border:2px dashed #a4b4d1;border-radius:10px}
+body.wide #workspaceDrop.over{border-color:#3157cd;background:#edf2ff}
+body.wide #workspaceSendNow{display:inline-block;background:#3157cd;color:white;padding:12px 20px;border-radius:8px;margin-top:18px;font-weight:700}
+body.wide #workspaceFileTools #workspaceDrive[hidden]{display:none}
+body.wide #workspaceTextEmpty :is(input,textarea){background:#fff;color:#182335}
+body.wide #workspaceFileTools #uploadPanel{flex-basis:100%}
