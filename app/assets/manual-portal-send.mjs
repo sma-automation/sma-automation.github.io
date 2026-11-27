@@ -6,7 +6,7 @@ import {createManualVideoThumbnails} from './manual-video-thumbnail.mjs?v=1';
 import {createMediaThumbnailLoader} from './asset-thumbnail.mjs?v=4';
 import {createSharedThumbnailClient} from './thumbnail-batch.mjs?v=1';
 import {historyStatuses} from './publication-history-model.mjs';
-import {mountManualComposer} from './manual-post-composer.mjs?v=1';
+import {mountManualComposer} from './manual-post-composer.mjs?v=2';
 import {describeFile} from './file-description.mjs?v=2';
 
 import {createManualIntake,mountManualDrop,manualURL,driveOpenId,driveIdFromLink} from './manual-file-input.mjs?v=1';
@@ -84,11 +84,11 @@ function selectFile(id){
  chosen=id;$('dropStatus').textContent='';$('chooser').open=false;
  const url=new URL(location.href);url.searchParams.set('asset',id);history.replaceState(null,'',url);
  for(const b of $('driveVideos').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.value===id));
- void show();
+ void show(true);
 }
-async function show(){
+async function show(fromPicker=false){
  const f=current(),v=++selection;clearTimeout(statusTimer);entry=null;syncActions();$('fileDetails').hidden=$('review').hidden=!f;
- void composer?.select(f);if(!f){preview.clear();$('status').textContent='Wähle ein Video aus dem Portalordner.';return;}
+ void composer?.select(f,fromPicker);if(!f){preview.clear();$('status').textContent='Wähle ein Video aus dem Portalordner.';return;}
  const title=describeFile(f).title,media=f.profile_media,driveVideo=$('driveVideo'),href=driveVideoUrl(f);
  driveVideo.removeAttribute('href');driveVideo.hidden=!href;if(href)driveVideo.href=href;
  $('portalLabel').textContent=portals[platform];
@@ -221,12 +221,12 @@ if(Object.hasOwn(portals,platform)){
   db.auth.onAuthStateChange((_event,s)=>{
    if(owner&&s?.user?.id!==owner){
     clearTimeout(statusTimer);clearTimeout(folderTimer);lastList++;selection++;owner=null;files=[];chosen='';entry=null;
-    thumbnails.clear();posters.clear();thumbnailClient.dispose();$('driveVideos').replaceChildren();preview.clear();void composer?.select(null);
+    thumbnails.clear();posters.clear();thumbnailClient.dispose();$('driveVideos').replaceChildren();preview.clear();composer?.dispose();
     $('fileDetails').hidden=$('review').hidden=$('drive').hidden=true;$('status').textContent=errors.AUTH_REQUIRED;
     $('reload').disabled=true;
    }
   });
-  composer=mountManualComposer({doc:document,platform,portalName:portals[platform],session,rpc,current,onReceipt:receipt,onChange:syncActions,
+  composer=mountManualComposer({doc:document,platform,owner,portalName:portals[platform],session,rpc,current,onReceipt:receipt,onChange:syncActions,
    beforeSend:id=>{const order=id||entry?.order;if(order)rememberOrder(order);},
    canSchedule:()=>!!entry?.can_send&&!busy,refreshFile:()=>rpc('sma_publication_files_v1',{p_action:'check',p_input:{asset_id:current().id,asset_revision:current().revision,platform}})});
   if(chosen)$('chooser').open=false;
@@ -256,4 +256,4 @@ if(Object.hasOwn(portals,platform)){
   location.replace(manualURL(result.platform,result.id));
  }catch(e){notify(e.message);}
 }
-window.addEventListener('pagehide',()=>{clearTimeout(folderTimer);clearTimeout(statusTimer);preview.clear();thumbnails.clear();posters.clear();thumbnailClient.dispose();composer?.dispose();});
+window.addEventListener('pagehide',event=>{if(event.persisted)return;clearTimeout(folderTimer);clearTimeout(statusTimer);preview.clear();thumbnails.clear();posters.clear();thumbnailClient.dispose();composer?.dispose();});
