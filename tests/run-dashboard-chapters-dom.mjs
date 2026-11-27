@@ -118,8 +118,9 @@ await test('connection cards preserve the delegated OAuth click, native status r
  const link='<a href="/connect/test" target="_blank" rel="noopener" data-en="Connect">Verbinden</a>';
  const blocked='<button disabled data-en="Meta approval pending">Meta-Freigabe offen</button>';
  const names=['YouTube','Instagram'];
- const publishing=names.map(name=>portal(name)+'<button class="sma-optimize" data-portal="'+name.toLowerCase()+'">Optimieren</button></article>').join('');
- const sourceRows=names.slice().reverse().map(name=>portal(name)+'<div class="platform-action">'+(name==='YouTube'?link:blocked)+'</div></article>').join('');
+ const icon='<span class="platform-icon"></span>';
+ const publishing=names.map(name=>portal(name)+'<button class="sma-optimize" data-portal="'+name.toLowerCase()+'">'+icon+'</button></article>').join('');
+ const sourceRows=names.slice().reverse().map(name=>portal(name)+icon+'<div class="platform-action">'+(name==='YouTube'?link:blocked)+'</div></article>').join('');
  const list=html=>'<div class="platform-list">'+html+'</div>';
  const {document:doc}=parseHTML('<html><head></head><body><nav><button data-page="publishing">Veröffentlichung</button><button data-page="social">Social Media</button></nav>'+
   page('publishing',card('portals',list(publishing))+'<div id="publishingFilesSlot"></div>')+page('social',list(sourceRows))+'</body></html>');
@@ -137,12 +138,12 @@ await test('connection cards preserve the delegated OAuth click, native status r
   assert(doc.getElementById('sma-publishing-panel-portals').contains(connect));
   assert.equal(doc.querySelector('#page-publishing .platform-list'),pub);
   assert.deepEqual([...native.children].map(c=>c.dataset.smaPlatform),names);
-  assert.equal(connect.closest('.sma-portal-actions').querySelector('.sma-optimize'),originals[0]);assert.equal(connect.target,'_blank');
-  const manual=native.querySelector('.sma-manual-post');assert.equal(manual.textContent,'Sofort posten');assert.equal(manual.closest('.platform-action'),null);assert.equal(manual.previousElementSibling,originals[0]);assert.match(manual.href,/sofort-posten\.html\?portal=youtube$/);
+  assert.equal(connect.closest('.platform-card').querySelector('.sma-optimize'),originals[0]);assert.equal(connect.target,'_blank');
+  const manual=native.querySelector('.sma-manual-post');assert.equal(manual.textContent,'Sofort posten');assert.equal(manual.closest('.platform-action'),null);assert.equal(manual.closest('.platform-card').querySelector('.sma-optimize .platform-icon').parentElement,originals[0]);assert.match(manual.href,/sofort-posten\.html\?portal=youtube$/);
   connect.click();assert.equal(pending,'YouTube');
   // The session shell replaces both lists after verifying the customer's fresh response.
   native.innerHTML=sourceRows.replace('>Verbinden<','>Neu verbinden<').replace('href="/connect/test"','href="/connect/fresh"');
-  pub.innerHTML=names.map(name=>portal(name)+'</article>').join('');
+  pub.innerHTML=names.map(name=>portal(name)+icon+'</article>').join('');
   await tick();
   assert.deepEqual([...native.querySelectorAll('.sma-optimize')],originals);
   assert.equal(native.querySelector('.platform-action a').textContent,'Neu verbinden');
