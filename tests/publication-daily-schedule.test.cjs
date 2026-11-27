@@ -159,6 +159,48 @@ test('each customer gets three separate files, all portal times, an idempotent d
   for(const {p,asset_revision} of scheduled)assert(folders['portal-folder-'+p].includes(asset_revision.split(':')[1]));
   assert.equal((await db.query("select sma_private.publication_portal_allowed_v1($1,'facebook',$2) ok",[sourceId,sha(100)])).rows[0].ok,false);
   assert.equal((await due()).length,0);
+  await db.exec(fs.readFileSync('supabase/migrations/20261127143600_customer_rotation_slots.sql','utf8'));
+  await db.exec(`create schema net;create function net.http_post(url text,body jsonb,timeout_milliseconds integer) returns bigint language sql as $$select 1::bigint$$;
+    create table sma_private.day_publish_channels_v1(source_id uuid,platform text,owner_id uuid,customer_id bigint,target_id text,folder_id text);
+    create table sma_private.day_publish_entries_v1(order_id uuid,platform text,target_id text,choices jsonb);`);
+  for(const name of ['20261127173429_immediate_portal_schedule','20261127174133_manual_portal_send']){
+    await db.exec(fs.readFileSync('supabase/migrations/'+name+'.sql','utf8'));
+  }
+  const moved=defaultTimes();moved.tiktok=['18:35','14:00','18:00'];
+  const newTimes=await run('save',b,b,moved,1);assert.equal(newTimes.ok,true,JSON.stringify(newTimes));
+  assert.deepEqual((await run('get',b,b)).times.tiktok,moved.tiktok);
+  const rows=(await db.query("select daily_slot,desired_at=(portal_times->>'tiktok')::timestamptz as aligned, to_char(desired_at at time zone 'Europe/Vienna','HH24:MI') as clock from sma_private.publication_joint_plans_v1 where plan_day='2097-06-01' and portal_times?'tiktok' order by daily_slot")).rows;
+  assert.deepEqual(rows.map(r=>r.clock),moved.tiktok);assert(rows.every(r=>r.aligned));
+  const portal=async(action,platform,asset=null,revision=null,order=null,token=null)=>(await db.query('select public.sma_manual_portal_v1($1,$2,$3,$4,$5,$6,null) as r',[action,platform,asset,revision,order,token])).rows[0].r;
+  assert.equal((await portal('folder','tiktok')).folder,'portal-folder-tiktok');
+  await db.query("insert into sma_private.day_publish_channels_v1 values($1,'youtube',$2,2,'test-account','portal-folder-youtube')",[sourceId,b]);
+  assert.equal((await portal('read','youtube',id(100),sha(100))).state,'approval_required');
+  assert.equal((await portal('read','youtube',id(103),sha(103))).ok,false);
+  assert.equal((await portal('send','youtube',id(100),sha(100),oid,id(300))).accepted,undefined);
+  assert.equal((await db.query('select count(*)::int n from sma_private.manual_portal_sends_v1')).rows[0].n,0);
+  assert.deepEqual((await db.query('select public.sma_claim_portal_schedule_v1($1) r',[id(300)])).rows[0].r.jobs,[]);
+  const chosen=id(103),approvedOrder=id(310),requestId=id(311),revision=sha(103),target='manual-tiktok';
+  await db.query("insert into sma_private.publication_rotation_channels_v1(source_id,platform,target_id) values($1,'tiktok',$2)",[sourceId,target]);
+  await db.query("insert into sma_private.day_publish_channels_v1 values($1,'tiktok',$2,2,$3,'portal-folder-tiktok')",[sourceId,b,target]);
+  const binding={asset_id:chosen,asset_revision:revision,platform:'tiktok',media_kind:'video',preview_id:pid,preview_revision:1,assignment_revision:1};
+  await db.query("insert into sma_private.publication_assignments_v1(asset_id,platform,preview_id,preview_revision,asset_revision,draft) values($1,'tiktok',$2,1,$3,'{}')",[chosen,pid,revision]);
+  await db.query("insert into sma_private.publication_orders_v1(id,user_id,customer_id,binding,draft,choices,target,approved_at,approval_review,state) values($1,$2,2,$3,'{}',$4,$5,now(),$6,'checked')",
+    [approvedOrder,b,binding,{visibility:'SELF_ONLY',brand_content_toggle:false},{id:target,platform:'tiktok'},{...review,tiktok_music_terms:true}]);
+  await db.query("insert into sma_private.publication_journal_v1(customer_id,asset_id,asset_revision,platform,target_id,order_id) values(2,$1,$2,'tiktok',$3,$4)",[chosen,revision,target,approvedOrder]);
+  const submit=(action,token)=>portal(action,'tiktok',chosen,revision,approvedOrder,token);
+  assert.equal((await submit('read')).can_send,true);
+  assert.equal((await submit('send',requestId)).accepted,true);
+  assert.equal((await submit('send',requestId)).accepted,true);
+  assert.equal((await submit('send',id(312))).accepted,false);
+  await db.query("insert into sma_private.publication_provider_attempts_v1(order_id,fingerprint,platform,target_id,visibility,size_bytes,state,last_operation,sequence) select id,sma_private.publication_provider_fingerprint_v1(o),'tiktok',$2,'SELF_ONLY',100,'uncertain','init',1 from sma_private.publication_orders_v1 o where id=$1",[approvedOrder,target]);
+  await db.query("insert into sma_private.publication_provider_events_v1(order_id,sequence,request_id,operation,outcome,finished_at) values($1,1,$2,'init',$3,now())",[approvedOrder,id(315),{state:'uncertain',code:'PROVIDER_INIT_UNCERTAIN'}]);
+  assert.equal((await submit('send',id(313))).accepted,true);
+  const retryEligible=async()=>(await db.query('select sma_private.manual_restart_allowed_v1($1) as ok',[approvedOrder])).rows[0].ok;
+  assert.equal(await retryEligible(),true);
+  await db.query("update sma_private.publication_provider_attempts_v1 set received_bytes=10 where order_id=$1",[approvedOrder]);
+  assert.equal(await retryEligible(),false);assert.equal((await submit('read')).can_send,false);
+  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[a]);
+  assert.equal((await portal('folder','tiktok')).ok,false);
   await db.exec('set role anon');await assert.rejects(db.exec("select public.sma_publication_daily_schedule_v1('get',null,current_date)"),/permission denied/);
 });
 
@@ -179,14 +221,17 @@ test('schedule editor loads on demand and saves all three times independently fo
   panel.querySelector('form').dispatchEvent(new Event('submit',{cancelable:true}));await new Promise(setImmediate);
   assert.deepEqual(calls[1].p_times.tiktok,['10:00','15:30','18:00']);assert.deepEqual(calls[1].p_times.youtube,['10:00','14:00','18:00']);
   assert.equal(calls[1].p_version,0);
+  fields[0].value='18:35';fields[0].dispatchEvent(new Event('change',{bubbles:true}));await new Promise(setImmediate);
+  assert.deepEqual(calls[2].p_times.tiktok,['18:35','15:30','18:00']);
+  assert.equal(fields[0].value,'18:35');
   view.open('instagram'); assert.equal(panel.querySelector('h2').getAttribute('aria-label'),'Instagram');
   assert.equal(fields[1].value,'14:00');
   view.open('tiktok'); assert.equal(fields[1].value,'15:30');
-  assert.equal(calls.length,2);
+  assert.equal(calls.length,3);
   panel.querySelector('.sma-schedule-date').click();
   const chosen=panel.querySelector('#sma-daily-calendar button[data-day]:not([disabled]):not([aria-pressed=true])');
   chosen.click();await new Promise(setImmediate);
-  assert.equal(calls[2].p_action,'get');assert.equal(calls[2].p_day,chosen.dataset.day);
+  assert.equal(calls[3].p_action,'get');assert.equal(calls[3].p_day,chosen.dataset.day);
   view.destroy();
 });
 

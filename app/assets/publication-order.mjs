@@ -377,7 +377,14 @@ export function installOrderReview(doc,{session,getContext,refresh,readYoutubeDe
   function historyLink(id,label){
     const link=make('a',label);link.href='dashboard.html#auftrag/'+id;link.target='_top';return link;
   }
+  function appendManualSend(row){
+    if(!['youtube','tiktok'].includes(row.binding?.platform)||!row.binding.asset_id)return;
+    const link=make('a','Sofort posten');link.target='_top';
+    link.href='sofort-posten.html?portal='+encodeURIComponent(row.binding.platform)+'&asset='+encodeURIComponent(row.binding.asset_id);
+    details.append(link);
+  }
   function appendApprovalReceipt(row){
+    appendManualSend(row);
     const when=new Intl.DateTimeFormat('de-AT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Vienna'}).format(new Date(row.approved_at));
     details.append(make('p','Freigegeben am '+when+' Uhr (Wien).'),historyLink(row.id,'Freigegebenen Auftrag in der History öffnen'));
   }

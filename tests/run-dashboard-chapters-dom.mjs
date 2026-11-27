@@ -138,6 +138,7 @@ await test('connection cards preserve the delegated OAuth click, native status r
   assert.equal(doc.querySelector('#page-publishing .platform-list'),pub);
   assert.deepEqual([...native.children].map(c=>c.dataset.smaPlatform),names);
   assert.equal(connect.previousElementSibling,originals[0]);assert.equal(connect.target,'_blank');
+  const manual=native.querySelector('.sma-manual-post');assert.equal(manual.textContent,'Sofort posten');assert.equal(manual.closest('.platform-action'),null);assert.match(manual.href,/sofort-posten\.html\?portal=youtube$/);
   connect.click();assert.equal(pending,'YouTube');
   // The session shell replaces both lists after verifying the customer's fresh response.
   native.innerHTML=sourceRows.replace('>Verbinden<','>Neu verbinden<').replace('href="/connect/test"','href="/connect/fresh"');
