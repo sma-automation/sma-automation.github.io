@@ -1,6 +1,7 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import {createOrderClient} from './publication-order.mjs?v=34';
 import {refreshMediaCatalog} from './media-metadata.mjs?v=3';
+import {describeFile} from './file-description.mjs?v=2';
 
 const db=createClient('https://bnvnmdxosbnuzedokqgh.supabase.co','sb_publishable_WbdlBQv6f_p5G8SZ_CMEAw_tMxHHklW');
 const params=new URLSearchParams(location.search),platform=params.get('portal');
@@ -31,6 +32,20 @@ async function rpc(name,args){await session();const {data,error}=await db.rpc(na
 function call(action,extra={}){return rpc('sma_manual_portal_v1',{p_platform:platform,p_action:action,...extra});}
 function current(){return files.find(f=>f.id===$('files').value);}
 function assetArgs(f){return {p_asset:f.id,p_revision:f.revision};}
+function isDriveId(value){return typeof value==='string'&&/^[\w-]{10,200}$/.test(value);}
+function driveVideoUrl(file){
+ const media=file.profile_media;
+ return ['verified','private_preview_only'].includes(media?.state)&&isDriveId(media.drive_id)?'https://drive.google.com/file/d/'+media.drive_id+'/view':null;
+}
+function filterDriveVideos(){
+ const search=$('videoSearch').value.trim().toLocaleLowerCase('de');
+ let visible=0;
+ for(const item of $('driveVideos').children){
+  item.hidden=!item.textContent.toLocaleLowerCase('de').includes(search);
+  if(!item.hidden)visible++;
+ }
+ $('noMatches').hidden=visible>0;
+}
 function localTime(value){
  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))throw Error(errors.INVALID_TIME);
  const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Vienna'}).format(new Date());
@@ -40,11 +55,21 @@ function localTime(value){
 async function show(){
  const f=current(),v=++selection;clearTimeout(statusTimer);entry=null;$('actions').hidden=true;$('post').hidden=!f;
  if(!f)return;
- $('headline').textContent=f.name;$('caption').textContent='';$('account').textContent='';$('status').textContent='Lade Beitrag …';
+ const title=describeFile(f).title,media=f.profile_media;
+ const driveVideo=$('driveVideo');
+ driveVideo.removeAttribute('href');driveVideo.hidden=true;
+ const href=driveVideoUrl(f);
+ if(href){
+  driveVideo.href=href;driveVideo.hidden=false;
+ }
+ $('headline').textContent=title;$('caption').textContent='';$('account').textContent='';$('status').textContent='Lade Beitrag …';
  $('review').href='./publication-preview.html?wide=1&portal='+platform+'&asset='+encodeURIComponent(f.id)+'&manual=1';
+ const previewOnly=media?.state==='private_preview_only';
+ $('review').textContent=previewOnly?'Private Vorschau in SMA ansehen':'Beitrag ansehen und freigeben';
+ if(previewOnly){$('status').textContent='Private Vorschau mit Logo und Musik.';return;}
  try{
   const result=await call('read',assetArgs(f));if(v!==selection)return;entry=result;
-  $('headline').textContent=result.title||f.name;$('caption').textContent=result.caption||'';
+  $('headline').textContent=result.title||title;$('caption').textContent=result.caption||'';
   $('account').textContent=[result.account,visibility[result.visibility]].filter(Boolean).join(' · ');
   $('actions').hidden=!result.can_send;$('status').textContent=tiktokReasons[result.provider_code]||states[result.state]||'Freigabe vorhanden.';
   if(result.due&&!['complete','failed','uncertain','needs_review','blocked'].includes(result.state)){
@@ -64,15 +89,32 @@ async function show(){
 }
 async function list(){
  const prior=$('files').value,data=await rpc('sma_publication_files_v1',{p_action:'list',p_input:{platform}});
- files=data.files.filter(f=>f.media_kind==='video'&&f.mime_type==='video/mp4');$('files').replaceChildren(new Option(files.length?'Video auswählen':'Keine Videos im Portalordner',''));
- for(const f of files)$('files').append(new Option(f.name,f.id));
- $('files').value=files.some(f=>f.id===prior)?prior:files.some(f=>f.id===preferred)?preferred:'';
- $('files').disabled=!files.length;await show();
+ files=data.files.filter(f=>f.media_kind==='video'&&f.mime_type==='video/mp4'&&(f.profile_media?.state!=='hidden_in_picker'||f.id===preferred));
+ const entries=files.map(file=>({file,...describeFile(file),href:driveVideoUrl(file)}))
+  .sort((a,b)=>a.title.localeCompare(b.title,'de',{numeric:true}));
+ const links=[],options=[];
+ for(const {file,title,version,href} of entries){
+  if(href){
+   const link=document.createElement('a');link.href=href;link.target='_blank';link.rel='noopener noreferrer';link.textContent=title;
+   const item=document.createElement('li');item.append(link);links.push(item);
+  }
+  if(file.profile_media?.state!=='private_preview_only'||!href||file.id===preferred)options.push(new Option(title+' · '+version,file.id));
+ }
+ $('driveVideos').replaceChildren(...links);$('drivePreviews').hidden=!links.length;filterDriveVideos();
+ $('smaSelection').hidden=!options.length&&links.length>0;
+ $('files').replaceChildren(new Option(options.length?'Videotitel auswählen':'Keine Videos im Portalordner',''),...options);
+ $('files').value=options.some(o=>o.value===prior)?prior:options.some(o=>o.value===preferred)?preferred:'';
+ $('files').disabled=!options.length;await show();
 }
 async function refresh(){
  if(loading||busy)return;clearTimeout(folderTimer);loading=true;$('reload').disabled=true;
  try{
-  const folder=await call('folder');if(/^[\w-]+$/.test(folder.folder)){$('drive').href='https://drive.google.com/drive/folders/'+folder.folder;$('drive').hidden=false;}
+  const drive=$('drive');drive.hidden=true;drive.removeAttribute('href');
+  const folder=await call('folder');
+  if(isDriveId(folder.folder)){
+   drive.href='https://drive.google.com/drive/folders/'+folder.folder;drive.hidden=false;
+   drive.textContent=portals[platform]+'-Ordner in Google Drive öffnen ↗';
+  }
   await list();
   $('folderStatus').textContent='Google Drive wird abgefragt …';
   const scan=await rpc('sma_refresh_portal_folder_v1',{p_platform:platform});
@@ -102,6 +144,7 @@ async function send(scheduled){
 if(Object.hasOwn(portals,platform)){
  $('title').textContent=portals[platform]+' · Manuell posten';
  $('files').addEventListener('change',show);$('reload').addEventListener('click',refresh);
+ $('videoSearch').addEventListener('input',filterDriveVideos);
  $('send').addEventListener('click',()=>send(false));$('schedule').addEventListener('click',()=>send(true));
  try{owner=(await session()).user.id;await refresh();}catch(e){$('folderStatus').textContent=e.message;}
 }else $('folderStatus').textContent='Öffne das gewünschte Portal im SMA-Kundenbereich.';
