@@ -17,6 +17,7 @@ test('each customer gets three separate files, all portal times, an idempotent d
   await db.exec('create table sma_private.publication_editor_exports_v1(customer_id bigint,user_id uuid,asset_id uuid,media_asset_id uuid);create table sma_private.gallery_music_v1(customer_id bigint,user_id uuid,source_id uuid,result_id uuid);');
   await db.exec(sql('publication-daily-schedule'));
   await db.exec(sql('publication-gallery-rotation'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261127220031_daily_schedule_editor_binding.sql','utf8'));
   await db.exec(sql('publication-drive-rotation-import'));
   await db.exec(sql('publication-rotation-metadata'));
   await db.exec(sql('publication-provider-journal'));
@@ -42,6 +43,8 @@ test('each customer gets three separate files, all portal times, an idempotent d
   await db.query("insert into sma_private.publication_joint_plans_v1(customer_id,asset_id,asset_revision,owner_id,desired_at,version) values(1,$1,'v',$2,($3::date+time '14:00') at time zone 'Europe/Vienna',1)",[id(11),a,tomorrow]);
   const saved=await run('save',a,a,times,0);
   assert.equal(saved.version,1);assert.equal(saved.files.length,3);
+  assert.equal(saved.files[1].asset_id,id(11));
+  assert(saved.files.every(file=>file.asset_revision==='v'&&file.media_kind==='video'));
   assert.deepEqual(saved.files.map(file=>file.slot),[1,null,3]);
   assert.equal(Object.keys(saved.files[1].times).length,2);
   const fmt=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Vienna',hour:'2-digit',minute:'2-digit'});
@@ -228,10 +231,43 @@ test('schedule editor loads on demand and saves all three times independently fo
   assert.equal(fields[1].value,'14:00');
   view.open('tiktok'); assert.equal(fields[1].value,'15:30');
   assert.equal(calls.length,3);
-  panel.querySelector('.sma-schedule-date').click();
-  const chosen=panel.querySelector('#sma-daily-calendar button[data-day]:not([disabled]):not([aria-pressed=true])');
-  chosen.click();await new Promise(setImmediate);
-  assert.equal(calls[3].p_action,'get');assert.equal(calls[3].p_day,chosen.dataset.day);
+  const chosen=panel.querySelector('input[type=date]');chosen.value=nextViennaDay();
+  chosen.dispatchEvent(new Event('change',{bubbles:true}));await new Promise(setImmediate);
+  assert.equal(calls[3].p_action,'get');assert.equal(calls[3].p_day,chosen.value);
+  view.destroy();
+});
+
+test('every scheduled video opens its own editor, including matching names and repeated time slots',async()=>{
+  const {parseHTML}=await import('./dom-runtime/node_modules/linkedom/esm/index.js');
+  const {mountDailySchedule}=await import('../app/assets/publication-daily-schedule.mjs');
+  const {document}=parseHTML('<html><body><section></section></body></html>');
+  const panel=document.querySelector('section');
+  const files=Array.from({length:4},(_,i)=>({
+    asset_id:'00000000-0000-4000-8000-00000000000'+i,asset_revision:'rev:'+i+'+1',
+    name:'Gleicher Titel.mp4',media_kind:'video',current:i!==3,texts:[],
+    times:Object.fromEntries(platforms.map(p=>[p,'2026-11-27T0'+(8+i%2)+':00:00Z']))
+  }));
+  const rows=[files[0],files[2],files[1],files[3]];
+  const media={reset(){},show(host,file){host.dataset.asset=file.asset_id;return file.name;}};
+  const view=mountDailySchedule(document,panel,async()=>({ok:true,version:1,times:defaultTimes(),files}),media,'https://sma.example/app/media-editor.html?kundenmedien=pilot');
+  for(const portal of platforms){
+    view.open(portal);await new Promise(setImmediate);
+    const cards=[...panel.querySelectorAll('li')];assert.equal(cards.length,files.length);
+    for(const [index,card] of cards.entries()){
+      const file=rows[index],edit=card.lastElementChild;
+      assert.equal(edit.textContent,'Video bearbeiten');
+      if(!file.current){
+        assert(edit.disabled);assert(!edit.hasAttribute('href'));assert.match(card.textContent,/nicht mehr verfügbar/);continue;
+      }
+      const url=new URL(edit.getAttribute('href')),params=new URLSearchParams(url.hash.slice(1));
+      assert.equal(edit.target,'_blank');assert.equal(url.pathname,'/app/media-editor.html');
+      assert.equal(url.searchParams.get('kundenmedien'),'pilot');
+      assert.deepEqual(Object.fromEntries(params),{asset:file.asset_id,revision:file.asset_revision,portal});
+      assert.equal(card.querySelector('.sma-schedule-thumbnail').dataset.asset,file.asset_id);
+    }
+    assert.doesNotMatch(panel.textContent,/Private Tagesentwürfe|Gemeinsame Tagesfreigabe öffnen/);
+    assert.equal(panel.querySelector('#sma-daily-calendar,a[href*="tagesplan.html"]'),null);
+  }
   view.destroy();
 });
 

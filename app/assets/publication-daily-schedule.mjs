@@ -17,7 +17,7 @@ function offsetViennaDay(offset, now) {
 }
 export function nextViennaDay(now = new Date()) {return offsetViennaDay(1,now);}
 
-export function mountDailySchedule(doc,panel,request,media) {
+export function mountDailySchedule(doc,panel,request,media,editorUrl) {
   const language=()=>/^en/i.test(doc.documentElement.lang)?'en':'de';
   const words=(de,en)=>language()==='en'?en:de;
   const translate=(element,de,en)=>{
@@ -31,11 +31,9 @@ export function mountDailySchedule(doc,panel,request,media) {
   const button=(parent,de,en)=>{
     const el=node(parent,'button',de,en);el.type='button';return el;
   };
-  function dateLabel(date,options) {
-    return new Intl.DateTimeFormat(words('de-AT','en-GB'),{timeZone:'UTC',...options}).format(date);
-  }
   panel.classList.add('sma-daily-schedule');
-  const head=node(panel,'header'),logo=node(head,'h2'),dayInfo=node(head,'div'),dayTitle=node(dayInfo,'strong');
+  const head=node(panel,'header'),logo=node(head,'h2'),dayInfo=node(head,'div');
+  const dayPicker=node(dayInfo,'input');dayPicker.type='date';
   node(dayInfo,'span','Wiener Zeit','Vienna time');
   const details=node(panel,'details');details.open=true;
   node(details,'summary','Standardzeiten anpassen','Adjust standard times');
@@ -47,95 +45,68 @@ export function mountDailySchedule(doc,panel,request,media) {
     return input;
   });
   const save=node(form,'button','Zeiten speichern','Save times');save.type='submit';
-  const release=node(panel,'a','Gemeinsame Tagesfreigabe öffnen','Open daily approval');
-  release.target='_top';
-  const dateTrigger=button(panel,'Private Tagesentwürfe','Private daily drafts');
-  dateTrigger.className='sma-schedule-date';dateTrigger.setAttribute('aria-controls','sma-daily-calendar');dateTrigger.setAttribute('aria-expanded','false');
-  const calendar=node(panel,'div');calendar.id='sma-daily-calendar';calendar.hidden=true;
-  const monthNav=node(calendar,'div'),prev=button(monthNav,'‹'),monthTitle=node(monthNav,'strong'),next=button(monthNav,'›');
-  const weeks=node(calendar,'div'),days=node(calendar,'div');weeks.className=days.className='sma-calendar-grid';
   const entries=node(panel,'ul'),status=node(panel,'p');status.setAttribute('role','status');
   const retry=button(panel,'Gespeicherten Stand laden','Reload saved schedule');retry.hidden=true;
-  let portal='youtube',day=offsetViennaDay(0,new Date()),monthShown,record=null,busy=false,destroyed=false;
+  let portal='youtube',day=offsetViennaDay(0,new Date()),record=null,busy=false,destroyed=false;
   const edits=new Map();
   let saveTimer;
   function controls(){
     inputs.forEach(input=>{input.disabled=!record||busy==='get';});
     save.disabled=busy||!record||(!edits.has(portal)&&record.version>0);
-    dateTrigger.disabled=busy||!record||edits.has(portal);
+    dayPicker.disabled=Boolean(busy)||edits.size>0;
     retry.disabled=busy;
   }
   function renderHeader(){
     const name=portals[portal];
-    const today=offsetViennaDay(0,new Date()),last=offsetViennaDay(2,new Date());
-    release.hidden=day<today||day>last||!['youtube','tiktok'].includes(portal);
-    release.href=new URL('../tagesplan.html?tag='+encodeURIComponent(day),import.meta.url).href;
+    dayPicker.min=offsetViennaDay(-31,new Date());dayPicker.max=offsetViennaDay(31,new Date());
+    dayPicker.value=day;dayPicker.setAttribute('aria-label',words('Planungstag','Schedule date'));
     const card=[...doc.querySelectorAll('#page-publishing .platform-card')].find(el=>el.querySelector('.platform-info strong')?.textContent.trim()===name);
     const icon=card?.querySelector('.platform-icon');
     logo.replaceChildren();
     if(icon){const brand=icon.cloneNode(true);brand.setAttribute('aria-hidden','true');logo.append(brand);}
     else logo.textContent=name;
     logo.setAttribute('aria-label',name);
-    dayTitle.textContent=dateLabel(new Date(day+'T12:00:00Z'),{weekday:'long',day:'numeric',month:'long'});
     const values=edits.get(portal)||record?.times[portal]||[];
     inputs.forEach((input,i)=>{input.value=values[i]||'';});
     controls();
   }
-  function renderDrafts(){
+  function renderVideos(){
     media?.reset();entries.replaceChildren();
     if(!record)return;
     const files=record.files.filter(file=>file.times[portal]).sort((a,b)=>Date.parse(a.times[portal])-Date.parse(b.times[portal]));
     for(const file of files){
       const li=node(entries,'li');
-      const time=node(li,'time',viennaTime.format(new Date(file.times[portal])));time.dateTime=file.times[portal];
-      const visual=node(li,'span');visual.className='sma-schedule-thumbnail';visual.setAttribute('aria-hidden','true');
-      const title=file.current?media?.show(visual,file.name,portal):null;
+      const summary=node(li,'div');summary.className='sma-schedule-file';
+      const time=node(summary,'time',viennaTime.format(new Date(file.times[portal])));time.dateTime=file.times[portal];
+      const visual=node(summary,'span');visual.className='sma-schedule-thumbnail';visual.setAttribute('aria-hidden','true');
+      const title=file.current?media?.show(visual,file,portal):null;
       if(!title)visual.hidden=true;
-      node(li,'strong',title||file.name);
+      const caption=node(summary,'div');node(caption,'strong',title||file.name);
       if(file.slot&&record.times[portal]?.[file.slot-1]!==time.textContent){
-        node(li,'small','Fester Termin für diesen Beitrag','Fixed time for this post');
+        node(caption,'small','Fester Termin für diesen Beitrag','Fixed time for this post');
       }
-      const note=node(li,'small');
-      if(!file.current)translate(note,'Dateiversion prüfen','Check file version');
+      const note=node(caption,'small');
+      if(!file.current)translate(note,'Geplante Dateiversion nicht mehr verfügbar','Scheduled file version is no longer available');
       else if(file.texts.includes(portal))translate(note,'Beitragstext vorhanden','Post text available');
       else translate(note,'Beitragstext offen','Post text pending');
+      const label=file.media_kind==='image'?['Bild bearbeiten','Edit image']:['Video bearbeiten','Edit video'];
+      if(file.current&&file.asset_id&&file.asset_revision&&editorUrl){
+        const edit=node(li,'a',...label),url=new URL(editorUrl);
+        url.hash=new URLSearchParams({asset:file.asset_id,revision:file.asset_revision,portal}).toString();
+        edit.href=url.href;edit.target='_blank';edit.rel='noopener';edit.className='sma-schedule-edit';
+        edit.setAttribute('aria-label',words(...label)+' · '+(title||file.name)+' · '+time.textContent);
+      }else{
+        const edit=button(li,...label);edit.className='sma-schedule-edit';edit.disabled=true;
+      }
     }
-    if(!files.length)node(entries,'li','Für diesen Tag gibt es keine privaten Entwürfe.','There are no private drafts for this day.');
+    if(!files.length)node(entries,'li','Für diesen Tag sind keine Beiträge geplant.','No posts are scheduled for this day.');
   }
-  function closeCalendar(focus=false){
-    calendar.hidden=true;dateTrigger.setAttribute('aria-expanded','false');if(focus)dateTrigger.focus();
-  }
-  function renderCalendar(){
-    const first=monthShown.getUTCMonth(),year=monthShown.getUTCFullYear(),now=new Date();
-    const min=offsetViennaDay(-31,now),max=offsetViennaDay(31,now);
-    monthTitle.textContent=dateLabel(monthShown,{year:'numeric',month:'long'});
-    prev.setAttribute('aria-label',words('Vorheriger Monat','Previous month'));
-    next.setAttribute('aria-label',words('Nächster Monat','Next month'));
-    const last=new Date(Date.UTC(year,first+1,0));
-    prev.disabled=isoDay(monthShown)<=min;next.disabled=isoDay(last)>=max;
-    weeks.replaceChildren();days.replaceChildren();
-    for(let i=0;i<7;i++)node(weeks,'span',dateLabel(new Date(Date.UTC(2024,0,i+1)),{weekday:'short'}));
-    for(let i=1;i<=last.getUTCDate();i++){
-      const value=new Date(Date.UTC(year,first,i)),iso=isoDay(value);
-      const pick=button(days,String(i));pick.dataset.day=iso;pick.disabled=iso<min||iso>max;
-      pick.setAttribute('aria-label',dateLabel(value,{dateStyle:'full'}));pick.setAttribute('aria-pressed',String(iso===day));
-      if(i===1)pick.style.gridColumnStart=String((value.getUTCDay()+6)%7+1);
-    }
-  }
-  dateTrigger.addEventListener('click',()=>{
-    if(!calendar.hidden){closeCalendar();return;}
-    monthShown=new Date(day.slice(0,7)+'-01T00:00:00Z');calendar.hidden=false;dateTrigger.setAttribute('aria-expanded','true');
-    renderCalendar();days.querySelector('[aria-pressed=true]')?.focus();
-  });
-  for(const [control,step] of [[prev,-1],[next,1]])control.addEventListener('click',()=>{
-    monthShown.setUTCMonth(monthShown.getUTCMonth()+step);renderCalendar();
-  });
-  days.addEventListener('click',dashboardAction(event=>{
-    const pick=event.target.closest('button[data-day]');
-    if(!pick||pick.disabled||busy)return;
-    closeCalendar(true);if(pick.dataset.day!==day){day=pick.dataset.day;void run('get');}
+  dayPicker.addEventListener('change',dashboardAction(()=>{
+    const selected=dayPicker.value;
+    if(busy||edits.size||!selected||selected<dayPicker.min||selected>dayPicker.max){dayPicker.value=day;return;}
+    if(selected===day)return;
+    day=selected;record=null;renderVideos();renderHeader();return run('get');
   }));
-  calendar.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeCalendar(true);}});
   async function run(action,target=portal){
     if(busy||destroyed)return;
     const args={p_action:action,p_day:day};
@@ -154,7 +125,7 @@ export function mountDailySchedule(doc,panel,request,media) {
       if(!data?.ok)throw Object.assign(new Error(),{code:data?.code});
       record=data;
       if(action==='save'&&edits.get(target)===sent)edits.delete(target);
-      renderHeader();renderDrafts();
+      renderHeader();renderVideos();
       if(action==='save'&&data.fixed_slots>0)translate(status,'Standardzeiten gespeichert. Bereits fest gebuchte oder abgelaufene Termine stehen unten mit ihrer gültigen Uhrzeit.','Standard times saved. Fixed or elapsed posts are shown below with their actual times.');
       else if(action==='save')translate(status,'Zeiten gespeichert.','Times saved.');
       else translate(status,'','');
@@ -188,12 +159,12 @@ export function mountDailySchedule(doc,panel,request,media) {
   form.addEventListener('submit',dashboardAction(event=>{event.preventDefault();if(!save.disabled)return run('save');}));
   retry.addEventListener('click',dashboardAction(()=>run('get')));
   const Observer=doc.defaultView?.MutationObserver;
-  const languageObserver=Observer?new Observer(()=>{if(!destroyed){renderHeader();if(!calendar.hidden)renderCalendar();}}):null;
+  const languageObserver=Observer?new Observer(()=>{if(!destroyed){renderHeader();renderVideos();}}):null;
   languageObserver?.observe(doc.documentElement,{attributes:true,attributeFilter:['lang']});
-  media?.ready?.then(()=>{if(!destroyed&&record&&!panel.hidden)renderDrafts();});
+  media?.ready?.then(()=>{if(!destroyed&&record&&!panel.hidden)renderVideos();});
   controls();
   return {
-    open(selected){portal=Object.hasOwn(portals,selected)?selected:'youtube';closeCalendar();renderHeader();renderDrafts();if(!record)void run('get');},
+    open(selected){portal=Object.hasOwn(portals,selected)?selected:'youtube';renderHeader();renderVideos();if(!record)void run('get');},
     destroy(){destroyed=true;languageObserver?.disconnect();media?.reset();clearTimeout(saveTimer);doc.defaultView?.removeEventListener('beforeunload',beforeLeave);edits.clear();panel.replaceChildren();}
   };
 }

@@ -1,8 +1,8 @@
 import {dashboardAction} from './dashboard-feedback.mjs?v=1';
 import {mountEditorCaption} from './media-editor-caption.mjs?v=1';
-import {mountEditorTimeline} from './media-editor-timeline.mjs?v=1';
+import {mountEditorTimeline} from './media-editor-timeline.mjs?v=2';
 import {exportFrameSize} from './media-export-model.mjs?v=4';
-import {mountOriginalVideo} from './original-video-preview.mjs?v=6';
+import {mountOriginalVideo,originalVideoSupported} from './original-video-preview.mjs?v=6';
 import {missingVideoMetadata,videoMetadataNotice} from './media-metadata.mjs?v=1';
 import {mountMediaMusic} from './media-music-view.mjs?v=7';
 import {mountMediaExport} from './media-export-view.mjs?v=9';
@@ -19,7 +19,7 @@ export function driveFileId(value){
  const ids=url.searchParams.getAll('id');
  return ids.length===1&&/^[A-Za-z0-9_-]{10,200}$/.test(ids[0])?ids[0]:null;
 }
-export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,lookupDriveFile=null,refreshMetadata=null,musicLibrary=null,thumbnail,source=null,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
+export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFiles,lookupDriveFile=null,refreshMetadata=null,musicLibrary=null,thumbnail,source=null,displaySource=null,isLinkedVideo=null,uuid,createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url),initialAssetId=null,initialAssetRevision=null,initialAssetPortal=null,exportDependencies=null,navigate=href=>doc.defaultView.location.assign(href)}){
  const $=id=>doc.getElementById(id),control=k=>doc.querySelector('[name="'+k+'"]'),ownerWindow=doc.defaultView;
  let files=[],file=null,saved=null,attempt=null,busy=false,disposed=false,invalidOwner=false,dirty=false,generation=0,previewController=null,previewURL=null,metadataController=null,fileStale=false;
  let exportView,discardAction=null;
@@ -33,11 +33,12 @@ export function mountMediaEditor({doc,expectedOwnerId,getOwnerId,request,listFil
  }
  const caption=mountEditorCaption({doc,stage:$('stage'),control,changed:markEdited});
  let timeline;
+ const playable=file=>originalVideoSupported(file)||Boolean(isLinkedVideo?.(file));
  const original=source?mountOriginalVideo({
-  doc,host:$('editorOriginal'),thumbnailHost:$('image'),editorStage:$('stage'),getOwnerId,expectedOwnerId,source,createURL,revokeURL,
+  doc,host:$('editorOriginal'),thumbnailHost:$('image'),editorStage:$('stage'),getOwnerId,expectedOwnerId,source,displaySource,displaySupported:playable,createURL,revokeURL,
   loadedText:'',onReadyChange:value=>timeline?.readyChange(value)
  }):null;
- timeline=mountEditorTimeline({doc,control,original,music,changed:markEdited,canEdit});
+ timeline=mountEditorTimeline({doc,control,original,music,changed:markEdited,canEdit,playable});
  function syncOriginal(){
   const selected=saved&&!fileStale&&!invalidOwner&&$('exportPanel').hidden?file:null;
   original?.setContext(selected);

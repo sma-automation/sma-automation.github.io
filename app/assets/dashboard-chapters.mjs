@@ -1,5 +1,5 @@
-import {mountTutorials} from './dashboard-tutorials.mjs';
-import {mountDailySchedule} from './publication-daily-schedule.mjs?v=4';
+import {mountTutorials} from './dashboard-tutorials.mjs?v=2';
+import {mountDailySchedule} from './publication-daily-schedule.mjs?v=5';
 import {mountPortalConnections} from './dashboard-portal-connections.mjs?v=4';
 // Presentation only: move the existing elements, never copy forms or customer data.
 export function createChapterTabs({doc,id,entries,initial=entries[0]?.key,list,onSelect}){
@@ -44,7 +44,7 @@ export function placeChapterBar(page,nav){
  page.setAttribute('data-sma-chapters','');
 }
 
-export function mountDashboardChapters({doc,stylesheetUrl,websiteView,dailyScheduleRequest,scheduleMedia,onPreparePost:openPortals}){
+export function mountDashboardChapters({doc,stylesheetUrl,websiteView,dailyScheduleRequest,scheduleMedia,scheduleEditorUrl,onPreparePost:openPortals}){
  const css=doc.createElement('link');css.rel='stylesheet';css.href=stylesheetUrl;doc.head.append(css);
  const cleanups=[],controllers=new Map();
  const children=(el,selector)=>el?[...el.children].filter(child=>child.matches(selector)):[];
@@ -86,7 +86,7 @@ export function mountDashboardChapters({doc,stylesheetUrl,websiteView,dailySched
   {key:'schedule',label:'Tagesplanung',en:'Daily schedule',emptyPanel:!!dailyScheduleRequest,nodes:[]}
  ],{onSelect:key=>{if(key==='schedule')scheduleView?.open(publishing.dataset.schedulePortal);}});
  if(dailyScheduleRequest&&publishingTabs){
-  scheduleView=mountDailySchedule(doc,publishingTabs.entries.find(e=>e.key==='schedule').panel,dailyScheduleRequest,scheduleMedia);
+  scheduleView=mountDailySchedule(doc,publishingTabs.entries.find(e=>e.key==='schedule').panel,dailyScheduleRequest,scheduleMedia,scheduleEditorUrl);
   cleanups.push(()=>scheduleView.destroy());
  }
  const social=page('social');

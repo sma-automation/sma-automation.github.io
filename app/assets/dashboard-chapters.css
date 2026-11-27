@@ -119,22 +119,21 @@
 .sma-daily-schedule summary{cursor:pointer;color:#3157cd;font-weight:600;padding:.35rem 0}
 .sma-schedule-times{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:.65rem 0}
 .sma-schedule-times input{margin-top:4px}
-.sma-daily-schedule .sma-schedule-date{color:#24324b;min-height:44px;font-weight:600}
-.sma-schedule-date::before{content:'';display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:.5rem;background:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23596879' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M7 3v4m10-4v4M3 11h18'/%3E%3C/svg%3E")}
-#sma-daily-calendar{max-width:320px;border:1px solid #dce2eb;border-radius:10px;padding:8px}
-#sma-daily-calendar>div:first-child{display:flex;align-items:center;justify-content:space-between}
-#sma-daily-calendar .sma-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}
-#sma-daily-calendar button{min-height:40px;margin:0;padding:4px;border:0}
-#sma-daily-calendar button[aria-pressed=true]{background:#3157cd;color:#fff}
 .sma-daily-schedule ul{margin:12px 0 0;padding:0;list-style:none}
-.sma-daily-schedule li{display:flex;align-items:center;gap:.65rem;border-top:1px solid #dce2eb;padding:.6rem 0;margin:0}
+.sma-daily-schedule li{border-top:1px solid #dce2eb;padding:.85rem 0;margin:0}
+.sma-schedule-file{display:flex;align-items:center;gap:.65rem}
+.sma-schedule-file>div{min-width:0}
+.sma-schedule-file strong,.sma-schedule-file small{display:block}
+.sma-daily-schedule .sma-schedule-edit{display:inline-flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;margin:.6rem 0 0;padding:.5rem .9rem;border:1px solid #264aa8;border-radius:8px;background:#3157bd;color:white;font:inherit;font-weight:600;text-decoration:none}
+.sma-schedule-edit[href]:hover{background:#254598}
+.sma-schedule-edit:focus-visible{outline:3px solid #4066bb;outline-offset:3px}
 .sma-daily-schedule li time{font-weight:650;font-variant-numeric:tabular-nums}
 .sma-daily-schedule li strong{flex:1;min-width:0}
 .sma-daily-schedule li small{color:#58677b}
 .sma-daily-schedule .sma-schedule-thumbnail{width:54px;height:50px;flex:none;overflow:hidden;border-radius:7px;background:#f0f2f5;text-align:center}
 .sma-schedule-thumbnail img{width:100%;height:100%;object-fit:cover}
 .sma-daily-schedule [hidden],.sma-daily-schedule p:empty{display:none!important}
-@media(max-width:480px){.sma-schedule-times{grid-template-columns:minmax(0,1fr)}.sma-daily-schedule li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:.15rem .4rem}.sma-daily-schedule li:has(small) strong,.sma-daily-schedule li small{grid-column:3}.sma-daily-schedule li time,.sma-daily-schedule li .sma-schedule-thumbnail{grid-row:span 2}}
+@media(max-width:480px){.sma-schedule-times{grid-template-columns:minmax(0,1fr)}}
 
 #page-tutorials [hidden]{display:none!important}
 .sma-tutorials{display:grid;grid-template-columns:minmax(170px,240px) minmax(0,1fr);align-items:start;gap:clamp(16px,2vw,32px);margin:8px 0 28px}

@@ -12,6 +12,11 @@ async function session(owner){const {data,error}=await (await auth()).auth.getSe
 const fileJobs=createFileJobClient({session});let originalMedia=null,thumbnailOwner=null,thumbnails=null;
 globalThis.window?.addEventListener('pagehide',()=>{originalMedia?.dispose();originalMedia=null;});
 export const editorMusicLibrary=owner=>createMusicLibraryAPI({owner,getSession:()=>session(owner),includeCatalog:true});
+export async function createEditorPortalPlayer(owner){
+ const db=await auth();
+ const {createPortalVideoSource}=await import('./portal-video-playback.mjs?v=2');
+ return createPortalVideoSource({client:()=>db,owner:()=>owner,original:editorSource});
+}
 export async function getOwnerId(){try{return (await session()).user.id;}catch{return null;}}
 export async function watchOwner(callback){return (await auth()).auth.onAuthStateChange((_event,s)=>{if(thumbnailOwner!==s?.user?.id){thumbnails?.dispose();thumbnails=null;thumbnailOwner=null;fileJobs.clear();}callback(s?.user?.id||null);}).data.subscription;}
 async function rpc(name,body,owner,signal){signal?.throwIfAborted();const s=await session(owner);signal?.throwIfAborted();const response=await fetch(origin+'/rest/v1/rpc/'+name,{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(15000)]),headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+s.access_token},body:JSON.stringify(body)});if(!response.ok)throw Error(response.status===401?'AUTH_REQUIRED':'UNAVAILABLE');return response.json();}

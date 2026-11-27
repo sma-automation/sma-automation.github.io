@@ -47,7 +47,7 @@ function drawFrames(doc, canvas, url) {
   return close;
 }
 
-export function mountEditorTimeline({doc, control, original, music, changed, canEdit}) {
+export function mountEditorTimeline({doc, control, original, music, changed, canEdit, playable=originalVideoSupported}) {
   const element = id => doc.getElementById(id);
   const track = element('timeTrack'), play = element('stagePlayback'), scrub = element('scrub');
   const video = original?.video;
@@ -94,12 +94,12 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
     if (!canEdit() || doc.visibilityState === 'hidden') return;
     if (action === 'play') {
       const [a,b] = bounds();
-      const end = Math.min(b / 1000, video.duration);
+      const end = duration ? Math.min(b / 1000, video.duration) : video.duration;
       if (!original.playRange(a / 1000, end)) element('editorOriginal').querySelector('[role=status]').textContent = 'Der ausgewählte Ausschnitt ist im Video nicht erreichbar.';
     } else original.seekTo(Math.max(0, Math.min(cursor / 1000, video.duration - .001)));
   }
   function requestAction(action) {
-    if (!original || !originalVideoSupported(file)) return;
+    if (!original || !playable(file)) return;
     followPlayback = action === 'play';
     pending = action;
     if (ready) applyPending();
@@ -198,7 +198,7 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
     }
     file = next;
     duration = total;
-    play.hidden = !(original && originalVideoSupported(file));
+    play.hidden = !(original && playable(file));
     element('timeline').hidden = !duration;
     element('useCover').hidden = !duration;
     if (!duration) {element('coverTime').textContent = '';return;}
@@ -210,7 +210,7 @@ export function mountEditorTimeline({doc, control, original, music, changed, can
     }));
     paint();
   }
-  return {setFile,paint,readyChange,prepare(){if(originalVideoSupported(file))void original?.load();},
+  return {setFile,paint,readyChange,prepare(){if(playable(file))void original?.load();},
     pause(){pending = null; followPlayback = false; music.stopPreview(); original?.stop();},
     destroy(){pending = null; cancelFrames?.(); handlers.forEach(remove => remove());}};
 }

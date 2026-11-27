@@ -1,12 +1,12 @@
-import {mountMediaEditor} from './media-editor-view.mjs?v=20';
-import {getOwnerId,watchOwner,editorPilotAccess,editorRequest,editorMusicLibrary,editorDriveFolder,editorFileByDriveId,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=15';
+import {mountMediaEditor} from './media-editor-view.mjs?v=21';
+import {getOwnerId,watchOwner,createEditorPortalPlayer,editorPilotAccess,editorRequest,editorMusicLibrary,editorDriveFolder,editorFileByDriveId,editorFiles,editorRefreshFiles,editorThumbnail,exportRequest,editorSource,uploadExport} from './media-editor-api.mjs?v=17';
 
 const query = new URLSearchParams(location.search);
 const fileLink = new URLSearchParams(location.hash.slice(1));
 const pilot = query.get('kundenmedien') === 'pilot';
 const status = document.getElementById('status');
 const login = document.getElementById('login');
-let view, subscription, closed = false;
+let view, subscription, player, closed = false;
 
 function clearPilot() {
   delete document.documentElement.dataset.smaCustomerMedia;
@@ -15,6 +15,7 @@ window.addEventListener('pagehide', () => {
   closed = true;
   clearPilot();
   view?.destroy();
+  player?.clear();
   subscription?.unsubscribe();
 });
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
@@ -71,11 +72,21 @@ async function openEditor() {
   }
   if (pilot) document.getElementById('driveFolder').href = './media-editor.html?drive=folder&kundenmedien=pilot';
   const source=(file,signal)=>editorSource(file,signal,owner);
+  const asset=fileLink.get('asset'),revision=fileLink.get('revision'),portal=fileLink.get('portal');
+  const linked=asset&&revision&&['youtube','tiktok','instagram','facebook'].includes(portal);
+  const isLinkedVideo=file=>linked&&file?.media_kind==='video'&&file.id===asset&&file.revision===revision;
+  // Use the full revision-bound portal video for the monitor. Exports still read the original.
+  async function displaySource(file,signal){
+    if(!isLinkedVideo(file))return source(file,signal);
+    if(!player)player=await createEditorPortalPlayer(owner);
+    signal.throwIfAborted();
+    return player.read(file,portal,signal);
+  }
   view = mountMediaEditor({
     doc:document, expectedOwnerId:owner, getOwnerId, musicLibrary:editorMusicLibrary(owner),
     request:(action,input,signal)=>editorRequest(action,input,owner,signal), listFiles:()=>editorFiles(owner),
     refreshMetadata:signal=>editorRefreshFiles(owner,signal), thumbnail:(file,signal)=>editorThumbnail(file,signal,owner),
-    source,uuid:()=>crypto.randomUUID(),lookupDriveFile:(id,signal)=>editorFileByDriveId(id,owner,signal),
+    source,...(linked&&{displaySource,isLinkedVideo}),uuid:()=>crypto.randomUUID(),lookupDriveFile:(id,signal)=>editorFileByDriveId(id,owner,signal),
     exportDependencies:{
       request:(action,input)=>exportRequest(action,input,owner),
       source,
@@ -86,7 +97,7 @@ async function openEditor() {
     initialAssetPortal:fileLink.get('portal')
   });
   function checkOwner(id) {
-    if (id !== owner) clearPilot();
+    if (id !== owner) {clearPilot();player?.clear();}
     if (!closed) view.invalidateOwner(id);
   }
   subscription = await watchOwner(checkOwner);

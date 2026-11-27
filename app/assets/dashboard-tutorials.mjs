@@ -1,4 +1,4 @@
-import {quickStart, guides} from './tutorial-catalog.mjs';
+import {quickStart, guides} from './tutorial-catalog.mjs?v=2';
 
 const asset = (id, extension) => new URL('../tutorials/' + id + '.' + extension, import.meta.url).href;
 

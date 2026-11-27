@@ -27,7 +27,7 @@ export const quickStart = [
     steps: [
       "Öffne „Veröffentlichung“ und wähle „Optimieren“ beim gewünschten Portal. Prüfe die Datei und ihre Beitragsvorschau.",
       "Öffne die Tagesplanung. Trage die drei Uhrzeiten in Wiener Zeit ein und wähle „Zeiten speichern“.",
-      "Öffne „Private Tagesentwürfe“ und kontrolliere den gewählten Tag. Die Veröffentlichung erfordert eine eigene Freigabe.",
+      "Wähle oben das Datum und kontrolliere die geplanten Beiträge. Die Veröffentlichung erfordert eine eigene Freigabe.",
     ]
   },
 ];
@@ -105,7 +105,7 @@ export const guides = [
       "Öffne deine Datei und sieh dir die Beitragsvorschau an. Prüfe Video, Text und Zielportal, bevor du zur Tagesplanung wechselst.",
       "Öffne die „Tagesplanung“. Unter „Standardzeiten anpassen“ trägst du drei aufsteigende Uhrzeiten ein. Es gilt Wiener Zeit.",
       "Im Beispiel beginnt der erste Platz um 09:30 Uhr. Klicke auf „Zeiten speichern“, um die Werte für dieses Portal zu übernehmen.",
-      "Öffne „Private Tagesentwürfe“ und wähle den Tag im Kalender. Die Liste zeigt die Entwürfe für dieses Datum.",
+      "Wähle oben den Planungstag. Über „Video bearbeiten“ unter dem jeweiligen Video kannst du es abspielen und bearbeiten.",
       "Vergleiche Uhrzeit, Datei und Textstatus. Der Beitrag bleibt privat, bis du die Veröffentlichung separat freigibst.",
     ]
   },
